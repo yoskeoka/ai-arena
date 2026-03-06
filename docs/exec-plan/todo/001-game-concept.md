@@ -34,7 +34,9 @@ project-planで定義済みの要件（更新済み）:
 #### AI実行モデル
 - AIプロセスはゲーム開始時に起動、ゲーム終了まで維持
 - メモリを保持し、過去のやり取りに基づく戦略更新が可能
-- プロセスのリソース制限（メモリ、CPU等）
+- リソース制限:
+  - メモリ: WASM linear memory max pagesで上限設定
+  - CPU/実行時間: Go context.WithTimeoutで制御（ターンタイムアウトと統合）
 
 #### AI提出形式
 - WASM バイナリ（WASI 準拠）: stdin/stdout が WASI 標準でサポートされる
