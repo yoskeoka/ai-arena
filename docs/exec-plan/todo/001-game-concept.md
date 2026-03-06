@@ -12,7 +12,7 @@ project-planで定義済みの要件（更新済み）:
 - LLM丸投げ不可の高速判断
 - 観戦可能なゲーム画面
 - AI通信: stdin/stdout + JSON-RPC 2.0
-- AI提出: Docker or WASM（言語自由）
+- AI提出: WASM (WASI + wazero)
 - AIプロセスはゲーム中ずっと起動（記憶・学習可能）
 
 ## Deliverables
@@ -40,8 +40,8 @@ project-planで定義済みの要件（更新済み）:
 - WASM バイナリ（WASI 準拠）: stdin/stdout が WASI 標準でサポートされる
 - ランタイム: wazero（pure Go、CGo不要）でプラットフォームにネイティブ統合
 - セキュリティ: WASMはデフォルトでサンドボックス化（ネットワークアクセスなし、ファイルシステム制限）
+- AIログ: プラットフォームがstderrを捕捉・保存。AI開発者はAPI経由でログ取得可能
 - 対応言語: Rust, C/C++, Go, Zig, AssemblyScript等（WASMコンパイル可能なもの）
-- Docker対応は将来検討（WASM非対応言語向け）
 
 #### ゲームインターフェース（ゲーム登録要件）
 - ゲーム仕様書: AIが満たすべき入出力の仕様 + ゲームルール

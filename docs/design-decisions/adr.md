@@ -1,14 +1,38 @@
 # Architectural Decision Records (ADR)
 
-## [YYYY-MM-DD] Title of Decision
+## [2026-03-07] AI実行環境: WASM採用、Docker却下
 
 ### Context
-[Describe the issue or problem.]
+AIプログラムの提出・実行形式を決定する必要がある。候補はDocker（コンテナ）とWASM（WebAssembly/WASI）。
+
+project-planの要件:
+- AIプログラムの実装言語自由
+- プラットフォーム側でのコンパイル・ビルドなし
+- 外部通信禁止（不正防止）
+- stdin/stdoutでの通信
+- 高速起動（ターン制ゲーム）
 
 ### Decision
-[Describe the decision made.]
+**WASM (WASI + wazero) を採用。Dockerは却下。**
 
 ### Consequences
-[Describe the positive and negative consequences.]
+
+**WASM採用の利点:**
+- サンドボックスがデフォルト。外部通信禁止が設計上保証される（Dockerはiptables等で自前構築が必要）
+- 起動がミリ秒単位（Dockerは秒単位）
+- wazero（pure Go）でプラットフォームにネイティブ統合。外部依存なし
+- クロスプラットフォーム。提出者がOS/アーキテクチャを意識不要
+- stdin/stdoutがWASI標準でサポート済み
+
+**Docker却下の理由:**
+- セキュリティ確保が実質「小さなPaaS構築」になり、開発コストが高い
+- ネットワーク隔離を自前で構築・検証する必要がある（WASMはデフォルトで不可能）
+- Dockerデーモン依存はデプロイ環境の制約になる
+- 起動オーバーヘッドがターン制ゲームに不向き
+- WASMでカバーできない言語（Python等）のために残す案もあったが、WASMコンパイル可能な言語で十分なカバレッジがあり、複雑さに見合わない
+
+**トレードオフ:**
+- WASMにコンパイルできない言語（Python, Java等）は非対応。ただしAI競技で高速判断を求めるコンテキストでは、これらの言語はそもそも不利
+- AIプログラムからの外部ログ送信も不可能になるため、プラットフォーム側でstderr捕捉・ログ提供が必要
 
 ---
