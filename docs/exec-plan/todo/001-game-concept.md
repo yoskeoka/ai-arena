@@ -40,7 +40,7 @@ project-planで定義済みの要件（更新済み）:
 - WASM バイナリ（WASI 準拠）: stdin/stdout が WASI 標準でサポートされる
 - ランタイム: wazero（pure Go、CGo不要）でプラットフォームにネイティブ統合
 - セキュリティ: WASMはデフォルトでサンドボックス化（ネットワークアクセスなし、ファイルシステム制限）
-- AIログ: プラットフォームがstderrを捕捉・保存。AI開発者はAPI経由でログ取得可能
+- AIログ: stdoutはJSON-RPC専用、stderrはAI開発者の自由ログチャネル。プラットフォームがstderr全捕捉・保存、API提供。AI改善サイクル支援
 - 対応言語: Rust, C/C++, Go, Zig, AssemblyScript等（WASMコンパイル可能なもの）
 
 #### ゲームインターフェース（ゲーム登録要件）
