@@ -1,94 +1,86 @@
-# Dungeon Game Concept Specification
+# ダンジョンゲーム構想仕様
 
-## Purpose
+## 目的
 
-This document captures the Phase 1 concept for the dungeon game that will
-become the platform's flagship ruleset. It defines the design direction and the
-platform requirements implied by that direction, but it intentionally stops
-short of Phase 3 implementation-level detail.
+このドキュメントは、AI Arena の本命ゲームとなるダンジョンゲームについて、Phase 1 時点の構想を整理するものである。設計の方向性と、それによってプラットフォームへ要求される性質を定義するが、Phase 3 で扱う実装レベル詳細までは踏み込まない。
 
-## Design Goals
+## 設計目標
 
-- reward fast algorithmic decision-making rather than prompt-only LLM usage
-- create information asymmetry through limited vision
-- produce spectator-friendly state changes on a grid
-- support both indirect competition and direct player interaction
-- leave room for staged complexity growth across future phases
+- プロンプト投入だけではなく、高速なアルゴリズム判断を報いること
+- 視界制限により情報の非対称性を作ること
+- グリッド上の状態変化が観戦しやすいこと
+- 間接競争だけでなくプレイヤー間相互作用を持てること
+- 後続フェーズで段階的に複雑さを増やせること
 
-## High-Level Match Structure
+## 試合の大枠
 
-- Map: tile-based dungeon grid
-- Players: multiple concurrent explorers
-- Turn model: simultaneous action by default
-- Match length: fixed turn budget or earlier termination when the dungeon goal is
-  resolved
-- Outcome: ranked by final score
+- マップ: タイルベースのダンジョングリッド
+- プレイヤー: 同時参加する複数探索者
+- ターンモデル: 基本は同時行動
+- 試合長: 固定ターン数、またはダンジョン目標達成による早期終了
+- 勝敗: 最終スコア順で順位決定
 
-The exact player count, map dimensions, and turn budget are deferred to Phase 3.
+プレイヤー数、マップサイズ、総ターン数の正確な値は Phase 3 で定める。
 
-## Core Loop
+## コアループ
 
-Each turn:
+各ターンで以下を行う。
 
-1. the game master computes each player's visible area
-2. the platform sends that visible state to the player AI
-3. every player submits one action before the deadline
-4. the game master resolves movement, interactions, combat, and pickups
-5. the game master publishes the updated whole-state snapshot
+1. ゲームマスターが各プレイヤーの可視領域を計算する
+2. プラットフォームがその可視状態を各 AI に送る
+3. 各プレイヤーが締切前に1アクション提出する
+4. ゲームマスターが移動、衝突、戦闘、取得などを解決する
+5. 更新後の全体状態スナップショットを公開する
 
-This keeps the transport model aligned with janken while introducing richer
-state and partial information.
+これにより、じゃんけんと同じ transport モデルのまま、より複雑な状態と不完全情報を扱える。
 
-## Information Model
+## 情報モデル
 
-### Limited vision
+### 視界制限
 
-Each player can observe only a bounded area around its current position.
+各プレイヤーは、自分の現在位置の周囲にある限定された領域だけを観測できる。
 
-Phase 1 assumption:
+Phase 1 時点の前提:
 
-- a player's visible area is a local neighborhood with configurable radius `N`
-- tiles outside that area are omitted from `visible_state`
-- remembering old observations is the AI's responsibility, not the platform's
+- 可視領域は半径 `N` を持つ局所近傍とする
+- その範囲外のタイルは `visible_state` から省く
+- 過去に見た情報を記憶する責任はプラットフォームではなく AI 側に置く
 
-This is a deliberate design choice to test persistent internal state inside the
-AI process.
+これは、AI プロセス内部で持続的な状態記憶を使わせるための意図的な設計である。
 
-### Whole-state export
+### 全体状態エクスポート
 
-The platform still requires a complete hidden-information snapshot for operators
-and spectators. The game therefore needs two separate representations:
+プラットフォームは、運営者や観戦者向けに完全な隠し情報付き全体状態も必要とする。そのため、ダンジョンゲームは2種類の状態表現を持つ必要がある。
 
-- `visible_state`: per-player filtered state for AI decisions
-- `full_state`: authoritative dungeon state for replay and viewing
+- `visible_state`: AI の意思決定用にプレイヤーごとにフィルタされた状態
+- `full_state`: リプレイ・観戦用の権威的な全体状態
 
-## Proposed Game Elements
+## 想定ゲーム要素
 
-### Navigation
+### 移動
 
-- grid movement between neighboring walkable tiles
-- walls and obstacles that shape local pathfinding
-- exploration pressure from finite turn count
+- 隣接する歩行可能タイルへの移動
+- 経路選択に影響する壁や障害物
+- 有限ターン数による探索圧力
 
-### Resources
+### 資源
 
-- collectible items with positive score value
-- scarce objectives that create competition between players
-- optional boss reward or treasure-room reward that is worth contesting
+- スコア価値を持つ収集アイテム
+- プレイヤー間で競合する希少目標
+- 奪い合いが起きるボス報酬や宝物庫報酬
 
-### Player interaction
+### プレイヤー間相互作用
 
-- collision over the same target tile
-- contest over the same item
-- optional direct attack or sabotage action
-- optional temporary alliances in later phases
+- 同じ目的地タイルへの衝突
+- 同一アイテムの競合取得
+- 直接攻撃や妨害アクション
+- 後続フェーズでの一時協力や裏切り
 
-Phase 1 leaves the exact combat/interaction rules open, but the game must allow
-meaningful player-to-player influence beyond isolated racing.
+Phase 1 では戦闘や干渉の詳細ルールは未確定のままにするが、単なる個別レースではなく、プレイヤー同士が意味のある影響を与えられるゲームであることは維持する。
 
-## Action Categories
+## アクションカテゴリ
 
-The Phase 3 detailed spec is expected to define concrete actions from a set like:
+Phase 3 の詳細仕様では、少なくとも以下のようなアクション群から具体形を定義する想定である。
 
 - `move`
 - `wait`
@@ -97,62 +89,58 @@ The Phase 3 detailed spec is expected to define concrete actions from a set like
 - `attack`
 - `interact`
 
-The exact schema is intentionally deferred, but the platform must support
-game-specific action objects more complex than janken's single string action.
+正確なスキーマは Phase 3 に委ねるが、プラットフォームは、じゃんけんの単純な文字列アクションよりも複雑なゲーム固有オブジェクトを扱える必要がある。
 
-## Scoring Direction
+## スコア設計の方向
 
-Final ranking should derive from score rather than survival alone.
+最終順位は、生存可否だけでなくスコアに基づいて決める。
 
-Likely score sources:
+想定される加点源:
 
-- treasure collected
-- rare objective captures
-- combat rewards
-- extraction/escape bonus
+- 宝物の取得
+- 希少目標の獲得
+- 戦闘報酬
+- 脱出ボーナス
 
-Likely penalties:
+想定される減点または不利益:
 
-- defeat or incapacitation
-- wasted turns under hazardous conditions
+- 敗北や行動不能
+- 危険地帯での無駄ターン
 
-This scoring model supports both aggression and efficient exploration instead of
-collapsing the game into pure elimination.
+これにより、単なる生存ゲームや殲滅戦ではなく、探索効率と対人圧力の両方を競わせられる。
 
-## Spectator Value
+## 観戦価値
 
-The dungeon concept is chosen partly because it creates a readable visual match:
+ダンジョン構想を本命ゲームに据える理由の一つは、観戦時の視覚的な分かりやすさである。
 
-- map reveal over time
-- path divergence and convergence
-- contested objectives
-- surprise encounters caused by limited vision
+- 時間とともに進むマップ開示
+- プレイヤーの進路分岐と合流
+- 争奪対象をめぐる競合
+- 視界制限が生む不意の遭遇
 
-This makes it a better flagship spectator game than an abstract hidden-state
-game with weak spatial representation.
+抽象的な隠し情報ゲームよりも、空間表現のあるダンジョンの方が旗艦ゲームとして観戦価値を作りやすい。
 
-## Platform Implications
+## プラットフォームへの要求
 
-The dungeon game requires the platform to support:
+ダンジョンゲームを成立させるため、プラットフォームは以下をサポートする必要がある。
 
-- per-player filtered `visible_state`
-- long-lived AI memory across many turns
-- simultaneous action resolution with collisions/conflicts
-- whole-state snapshots for replay
-- ranking by composite score rather than binary win/loss
+- プレイヤーごとにフィルタされた `visible_state`
+- 多ターンにわたる AI の長期記憶
+- 衝突や競合を含む同時行動解決
+- リプレイ可能な全体状態スナップショット
+- 単純な勝敗ではなく複合スコアによる順位付け
 
-These requirements are why the Phase 1 platform spec is broader than what
-janken alone would demand.
+これらが、Phase 1 のプラットフォーム仕様を、じゃんけんだけで必要な最小要件より広くしている理由である。
 
-## Deferred to Phase 3
+## Phase 3 へ先送りする項目
 
-Phase 3 must define:
+Phase 3 では少なくとも以下を定義する必要がある。
 
-- concrete tile types and map generation rules
-- exact vision geometry
-- action schema and validation rules
-- combat/interference rules
-- item taxonomy
-- termination conditions
-- scoring formula and tie-breakers
-- canonical JSON-RPC payload examples
+- 具体的なタイル種別とマップ生成ルール
+- 視界形状と視界半径の厳密定義
+- アクションスキーマとバリデーション規則
+- 戦闘/干渉ルール
+- アイテム種別
+- 試合終了条件
+- スコア計算式とタイブレーク規則
+- 正式な JSON-RPC ペイロード例

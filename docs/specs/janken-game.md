@@ -1,61 +1,57 @@
-# Janken Game Specification
+# じゃんけんゲーム仕様
 
-## Purpose
+## 目的
 
-Janken is the Phase 2 proving game for the platform. It is intentionally small
-enough to validate the core platform loop before implementing the more complex
-dungeon game.
+じゃんけんは、プラットフォームの Phase 2 実証用ゲームである。より複雑なダンジョンゲームへ進む前に、プラットフォームの基本ループを最小構成で検証することを目的とする。
 
-The game is designed to verify:
+このゲームで検証したい要素は以下。
 
-- simultaneous-action turn handling
-- hidden opponent choices until turn resolution
-- timeout behavior
-- invalid-action handling
-- multi-round ranking based on win rate
+- 同時行動ターン処理
+- 解決まで相手の手が見えない隠し情報
+- タイムアウト処理
+- 無効アクション処理
+- 勝率ベースの複数ラウンド順位付け
 
-## Match Format
+## 試合形式
 
-- Players: 2 or more
-- Turn model: simultaneous action
-- Round count: fixed `N`, configured before match start
-- Allowed hands: `rock`, `paper`, `scissors`
-- Match end: after round `N`
+- プレイヤー数: 2人以上
+- ターンモデル: 同時行動
+- ラウンド数: 事前設定された固定 `N`
+- 選択可能な手: `rock`, `paper`, `scissors`
+- 試合終了: `N` ラウンド終了時
 
-## Round Resolution
+## ラウンド解決
 
-Every active player submits one hand per round.
+各アクティブプレイヤーは、各ラウンドで1つの手を提出する。
 
-### Outcome rules
+### 勝敗ルール
 
-- `rock` beats `scissors`
-- `scissors` beats `paper`
-- `paper` beats `rock`
+- `rock` は `scissors` に勝つ
+- `scissors` は `paper` に勝つ
+- `paper` は `rock` に勝つ
 
-### Multi-player interpretation
+### 多人数戦での解釈
 
-For a round with more than two players:
+2人を超える場合の1ラウンド解決は以下とする。
 
-- if all submitted hands are identical, the round is a draw for all players
-- if all three hands appear, the round is a draw for all players
-- if exactly two hand types appear, players using the winning hand receive one
-  round win and players using the losing hand receive one round loss
+- 全員が同じ手なら全員引き分け
+- 3種類すべての手が出たら全員引き分け
+- ちょうど2種類の手だけが出たら、勝つ側の手を出したプレイヤー全員を勝ち、負ける側の手を出したプレイヤー全員を負けとする
 
-No player is eliminated during the match.
+試合途中でプレイヤーが脱落することはない。
 
-## Timeout and Invalid Actions
+## タイムアウトと無効アクション
 
-- Timeout action: treated as `no_action`
-- Invalid action: treated as `no_action`
-- `no_action` loses to any valid hand present in the round
-- if every player submits `no_action`, the round is a draw for all players
+- タイムアウト時の行動は `no_action` とみなす
+- 無効アクションも `no_action` とみなす
+- `no_action` は、そのラウンドに有効な手が1つでも存在すれば負け扱いになる
+- 全員が `no_action` の場合は全員引き分けとする
 
-This policy makes timeout handling visible in the final ranking without adding a
-special penalty subsystem.
+この方針により、別の罰則システムを増やさずに、タイムアウトや不正行動を最終順位へ反映できる。
 
-## Scoring and Ranking
+## スコアと順位
 
-Each player tracks:
+各プレイヤーは以下を記録する。
 
 - `wins`
 - `losses`
@@ -63,53 +59,51 @@ Each player tracks:
 - `timeouts`
 - `invalid_actions`
 
-Primary ranking metric:
+主順位指標:
 
-- win rate = `wins / N`
+- 勝率 = `wins / N`
 
-Tie-breakers in order:
+同率時のタイブレーク順:
 
-1. fewer losses
-2. fewer timeouts
-3. fewer invalid actions
-4. tied placement
+1. `losses` が少ない方
+2. `timeouts` が少ない方
+3. `invalid_actions` が少ない方
+4. それでも同じなら同順位
 
-## Visible Information Model
+## 可視情報モデル
 
-### Initial information
+### 初期情報
 
-At `init`, every player receives:
+`init` 時に各プレイヤーへ渡す情報:
 
 - `game`: `janken`
 - `player_id`
-- `players`: ordered list of player IDs
-- `rounds`: total configured round count
+- `players`: プレイヤー ID の順序付き配列
+- `rounds`: 総ラウンド数
 - `deadline_ms`
 
-### Per-round information
+### 各ラウンド情報
 
-At each `turn`, every player receives:
+各 `turn` の `visible_state` には以下を含める。
 
 - `round`
 - `rounds`
 - `self_history`
 - `public_history`
-- `legal_action_hint`
 
-`self_history` contains the player's own past hands and outcomes.
+`self_history` は、そのプレイヤー自身の過去の手と結果を含む。
 
-`public_history` contains fully resolved past rounds. It never includes the
-current round's pending submissions, so simultaneous hidden choice is preserved.
+`public_history` は、すでに解決済みの過去ラウンドのみを含む。現在ラウンドの未解決提出内容は含めず、同時行動の隠し手を維持する。
 
-`legal_action_hint` is always:
+`legal_action_hint` は `visible_state` の外側に置き、常に以下とする。
 
 ```json
 ["rock", "paper", "scissors"]
 ```
 
-## Action Schema
+## アクションスキーマ
 
-AI response `result` for `turn`:
+`turn` に対する AI レスポンスの `result` は以下。
 
 ```json
 {
@@ -117,19 +111,19 @@ AI response `result` for `turn`:
 }
 ```
 
-Allowed `action` values:
+許可される `action` 値:
 
 - `rock`
 - `paper`
 - `scissors`
 
-Any other value is invalid.
+それ以外は無効アクションとする。
 
-## JSON-RPC Examples
+## JSON-RPC 例
 
 ### `init`
 
-Request:
+リクエスト:
 
 ```json
 {
@@ -150,7 +144,7 @@ Request:
 }
 ```
 
-Response:
+レスポンス:
 
 ```json
 {
@@ -164,7 +158,7 @@ Response:
 
 ### `turn`
 
-Request:
+リクエスト:
 
 ```json
 {
@@ -199,7 +193,7 @@ Request:
 }
 ```
 
-Response:
+レスポンス:
 
 ```json
 {
@@ -213,7 +207,7 @@ Response:
 
 ### `result`
 
-Request:
+リクエスト:
 
 ```json
 {
@@ -237,22 +231,19 @@ Request:
 }
 ```
 
-## Spectator-Facing Whole State
+## 観戦向け全体状態
 
-The whole-state export for a janken match must include:
+じゃんけんの全体状態エクスポートには以下を含める。
 
-- configured round count
-- current round number
-- all player submissions for resolved rounds
-- round outcomes
-- cumulative score table
-- pending players for the active round
+- 設定ラウンド数
+- 現在ラウンド番号
+- 解決済みラウンドの全プレイヤー提出内容
+- 各ラウンド結果
+- 累積スコア表
+- 現在ラウンドで未提出のプレイヤー一覧
 
-This is sufficient for a future spectator UI showing round-by-round reveals.
+これで将来の観戦 UI でラウンドごとの reveal 表示が可能になる。
 
-## Why This Game Exists
+## このゲームを使う理由
 
-Janken is not meant to be strategically deep enough for the final platform. It
-exists because it is the smallest game that still exercises simultaneous hidden
-actions, repeated rounds, ranking, and deadline behavior under the shared AI
-protocol.
+じゃんけん自体を最終的な主力ゲームにしたいわけではない。このゲームを選ぶ理由は、共有 AI プロトコルの上で、同時隠し行動、複数ラウンド、順位付け、締切処理を最小のルールで検証できるからである。

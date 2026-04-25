@@ -1,37 +1,34 @@
-# `ww cd` failed immediately after `ww create`
+# `ww cd` が `ww create` 直後に失敗する
 
-## Summary
+## 概要
 
-During execution of Phase 1 task `001-game-concept`, the prescribed setup flow:
+Phase 1 タスク `001-game-concept` の実行中、想定されている以下のセットアップ手順:
 
 ```sh
 ww create --repo ai-arena docs/001-game-concept
 cd "$(ww cd --repo ai-arena docs/001-game-concept)"
 ```
 
-did not work as documented.
+が、ドキュメントどおりには動作しなかった。
 
-## Observed behavior
+## 実際の挙動
 
-- `ww create --repo ai-arena docs/001-game-concept` succeeded
-- created worktree path:
-  `/path/to/.../.worktrees/ai-arena@docs-001-game-concept`
-- immediate follow-up `ww cd --repo ai-arena docs/001-game-concept` failed with:
+- `ww create --repo ai-arena docs/001-game-concept` は成功した
+- 作成された worktree path:
+  `.../.worktrees/ai-arena@docs-001-game-concept`
+- 直後の `ww cd --repo ai-arena docs/001-game-concept` は以下で失敗した:
   `no worktree found for branch "docs/001-game-concept"`
 
-## Expected behavior
+## 期待する挙動
 
-After successful `ww create`, the matching `ww cd` invocation should resolve the
-newly created worktree path for the same repo and branch.
+`ww create` が成功した直後であれば、同じ repo と branch を指定した `ww cd` で、新しく作られた worktree path を解決できるべき。
 
-## Impact
+## 影響
 
-- workflow instructions could not be followed literally
-- execution continued by using the created path directly
-- no code/spec content was blocked, but the standard worktree UX was broken
+- workflow 手順をそのまま実行できなかった
+- 作成済み path を直接使うことで作業は継続できた
+- code/spec 作業自体は止まらなかったが、標準的な worktree UX は壊れていた
 
-## Follow-up
+## フォローアップ
 
-Investigate whether `ww cd` expects a different branch key format than
-`ww create`, or whether the worktree registration step is incomplete for `docs/*`
-branches.
+`ww cd` が `ww create` と異なる branch key format を期待しているのか、あるいは `docs/*` branch に対する worktree 登録が不完全なのかを調査する。

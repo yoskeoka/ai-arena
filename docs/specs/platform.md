@@ -1,82 +1,78 @@
-# Platform Specification
+# プラットフォーム仕様
 
-## Purpose
+## 目的
 
-This document defines the Phase 1 specification for the AI Arena platform layer.
-The platform layer is game-agnostic and is responsible for AI execution, turn
-coordination, result recording, and spectator-facing state retrieval.
+このドキュメントは、AI Arena の Phase 1 におけるプラットフォーム層の仕様を定義する。
+プラットフォーム層はゲーム非依存であり、AI 実行、ターン進行、結果記録、観戦向け状態取得を担う。
 
-## Scope
+## スコープ
 
-The platform layer must support:
+プラットフォーム層は以下をサポートする必要がある。
 
-- registering multiple games behind a common execution model
-- running long-lived AI processes for a single match
-- exchanging actions over stdin/stdout with JSON-RPC 2.0 envelopes
-- handling simultaneous-action and turn-order games
-- recording match results, rankings, and AI stderr logs
-- exposing whole-match state for operators and future spectator clients
+- 複数ゲームを共通の実行モデルで登録できること
+- 1試合の間、AI プロセスを長寿命で維持できること
+- stdin/stdout 上で JSON-RPC 2.0 によりアクションを交換できること
+- 同時行動型ゲームと順番制ゲームの両方を扱えること
+- 試合結果、順位、AI の stderr ログを記録できること
+- 将来の観戦クライアントや運営画面向けに試合全体状態を公開できること
 
-This document does not define the concrete HTTP API surface or persistence
-schema. Those are deferred to later implementation phases.
+このドキュメントでは、HTTP API の具体形や永続化スキーマは定義しない。それらは後続フェーズで扱う。
 
-## Core Model
+## コアモデル
 
-### Platform responsibilities
+### プラットフォームの責務
 
-The platform is responsible for:
+プラットフォームは以下を担当する。
 
-- accepting a game definition and match configuration
-- starting one AI runtime instance per participating player
-- delivering game-specific visible state to each AI
-- collecting actions within the configured deadline
-- applying timeout and invalid-action policies
-- delegating state transition logic to the selected game master
-- persisting match results and AI stderr logs
-- exposing full game state to future observer and admin interfaces
+- ゲーム定義と対戦設定を受け付ける
+- 参加プレイヤーごとに AI ランタイムを1つ起動する
+- 各 AI にゲーム固有の可視状態を届ける
+- 制限時間内にアクションを収集する
+- タイムアウトと不正アクションの扱いを適用する
+- 状態遷移ロジックを選択されたゲームマスターに委譲する
+- 試合結果と AI の stderr ログを永続化する
+- 観戦者や運営者向けに全体状態を公開する
 
-### Non-responsibilities
+### プラットフォームの非責務
 
-The platform is not responsible for:
+プラットフォームは以下を担当しない。
 
-- defining game-specific action schemas beyond transport requirements
-- providing AI source build pipelines
-- letting AIs communicate externally during a match
+- 伝送方式を超えたゲーム固有アクション仕様の定義
+- AI ソースコードのビルドパイプライン提供
+- 試合中に AI 同士や外部と通信させること
 
-## AI Runtime Model
+## AI 実行モデル
 
-### Submission format
+### 提出形式
 
-- AI submissions are WASM binaries targeting WASI.
-- The platform does not compile user source code.
-- A submission is versioned per player and selected at match creation time.
+- AI の提出物は WASI 対応 WASM バイナリとする
+- プラットフォームはユーザーのソースコードをコンパイルしない
+- 提出物はプレイヤー単位でバージョン管理され、対戦作成時に選択される
 
-### Runtime constraints
+### 実行制約
 
-- Each AI is started once at match start and remains alive until the match ends.
-- AI processes may keep in-memory state across turns in the same match.
-- Runtime memory limits are enforced via WASM linear memory limits.
-- Turn deadlines are enforced by the platform with timeout-aware execution
-  control.
-- Network access is unavailable by design.
-- Filesystem access is denied by default unless a future spec explicitly allows
-  a bounded scratch area.
+- 各 AI は試合開始時に1回だけ起動し、試合終了まで生存する
+- AI は同一試合中のターンをまたいでメモリ上の状態を保持できる
+- メモリ上限は WASM linear memory の制限で管理する
+- ターン締切はタイムアウト制御付きの実行管理で強制する
+- ネットワークアクセスは設計上利用不可とする
+- ファイルシステムアクセスはデフォルトで禁止し、将来必要なら別 spec で限定的に許可する
 
-### Standard streams
+### 標準ストリーム
 
-- `stdin`: platform-to-AI JSON-RPC requests
-- `stdout`: AI-to-platform JSON-RPC responses only
-- `stderr`: free-form AI logs captured verbatim by the platform
+- `stdin`: プラットフォームから AI への JSON-RPC リクエスト
+- `stdout`: AI からプラットフォームへの JSON-RPC レスポンス専用
+- `stderr`: AI が自由に出力できるログチャネル
 
-Any non-JSON-RPC payload written to `stdout` is treated as protocol violation.
+`stdout` に JSON-RPC 以外の内容が出力された場合は、プロトコル違反として扱う。
 
-## Transport Protocol
+## 通信プロトコル
 
-### Envelope
+### エンベロープ
 
-All platform-to-AI requests and AI-to-platform responses use JSON-RPC 2.0.
+プラットフォームから AI へのリクエスト、および AI からプラットフォームへのレスポンスは、すべて JSON-RPC 2.0 を用いる。
 
-Platform request shape:
+プラットフォームからのリクエスト例:
 
 ```json
 {
@@ -87,7 +83,7 @@ Platform request shape:
 }
 ```
 
-AI response shape:
+AI からのレスポンス例:
 
 ```json
 {
@@ -97,35 +93,43 @@ AI response shape:
 }
 ```
 
-### Request lifecycle
+### メッセージフレーミング
 
-1. The platform sends a request with a unique `id`.
-2. The AI must respond with the same `id` before the deadline.
-3. A missing response by the deadline is treated as timeout.
-4. A malformed response or mismatched `id` is treated as protocol error.
+`stdin` / `stdout` 上のプロトコルメッセージは NDJSON とする。
 
-The platform sends requests sequentially per AI process. A game may still use
-simultaneous turns by sending each player its own request for the same turn
-window and waiting for all responses or deadlines before resolving the turn.
+- 各 JSON-RPC メッセージは1つの UTF-8 JSON オブジェクトとして出力する
+- 各メッセージは改行文字 `\n` で終端する
+- 受信側は `\r\n` も行終端として受理してよい
+- 送信側はプロトコルストリーム上で複数行 JSON を出力してはならない
+- `stdout` にはフレーム化された JSON-RPC メッセージ以外のバイト列を混在させてはならない
 
-### Standard methods
+### リクエストライフサイクル
 
-The platform reserves these request methods:
+1. プラットフォームは一意な `id` を持つリクエストを送る
+2. AI は締切までに同じ `id` を持つレスポンスを返す
+3. 締切までに応答がなければタイムアウトとして扱う
+4. 不正な形式や `id` 不一致の応答はプロトコルエラーとして扱う
 
-- `init`: sent once at match start
-- `turn`: sent once per decision point visible to that AI
-- `result`: sent once at match end
+プラットフォームは各 AI プロセスに対しては逐次的にリクエストを送る。ゲーム全体としては、同じターン窓で各プレイヤーに個別にリクエストを送り、全員の応答または締切を待ってから解決することで、同時行動を表現できる。
 
-Games may extend `params` but may not redefine these method names.
+### 標準メソッド
+
+プラットフォームは以下のメソッド名を予約する。
+
+- `init`: 試合開始時に1回送る
+- `turn`: 各 AI の意思決定ポイントごとに送る
+- `result`: 試合終了時に1回送る
+
+ゲームごとに `params` の中身を拡張してよいが、これらのメソッド名は再定義しない。
 
 ### `init`
 
-Purpose:
+目的:
 
-- inform the AI of static match metadata
-- provide the game identifier and game-specific setup payload
+- 試合の静的メタデータを AI に知らせる
+- ゲーム識別子とゲーム固有の初期状態を渡す
 
-Required `params` fields:
+必須 `params` フィールド:
 
 - `match_id`
 - `player_id`
@@ -134,153 +138,140 @@ Required `params` fields:
 - `deadline_ms`
 - `state`
 
-The `state` field contains the game-specific initial visible state for that AI.
+`state` には、その AI から見えるゲーム固有の初期状態を入れる。
 
 ### `turn`
 
-Purpose:
+目的:
 
-- request one decision from the AI for the current turn or action window
+- 現在のターンまたは行動窓に対する1回の意思決定を要求する
 
-Required `params` fields:
+必須 `params` フィールド:
 
 - `turn`
 - `visible_state`
 - `legal_action_hint`
 - `deadline_ms`
 
-`legal_action_hint` is optional for games that do not precompute legal actions,
-but Phase 1 game specs should include it where practical because it simplifies
-AI prototyping and spectator debugging.
+`legal_action_hint` は Phase 1 では必須とする。もともと合法手の事前列挙が自然でないゲームであっても、AI の試作と観戦デバッグを簡単にするため、Phase 1 のゲーム仕様では何らかの形で与える。
 
 ### `result`
 
-Purpose:
+目的:
 
-- notify the AI that the match is complete
-- provide final ranking and game-specific outcome data
+- 試合終了を AI に通知する
+- 最終順位とゲーム固有の結果情報を渡す
 
-Required `params` fields:
+必須 `params` フィールド:
 
 - `placement`
 - `score`
 - `summary`
 
-No further requests are sent after `result`.
+`result` の後に追加のリクエストは送らない。
 
-## Error Handling
+## エラーハンドリング
 
-### Timeout
+### タイムアウト
 
-If the AI fails to answer before the deadline:
+AI が締切前に応答しなかった場合:
 
-- the platform records a timeout event
-- the AI action for that window becomes `no_action`
-- the game master resolves `no_action` according to game rules
+- プラットフォームはタイムアウトイベントを記録する
+- その行動窓のアクションは `no_action` とみなす
+- ゲームマスターはゲーム仕様に従って `no_action` を解決する
 
-### Malformed protocol output
+### 不正なプロトコル出力
 
-Malformed JSON, invalid JSON-RPC envelopes, or responses with wrong `id` are
-protocol violations. The platform records the error and treats the turn as
-`no_action`.
+不正な JSON、無効な JSON-RPC エンベロープ、または `id` が一致しないレスポンスはプロトコル違反とする。プラットフォームはそのエラーを記録し、そのターンを `no_action` として扱う。
 
-Repeated protocol violations may trigger early match termination in future
-phases, but Phase 1 specs assume the match continues unless the game master
-cannot proceed.
+将来フェーズでは、プロトコル違反の繰り返しで試合を早期終了させる可能性がある。ただし Phase 1 では、ゲームマスターが進行不能でない限り試合継続を前提とする。
 
-### Invalid in-game action
+### ゲーム内で無効なアクション
 
-If the AI returns syntactically valid JSON-RPC with a semantically invalid
-action:
+AI が JSON-RPC としては正しいが、ゲームルール上は無効なアクションを返した場合:
 
-- the platform records the invalid action
-- the game master applies the game's invalid-action policy
+- プラットフォームは無効アクションとして記録する
+- ゲームマスターはそのゲームの無効アクション方針を適用する
 
-Each game spec must state whether invalid actions become `no_action`, are
-rejected with fallback behavior, or immediately lose the round.
+各ゲーム仕様は、無効アクションを `no_action` に落とすのか、代替挙動に置き換えるのか、即敗北扱いにするのかを明記しなければならない。
 
-## Game Integration Contract
+## ゲーム統合契約
 
-Each registered game must provide:
+各ゲームは少なくとも以下を提供する。
 
-- a human-readable game specification
-- a machine-readable action and visible-state schema definition
-- a game master implementation
-- a full-state export model for operators and spectators
+- 人間向けのゲーム仕様書
+- 機械可読なアクション/可視状態スキーマ定義
+- ゲームマスター実装
+- 観戦者や運営向けの全体状態エクスポートモデル
 
-### Game master responsibilities
+### ゲームマスターの責務
 
-The game master must implement logic for:
+ゲームマスターは以下のロジックを実装する。
 
-- creating initial match state
-- producing each player's visible state
-- validating actions
-- applying actions to full state
-- resolving simultaneous submissions when required
-- determining round and match termination
-- computing score and placement
-- exporting full-state snapshots for observation
+- 初期試合状態の生成
+- プレイヤーごとの可視状態生成
+- アクション検証
+- 全体状態へのアクション適用
+- 必要に応じた同時提出アクションの解決
+- ラウンド終了判定と試合終了判定
+- スコア算出と順位決定
+- 観戦用の全体状態スナップショット出力
 
-### Full-state export
+### 全体状態エクスポート
 
-The platform expects each game to expose a whole-state representation that is
-safe for observer/admin consumption. This representation may contain hidden
-information not visible to individual AIs.
+プラットフォームは、各ゲームが観戦者や運営者向けに安全に利用できる全体状態表現を出せることを前提とする。この表現には、各 AI には見えていない隠し情報が含まれていてよい。
 
-The spectator API in later phases will build on this whole-state export instead
-of reading internal engine memory directly.
+将来の観戦 API は、内部メモリを直接読むのではなく、この全体状態エクスポートを土台に構築する。
 
-## Turn Models
+## ターンモデル
 
-### Simultaneous-action games
+### 同時行動ゲーム
 
-Flow:
+流れ:
 
-1. The platform sends a `turn` request to every active player.
-2. The platform waits until every player responds or times out.
-3. The game master resolves the turn using the collected action set.
-4. The platform advances to the next turn.
+1. プラットフォームは全アクティブプレイヤーへ `turn` を送る
+2. 全プレイヤーの応答またはタイムアウトまで待つ
+3. ゲームマスターが集まったアクション集合を使ってターンを解決する
+4. 次のターンへ進む
 
-### Sequential-turn games
+### 順番制ゲーム
 
-Flow:
+流れ:
 
-1. The platform sends a `turn` request only to the active player.
-2. The game master applies the returned action or timeout fallback.
-3. The platform advances the active player pointer.
+1. プラットフォームは現在の手番プレイヤーにだけ `turn` を送る
+2. ゲームマスターが応答またはタイムアウト代替行動を適用する
+3. 次の手番へ進む
 
-The platform must support both models without changing the AI transport.
+AI 通信方式を変えずに、プラットフォームは両モデルを扱えなければならない。
 
-## Ranking
+## 順位決定
 
-Each game defines its own scoring and placement rule. The platform only assumes
-that a match produces:
+各ゲームは独自のスコア・順位ルールを定義する。プラットフォームが共通で前提とするのは、1試合の結果として次が得られることだけである。
 
-- a per-player score value
-- a final placement order or tie group
-- an outcome summary suitable for logs and future ranking systems
+- プレイヤーごとのスコア値
+- 最終順位または同順位グループ
+- ログや将来のランキング集計に使える結果サマリ
 
-Phase 1 does not standardize cross-game ladder aggregation.
+Phase 1 では、ゲーム横断のレーティングやラダー集計は標準化しない。
 
-## Logging and Observability
+## ログと観測性
 
-- AI `stderr` is stored with player, match, and timestamp metadata.
-- Match execution records include timeouts, invalid actions, and protocol
-  violations.
-- Whole-state snapshots are retained at least at turn boundaries.
+- AI の `stderr` は、プレイヤー・試合・時刻メタデータとともに保存する
+- 試合実行記録にはタイムアウト、無効アクション、プロトコル違反を含める
+- 全体状態スナップショットは少なくともターン境界で保持する
 
-This data is required for:
+これらのデータは以下のために必要である。
 
-- AI debugging
-- spectator playback
-- operator incident analysis
+- AI のデバッグ
+- 観戦リプレイ
+- 運営側の障害調査
 
-## Deferred Items
+## 後続フェーズへ送る項目
 
-The following are intentionally deferred beyond Phase 1:
+以下は意図的に Phase 1 の対象外とする。
 
-- concrete spectator API transport
-- matchmaking and tournament orchestration
-- persistent rating systems
-- plugin packaging/discovery for third-party games
-- hot-swapping AI versions mid-match
+- 観戦 API の具体的な伝送方式
+- マッチメイキングとトーナメント運営
+- 永続レーティングシステム
+- サードパーティ向けゲームプラグインの配布/発見方式
+- 試合中の AI バージョン差し替え
