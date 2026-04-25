@@ -100,11 +100,11 @@ project-planで定義済みの要件（更新済み）:
 
 ## Sub-tasks
 
-- [ ] [parallel] `docs/specs/platform.md` 作成
-- [ ] [parallel] `docs/specs/janken-game.md` 作成
-- [ ] [parallel] `docs/specs/dungeon-game.md` 概要作成
-- [ ] [parallel] `docs/design-decisions/adr.md` 更新
-- [ ] [depends on: all above] 全体の整合性レビュー
+- [x] [parallel] `docs/specs/platform.md` 作成
+- [x] [parallel] `docs/specs/janken-game.md` 作成
+- [x] [parallel] `docs/specs/dungeon-game.md` 概要作成
+- [x] [parallel] `docs/design-decisions/adr.md` 更新
+- [x] [depends on: all above] 全体の整合性レビュー
 
 ## Notes
 
