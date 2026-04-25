@@ -1,2 +1,4 @@
 Place issue files here. Format: `issue-name.md`.
 Use this for tracking bugs/refactors discovered during an exec-plan that are out of scope for the current plan.
+
+Resolved issues should be moved to `docs/issues/done/`.
