@@ -15,7 +15,7 @@ did not work as documented.
 
 - `ww create --repo ai-arena docs/001-game-concept` succeeded
 - created worktree path:
-  `/home/yoske/src/github.com/yoskeoka/vibe-coding-workspace/.worktrees/ai-arena@docs-001-game-concept`
+  `/path/to/.../.worktrees/ai-arena@docs-001-game-concept`
 - immediate follow-up `ww cd --repo ai-arena docs/001-game-concept` failed with:
   `no worktree found for branch "docs/001-game-concept"`
 
