@@ -211,15 +211,14 @@
 }
 ```
 
-### `result`
+### `end`
 
-リクエスト:
+notification:
 
 ```json
 {
   "jsonrpc": "2.0",
-  "id": "result",
-  "method": "result",
+  "method": "end",
   "params": {
     "placement": 1,
     "score": {
@@ -232,10 +231,51 @@
       "players": 2,
       "rounds": 5,
       "tie_breakers_applied": []
-    }
+    },
+    "final_visible_state": {
+      "round": 5,
+      "rounds": 5,
+      "self_history": [
+        {"round": 1, "action": "rock", "outcome": "win"},
+        {"round": 2, "action": "paper", "outcome": "draw"},
+        {"round": 3, "action": "scissors", "outcome": "loss"},
+        {"round": 4, "action": "rock", "outcome": "win"},
+        {"round": 5, "action": "paper", "outcome": "win"}
+      ],
+      "public_history": [
+        {
+          "round": 1,
+          "actions": {"p1": "rock", "p2": "scissors"},
+          "outcomes": {"p1": "win", "p2": "loss"}
+        },
+        {
+          "round": 2,
+          "actions": {"p1": "paper", "p2": "paper"},
+          "outcomes": {"p1": "draw", "p2": "draw"}
+        },
+        {
+          "round": 3,
+          "actions": {"p1": "scissors", "p2": "rock"},
+          "outcomes": {"p1": "loss", "p2": "win"}
+        },
+        {
+          "round": 4,
+          "actions": {"p1": "rock", "p2": "scissors"},
+          "outcomes": {"p1": "win", "p2": "loss"}
+        },
+        {
+          "round": 5,
+          "actions": {"p1": "paper", "p2": "rock"},
+          "outcomes": {"p1": "win", "p2": "loss"}
+        }
+      ]
+    },
+    "shutdown_after_ms": 500
   }
 }
 ```
+
+`end` はレスポンス不要であり、AI はこの通知を受けたあとに最終ラウンド結果も含めて自己評価し、必要なら改善用レポートを `stderr` へ出力してよい。プラットフォームは `shutdown_after_ms` の猶予後にインスタンスを終了させる。
 
 ## 観戦向け全体状態
 
