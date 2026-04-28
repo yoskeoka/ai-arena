@@ -211,14 +211,14 @@
 }
 ```
 
-### `end`
+### `game_over`
 
 notification:
 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "end",
+  "method": "game_over",
   "params": {
     "placement": 1,
     "score": {
@@ -275,7 +275,7 @@ notification:
 }
 ```
 
-`end` はレスポンス不要であり、AI はこの通知を受けたあとに最終ラウンド結果も含めて自己評価し、必要なら改善用レポートを `stderr` へ出力してよい。プラットフォームは `shutdown_after_ms` の猶予後にインスタンスを終了させる。
+`game_over` はレスポンス不要であり、AI はこの通知を受けたあとに最終ラウンド結果も含めて自己評価し、必要なら改善用レポートを `stderr` へ出力してよい。プラットフォームは `shutdown_after_ms` の猶予後にインスタンスを終了させる。
 
 ## 観戦向け全体状態
 
