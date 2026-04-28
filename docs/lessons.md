@@ -27,3 +27,10 @@
 - **Pattern**: 「結果を渡すこと」と「終了猶予を与えること」を別メカニズムにせず、末尾プロトコルを詰め切らない
 - **Rule**: AI が最終振り返りやレポート出力を行う必要があるゲームでは、試合終了メッセージは response 不要の `game_over` notification とし、必要なら `shutdown_after_ms` を明示する
 - **Applied**: `docs/specs/platform.md` の `game_over` / shutdown 記述、`docs/specs/janken-game.md` の最終通知例
+
+## [2026-04-29] platform 共通仕様とゲーム固有運用の境界を残す
+
+- **Mistake**: `stderr` の公開タイミングや AI 差し替え条件まで platform 共通仕様で固定すると、ゲームごとの面白さや運営ルール差分を潰してしまう
+- **Pattern**: 保存責務と公開タイミング、再起動フックと発火条件を同じ層で定義してしまう
+- **Rule**: platform spec では「保存する」「差し替え前処理フックを持つ」までを定義し、公開タイミングや差し替え条件はゲーム仕様へ委ねる
+- **Applied**: `docs/specs/platform.md` の `stderr` 取得タイミングと `turn` 前差し替え前処理の記述
