@@ -30,6 +30,13 @@
 - ID は中央集権的な採番を前提にせず、少なくとも UUIDv7 のような十分衝突しにくい stable ID を使えるようにする
 - この ID は runner の match 起動時だけでなく、将来の game 登録 / AI 登録 / AI 更新時の互換性バリデーションにも使う
 
+`game_protocol_id` の修正案:
+
+- `game_protocol_id` は game 名ではなく、`init` / `turn` / `game_over` の payload shape、action schema、snapshot restart に必要な metadata を含む「互換プロトコル契約」を識別する ID として扱う
+- 互換性を壊さないルール調整や balance 調整は `ruleset_version` で表現し、`game_protocol_id` は維持してよい
+- `init` / `turn` / `game_over` の必須フィールド変更、型変更、action schema の非後方互換変更、snapshot 復元 contract の変更が入る場合は `game_protocol_id` を変える
+- Phase 2 の local subprocess 実装では、AI metadata は sidecar manifest から読む前提を既定にする。将来 WASM custom section などへ移しても、runner が見る論理 metadata 項目は維持する
+
 過去判断との整合:
 
 - `janken` を Phase 2 の主たる実証ゲームとして扱う ADR は維持する
@@ -86,9 +93,6 @@
 - `janken` は Phase 2 の richer integration として残しつつ、その前段に deterministic fixture を入れる方が ADR の「先にローカルプロセス実行で切り分ける」と整合する
 - オウム返し game 単体では順位差や失敗系の確認が弱いが、fault injection AI を同梱すれば platform の責務検証として十分な厚みになる
 
-**Human confirmation needed before execution**:
-この plan は `janken` を置き換えず、`platform` 専用 fixture として `echo-count` 系ゲームを追加する前提で組む。
-
 ## Recommended Fixture Design
 
 fixture game 名は仮に `echo-count` とする。
@@ -131,7 +135,7 @@ mode:
 - `no_action` に至った理由は match record に別フィールドで記録する
 - game master は理由分類に依存せず、ゲーム仕様どおり `no_action` を処理する
 - transport / JSON-RPC として壊れているかどうかは platform が判定する
-- game 固有 schema や legal move かどうかは game validator / game master が判定する
+- game 固有 schema や legal move かどうかは game 側 validator が判定する
 
 推奨する記録分類:
 
@@ -155,19 +159,37 @@ mode:
 - `invalid-protocol-mismatched-id`
   - platform が判定する
 - `invalid-illegal-action`
-  - platform 単独ではなく、game validator / game master の判定結果として記録する
+  - platform 単独ではなく、game validator の判定結果として記録する
 
 必要なら record 上は `failure_source=platform|game` を持たせ、同じ `no_action` でも原因の責務境界を追えるようにする。
 
-必要なら execution 時に `invalid-protocol-unexpected-output` のような細分類を追加してよいが、少なくとも上記 4 種は区別できるようにする。
+必要なら execution 時に `invalid-protocol-unexpected-output` や `invalid-protocol-late-response` のような細分類を追加してよいが、少なくとも上記 4 種は区別できるようにする。
+
+インターフェース修正案:
+
+- session 層は AI から返った生の `result` payload を保持したまま match 層へ返す
+- game package は `ValidateAction(rawResult)` を持ち、`accepted` または `invalid-illegal-action -> no_action` へ正規化する
+- match loop は platform failure と game validation failure を同じ `TurnOutcome` で扱うが、`failure_reason` と `failure_source` を分離して記録する
+- game master の resolve/apply 系 API は、validation 済みの `accepted | no_action` だけを受け取る
 
 `echo-count` fixture での扱い:
 
 - game master は `accepted` なら一致値を検証して成功を記録する
-- `accepted` だが値が期待値と違う場合は、platform ではなく game spec 側の無効行動なので、game validator が `invalid-illegal-action` を返し、match record へ記録しつつ game master へは `no_action` として渡す
+- `accepted` 候補だが値が期待値と違う場合は、platform ではなく game spec 側の無効行動なので、game validator が `invalid-illegal-action` を返し、match record へ記録しつつ game master へは `no_action` として渡す
 - `invalid-timeout` / `invalid-protocol-*` は platform 層で記録し、game master へは `no_action` として渡す
 
 この分離により、platform test では「どう壊れたか」を見え、game test では「`no_action` をどう処理するか」だけを見ればよくなる。
+
+### timeout 後の遅延レスポンス方針
+
+長寿命 session では、timeout 判定後に古い request への response が遅れて到着するケースを明示的に扱う必要がある。
+
+修正案:
+
+- timeout 済み request の `id` に対応する遅延レスポンスは、その turn の有効入力へ復帰させず破棄する
+- 遅延レスポンスは `invalid-protocol-late-response` として記録し、少なくとも player event counters と turn record から辿れるようにする
+- 次の request を送る前に、session は stdout reader 側で stale response を識別できる必要がある
+- 遅延レスポンス単発では即 kill しないが、閾値超過時は他の protocol violation と同様に AI 強制停止対象へ含めてよい
 
 ## snapshot の目的と非目標
 
@@ -217,16 +239,20 @@ replay について:
 - transport/protocol violation の記録項目を実装可能な粒度に具体化する
 - game master に渡す正規化 action と、match record に残す failure reason を分離して定義する
 - platform 判定可能な failure と game 判定の illegal action を分けて定義する
+- raw AI response を game validator が正規化し、その後の game master には `accepted | no_action` だけを渡す contract を定義する
+- timeout 後の遅延レスポンス (`late response`) の記録方針と破棄方針を定義する
 - `game_protocol_id` を game metadata / AI metadata / `init` payload に含める
 - runner と将来の登録フローで `game_protocol_id` 一致確認を行うことを定義する
+- `game_protocol_id` と `ruleset_version` の責務差分、および AI metadata の取得元としての sidecar manifest 既定を定義する
 
-### 2. `docs/specs/platform-fixture-echo-count.md` を新規追加
+### 2. `docs/specs/platform.md` の fixture appendix
 
 - `echo-count` fixture game のルール、`init` / `turn` / `game_over` payload、mode 別進行、score/placement の定義を書く
 - restart-from-snapshot に必要な snapshot 入出力形を定義する
 - simultaneous / sequential の両 mode の example transcript を載せる
 - failure mode 用 AI を使った expected record 例を載せる
 - `accepted` / `no_action` の game master 入力と、`invalid-timeout` / `invalid-protocol-malformed` / `invalid-protocol-mismatched-id` / `invalid-illegal-action` の記録例を載せる
+- `invalid-protocol-late-response` と init/shutdown failure の expected record 例を載せる
 - 特に `invalid-illegal-action` は game 側判定であり、platform 単独では決めないことを明記する
 - `echo-count` の `game_protocol_id` と、AI metadata 側での一致要件を明記する
 
@@ -266,6 +292,7 @@ ADR 追加は不要の見込み。
   - restart-from-snapshot entrypoint
 - `internal/platform/game/`
   - game master interface
+  - action validator interface
   - exported snapshot interface
 - `internal/platform/catalog/`
   - game metadata
@@ -280,6 +307,10 @@ ADR 追加は不要の見込み。
   - timeout AI
   - invalid action AI
   - bad JSON AI
+  - late response AI
+  - init-timeout AI
+  - exit-after-init AI
+  - hung-after-game-over AI
 - `e2e/`
   - CLI 起動ベースの black-box tests
 
@@ -305,6 +336,7 @@ Verification:
 - unit test: 複数 message の NDJSON framing
 - unit test: malformed JSON / wrong `id` / invalid envelope の判定
 - unit test: metadata の `game_protocol_id` 必須チェック
+- unit test: `game_protocol_id` と `ruleset_version` の責務差分に沿った validation
 
 ### Task 2: local process runtime adapter を実装する
 
@@ -319,6 +351,7 @@ Verification:
 - unit test: stderr capture 上限が適用される
 - unit test: process start failure が `init` 前失敗として扱われる
 - unit test: AI metadata の `game_protocol_id` を取得できる
+- unit test: `game_over` 後の shutdown timeout 超過で強制停止できる
 
 ### Task 3: AI session 層を実装する
 
@@ -327,18 +360,22 @@ Verification:
 - protocol violation を turn failure として記録できるようにする
 - game master に渡す正規化 action を `accepted` / `no_action` にそろえ、failure reason は別 record に保持する
 - platform 層では transport/protocol 系 failure までを判定し、game legal move 判定は game 層へ委譲する
+- timeout 後に届いた stale response を後続 turn の応答として誤採用しないようにする
 
 Verification:
 
 - unit test: `init` ACK を正常受理できる
 - unit test: `turn` timeout が `no_action` 相当として返る
+- unit test: `init` timeout または bad ACK が init failure として記録される
 - unit test: `game_over` が notification として送られ response を待たない
 - unit test: bad JSON / mismatched id / unexpected stdout を protocol violation として記録する
 - unit test: `invalid-timeout` / `invalid-protocol-malformed` / `invalid-protocol-mismatched-id` がそれぞれ別 reason で記録される
+- unit test: timeout 後の late response が `invalid-protocol-late-response` として記録され、次 turn の response と混線しない
 
 ### Task 4: game master 契約と match loop を実装する
 
 - game master interface を定義する
+- action validator interface を定義する
 - simultaneous / sequential scheduler を実装する
 - turn 収集結果を game master に適用する
 
@@ -347,6 +384,7 @@ Verification:
 - unit test: simultaneous mode で全員応答待ち後に 1 回だけ resolve される
 - unit test: sequential mode で手番プレイヤーだけに request が送られる
 - unit test: timeout / invalid action が game master へ `no_action` 相当で渡る
+- unit test: raw AI result は game validator を通るまで resolve 対象へ入らない
 
 ### Task 5: match record / exported snapshot / observability を実装する
 
@@ -356,6 +394,7 @@ Verification:
 - snapshot は restart-from-snapshot 用 canonical state と exported snapshot を区別して定義する
 - player ごとの `action_status` と `failure_reason` を turn 単位で残せるようにする
 - 必要なら `failure_source` も持たせ、platform 起因か game 起因か区別できるようにする
+- init failure / turn failure / shutdown failure を phase ごとに残せるようにする
 
 Verification:
 
@@ -364,6 +403,7 @@ Verification:
 - unit test: final result に placement と score が入る
 - unit test: `no_action` と `failure_reason` が独立して記録される
 - unit test: `invalid-illegal-action` は game 側判定の結果として記録される
+- unit test: stderr truncation と shutdown timeout 超過が lifecycle event として残る
 
 ### Task 6: `echo-count` fixture game を実装する
 
@@ -385,6 +425,10 @@ Verification:
 - `timeout-ai`: 一部 turn を意図的に無応答にする
 - `invalid-action-ai`: schema 上不正な action を返す
 - `bad-json-ai`: protocol violation を起こす
+- `late-response-ai`: timeout 後に古い request への response を遅延送信する
+- `init-timeout-ai`: `init` request に応答しない
+- `exit-after-init-ai`: `init` 後に早期終了する
+- `hung-after-game-over-ai`: `game_over` 後も終了せず強制停止を必要とする
 
 Verification:
 
@@ -400,20 +444,27 @@ Verification:
 - e2e: simultaneous transcript, final score, final snapshot, stderr capture が期待通り
 - e2e: runner が `game_protocol_id` 一致ケースだけ起動を許可する
 - e2e: sequential transcript, turn order, final snapshot が期待通り
+- e2e: sidecar manifest 由来 metadata で `game_protocol_id` / `ruleset_version` が期待通り読まれる
 
 ### Task 9: black-box e2e で失敗系を閉じる
 
 - 片方を `timeout-ai` に差し替えた match
 - 片方を `invalid-action-ai` に差し替えた match
 - 片方を `bad-json-ai` に差し替えた match
+- 片方を `late-response-ai` に差し替えた match
+- `init-timeout-ai` または `exit-after-init-ai` を指定した match
+- `hung-after-game-over-ai` を含む match
 - `game_protocol_id` 不一致の AI を指定した match
 
 Verification:
 
 - e2e: timeout count / invalid action count / protocol violation count が match record に出る
 - e2e: timeout / malformed / mismatched-id / illegal-action が別 reason で記録される
+- e2e: late response が別 reason で記録され、後続 turn へ混線しない
 - e2e: failure player だけ placement が悪化する
 - e2e: 残り player の進行は継続される
+- e2e: init failure は match 開始前または開始直後に明示記録される
+- e2e: `game_over` 後に終了しない AI は shutdown timeout 後に強制停止され、その lifecycle event が残る
 - e2e: `game_protocol_id` 不一致なら runner が開始前に明示エラーで落ちる
 
 ### Task 10: restart-from-snapshot を追加する
@@ -452,7 +503,7 @@ Verification:
 - [ ] [depends on: Implement `echo-count` fixture game] Add fixture AI programs
 - [ ] [depends on: Add fixture AI programs, Implement match record and snapshot export] Add happy-path e2e tests
 - [ ] [depends on: Add happy-path e2e tests] Add failure-mode e2e tests
-- [ ] [depends on: Add failure-mode e2e tests] Decide whether `janken` starts in the same execution PR or a follow-up plan
+- [ ] [depends on: Add failure-mode e2e tests] Write the follow-up exec plan for `janken` richer integration
 
 ## Parallelism
 
