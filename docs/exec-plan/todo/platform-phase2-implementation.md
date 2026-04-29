@@ -197,15 +197,15 @@ ADR 追加は不要の見込み。
 初回実装では以下のような Go module 構成を想定する。
 
 - `go.mod`
-- `cmd/arena-local/`
-  - local process runtime で match を起動する CLI
+- `cmd/arena-runner/`
+  - オンラインマッチングや常駐 server を介さず、既定 game と既定 AI player 群で match 進行を直接開始する単発 runner
 - `internal/platform/protocol/`
   - JSON-RPC 2.0 envelope
   - NDJSON reader/writer
   - request id matching
 - `internal/platform/runtime/`
   - AI runtime interface
-  - local process adapter
+  - local subprocess adapter
   - stderr capture / lifecycle management
 - `internal/platform/session/`
   - `init` / `turn` / `game_over` 送受信
@@ -234,6 +234,7 @@ ADR 追加は不要の見込み。
 - protocol と game logic を分離する
 - runtime adapter と session/match loop を分離する
 - fixture game と main game (`janken`) を分離する
+- runner の責務は「既定入力から match を起動して結果を出すところまで」に留め、将来の server 常駐プロセス責務と混ぜない
 
 ## Execution Strategy
 
@@ -251,7 +252,7 @@ Verification:
 ### Task 2: local process runtime adapter を実装する
 
 - AI runtime interface を定義する
-- 子プロセス起動、stdin/stdout/stderr 接続、shutdown を持つ local adapter を実装する
+- 子プロセス起動、stdin/stdout/stderr 接続、shutdown を持つ local subprocess adapter を実装する
 - stderr を phase-aware に蓄積する仕組みを入れる
 
 Verification:
@@ -331,8 +332,8 @@ Verification:
 
 ### Task 8: black-box e2e で platform 単体の happy path を閉じる
 
-- CLI から `echo-count` simultaneous match を 2 echo AI で起動する
-- CLI から `echo-count` sequential match を 2 echo AI で起動する
+- `arena-runner` から `echo-count` simultaneous match を 2 echo AI で起動する
+- `arena-runner` から `echo-count` sequential match を 2 echo AI で起動する
 
 Verification:
 
