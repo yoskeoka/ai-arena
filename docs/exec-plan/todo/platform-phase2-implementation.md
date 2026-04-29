@@ -27,15 +27,18 @@
 
 - game とそれに対応する AI は、同じ game protocol 契約を実装していることを事前検証できる必要がある
 - そのため、game 仕様と AI 提出物の双方が共有する `game_protocol_id` を導入する
-- ID は中央集権的な採番を前提にせず、少なくとも UUIDv7 のような十分衝突しにくい stable ID を使えるようにする
+- `game_protocol_id` は少なくとも `game name + game_version major` と 1 対 1 に対応する stable identifier とする
 - この ID は runner の match 起動時だけでなく、将来の game 登録 / AI 登録 / AI 更新時の互換性バリデーションにも使う
 
 `game_protocol_id` の修正案:
 
-- `game_protocol_id` は game 名ではなく、`init` / `turn` / `game_over` の payload shape、action schema、snapshot restart に必要な metadata を含む「互換プロトコル契約」を識別する ID として扱う
-- 互換性を壊さないルール調整や balance 調整は `ruleset_version` で表現し、`game_protocol_id` は維持してよい
-- `init` / `turn` / `game_over` の必須フィールド変更、型変更、action schema の非後方互換変更、snapshot 復元 contract の変更が入る場合は `game_protocol_id` を変える
-- Phase 2 の local subprocess 実装では、AI metadata は sidecar manifest から読む前提を既定にする。将来 WASM custom section などへ移しても、runner が見る論理 metadata 項目は維持する
+- 各 game は semver の `game_version` を持ち、protocol 互換性はその major version で表現する
+- protocol に非互換変更が入ったら `game_version` の major を上げる
+- major version が異なれば「同じ game family だが、platform 上は別 game として扱う」と固定する
+- `game_protocol_id` は自由な opaque ID ではなく、少なくとも `game name + major version` と 1 対 1 に対応する識別子として扱う
+- patch / minor の更新、互換性を壊さないルール調整や balance 調整は `ruleset_version` または `game_version` の non-major 部分で表現し、platform の互換性判定は変えない
+- `init` / `turn` / `game_over` の必須フィールド変更、型変更、action schema の非後方互換変更、snapshot / history replay contract の変更が入る場合は major version を上げる
+- Phase 2 の local subprocess 実装では、AI metadata は sidecar manifest から読む前提を既定にする。sidecar manifest は AI 実行ファイルの横に置く小さな metadata file で、`game name`、`game_version`、`ruleset_version` などを持つ。将来 WASM custom section などへ移しても、runner が見る論理 metadata 項目は維持する
 
 過去判断との整合:
 
@@ -245,7 +248,7 @@ history / replay について:
   - JSON payload
   - related request id / snapshot ref if applicable
 - snapshot に必要な最低 metadata
-  - `game_protocol_id`
+  - `game_protocol_id` or `game name + major version`
   - `ruleset_version`
   - turn number
   - current turn mode state
@@ -257,9 +260,10 @@ history / replay について:
 - raw AI response を game validator が正規化し、その後の game master には `accepted | no_action` だけを渡す contract を定義する
 - timeout 後の遅延レスポンス (`late response`) の記録方針と破棄方針を定義する
 - `start-from-snapshot` と `resume-from-history-and-continue` の入力、再現範囲、AI memory continuity 非保証を定義する
-- `game_protocol_id` を game metadata / AI metadata / `init` payload に含める
-- runner と将来の登録フローで `game_protocol_id` 一致確認を行うことを定義する
-- `game_protocol_id` と `ruleset_version` の責務差分、および AI metadata の取得元としての sidecar manifest 既定を定義する
+- `game_protocol_id` と `game_version major` の対応、および `ruleset_version` との責務差分を定義する
+- game metadata / AI metadata / `init` payload には、少なくとも `game name`、`game_version`、`ruleset_version` を含める
+- runner と将来の登録フローで `game name + game_version major` 一致確認を行うことを定義する
+- AI metadata の取得元としての sidecar manifest 既定を定義する
 
 ### 2. `docs/specs/platform.md` の fixture appendix
 
@@ -271,7 +275,7 @@ history / replay について:
 - `accepted` / `no_action` の game master 入力と、`invalid-timeout` / `invalid-protocol-malformed` / `invalid-protocol-mismatched-id` / `invalid-illegal-action` の記録例を載せる
 - `invalid-protocol-late-response` と init/shutdown failure の expected record 例を載せる
 - 特に `invalid-illegal-action` は game 側判定であり、platform 単独では決めないことを明記する
-- `echo-count` の `game_protocol_id` と、AI metadata 側での一致要件を明記する
+- `echo-count` の `game_version` / `game_protocol_id` と、AI metadata 側での一致要件を明記する
 
 ### 3. `docs/specs/janken-game.md`
 
@@ -315,7 +319,7 @@ ADR 追加は不要の見込み。
 - `internal/platform/catalog/`
   - game metadata
   - AI metadata
-  - `game_protocol_id` validation
+  - `game_version major` / `game_protocol_id` validation
 - `internal/games/echo/`
   - `echo-count` fixture game master
 - `internal/games/janken/`
@@ -338,7 +342,7 @@ ADR 追加は不要の見込み。
 - runtime adapter と session/match loop を分離する
 - fixture game と main game (`janken`) を分離する
 - runner の責務は「CLI 引数や設定ファイルで与えた入力から match を起動して結果を出すところまで」に留め、将来の server 常駐プロセス責務と混ぜない
-- protocol 互換性判定は game 名の文字列比較ではなく `game_protocol_id` で行う
+- protocol 互換性判定は game 名だけではなく `game name + game_version major` で行う
 
 ## Execution Strategy
 
@@ -346,15 +350,15 @@ ADR 追加は不要の見込み。
 
 - `go.mod` と最小 test target を追加する
 - JSON-RPC 2.0 envelope 型、NDJSON reader/writer、request/response correlation を実装する
-- `game_protocol_id` を含む最小 metadata 型を定義する
+- `game_version` と `game_protocol_id` を含む最小 metadata 型を定義する
 
 Verification:
 
 - unit test: valid request/response encode-decode
 - unit test: 複数 message の NDJSON framing
 - unit test: malformed JSON / wrong `id` / invalid envelope の判定
-- unit test: metadata の `game_protocol_id` 必須チェック
-- unit test: `game_protocol_id` と `ruleset_version` の責務差分に沿った validation
+- unit test: metadata の `game_version` 必須チェック
+- unit test: `game_version major` と `ruleset_version` の責務差分に沿った validation
 
 ### Task 2: local process runtime adapter を実装する
 
@@ -368,7 +372,7 @@ Verification:
 - unit test: 起動成功時に stream が接続される
 - unit test: stderr capture 上限が適用される
 - unit test: process start failure が `init` 前失敗として扱われる
-- unit test: AI metadata の `game_protocol_id` を取得できる
+- unit test: AI metadata の `game name` / `game_version` / `ruleset_version` を取得できる
 - unit test: `game_over` 後の shutdown timeout 超過で強制停止できる
 
 ### Task 3: AI session 層を実装する
@@ -463,9 +467,9 @@ Verification:
 Verification:
 
 - e2e: simultaneous transcript, final score, final snapshot, stderr capture が期待通り
-- e2e: runner が `game_protocol_id` 一致ケースだけ起動を許可する
+- e2e: runner が `game name + game_version major` 一致ケースだけ起動を許可する
 - e2e: sequential transcript, turn order, final snapshot が期待通り
-- e2e: sidecar manifest 由来 metadata で `game_protocol_id` / `ruleset_version` が期待通り読まれる
+- e2e: sidecar manifest 由来 metadata で `game name` / `game_version` / `ruleset_version` が期待通り読まれる
 
 ### Task 9: black-box e2e で失敗系を閉じる
 
@@ -475,7 +479,7 @@ Verification:
 - 片方を `late-response-ai` に差し替えた match
 - `init-timeout-ai` または `exit-after-init-ai` を指定した match
 - `hung-after-game-over-ai` を含む match
-- `game_protocol_id` 不一致の AI を指定した match
+- `game_version major` 不一致の AI を指定した match
 
 Verification:
 
@@ -486,7 +490,7 @@ Verification:
 - e2e: 残り player の進行は継続される
 - e2e: init failure は match 開始前または開始直後に明示記録される
 - e2e: `game_over` 後に終了しない AI は shutdown timeout 後に強制停止され、その lifecycle event が残る
-- e2e: `game_protocol_id` 不一致なら runner が開始前に明示エラーで落ちる
+- e2e: `game_version major` 不一致なら runner が開始前に明示エラーで落ちる
 
 ### Task 10: start-from-snapshot を追加する
 
@@ -526,7 +530,7 @@ Verification:
 ## Sub-tasks
 
 - [ ] Spec update: `platform.md` appendix / `janken-game.md`
-- [ ] Define `game_protocol_id` metadata and validation rules
+- [ ] Define `game_version` / `game_protocol_id` metadata and validation rules
 - [ ] [parallel] Bootstrap protocol package and tests
 - [ ] [parallel] Design runtime/session interfaces
 - [ ] [depends on: Bootstrap protocol package and tests, Design runtime/session interfaces] Implement local runtime adapter
