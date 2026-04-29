@@ -9,7 +9,7 @@
 
 - JSON-RPC 2.0 + NDJSON transport を持つ platform コアを Go で実装する
 - 長寿命 AI session、同時行動/順番制の両 turn model、match record/export を実装する
-- turn 境界で restart-from-snapshot 可能な snapshot を出力し、platform / game protocol の開発・デバッグに使えるようにする
+- turn 境界で start-from-snapshot 可能な snapshot と、resume-from-history-and-continue 可能な history を出力し、platform / game protocol の開発・デバッグに使えるようにする
 - 実装確認用の deterministic な platform e2e fixture game を追加し、各段階を unit test または外形 e2e で閉じる
 - ADR で維持されている Phase 2 実証ゲーム `janken` へ進む前に、platform 単体の動作保証面を先に固める
 
@@ -191,32 +191,37 @@ mode:
 - 次の request を送る前に、session は stdout reader 側で stale response を識別できる必要がある
 - 遅延レスポンス単発では即 kill しないが、閾値超過時は他の protocol violation と同様に AI 強制停止対象へ含めてよい
 
-## snapshot の目的と非目標
+## snapshot / history の目的と非目標
 
-この plan における turn 境界 snapshot の主目的は、本番障害時の完全復旧ではなく、platform と game protocol の開発・デバッグ支援である。
+この plan における turn 境界 snapshot と history の主目的は、本番障害時の完全復旧ではなく、platform と game protocol の開発・デバッグ支援である。
 
 主目的:
 
 - 特定 turn 直前の game state を保存し、bug 再現や局面切り出しをやりやすくする
-- `arena-runner` から snapshot を入力して、その局面から game を再開できるようにする
+- `arena-runner` から snapshot を入力して、その局面を初期状態として game を開始できるようにする
+- 実際の match から出た history を入力し、記録済みの選択と platform event を再現したうえで任意の turn 境界から継続できるようにする
 - game master の state 遷移、timeout 処理、invalid action 処理を局所的に検証できるようにする
 
 非目標:
 
 - AI player のプロセスメモリまで含めた完全 continuation
 - 本番障害時の厳密な in-flight 復旧
-- turn ごとの replay history 出力そのものをこの plan で完成させること
+- 観戦 UI 向け replay player をこの plan で完成させること
 
 用語整理:
 
 - `snapshot`: game master を turn 境界から再開するための canonical state と補助 metadata
 - `exported snapshot`: 観戦・記録向けに公開してよい状態表現
-- `restart-from-snapshot`: snapshot を入力して match をその局面から再開すること。AI メモリは復元しないため、`resume` ではなくこの表現を使う
+- `history`: match record 内の append-only event log。AI への request、AI response、timeout、validation result、game resolution、snapshot ref などを `seq` 順に保持する
+- `start-from-snapshot`: snapshot を入力して、その局面を初期状態として新しい match 実行を開始すること。JSON を手で生成できるため、edge case 再現に向く
+- `resume-from-history-and-continue`: 実プレイ由来の history を指定 turn 境界まで replay し、そこから新しい AI process で継続すること。実際の match で発生した挙動の調査に向く
 
-replay について:
+history / replay について:
 
-- 将来的には game master 側 RNG seed と history 出力を組み合わせた replay player を作る価値が高い
-- ただし snapshot が正しく出力できれば後続開発で十分に着手しやすいため、この plan では restart 可能 snapshot の定義と出力までを優先する
+- match record は、snapshot だけでなく turn input/output/event の順序付き記録を source of truth として持つ
+- snapshot は任意局面を直接作れる debug entrypoint として扱う
+- history は実際のプレイで発生した挙動を再現し、途中から続行するための debug entrypoint として扱う
+- 将来的には history と snapshot refs を観戦 replay player の入力にできる
 
 ## Spec Changes
 
@@ -227,8 +232,18 @@ replay について:
 - 初期実装スコープを追記する
   - Phase 2a: local process runtime adapter
   - Phase 2b: WASM adapter は後続
-- match record / snapshot / exported snapshot / stderr capture の最小データ形を明記する
-- snapshot の主目的が開発・デバッグ用の restart-from-snapshot であり、本番完全復旧は非目標であることを明記する
+- match record / event log / snapshot / exported snapshot / stderr capture の最小データ形を明記する
+- snapshot の主目的が開発・デバッグ用の start-from-snapshot であり、本番完全復旧は非目標であることを明記する
+- history の主目的が実プレイ由来の挙動調査用 resume-from-history-and-continue であることを明記する
+- event log に必要な最低 metadata
+  - monotonic `seq`
+  - match id
+  - turn number
+  - phase
+  - player id if applicable
+  - event type
+  - JSON payload
+  - related request id / snapshot ref if applicable
 - snapshot に必要な最低 metadata
   - `game_protocol_id`
   - `ruleset_version`
@@ -241,6 +256,7 @@ replay について:
 - platform 判定可能な failure と game 判定の illegal action を分けて定義する
 - raw AI response を game validator が正規化し、その後の game master には `accepted | no_action` だけを渡す contract を定義する
 - timeout 後の遅延レスポンス (`late response`) の記録方針と破棄方針を定義する
+- `start-from-snapshot` と `resume-from-history-and-continue` の入力、再現範囲、AI memory continuity 非保証を定義する
 - `game_protocol_id` を game metadata / AI metadata / `init` payload に含める
 - runner と将来の登録フローで `game_protocol_id` 一致確認を行うことを定義する
 - `game_protocol_id` と `ruleset_version` の責務差分、および AI metadata の取得元としての sidecar manifest 既定を定義する
@@ -248,7 +264,8 @@ replay について:
 ### 2. `docs/specs/platform.md` の fixture appendix
 
 - `echo-count` fixture game のルール、`init` / `turn` / `game_over` payload、mode 別進行、score/placement の定義を書く
-- restart-from-snapshot に必要な snapshot 入出力形を定義する
+- start-from-snapshot に必要な snapshot 入出力形を定義する
+- resume-from-history-and-continue に必要な event log replay 入出力形を定義する
 - simultaneous / sequential の両 mode の example transcript を載せる
 - failure mode 用 AI を使った expected record 例を載せる
 - `accepted` / `no_action` の game master 入力と、`invalid-timeout` / `invalid-protocol-malformed` / `invalid-protocol-mismatched-id` / `invalid-illegal-action` の記録例を載せる
@@ -289,7 +306,8 @@ ADR 追加は不要の見込み。
   - match loop
   - simultaneous / sequential scheduler
   - match result / match record
-  - restart-from-snapshot entrypoint
+  - start-from-snapshot entrypoint
+  - resume-from-history-and-continue entrypoint
 - `internal/platform/game/`
   - game master interface
   - action validator interface
@@ -386,19 +404,22 @@ Verification:
 - unit test: timeout / invalid action が game master へ `no_action` 相当で渡る
 - unit test: raw AI result は game validator を通るまで resolve 対象へ入らない
 
-### Task 5: match record / exported snapshot / observability を実装する
+### Task 5: match record / event log / exported snapshot / observability を実装する
 
 - turn 境界 snapshot
+- append-only event log
 - player ごとの timeout / invalid / protocol violation count
 - stderr / lifecycle event / final placement を含む match record を定義する
-- snapshot は restart-from-snapshot 用 canonical state と exported snapshot を区別して定義する
+- snapshot は start-from-snapshot 用 canonical state と exported snapshot を区別して定義する
+- event log は `seq` 順で AI request / AI response / timeout / validation / game resolution / snapshot ref / lifecycle event を記録する
 - player ごとの `action_status` と `failure_reason` を turn 単位で残せるようにする
 - 必要なら `failure_source` も持たせ、platform 起因か game 起因か区別できるようにする
 - init failure / turn failure / shutdown failure を phase ごとに残せるようにする
 
 Verification:
 
-- unit test: turn ごと restart 可能 snapshot が残る
+- unit test: turn ごと start-from-snapshot 可能な snapshot が残る
+- unit test: event log の `seq` が単調増加し、turn input/output/event が順序付きで残る
 - unit test: player event counters が正しく集計される
 - unit test: final result に placement と score が入る
 - unit test: `no_action` と `failure_reason` が独立して記録される
@@ -467,20 +488,33 @@ Verification:
 - e2e: `game_over` 後に終了しない AI は shutdown timeout 後に強制停止され、その lifecycle event が残る
 - e2e: `game_protocol_id` 不一致なら runner が開始前に明示エラーで落ちる
 
-### Task 10: restart-from-snapshot を追加する
+### Task 10: start-from-snapshot を追加する
 
 - `arena-runner` が snapshot file を入力として受け取れるようにする
-- game master canonical state と必要 metadata から、指定 turn 境界の局面を再開できるようにする
-- 再開時の AI は新規プロセスとして起動し、snapshot に対応する `init` / 可視状態を渡す
+- game master canonical state と必要 metadata から、指定 turn 境界の局面を初期状態として開始できるようにする
+- 開始時の AI は新規プロセスとして起動し、snapshot に対応する `init` / 可視状態を渡す
 - これは開発・デバッグ主用途であり、本番完全復旧を保証しない
 
 Verification:
 
 - unit test: snapshot serialize / deserialize 後に game master state を復元できる
-- e2e: 途中 turn の snapshot から `echo-count` match を再開できる
-- e2e: restart 後は AI メモリ continuity を保証しないことが明示される
+- e2e: 手書きまたは fixture 生成した途中 turn の snapshot から `echo-count` match を開始できる
+- e2e: start-from-snapshot 後は AI メモリ continuity を保証しないことが明示される
 
-### Task 11: `janken` 実装へつなぐ richer integration の入口を作る
+### Task 11: resume-from-history-and-continue を追加する
+
+- `arena-runner` が match history file と resume target turn を入力として受け取れるようにする
+- event log を先頭から target turn 境界まで replay し、記録済み AI choices / timeout / validation / game resolution を再現する
+- target turn 境界以後は新規 AI process を起動し、再現済み game state から通常の match loop を継続する
+- これは実プレイ由来の挙動調査を目的とし、AI process memory の continuation は保証しない
+
+Verification:
+
+- unit test: event log replay で target turn 境界の game master state を復元できる
+- e2e: 実行済み `echo-count` match record から target turn まで replay し、その続きだけ新しい AI process で進行できる
+- e2e: history 内の記録済み選択は再問い合わせせず、target turn 以後だけ新規 AI response を使う
+
+### Task 12: `janken` 実装へつなぐ richer integration の入口を作る
 
 - `janken` game master の package と test skeleton だけ作るか、もしくは follow-up plan を切る
 - `echo-count` だけでは不足する coverage を `janken` 側へ明示的に送る
@@ -498,18 +532,21 @@ Verification:
 - [ ] [depends on: Bootstrap protocol package and tests, Design runtime/session interfaces] Implement local runtime adapter
 - [ ] [depends on: Implement local runtime adapter] Implement AI session layer
 - [ ] [depends on: Implement AI session layer] Implement match loop and game master contract
-- [ ] [depends on: Implement match loop and game master contract] Implement match record and snapshot export
+- [ ] [depends on: Implement match loop and game master contract] Implement match record, event log, and snapshot export
 - [ ] [depends on: Implement match loop and game master contract] Implement `echo-count` fixture game
 - [ ] [depends on: Implement `echo-count` fixture game] Add fixture AI programs
-- [ ] [depends on: Add fixture AI programs, Implement match record and snapshot export] Add happy-path e2e tests
+- [ ] [depends on: Add fixture AI programs, Implement match record, event log, and snapshot export] Add happy-path e2e tests
 - [ ] [depends on: Add happy-path e2e tests] Add failure-mode e2e tests
-- [ ] [depends on: Add failure-mode e2e tests] Write the follow-up exec plan for `janken` richer integration
+- [ ] [depends on: Add failure-mode e2e tests] Add start-from-snapshot e2e tests
+- [ ] [depends on: Add start-from-snapshot e2e tests] Add resume-from-history-and-continue e2e tests
+- [ ] [depends on: Add resume-from-history-and-continue e2e tests] Write the follow-up exec plan for `janken` richer integration
 
 ## Parallelism
 
 - protocol package 実装と runtime/session interface 設計は独立して進められる
 - match record 実装と fixture game 実装は match loop 契約が固まった後なら並行できる
 - simultaneous / sequential e2e は同一 fixture 上で別ケースとして分けられる
+- start-from-snapshot と resume-from-history-and-continue は、event log / snapshot schema が固まった後なら別ケースとして並行検証できる
 
 ## Risks and Mitigations
 
@@ -520,7 +557,9 @@ Verification:
 - e2e が transcript 全比較に寄りすぎると壊れやすい
   - mitigation: transport log の全文一致ではなく、turn order / counters / score / snapshot の意味的 assertion を中心にする
 - snapshot を本番完全復旧前提で設計すると、AI メモリ復元不能とのギャップで責務が膨らむ
-  - mitigation: この plan では restart-from-snapshot を開発・デバッグ用途に限定し、完全 continuation は非目標と明記する
+  - mitigation: この plan では start-from-snapshot を開発・デバッグ用途に限定し、完全 continuation は非目標と明記する
+- history replay を完全な process continuation と誤解すると、AI memory や in-flight stdout まで復元したくなる
+  - mitigation: この plan では resume-from-history-and-continue を「記録済み選択の再現 + target turn 以後の新規 AI process 継続」に限定する
 
 ## Resolved Decisions
 
