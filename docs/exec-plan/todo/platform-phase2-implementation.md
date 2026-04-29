@@ -29,7 +29,7 @@
 - そのため、game metadata と AI metadata の双方が共有する `game_id` と `game_version` を持つ
 - runner の match 起動時だけでなく、将来の game 登録 / AI 登録 / AI 更新時の互換性バリデーションにもこの 2 つを使う
 
-`game_id` / `game_version` の修正案:
+`game_id` / `game_version` の詳細:
 
 - 各 game は app store / Google Play 的な感覚に合わせて stable な `game_id` と semver の `game_version` を持つ
 - platform は `game_id` を game family の識別子として扱う
@@ -88,7 +88,7 @@
 
 ## Recommendation
 
-推奨は **Option C**。
+この plan では **Option C** を採用する。
 
 理由:
 
@@ -114,19 +114,11 @@ mode:
 - `simultaneous`: 同一 turn で両 AI に同じ数字を送り、全員の応答後に解決する
 - `sequential`: 手番プレイヤー 1 人だけに数字を送り、応答ごとに次の手番へ進む
 
-
-
-この案の評価:
-
-- ユーザー提案どおり、同一 fixture で simultaneous / sequential の両 turn model を検証できる
-- transcript が単純なので e2e assertion を「送信順」「受信順」「match record」「final snapshot」で固定しやすい
-- 一方で、隠し情報・複雑な legal action・順位決定の厚みは弱いので、`platform` の最終受け入れをこれだけで済ませるのは不足
-
-改善提案:
-
 - happy-path AI だけでなく `timeout-ai` / `invalid-action-ai` / `bad-json-ai` を fixture 群として追加する
 - placement の差が必要な test では 1 人だけ fault injection AI を使い、score/placement/timeout count まで検証する
 - `janken` はこの plan 完了後の follow-up 実装で、隠し情報・同時解決・順位付けの richer coverage を担わせる
+
+この構成により、同一 fixture で simultaneous / sequential の両 turn model を検証でき、transcript も「送信順」「受信順」「match record」「final snapshot」で安定して assertion しやすい。隠し情報・複雑な legal action・順位決定の厚みは `echo-count` だけでは不足するため、その部分は `janken` の follow-up 実装で担保する。
 
 ### `no_action` と platform 記録分類
 
@@ -140,7 +132,7 @@ mode:
 - transport / JSON-RPC として壊れているかどうかは platform が判定する
 - game 固有 schema や legal move かどうかは game 側 validator が判定する
 
-推奨する記録分類:
+記録分類:
 
 - `accepted`
   - request に対応する合法レスポンスを期限内に返した
@@ -168,7 +160,7 @@ mode:
 
 必要なら execution 時に `invalid-protocol-unexpected-output` や `invalid-protocol-late-response` のような細分類を追加してよいが、少なくとも上記 4 種は区別できるようにする。
 
-インターフェース修正案:
+インターフェース:
 
 - session 層は AI から返った生の `result` payload を保持したまま match 層へ返す
 - game package は `ValidateAction(rawResult)` を持ち、`accepted` または `invalid-illegal-action -> no_action` へ正規化する
@@ -186,8 +178,6 @@ mode:
 ### timeout 後の遅延レスポンス方針
 
 長寿命 session では、timeout 判定後に古い request への response が遅れて到着するケースを明示的に扱う必要がある。
-
-修正案:
 
 - timeout 済み request の `id` に対応する遅延レスポンスは、その turn の有効入力へ復帰させず破棄する
 - 遅延レスポンスは `invalid-protocol-late-response` として記録し、少なくとも player event counters と turn record から辿れるようにする
