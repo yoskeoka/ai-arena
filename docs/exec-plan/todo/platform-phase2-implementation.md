@@ -25,20 +25,20 @@
 
 追加前提:
 
-- game とそれに対応する AI は、同じ game protocol 契約を実装していることを事前検証できる必要がある
-- そのため、game 仕様と AI 提出物の双方が共有する `game_protocol_id` を導入する
-- `game_protocol_id` は少なくとも `game name + game_version major` と 1 対 1 に対応する stable identifier とする
-- この ID は runner の match 起動時だけでなく、将来の game 登録 / AI 登録 / AI 更新時の互換性バリデーションにも使う
+- game とそれに対応する AI は、同じ game 契約を実装していることを事前検証できる必要がある
+- そのため、game metadata と AI metadata の双方が共有する `game_id` と `game_version` を持つ
+- runner の match 起動時だけでなく、将来の game 登録 / AI 登録 / AI 更新時の互換性バリデーションにもこの 2 つを使う
 
-`game_protocol_id` の修正案:
+`game_id` / `game_version` の修正案:
 
-- 各 game は semver の `game_version` を持ち、protocol 互換性はその major version で表現する
+- 各 game は app store / Google Play 的な感覚に合わせて stable な `game_id` と semver の `game_version` を持つ
+- platform は `game_id` を game family の識別子として扱う
+- protocol 互換性は `game_version` の major version で表現する
 - protocol に非互換変更が入ったら `game_version` の major を上げる
-- major version が異なれば「同じ game family だが、platform 上は別 game として扱う」と固定する
-- `game_protocol_id` は自由な opaque ID ではなく、少なくとも `game name + major version` と 1 対 1 に対応する識別子として扱う
+- `game_id` が同じでも major version が異なれば、同じ game family だが platform 上は別 game として扱う
 - patch / minor の更新、互換性を壊さないルール調整や balance 調整は `ruleset_version` または `game_version` の non-major 部分で表現し、platform の互換性判定は変えない
 - `init` / `turn` / `game_over` の必須フィールド変更、型変更、action schema の非後方互換変更、snapshot / history replay contract の変更が入る場合は major version を上げる
-- Phase 2 の local subprocess 実装では、AI metadata は sidecar manifest から読む前提を既定にする。sidecar manifest は AI 実行ファイルの横に置く小さな metadata file で、`game name`、`game_version`、`ruleset_version` などを持つ。将来 WASM custom section などへ移しても、runner が見る論理 metadata 項目は維持する
+- Phase 2 の local subprocess 実装では、AI metadata は sidecar manifest から読む前提を既定にする。sidecar manifest は AI 実行ファイルの横に置く小さな metadata file で、`game_id`、`game_version`、`ruleset_version` などを持つ。将来 WASM custom section などへ移しても、runner が見る論理 metadata 項目は維持する
 
 過去判断との整合:
 
@@ -248,7 +248,8 @@ history / replay について:
   - JSON payload
   - related request id / snapshot ref if applicable
 - snapshot に必要な最低 metadata
-  - `game_protocol_id` or `game name + major version`
+  - `game_id`
+  - `game_version`
   - `ruleset_version`
   - turn number
   - current turn mode state
@@ -260,9 +261,9 @@ history / replay について:
 - raw AI response を game validator が正規化し、その後の game master には `accepted | no_action` だけを渡す contract を定義する
 - timeout 後の遅延レスポンス (`late response`) の記録方針と破棄方針を定義する
 - `start-from-snapshot` と `resume-from-history-and-continue` の入力、再現範囲、AI memory continuity 非保証を定義する
-- `game_protocol_id` と `game_version major` の対応、および `ruleset_version` との責務差分を定義する
-- game metadata / AI metadata / `init` payload には、少なくとも `game name`、`game_version`、`ruleset_version` を含める
-- runner と将来の登録フローで `game name + game_version major` 一致確認を行うことを定義する
+- `game_id` と `game_version major` の責務差分、および `ruleset_version` との責務差分を定義する
+- game metadata / AI metadata / `init` payload には、少なくとも `game_id`、`game_version`、`ruleset_version` を含める
+- runner と将来の登録フローで `game_id` 一致かつ `game_version major` 一致確認を行うことを定義する
 - AI metadata の取得元としての sidecar manifest 既定を定義する
 
 ### 2. `docs/specs/platform.md` の fixture appendix
@@ -275,7 +276,7 @@ history / replay について:
 - `accepted` / `no_action` の game master 入力と、`invalid-timeout` / `invalid-protocol-malformed` / `invalid-protocol-mismatched-id` / `invalid-illegal-action` の記録例を載せる
 - `invalid-protocol-late-response` と init/shutdown failure の expected record 例を載せる
 - 特に `invalid-illegal-action` は game 側判定であり、platform 単独では決めないことを明記する
-- `echo-count` の `game_version` / `game_protocol_id` と、AI metadata 側での一致要件を明記する
+- `echo-count` の `game_id` / `game_version` と、AI metadata 側での一致要件を明記する
 
 ### 3. `docs/specs/janken-game.md`
 
@@ -319,7 +320,7 @@ ADR 追加は不要の見込み。
 - `internal/platform/catalog/`
   - game metadata
   - AI metadata
-  - `game_version major` / `game_protocol_id` validation
+  - `game_id` / `game_version major` validation
 - `internal/games/echo/`
   - `echo-count` fixture game master
 - `internal/games/janken/`
@@ -342,7 +343,7 @@ ADR 追加は不要の見込み。
 - runtime adapter と session/match loop を分離する
 - fixture game と main game (`janken`) を分離する
 - runner の責務は「CLI 引数や設定ファイルで与えた入力から match を起動して結果を出すところまで」に留め、将来の server 常駐プロセス責務と混ぜない
-- protocol 互換性判定は game 名だけではなく `game name + game_version major` で行う
+- protocol 互換性判定は `game_id` 一致かつ `game_version major` 一致で行う
 
 ## Execution Strategy
 
@@ -350,7 +351,7 @@ ADR 追加は不要の見込み。
 
 - `go.mod` と最小 test target を追加する
 - JSON-RPC 2.0 envelope 型、NDJSON reader/writer、request/response correlation を実装する
-- `game_version` と `game_protocol_id` を含む最小 metadata 型を定義する
+- `game_id` と `game_version` を含む最小 metadata 型を定義する
 
 Verification:
 
@@ -372,7 +373,7 @@ Verification:
 - unit test: 起動成功時に stream が接続される
 - unit test: stderr capture 上限が適用される
 - unit test: process start failure が `init` 前失敗として扱われる
-- unit test: AI metadata の `game name` / `game_version` / `ruleset_version` を取得できる
+- unit test: AI metadata の `game_id` / `game_version` / `ruleset_version` を取得できる
 - unit test: `game_over` 後の shutdown timeout 超過で強制停止できる
 
 ### Task 3: AI session 層を実装する
@@ -467,9 +468,9 @@ Verification:
 Verification:
 
 - e2e: simultaneous transcript, final score, final snapshot, stderr capture が期待通り
-- e2e: runner が `game name + game_version major` 一致ケースだけ起動を許可する
+- e2e: runner が `game_id` 一致かつ `game_version major` 一致ケースだけ起動を許可する
 - e2e: sequential transcript, turn order, final snapshot が期待通り
-- e2e: sidecar manifest 由来 metadata で `game name` / `game_version` / `ruleset_version` が期待通り読まれる
+- e2e: sidecar manifest 由来 metadata で `game_id` / `game_version` / `ruleset_version` が期待通り読まれる
 
 ### Task 9: black-box e2e で失敗系を閉じる
 
@@ -530,7 +531,7 @@ Verification:
 ## Sub-tasks
 
 - [ ] Spec update: `platform.md` appendix / `janken-game.md`
-- [ ] Define `game_version` / `game_protocol_id` metadata and validation rules
+- [ ] Define `game_id` / `game_version` metadata and validation rules
 - [ ] [parallel] Bootstrap protocol package and tests
 - [ ] [parallel] Design runtime/session interfaces
 - [ ] [depends on: Bootstrap protocol package and tests, Design runtime/session interfaces] Implement local runtime adapter
