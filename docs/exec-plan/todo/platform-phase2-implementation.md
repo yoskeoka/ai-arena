@@ -118,10 +118,12 @@ mode:
 原則:
 
 - game master に渡す正規化済み turn outcome は `accepted` または `no_action` だけにする
-- platform は `no_action` に至った理由を別フィールドで記録する
+- `no_action` に至った理由は match record に別フィールドで記録する
 - game master は理由分類に依存せず、ゲーム仕様どおり `no_action` を処理する
+- transport / JSON-RPC として壊れているかどうかは platform が判定する
+- game 固有 schema や legal move かどうかは game validator / game master が判定する
 
-推奨する platform 記録分類:
+推奨する記録分類:
 
 - `accepted`
   - request に対応する合法レスポンスを期限内に返した
@@ -134,12 +136,25 @@ mode:
 - `invalid-illegal-action`
   - JSON-RPC としては正しいが、ゲーム仕様上の action schema または legal action に違反
 
+ただし責務境界は以下。
+
+- `invalid-timeout`
+  - platform が判定する
+- `invalid-protocol-malformed`
+  - platform が判定する
+- `invalid-protocol-mismatched-id`
+  - platform が判定する
+- `invalid-illegal-action`
+  - platform 単独ではなく、game validator / game master の判定結果として記録する
+
+必要なら record 上は `failure_source=platform|game` を持たせ、同じ `no_action` でも原因の責務境界を追えるようにする。
+
 必要なら execution 時に `invalid-protocol-unexpected-output` のような細分類を追加してよいが、少なくとも上記 4 種は区別できるようにする。
 
 `echo-count` fixture での扱い:
 
 - game master は `accepted` なら一致値を検証して成功を記録する
-- `accepted` だが値が期待値と違う場合は、platform ではなく game spec 側の無効行動なので `invalid-illegal-action` を記録しつつ game master へは `no_action` として渡す
+- `accepted` だが値が期待値と違う場合は、platform ではなく game spec 側の無効行動なので、game validator が `invalid-illegal-action` を返し、match record へ記録しつつ game master へは `no_action` として渡す
 - `invalid-timeout` / `invalid-protocol-*` は platform 層で記録し、game master へは `no_action` として渡す
 
 この分離により、platform test では「どう壊れたか」を見え、game test では「`no_action` をどう処理するか」だけを見ればよくなる。
@@ -155,7 +170,8 @@ mode:
   - Phase 2b: WASM adapter は後続
 - match record / exported snapshot / stderr capture の最小データ形を明記する
 - transport/protocol violation の記録項目を実装可能な粒度に具体化する
-- game master に渡す正規化 action と、platform record に残す failure reason を分離して定義する
+- game master に渡す正規化 action と、match record に残す failure reason を分離して定義する
+- platform 判定可能な failure と game 判定の illegal action を分けて定義する
 
 ### 2. `docs/specs/platform-fixture-echo-count.md` を新規追加
 
@@ -163,6 +179,7 @@ mode:
 - simultaneous / sequential の両 mode の example transcript を載せる
 - failure mode 用 AI を使った expected record 例を載せる
 - `accepted` / `no_action` の game master 入力と、`invalid-timeout` / `invalid-protocol-malformed` / `invalid-protocol-mismatched-id` / `invalid-illegal-action` の記録例を載せる
+- 特に `invalid-illegal-action` は game 側判定であり、platform 単独では決めないことを明記する
 
 ### 3. `docs/specs/janken-game.md`
 
@@ -249,6 +266,7 @@ Verification:
 - per-request deadline と timeout を扱う
 - protocol violation を turn failure として記録できるようにする
 - game master に渡す正規化 action を `accepted` / `no_action` にそろえ、failure reason は別 record に保持する
+- platform 層では transport/protocol 系 failure までを判定し、game legal move 判定は game 層へ委譲する
 
 Verification:
 
@@ -276,6 +294,7 @@ Verification:
 - player ごとの timeout / invalid / protocol violation count
 - stderr / lifecycle event / final placement を含む match record を定義する
 - player ごとの `action_status` と `failure_reason` を turn 単位で残せるようにする
+- 必要なら `failure_source` も持たせ、platform 起因か game 起因か区別できるようにする
 
 Verification:
 
@@ -283,6 +302,7 @@ Verification:
 - unit test: player event counters が正しく集計される
 - unit test: final result に placement と score が入る
 - unit test: `no_action` と `failure_reason` が独立して記録される
+- unit test: `invalid-illegal-action` は game 側判定の結果として記録される
 
 ### Task 6: `echo-count` fixture game を実装する
 
