@@ -440,7 +440,7 @@ Verification:
 
 ## Sub-tasks
 
-- [ ] Spec update: `platform.md` / `platform-fixture-echo-count.md` / `janken-game.md`
+- [ ] Spec update: `platform.md` appendix / `janken-game.md`
 - [ ] Define `game_protocol_id` metadata and validation rules
 - [ ] [parallel] Bootstrap protocol package and tests
 - [ ] [parallel] Design runtime/session interfaces
@@ -471,12 +471,12 @@ Verification:
 - snapshot を本番完全復旧前提で設計すると、AI メモリ復元不能とのギャップで責務が膨らむ
   - mitigation: この plan では restart-from-snapshot を開発・デバッグ用途に限定し、完全 continuation は非目標と明記する
 
-## Open Questions
+## Resolved Decisions
 
-- `janken` 実装をこの plan の execution に含めるか、それとも `platform` foundation 完了後に別 exec plan を切るか
-- `echo-count` fixture spec を `platform.md` の付録として持つか、独立 spec にするか
+- `janken` はこの plan の execution に含めず、platform foundation 実装完了後に改めて exec plan を作成する
+- `echo-count` は独立 game spec を持たず、`platform.md` の付録 fixture として扱う
 
-推奨:
+理由:
 
-- `janken` は follow-up plan に分離する
-- `echo-count` fixture は独立 spec にする
+- `echo-count` は platform 検証用 fixture であり、ゲームとしての独立価値がほぼない
+- 新ゲームプロトコル開発の参照先としては `janken` や後続の本命ゲームの方が有用
