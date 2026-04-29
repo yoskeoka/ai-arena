@@ -9,6 +9,7 @@
 
 - JSON-RPC 2.0 + NDJSON transport を持つ platform コアを Go で実装する
 - 長寿命 AI session、同時行動/順番制の両 turn model、match record/export を実装する
+- turn 境界で restart-from-snapshot 可能な snapshot を出力し、platform / game protocol の開発・デバッグに使えるようにする
 - 実装確認用の deterministic な platform e2e fixture game を追加し、各段階を unit test または外形 e2e で閉じる
 - ADR で維持されている Phase 2 実証ゲーム `janken` へ進む前に、platform 単体の動作保証面を先に固める
 
@@ -168,6 +169,33 @@ mode:
 
 この分離により、platform test では「どう壊れたか」を見え、game test では「`no_action` をどう処理するか」だけを見ればよくなる。
 
+## snapshot の目的と非目標
+
+この plan における turn 境界 snapshot の主目的は、本番障害時の完全復旧ではなく、platform と game protocol の開発・デバッグ支援である。
+
+主目的:
+
+- 特定 turn 直前の game state を保存し、bug 再現や局面切り出しをやりやすくする
+- `arena-runner` から snapshot を入力して、その局面から game を再開できるようにする
+- game master の state 遷移、timeout 処理、invalid action 処理を局所的に検証できるようにする
+
+非目標:
+
+- AI player のプロセスメモリまで含めた完全 continuation
+- 本番障害時の厳密な in-flight 復旧
+- turn ごとの replay history 出力そのものをこの plan で完成させること
+
+用語整理:
+
+- `snapshot`: game master を turn 境界から再開するための canonical state と補助 metadata
+- `exported snapshot`: 観戦・記録向けに公開してよい状態表現
+- `restart-from-snapshot`: snapshot を入力して match をその局面から再開すること。AI メモリは復元しないため、`resume` ではなくこの表現を使う
+
+replay について:
+
+- 将来的には game master 側 RNG seed と history 出力を組み合わせた replay player を作る価値が高い
+- ただし snapshot が正しく出力できれば後続開発で十分に着手しやすいため、この plan では restart 可能 snapshot の定義と出力までを優先する
+
 ## Spec Changes
 
 実装前に以下の spec 更新を行う。
@@ -177,7 +205,15 @@ mode:
 - 初期実装スコープを追記する
   - Phase 2a: local process runtime adapter
   - Phase 2b: WASM adapter は後続
-- match record / exported snapshot / stderr capture の最小データ形を明記する
+- match record / snapshot / exported snapshot / stderr capture の最小データ形を明記する
+- snapshot の主目的が開発・デバッグ用の restart-from-snapshot であり、本番完全復旧は非目標であることを明記する
+- snapshot に必要な最低 metadata
+  - `game_protocol_id`
+  - `ruleset_version`
+  - turn number
+  - current turn mode state
+  - game master canonical state
+  - 必要なら RNG seed または RNG state
 - transport/protocol violation の記録項目を実装可能な粒度に具体化する
 - game master に渡す正規化 action と、match record に残す failure reason を分離して定義する
 - platform 判定可能な failure と game 判定の illegal action を分けて定義する
@@ -187,6 +223,7 @@ mode:
 ### 2. `docs/specs/platform-fixture-echo-count.md` を新規追加
 
 - `echo-count` fixture game のルール、`init` / `turn` / `game_over` payload、mode 別進行、score/placement の定義を書く
+- restart-from-snapshot に必要な snapshot 入出力形を定義する
 - simultaneous / sequential の両 mode の example transcript を載せる
 - failure mode 用 AI を使った expected record 例を載せる
 - `accepted` / `no_action` の game master 入力と、`invalid-timeout` / `invalid-protocol-malformed` / `invalid-protocol-mismatched-id` / `invalid-illegal-action` の記録例を載せる
@@ -226,6 +263,7 @@ ADR 追加は不要の見込み。
   - match loop
   - simultaneous / sequential scheduler
   - match result / match record
+  - restart-from-snapshot entrypoint
 - `internal/platform/game/`
   - game master interface
   - exported snapshot interface
@@ -315,12 +353,13 @@ Verification:
 - turn 境界 snapshot
 - player ごとの timeout / invalid / protocol violation count
 - stderr / lifecycle event / final placement を含む match record を定義する
+- snapshot は restart-from-snapshot 用 canonical state と exported snapshot を区別して定義する
 - player ごとの `action_status` と `failure_reason` を turn 単位で残せるようにする
 - 必要なら `failure_source` も持たせ、platform 起因か game 起因か区別できるようにする
 
 Verification:
 
-- unit test: turn ごと snapshot が残る
+- unit test: turn ごと restart 可能 snapshot が残る
 - unit test: player event counters が正しく集計される
 - unit test: final result に placement と score が入る
 - unit test: `no_action` と `failure_reason` が独立して記録される
@@ -377,7 +416,20 @@ Verification:
 - e2e: 残り player の進行は継続される
 - e2e: `game_protocol_id` 不一致なら runner が開始前に明示エラーで落ちる
 
-### Task 10: `janken` 実装へつなぐ richer integration の入口を作る
+### Task 10: restart-from-snapshot を追加する
+
+- `arena-runner` が snapshot file を入力として受け取れるようにする
+- game master canonical state と必要 metadata から、指定 turn 境界の局面を再開できるようにする
+- 再開時の AI は新規プロセスとして起動し、snapshot に対応する `init` / 可視状態を渡す
+- これは開発・デバッグ主用途であり、本番完全復旧を保証しない
+
+Verification:
+
+- unit test: snapshot serialize / deserialize 後に game master state を復元できる
+- e2e: 途中 turn の snapshot から `echo-count` match を再開できる
+- e2e: restart 後は AI メモリ continuity を保証しないことが明示される
+
+### Task 11: `janken` 実装へつなぐ richer integration の入口を作る
 
 - `janken` game master の package と test skeleton だけ作るか、もしくは follow-up plan を切る
 - `echo-count` だけでは不足する coverage を `janken` 側へ明示的に送る
@@ -416,6 +468,8 @@ Verification:
   - mitigation: runtime interface を先に固定し、adapter を差し替え可能にする
 - e2e が transcript 全比較に寄りすぎると壊れやすい
   - mitigation: transport log の全文一致ではなく、turn order / counters / score / snapshot の意味的 assertion を中心にする
+- snapshot を本番完全復旧前提で設計すると、AI メモリ復元不能とのギャップで責務が膨らむ
+  - mitigation: この plan では restart-from-snapshot を開発・デバッグ用途に限定し、完全 continuation は非目標と明記する
 
 ## Open Questions
 
