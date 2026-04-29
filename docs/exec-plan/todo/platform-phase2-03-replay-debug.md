@@ -1,4 +1,4 @@
-# platform-phase2-replay-debug
+# platform-phase2-03-replay-debug
 **Execution**: Use `/execute-task` to implement this plan.
 
 ## Objective
@@ -11,7 +11,7 @@ turn 境界 snapshot と event history を使って、debug 用の `start-from-s
 
 depends on:
 
-- `platform-phase2-fixture-e2e.md`
+- `platform-phase2-02-fixture-e2e.md`
 
 ## Scope
 

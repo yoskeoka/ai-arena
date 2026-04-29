@@ -1,4 +1,4 @@
-# platform-phase2-janken-integration
+# platform-phase2-04-janken-integration
 **Execution**: Use `/execute-task` to implement this plan.
 
 ## Objective
@@ -11,7 +11,7 @@
 
 depends on:
 
-- `platform-phase2-fixture-e2e.md`
+- `platform-phase2-02-fixture-e2e.md`
 
 ## Scope
 
@@ -70,6 +70,6 @@ depends on:
 ## Risks and Mitigations
 
 - `janken` 着手が早すぎると platform core の不具合とゲーム不具合が混ざる
-  - mitigation: `platform-phase2-fixture-e2e.md` 完了を前提にする
+  - mitigation: `platform-phase2-02-fixture-e2e.md` 完了を前提にする
 - `echo-count` と同じ assertion を重複して増やすと価値が薄い
   - mitigation: `janken` では hidden action / reveal / richer ranking に集中する

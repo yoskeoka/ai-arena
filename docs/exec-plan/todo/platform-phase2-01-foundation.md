@@ -1,4 +1,4 @@
-# platform-phase2-foundation
+# platform-phase2-01-foundation
 **Execution**: Use `/execute-task` to implement this plan.
 
 ## Objective
@@ -45,7 +45,7 @@
 
 ### `docs/specs/janken-game.md`
 
-- この plan では変更しない。`janken` 側の責務は `platform-phase2-janken-integration.md` へ送る
+- この plan では変更しない。`janken` 側の責務は `platform-phase2-04-janken-integration.md` へ送る
 
 ## Expected Code Changes
 

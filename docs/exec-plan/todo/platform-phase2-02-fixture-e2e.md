@@ -1,9 +1,9 @@
-# platform-phase2-fixture-e2e
+# platform-phase2-02-fixture-e2e
 **Execution**: Use `/execute-task` to implement this plan.
 
 ## Objective
 
-`platform-phase2-foundation.md` の上に `echo-count` fixture と `arena-runner` の black-box verification を載せ、Phase 2 platform 単体の happy-path / failure-path を CLI と e2e で閉じる。
+`platform-phase2-01-foundation.md` の上に `echo-count` fixture と `arena-runner` の black-box verification を載せ、Phase 2 platform 単体の happy-path / failure-path を CLI と e2e で閉じる。
 
 親 plan:
 
@@ -11,7 +11,7 @@
 
 depends on:
 
-- `platform-phase2-foundation.md`
+- `platform-phase2-01-foundation.md`
 
 ## Scope
 

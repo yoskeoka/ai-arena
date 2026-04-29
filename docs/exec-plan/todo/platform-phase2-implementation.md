@@ -61,7 +61,7 @@
 
 ## Child Plans
 
-### 1. `platform-phase2-foundation.md`
+### 1. `platform-phase2-01-foundation.md`
 
 役割:
 
@@ -73,7 +73,7 @@
 - unit test 中心で閉じる
 - `go test` により protocol / runtime / session / match / record の主要契約が検証される
 
-### 2. `platform-phase2-fixture-e2e.md`
+### 2. `platform-phase2-02-fixture-e2e.md`
 
 役割:
 
@@ -83,14 +83,14 @@
 
 depends on:
 
-- `platform-phase2-foundation.md`
+- `platform-phase2-01-foundation.md`
 
 完了条件:
 
 - CLI 実行と black-box e2e で閉じる
 - `game_id` / `game_version major` validation を runner 外形で確認できる
 
-### 3. `platform-phase2-replay-debug.md`
+### 3. `platform-phase2-03-replay-debug.md`
 
 役割:
 
@@ -99,13 +99,13 @@ depends on:
 
 depends on:
 
-- `platform-phase2-fixture-e2e.md`
+- `platform-phase2-02-fixture-e2e.md`
 
 完了条件:
 
 - snapshot / history file を入力した CLI 実行と e2e で閉じる
 
-### 4. `platform-phase2-janken-integration.md`
+### 4. `platform-phase2-04-janken-integration.md`
 
 役割:
 
@@ -113,7 +113,7 @@ depends on:
 
 depends on:
 
-- `platform-phase2-fixture-e2e.md`
+- `platform-phase2-02-fixture-e2e.md`
 
 完了条件:
 
@@ -130,16 +130,16 @@ depends on:
 
 ## Sub-tasks
 
-- [ ] Create `platform-phase2-foundation.md`
-- [ ] Create `platform-phase2-fixture-e2e.md`
-- [ ] Create `platform-phase2-replay-debug.md`
-- [ ] Create `platform-phase2-janken-integration.md`
+- [ ] Create `platform-phase2-01-foundation.md`
+- [ ] Create `platform-phase2-02-fixture-e2e.md`
+- [ ] Create `platform-phase2-03-replay-debug.md`
+- [ ] Create `platform-phase2-04-janken-integration.md`
 - [ ] Remove implementation detail from this parent plan and leave only split/ordering/verification guidance
 
 ## Parallelism
 
-- `platform-phase2-janken-integration.md` は `platform-phase2-fixture-e2e.md` 完了後に別 execution stream として扱える
-- `platform-phase2-replay-debug.md` は `foundation` 完了後すぐではなく、fixture/e2e の record 形式が固まった後に着手する
+- `platform-phase2-04-janken-integration.md` は `platform-phase2-02-fixture-e2e.md` 完了後に別 execution stream として扱える
+- `platform-phase2-03-replay-debug.md` は `foundation` 完了後すぐではなく、fixture/e2e の record 形式が固まった後に着手する
 
 ## Resolved Decisions
 
