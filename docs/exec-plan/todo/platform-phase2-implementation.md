@@ -90,7 +90,9 @@ fixture game 名は仮に `echo-count` とする。
 - ゲームマスターは deterministic に整数カウンタを進める
 - 各 turn request で対象プレイヤーへ期待値となる数字を渡す
 - AI は受け取った数字をそのまま返す
-- 一致すれば `accepted`、不一致/timeout/不正プロトコルは `no_action` または `invalid` として記録する
+- 一致すれば `accepted` として解決する
+- ゲームマスターに渡す turn 入力は、platform 側で正規化した `accepted` または `no_action` のどちらかに限定する
+- `no_action` になった理由は game master に埋め込まず、platform record 側で原因分類を保持する
 
 mode:
 
@@ -109,6 +111,39 @@ mode:
 - placement の差が必要な test では 1 人だけ fault injection AI を使い、score/placement/timeout count まで検証する
 - `janken` はこの plan 完了後の follow-up 実装で、隠し情報・同時解決・順位付けの richer coverage を担わせる
 
+### `no_action` と platform 記録分類
+
+ここは execution 前に spec で明確化する。
+
+原則:
+
+- game master に渡す正規化済み turn outcome は `accepted` または `no_action` だけにする
+- platform は `no_action` に至った理由を別フィールドで記録する
+- game master は理由分類に依存せず、ゲーム仕様どおり `no_action` を処理する
+
+推奨する platform 記録分類:
+
+- `accepted`
+  - request に対応する合法レスポンスを期限内に返した
+- `invalid-timeout`
+  - 期限内応答なし
+- `invalid-protocol-malformed`
+  - JSON parse 不可、NDJSON framing 不正、JSON-RPC envelope 不正
+- `invalid-protocol-mismatched-id`
+  - `id` 不一致、response 相関不能
+- `invalid-illegal-action`
+  - JSON-RPC としては正しいが、ゲーム仕様上の action schema または legal action に違反
+
+必要なら execution 時に `invalid-protocol-unexpected-output` のような細分類を追加してよいが、少なくとも上記 4 種は区別できるようにする。
+
+`echo-count` fixture での扱い:
+
+- game master は `accepted` なら一致値を検証して成功を記録する
+- `accepted` だが値が期待値と違う場合は、platform ではなく game spec 側の無効行動なので `invalid-illegal-action` を記録しつつ game master へは `no_action` として渡す
+- `invalid-timeout` / `invalid-protocol-*` は platform 層で記録し、game master へは `no_action` として渡す
+
+この分離により、platform test では「どう壊れたか」を見え、game test では「`no_action` をどう処理するか」だけを見ればよくなる。
+
 ## Spec Changes
 
 実装前に以下の spec 更新を行う。
@@ -120,12 +155,14 @@ mode:
   - Phase 2b: WASM adapter は後続
 - match record / exported snapshot / stderr capture の最小データ形を明記する
 - transport/protocol violation の記録項目を実装可能な粒度に具体化する
+- game master に渡す正規化 action と、platform record に残す failure reason を分離して定義する
 
 ### 2. `docs/specs/platform-fixture-echo-count.md` を新規追加
 
 - `echo-count` fixture game のルール、`init` / `turn` / `game_over` payload、mode 別進行、score/placement の定義を書く
 - simultaneous / sequential の両 mode の example transcript を載せる
 - failure mode 用 AI を使った expected record 例を載せる
+- `accepted` / `no_action` の game master 入力と、`invalid-timeout` / `invalid-protocol-malformed` / `invalid-protocol-mismatched-id` / `invalid-illegal-action` の記録例を載せる
 
 ### 3. `docs/specs/janken-game.md`
 
@@ -211,6 +248,7 @@ Verification:
 - `init`, `turn`, `game_over` の送信 API を作る
 - per-request deadline と timeout を扱う
 - protocol violation を turn failure として記録できるようにする
+- game master に渡す正規化 action を `accepted` / `no_action` にそろえ、failure reason は別 record に保持する
 
 Verification:
 
@@ -218,6 +256,7 @@ Verification:
 - unit test: `turn` timeout が `no_action` 相当として返る
 - unit test: `game_over` が notification として送られ response を待たない
 - unit test: bad JSON / mismatched id / unexpected stdout を protocol violation として記録する
+- unit test: `invalid-timeout` / `invalid-protocol-malformed` / `invalid-protocol-mismatched-id` がそれぞれ別 reason で記録される
 
 ### Task 4: game master 契約と match loop を実装する
 
@@ -236,24 +275,28 @@ Verification:
 - turn 境界 snapshot
 - player ごとの timeout / invalid / protocol violation count
 - stderr / lifecycle event / final placement を含む match record を定義する
+- player ごとの `action_status` と `failure_reason` を turn 単位で残せるようにする
 
 Verification:
 
 - unit test: turn ごと snapshot が残る
 - unit test: player event counters が正しく集計される
 - unit test: final result に placement と score が入る
+- unit test: `no_action` と `failure_reason` が独立して記録される
 
 ### Task 6: `echo-count` fixture game を実装する
 
 - simultaneous / sequential 両 mode を持つ deterministic game master を作る
 - accepted / invalid / timeout の score ルールを定義する
 - exported snapshot を安定した JSON 形で出せるようにする
+- game master は `accepted` または `no_action` だけを入力として受ける
 
 Verification:
 
 - unit test: simultaneous mode の解決規則
 - unit test: sequential mode の手番遷移
 - unit test: score / placement / summary の計算
+- unit test: illegal echoed value は game spec 上 `no_action` に落ち、platform record には `invalid-illegal-action` が残る
 
 ### Task 7: fixture AI 群を実装する
 
@@ -285,6 +328,7 @@ Verification:
 Verification:
 
 - e2e: timeout count / invalid action count / protocol violation count が match record に出る
+- e2e: timeout / malformed / mismatched-id / illegal-action が別 reason で記録される
 - e2e: failure player だけ placement が悪化する
 - e2e: 残り player の進行は継続される
 
@@ -336,4 +380,3 @@ Verification:
 
 - `janken` は follow-up plan に分離する
 - `echo-count` fixture は独立 spec にする
-
