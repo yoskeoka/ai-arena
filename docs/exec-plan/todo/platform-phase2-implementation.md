@@ -198,7 +198,7 @@ ADR 追加は不要の見込み。
 
 - `go.mod`
 - `cmd/arena-runner/`
-  - オンラインマッチングや常駐 server を介さず、既定 game と既定 AI player 群で match 進行を直接開始する単発 runner
+  - オンラインマッチングや常駐 server を介さず、CLI 引数や設定ファイルで指定した game master と AI player 群から match 進行を直接開始する単発 runner
 - `internal/platform/protocol/`
   - JSON-RPC 2.0 envelope
   - NDJSON reader/writer
@@ -234,7 +234,7 @@ ADR 追加は不要の見込み。
 - protocol と game logic を分離する
 - runtime adapter と session/match loop を分離する
 - fixture game と main game (`janken`) を分離する
-- runner の責務は「既定入力から match を起動して結果を出すところまで」に留め、将来の server 常駐プロセス責務と混ぜない
+- runner の責務は「CLI 引数や設定ファイルで与えた入力から match を起動して結果を出すところまで」に留め、将来の server 常駐プロセス責務と混ぜない
 
 ## Execution Strategy
 
