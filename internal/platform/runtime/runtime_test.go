@@ -60,6 +60,23 @@ func TestCloseKillsProcessWhenShutdownDeadlineExpires(t *testing.T) {
 	}
 }
 
+func TestCloseReturnsCrashExitWhenProcessAlreadyFailed(t *testing.T) {
+	adapter, err := Start(context.Background(), Config{
+		Command: []string{"/bin/sh", "-c", "exit 2"},
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	closeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := adapter.Close(closeCtx); err == nil {
+		t.Fatal("Close returned nil, want crash exit error")
+	}
+}
+
 func TestHelperProcess(t *testing.T) {
 	mode := os.Getenv("GO_WANT_HELPER_PROCESS")
 	if mode == "" {

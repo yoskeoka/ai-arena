@@ -47,7 +47,11 @@ func TestRunnerHandlesSimultaneousAndSequentialAndBuildsRecord(t *testing.T) {
 		"p1": &fakeSession{
 			turnResults: []session.Result{
 				{Outcome: session.OutcomeAccepted, Payload: raw(`{"action":"a"}`)},
-				{Outcome: session.OutcomeAccepted, Payload: raw(`{"action":"c"}`)},
+				{
+					Outcome:                session.OutcomeAccepted,
+					Payload:                raw(`{"action":"c"}`),
+					IgnoredLateResponseIDs: []string{"turn-1-p1"},
+				},
 			},
 		},
 		"p2": &fakeSession{
@@ -77,6 +81,9 @@ func TestRunnerHandlesSimultaneousAndSequentialAndBuildsRecord(t *testing.T) {
 	}
 	if record.ExportedSnapshot.MatchID != "match-001" {
 		t.Fatalf("exported snapshot match id = %q", record.ExportedSnapshot.MatchID)
+	}
+	if !hasEventKind(record.EventLog, "late_response_ignored") {
+		t.Fatalf("event log missing late_response_ignored: %+v", record.EventLog)
 	}
 }
 
@@ -170,4 +177,13 @@ func (f *fakeSession) StderrSnapshot() runtime.StderrSnapshot {
 
 func raw(s string) json.RawMessage {
 	return json.RawMessage(s)
+}
+
+func hasEventKind(events []Event, kind string) bool {
+	for _, event := range events {
+		if event.Kind == kind {
+			return true
+		}
+	}
+	return false
 }

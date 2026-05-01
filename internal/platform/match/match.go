@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
@@ -50,6 +51,14 @@ type Runner struct {
 	lastResult map[string]game.ActionOutcome
 }
 
+const initDeadline = time.Second
+
+type turnExecution struct {
+	request game.DecisionRequest
+	result  session.Result
+	outcome game.ActionOutcome
+}
+
 func NewRunner(matchID string, players []game.Player, master game.Master, sessions map[string]PlayerSession) *Runner {
 	return &Runner{
 		matchID:    matchID,
@@ -71,20 +80,21 @@ func (r *Runner) Run(ctx context.Context) (Record, error) {
 
 	meta := r.master.Metadata()
 	for _, player := range r.players {
+		state := initState.PerPlayer[player.PlayerID]
 		params := map[string]any{
 			"match_id":        r.matchID,
 			"player_id":       player.PlayerID,
 			"game_id":         meta.GameID,
 			"game_version":    meta.GameVersion,
 			"ruleset_version": meta.RulesetVersion,
-			"deadline_ms":     1000,
-			"state":           json.RawMessage(initState.PerPlayer[player.PlayerID]),
+			"deadline_ms":     initDeadline.Milliseconds(),
+			"state":           json.RawMessage(state),
 		}
 		result := r.sessions[player.PlayerID].Init(ctx, session.Request{
 			ID:       "init",
 			Method:   "init",
 			Params:   params,
-			Deadline: 1_000_000_000,
+			Deadline: initDeadline,
 		})
 		r.appendEvent("session_initialized", 0, player.PlayerID, result)
 		if result.Outcome != session.OutcomeAccepted {
@@ -110,7 +120,9 @@ func (r *Runner) Run(ctx context.Context) (Record, error) {
 		}
 
 		for _, req := range window.Requests {
-			outcome := r.runTurn(ctx, window.Turn, req)
+			r.prepareTurn(window.Turn, req)
+			exec := r.executeTurn(ctx, window.Turn, req)
+			outcome := r.recordTurn(window.Turn, exec)
 			partial := game.DecisionWindow{
 				Turn:     window.Turn,
 				Mode:     game.Sequential,
@@ -175,7 +187,12 @@ func (r *Runner) Run(ctx context.Context) (Record, error) {
 }
 
 func (r *Runner) runSimultaneous(ctx context.Context, window game.DecisionWindow) []game.ActionOutcome {
-	outcomes := make([]game.ActionOutcome, len(window.Requests))
+	executions := make([]turnExecution, len(window.Requests))
+	for i, req := range window.Requests {
+		r.prepareTurn(window.Turn, req)
+		executions[i].request = req
+	}
+
 	var wg sync.WaitGroup
 	for i, req := range window.Requests {
 		i := i
@@ -183,17 +200,24 @@ func (r *Runner) runSimultaneous(ctx context.Context, window game.DecisionWindow
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			outcomes[i] = r.runTurn(ctx, window.Turn, req)
+			executions[i] = r.executeTurn(ctx, window.Turn, req)
 		}()
 	}
 	wg.Wait()
+
+	outcomes := make([]game.ActionOutcome, len(executions))
+	for i, exec := range executions {
+		outcomes[i] = r.recordTurn(window.Turn, exec)
+	}
 	return outcomes
 }
 
-func (r *Runner) runTurn(ctx context.Context, turn int, req game.DecisionRequest) game.ActionOutcome {
+func (r *Runner) prepareTurn(turn int, req game.DecisionRequest) {
 	r.lastSeen[req.PlayerID] = req.VisibleState
 	r.appendEvent("turn_requested", turn, req.PlayerID, req)
+}
 
+func (r *Runner) executeTurn(ctx context.Context, turn int, req game.DecisionRequest) turnExecution {
 	result := r.sessions[req.PlayerID].Turn(ctx, session.Request{
 		ID:       fmt.Sprintf("turn-%d-%s", turn, req.PlayerID),
 		Method:   "turn",
@@ -201,30 +225,38 @@ func (r *Runner) runTurn(ctx context.Context, turn int, req game.DecisionRequest
 		Deadline: req.Deadline,
 	})
 
-	outcome := game.ActionOutcome{
-		PlayerID:      req.PlayerID,
-		Outcome:       result.Outcome,
-		FailureReason: result.FailureReason,
-		Action:        result.Payload,
+	return turnExecution{
+		request: req,
+		result:  result,
+		outcome: game.ActionOutcome{
+			PlayerID:      req.PlayerID,
+			Outcome:       result.Outcome,
+			FailureReason: result.FailureReason,
+			Action:        result.Payload,
+		},
 	}
-	r.lastResult[req.PlayerID] = outcome
+}
 
-	switch result.FailureReason {
-	case "":
-		r.appendEvent("turn_result", turn, req.PlayerID, outcome)
-	case session.ReasonTimeout:
-		r.appendEvent("turn_timeout", turn, req.PlayerID, outcome)
-	case session.ReasonLateResponse:
-		r.appendEvent("late_response_ignored", turn, req.PlayerID, outcome)
-	default:
-		r.appendEvent("protocol_error", turn, req.PlayerID, outcome)
+func (r *Runner) recordTurn(turn int, exec turnExecution) game.ActionOutcome {
+	r.lastResult[exec.request.PlayerID] = exec.outcome
+	for _, lateID := range exec.result.IgnoredLateResponseIDs {
+		r.appendEvent("late_response_ignored", turn, exec.request.PlayerID, map[string]any{"response_id": lateID})
 	}
-	return outcome
+
+	switch exec.result.FailureReason {
+	case "":
+		r.appendEvent("turn_result", turn, exec.request.PlayerID, exec.outcome)
+	case session.ReasonTimeout:
+		r.appendEvent("turn_timeout", turn, exec.request.PlayerID, exec.outcome)
+	default:
+		r.appendEvent("protocol_error", turn, exec.request.PlayerID, exec.outcome)
+	}
+	return exec.outcome
 }
 
 func (r *Runner) appendEvent(kind string, turn int, playerID string, payload any) {
 	r.nextSeq++
-	raw, _ := json.Marshal(payload)
+	raw := mustMarshalPayload(payload)
 	r.events = append(r.events, Event{
 		Seq:      r.nextSeq,
 		Kind:     kind,
@@ -232,4 +264,21 @@ func (r *Runner) appendEvent(kind string, turn int, playerID string, payload any
 		PlayerID: playerID,
 		Payload:  raw,
 	})
+}
+
+func mustMarshalPayload(payload any) json.RawMessage {
+	raw, err := json.Marshal(payload)
+	if err == nil {
+		return raw
+	}
+
+	fallback, fallbackErr := json.Marshal(map[string]any{
+		"marshal_error": err.Error(),
+		"payload_type":  fmt.Sprintf("%T", payload),
+	})
+	if fallbackErr == nil {
+		return fallback
+	}
+
+	return json.RawMessage(`{"marshal_error":"failed to encode event payload"}`)
 }

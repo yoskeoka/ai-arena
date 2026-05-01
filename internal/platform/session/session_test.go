@@ -61,6 +61,9 @@ func TestSessionInitTurnTimeoutGameOverAndLateResponse(t *testing.T) {
 	if nextResult.Outcome != OutcomeAccepted {
 		t.Fatalf("next outcome = %q, want accepted", nextResult.Outcome)
 	}
+	if len(nextResult.IgnoredLateResponseIDs) != 1 || nextResult.IgnoredLateResponseIDs[0] != "turn-timeout" {
+		t.Fatalf("ignored late response ids = %v, want [turn-timeout]", nextResult.IgnoredLateResponseIDs)
+	}
 
 	deadline := time.Now().Add(time.Second)
 	for len(lateIDs) == 0 && time.Now().Before(deadline) {

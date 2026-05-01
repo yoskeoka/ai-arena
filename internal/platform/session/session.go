@@ -35,9 +35,10 @@ type Request struct {
 }
 
 type Result struct {
-	Outcome       string
-	FailureReason string
-	Payload       json.RawMessage
+	Outcome                string
+	FailureReason          string
+	Payload                json.RawMessage
+	IgnoredLateResponseIDs []string
 }
 
 type Session struct {
@@ -87,6 +88,8 @@ func (s *Session) StderrSnapshot() runtime.StderrSnapshot {
 }
 
 func (s *Session) call(ctx context.Context, req Request) Result {
+	var ignoredLateResponseIDs []string
+
 	msg, err := protocol.NewRequest(req.ID, req.Method, req.Params)
 	if err != nil {
 		return Result{Outcome: OutcomeNoAction, FailureReason: ReasonMalformed}
@@ -121,6 +124,7 @@ func (s *Session) call(ctx context.Context, req Request) Result {
 			}
 			if _, timedOut := s.lateIDs[incoming.Response.ID]; timedOut {
 				delete(s.lateIDs, incoming.Response.ID)
+				ignoredLateResponseIDs = append(ignoredLateResponseIDs, incoming.Response.ID)
 				if s.onLate != nil {
 					s.onLate(incoming.Response.ID)
 				}
@@ -133,9 +137,17 @@ func (s *Session) call(ctx context.Context, req Request) Result {
 				return Result{Outcome: OutcomeNoAction, FailureReason: ReasonMalformed}
 			}
 			if incoming.Response.Error != nil {
-				return Result{Outcome: OutcomeNoAction, FailureReason: ReasonMalformed}
+				return Result{
+					Outcome:                OutcomeNoAction,
+					FailureReason:          ReasonMalformed,
+					IgnoredLateResponseIDs: ignoredLateResponseIDs,
+				}
 			}
-			return Result{Outcome: OutcomeAccepted, Payload: incoming.Response.Result}
+			return Result{
+				Outcome:                OutcomeAccepted,
+				Payload:                incoming.Response.Result,
+				IgnoredLateResponseIDs: ignoredLateResponseIDs,
+			}
 		}
 	}
 }

@@ -77,9 +77,12 @@ func Start(ctx context.Context, cfg Config) (*Adapter, error) {
 		_, _ = io.Copy(stderr, stderrPipe)
 	}()
 
-	go adapter.readStdout(stdout)
+	stdoutDone := make(chan struct{})
+	go adapter.readStdout(stdout, stdoutDone)
 	go func() {
-		adapter.done <- cmd.Wait()
+		err := cmd.Wait()
+		<-stdoutDone
+		adapter.done <- err
 		close(adapter.done)
 		close(adapter.incoming)
 	}()
@@ -106,7 +109,7 @@ func (a *Adapter) Close(ctx context.Context) error {
 
 	select {
 	case err := <-a.done:
-		return normalizeExit(err)
+		return err
 	default:
 	}
 
@@ -115,18 +118,20 @@ func (a *Adapter) Close(ctx context.Context) error {
 
 	select {
 	case err := <-a.done:
-		return normalizeExit(err)
+		return suppressExpectedShutdownExit(err, os.Interrupt)
 	case <-ctx.Done():
 		_ = a.cmd.Process.Signal(syscall.SIGKILL)
 		err := <-a.done
 		if err == nil {
 			return ctx.Err()
 		}
-		return errors.Join(ctx.Err(), normalizeExit(err))
+		return errors.Join(ctx.Err(), suppressExpectedShutdownExit(err, syscall.SIGKILL))
 	}
 }
 
-func (a *Adapter) readStdout(stdout io.Reader) {
+func (a *Adapter) readStdout(stdout io.Reader, done chan<- struct{}) {
+	defer close(done)
+
 	dec := protocol.NewDecoder(stdout)
 	for {
 		resp, err := dec.DecodeResponse()
@@ -142,9 +147,18 @@ func (a *Adapter) readStdout(stdout io.Reader) {
 	}
 }
 
-func normalizeExit(err error) error {
+func suppressExpectedShutdownExit(err error, expectedSignal os.Signal) error {
+	if err == nil {
+		return nil
+	}
+
 	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if errors.As(err, &exitErr) && exitErr.ProcessState != nil && exitErr.ProcessState.Sys() != nil {
+		if status, ok := exitErr.ProcessState.Sys().(syscall.WaitStatus); ok && status.Signaled() && status.Signal() == expectedSignal {
+			return nil
+		}
+	}
+	if errors.Is(err, os.ErrProcessDone) {
 		return nil
 	}
 	return err
