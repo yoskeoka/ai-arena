@@ -3,7 +3,9 @@
 
 ## Objective
 
-`echo-count` fixture で固めた platform foundation の上に `janken` を載せ、Phase 2 の主実証ゲームとして richer integration coverage を追加する。
+親 plan の Task 12 に合わせて、`janken` richer integration へ進む入口だけを作る。
+
+この plan では `janken` の空 package と test skeleton、責務境界の明文化、そして本実装用 follow-up plan の作成までを扱う。`janken` の中身や platform 検証のための作りこみは、この plan では実装せず別 plan に送る。
 
 親 plan:
 
@@ -16,9 +18,9 @@ depends on:
 ## Scope
 
 - `internal/games/janken/`
-- `janken` 用 sample AI または test fixture
-- `janken` の CLI 実行
-- `janken` e2e
+- `janken` game master の空 package
+- `janken` test skeleton
+- `janken` richer integration 本実装用の follow-up exec plan
 
 この plan で担保したいのは、`echo-count` では不足する以下の責務。
 
@@ -27,13 +29,21 @@ depends on:
 - game-specific action schema
 - ranking / tie-break の richer coverage
 
+この plan では以下は扱わない。
+
+- `janken` game logic の本実装
+- `janken` 用 sample AI や test fixture の作りこみ
+- `janken` の CLI 実行
+- `janken` e2e
+- hidden action / reveal / ranking の platform 上での実検証
+
 ## Spec Changes
 
 ### `docs/specs/janken-game.md`
 
-- platform foundation 完了後の integration game としての位置付けを具体化する
-- `init` / `turn` / `game_over` payload と game-specific validation を実装可能な粒度へ詰める
-- score / placement / tie-break を必要なら追記する
+- platform foundation 完了後の richer integration game であることを再確認する
+- この plan では skeleton と責務境界だけを整え、本実装と richer verification は follow-up plan に送ることを明記する
+- `echo-count` で担保済みの責務と、`janken` に残す責務を区別する
 
 ### `docs/specs/platform.md`
 
@@ -42,34 +52,32 @@ depends on:
 ## Expected Code Changes
 
 - `internal/games/janken/`
-- `testdata/ai/janken/` または同等の test fixture
-- `e2e/` の `janken` coverage
+- `internal/games/janken/*_test.go` の skeleton
+- `docs/exec-plan/todo/` の `janken` 本実装用 follow-up plan
 
 ## Verification
 
-完了は CLI 実行と e2e で判定する。最低限、以下を機械的に確認できること。
+完了は docs review と skeleton の機械確認で判定する。最低限、以下を確認できること。
 
-- `arena-runner` から `janken` match を起動できる
-- hidden action と reveal 後の解決結果が期待どおり
-- illegal action や timeout が `janken` ルール上 `no_action` として処理される
-- score / placement / tie-break が `janken` spec と一致する
+- `internal/games/janken/` に空 package と test skeleton があり、`go test ./...` を壊さない
+- `echo-count` で担保済みの責務と `janken` に残す責務が docs 上で区別されている
+- `janken` の中身、sample AI、CLI、e2e、richer verification は別 follow-up plan で扱うことが明記されている
 
 ## Sub-tasks
 
-- [ ] Update `docs/specs/janken-game.md` for implementation detail
-- [ ] Implement `janken` game master
-- [ ] Add `janken` fixture AI or sample AI
-- [ ] Add CLI verification path for `janken`
-- [ ] Add `janken` e2e coverage
+- [ ] Update `docs/specs/janken-game.md` to clarify skeleton-only scope and remaining `janken` responsibilities
+- [ ] Add empty `internal/games/janken/` package
+- [ ] Add `janken` test skeleton without committing game logic
+- [ ] Write a separate follow-up exec plan for `janken` implementation and richer platform verification
 
 ## Parallelism
 
-- `janken` game logic と test AI 準備は並行できる
-- e2e は AI fixture が揃った後に別 stream で追加できる
+- spec 上の責務整理と skeleton package 追加は並行できる
+- follow-up plan 作成は skeleton 追加と独立して進められる
 
 ## Risks and Mitigations
 
-- `janken` 着手が早すぎると platform core の不具合とゲーム不具合が混ざる
-  - mitigation: `platform-phase2-02-fixture-e2e.md` 完了を前提にする
-- `echo-count` と同じ assertion を重複して増やすと価値が薄い
-  - mitigation: `janken` では hidden action / reveal / richer ranking に集中する
+- この plan の段階で `janken` 本実装まで進めると、親 plan の Task 12 を超えて scope creep する
+  - mitigation: skeleton と follow-up plan 作成までに止める
+- `echo-count` と `janken` の責務境界が曖昧だと、後続 plan の verification が重複する
+  - mitigation: `echo-count` で閉じた責務と `janken` に残す責務を docs で先に固定する
