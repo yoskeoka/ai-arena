@@ -7,7 +7,7 @@
 
 親 plan:
 
-- `platform-phase2-implementation.md`。このファイルは `docs/exec-plan/todo/` または `docs/exec-plan/done/` に存在しうる
+- `docs/exec-plan/done/platform-phase2-implementation.md`
 
 ## Scope
 
