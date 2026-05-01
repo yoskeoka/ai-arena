@@ -2,429 +2,387 @@
 
 ## 目的
 
-このドキュメントは、AI Arena の Phase 1 におけるプラットフォーム層の仕様を定義する。
-プラットフォーム層はゲーム非依存であり、AI 実行、ターン進行、結果記録、観戦向け状態取得を担う。
+このドキュメントは、AI Arena の Phase 2a foundation におけるプラットフォーム層の仕様を定義する。
+このフェーズの目的は、ゲーム非依存の platform core を local subprocess 上で成立させ、
+後続の `echo-count` fixture と `janken` 実装の土台を固めることである。
 
-## スコープ
+最終的な提出形式は引き続き WASM を目指すが、このフェーズでは実行基盤の切り分けを優先し、
+AI 実行アダプタはローカルプロセスを使う。
 
-プラットフォーム層は以下をサポートする必要がある。
+## Phase 2a スコープ
 
-- 複数ゲームを共通の実行モデルで登録できること
-- 1試合の間、AI プロセスを長寿命で維持できること
-- stdin/stdout 上で JSON-RPC 2.0 によりアクションを交換できること
-- 同時行動型ゲームと順番制ゲームの両方を扱えること
-- 試合結果、順位、AI の stderr ログを記録できること
-- 将来の観戦クライアントや運営画面向けに試合全体状態を公開できること
+このフェーズで platform が満たすべきこと:
 
-このドキュメントでは、HTTP API の具体形や永続化スキーマは定義しない。それらは後続フェーズで扱う。
+- JSON-RPC 2.0 + NDJSON による AI 通信
+- 1試合中に AI プロセスを長寿命で維持する session モデル
+- `init` / `turn` / `game_over` の platform 共通メソッド
+- 同時行動と順番制の両方を扱える match loop
+- game metadata compatibility 判定
+- local subprocess runtime adapter
+- match record / event log / snapshot / exported snapshot の最小 schema
 
-## コアモデル
+このフェーズで扱わないこと:
+
+- WASM runtime 統合
+- black-box end-to-end CLI シナリオ
+- `echo-count` / `janken` のゲーム実装詳細
+- resume / replay 継続実行の CLI entrypoint
+
+## コア責務
 
 ### プラットフォームの責務
 
-プラットフォームは以下を担当する。
-
-- ゲーム定義と対戦設定を受け付ける
-- マッチメイク結果ごとに試合単位の実行コンテキストを作る
-- 試合単位の実行コンテキスト内でゲームマスターと各 AI を接続する
-- 参加プレイヤーごとに AI ランタイムを1つ起動する
-- 各 AI にゲーム固有の可視状態を届ける
-- 制限時間内にアクションを収集する
-- タイムアウトと不正アクションの扱いを適用する
-- 状態遷移ロジックを選択されたゲームマスターに委譲する
-- 試合結果と AI の stderr ログを永続化する
-- 観戦者や運営者向けに全体状態を公開する
+- ゲーム定義を catalog に登録し、metadata 互換性を検証する
+- 試合ごとに game master と player AI session を接続する
+- 各 AI runtime の起動、標準 stream 接続、終了を管理する
+- 各 decision window ごとに request を送り、締切までの response を集約する
+- timeout / malformed protocol / mismatched id / illegal action / late response を区別して記録する
+- game master へ player action outcome を渡し、状態遷移を進める
+- 最低限の match record, event log, snapshot を生成する
 
 ### プラットフォームの非責務
 
-プラットフォームは以下を担当しない。
+- ゲーム固有 action schema の意味解釈
+- 対外 HTTP API や永続化 backend の具体実装
+- AI ソースコードのビルド
+- 試合中の AI 間通信
 
-- 伝送方式を超えたゲーム固有アクション仕様の定義
-- AI ソースコードのビルドパイプライン提供
-- 試合中に AI 同士や外部と通信させること
+## 実行トポロジ
 
-### 試合実行トポロジ
-
-プラットフォームは、マッチメイク済みの1試合ごとに独立した実行コンテキストを作る。この実行コンテキストは、概念上「試合の部屋」として扱う。
-
-その中には以下が存在する。
-
-- 1つのゲームマスター
-- 参加プレイヤーごとの AI インスタンス
-- プラットフォームの進行制御ループ
-
-役割分担は以下。
-
-- ゲームマスター: 全体状態を保持し、ターン進行と勝敗判定を決める
-- AI: 可視状態を受け取り、行動を返す
-- プラットフォーム: ゲームマスターと AI 群の間を仲介し、各 AI への request/response を締切付きで管理する
-
-概念図:
+1試合ごとに独立した match room を作る。
 
 ```text
 match room
-  platform loop
+  match loop
     <-> game master
-    <-> player ai 1
-    <-> player ai 2
-    <-> player ai N
+    <-> ai session 1
+      <-> runtime adapter 1
+    <-> ai session 2
+      <-> runtime adapter 2
 ```
 
-AI 同士は直接通信しない。すべてのゲーム進行は、ゲームマスターとプラットフォームを介して成立する。
+- `runtime adapter`: subprocess/WASM など実行手段の差分を吸収する層
+- `ai session`: protocol request/response と timeout を扱う層
+- `match loop`: game master と複数 session を束ねる層
+- `game master`: ゲーム固有の状態遷移と勝敗判定を持つ層
+
+protocol と game logic は分離する。runtime adapter と session / match loop も分離する。
+
+## ゲーム metadata 契約
+
+### 必須 metadata
+
+各ゲームは少なくとも以下を持つ。
+
+- `game_id`
+- `game_version`
+- `ruleset_version`
+- `turn_mode`
+
+例:
+
+```json
+{
+  "game_id": "janken",
+  "game_version": "2.1.0",
+  "ruleset_version": "phase2",
+  "turn_mode": "simultaneous"
+}
+```
+
+### 各フィールドの責務
+
+- `game_id`: ゲーム系列そのものの識別子。別ゲームになったら変える
+- `game_version`: game master 実装と payload schema の互換性を表す semver
+- `ruleset_version`: 同一 game 上での運営ルール・採点・round 数既定など、必ずしも schema 変更を伴わないルール識別子
+
+### 互換性判定
+
+- platform は `game_id` 完全一致を要求する
+- platform は `game_version` の major 一致を要求する
+- `ruleset_version` は exact match を要求する
+
+したがって、以下は非互換とみなす。
+
+- `game_id` 不一致
+- `game_version` major 不一致
+- `ruleset_version` 不一致
+
+minor / patch 差分は同一 major の範囲で互換とみなす。
+
+## AI metadata sidecar manifest
+
+AI 実行物の横に sidecar manifest を置く既定を持つ。
+
+- 実行物 path: `<entry>`
+- sidecar path: `<entry>.arena.json`
+
+最小 schema:
+
+```json
+{
+  "ai_id": "sample-janken-bot",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "janken",
+    "game_version": "2.1.0",
+    "ruleset_version": "phase2"
+  },
+  "runtime": {
+    "kind": "local-subprocess",
+    "command": ["./bot"]
+  }
+}
+```
+
+sidecar が存在しない場合、Phase 2a の既定は以下。
+
+- `runtime.kind = local-subprocess`
+- command は登録時に明示された実行コマンドを使う
+- protocol metadata は match 側設定と同一でなければならない
 
 ## AI 実行モデル
 
-### 提出形式
+### Phase 2a runtime
 
-- AI の提出物は WASI 対応 WASM バイナリとする
-- プラットフォームはユーザーのソースコードをコンパイルしない
-- 提出物はプレイヤー単位でバージョン管理され、対戦作成時に選択される
+- runtime は local subprocess を使う
+- platform はプロセス起動後、`stdin` / `stdout` / `stderr` を接続する
+- AI は試合開始から終了まで同一プロセスで生存できる
+- `stdout` は JSON-RPC response 専用
+- `stderr` は自由ログであり、platform が capture する
 
-### 実行制約
+### 起動確認
 
-- 各 AI は試合開始時に1回だけ起動し、試合終了まで生存する
-- AI は同一試合中のターンをまたいでメモリ上の状態を保持できる
-- メモリ上限は WASM linear memory の制限で管理する
-- ターン締切はタイムアウト制御付きの実行管理で強制する
-- ネットワークアクセスは設計上利用不可とする
-- ファイルシステムアクセスはデフォルトで禁止し、将来必要なら別 spec で限定的に許可する
+`init` 送信前に platform は少なくとも以下を確認する。
 
-### 起動確認と状態の境界
+- subprocess 起動成功
+- `stdin` / `stdout` / `stderr` pipe 接続成功
+- `stdout` 受信ループ開始成功
 
-プラットフォームは `init` を送る前に、少なくとも以下を確認しなければならない。
+これに失敗した場合、その AI は `init` 前起動失敗として扱う。
 
-- WASM バイナリの読み込みに成功していること
-- WASM インスタンスの生成に成功していること
-- `stdin` / `stdout` / `stderr` の接続が確立していること
+### 終了
 
-これらに失敗した場合、その AI は `init` 送信前の起動失敗として扱う。
-
-一方で、プラットフォームだけで確認できるのはランタイム起動成功とプロトコル応答性までであり、ゲーム固有の初期化が完了しているかどうかは `init` の request/response を通じて確認する。
-
-### 標準ストリーム
-
-- `stdin`: プラットフォームから AI への JSON-RPC リクエスト
-- `stdout`: AI からプラットフォームへの JSON-RPC レスポンス専用
-- `stderr`: AI が自由に出力できるログチャネル
-
-`stdout` に JSON-RPC 以外の内容が出力された場合は、プロトコル違反として扱う。
-
-### `stderr` の出力量制限
-
-`stderr` は AI の改善に有用だが、無制限に保存するとプラットフォーム資源を圧迫する。そのためプラットフォームは保存対象に上限を設ける。
-
-Phase 1 の方針:
-
-- `init` フェーズの `stderr` 保存量上限を設ける
-- 各 `turn` ごとに `stderr` 保存量上限を設ける
-- `game_over` 後の `stderr` 保存量上限を設ける
-- 追加で、試合全体の `stderr` 保存総量上限も設けてよい
-
-上限を超えた `stderr` は AI 実行自体を止めず、保存対象から破棄してよい。破棄が起きた事実は試合記録へ残すことが望ましい。
-
-### `stderr` の取得タイミング
-
-AI プレイヤー実装者が `stderr` に出力した内容をいつ取得可能にするかは、Phase 1 では platform 共通仕様としては定義しない。
-
-既定の考え方:
-
-- ゲーム側で特別な取得タイミングを定義しない場合、`game_over` を全 AI に送信し、全 AI インスタンスを終了させた後に取得可能にする
-- ゲーム側が死亡、転生、外部イベント発生などを契機に途中取得を許したい場合は、そのタイミングをゲーム仕様側で追加定義する
-
-つまり、`stderr` の保存は platform の責務だが、参加者へどの時点で見せるかはゲーム仕様や将来の運営仕様に委ねる。
+- match 終了時、platform は `game_over` notification を送る
+- その後、runtime に shutdown 猶予を与える
+- 猶予内に終了しなければ強制終了してよい
 
 ## 通信プロトコル
 
-### エンベロープ
+### Envelope
 
-プラットフォームから AI へのリクエスト、および AI からプラットフォームへのレスポンスは、すべて JSON-RPC 2.0 を用いる。
-
-プラットフォームからのリクエスト例:
+platform request:
 
 ```json
 {
   "jsonrpc": "2.0",
-  "id": "turn-7-player-2",
+  "id": "turn-3-p2",
   "method": "turn",
   "params": {}
 }
 ```
 
-AI からのレスポンス例:
+AI response:
 
 ```json
 {
   "jsonrpc": "2.0",
-  "id": "turn-7-player-2",
+  "id": "turn-3-p2",
   "result": {}
 }
 ```
 
-### メッセージフレーミング
+error response:
 
-`stdin` / `stdout` 上のプロトコルメッセージは NDJSON とする。
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "turn-3-p2",
+  "error": {
+    "code": -32000,
+    "message": "illegal action"
+  }
+}
+```
 
-NDJSON を選ぶ理由は、実装を単純に保ちつつ、人間がローカル実行時に入出力を目視で追いやすく、デバッグしやすいためである。
+### NDJSON framing
 
-- 各 JSON-RPC メッセージは1つの UTF-8 JSON オブジェクトとして出力する
-- 各メッセージは改行文字 `\n` で終端する
-- 受信側は `\r\n` も行終端として受理してよい
-- 送信側はプロトコルストリーム上で複数行 JSON を出力してはならない
-- `stdout` にはフレーム化された JSON-RPC メッセージ以外のバイト列を混在させてはならない
-
-### メッセージライフサイクル
-
-1. プラットフォームは一意な `id` を持つリクエストを送る
-2. AI は締切までに同じ `id` を持つレスポンスを返す
-3. 締切までに応答がなければタイムアウトとして扱う
-4. 不正な形式や `id` 不一致の応答はプロトコルエラーとして扱う
-
-また、プラットフォームは response を期待しない one-way メッセージを JSON-RPC notification として送ってよい。この場合:
-
-- メッセージに `id` を含めない
-- AI からのレスポンスは不要とする
-- AI が何か追加情報を残したい場合は `stderr` に出力する
-
-プラットフォームは各 AI プロセスに対しては逐次的にリクエストを送る。ゲーム全体としては、同じターン窓で各プレイヤーに個別にリクエストを送り、全員の応答または締切を待ってから解決することで、同時行動を表現できる。
-
-プラットフォームが AI 応答待ちに使う締切は、ゲームマスターのロジック実行時間とは別に管理する。
+- 1メッセージは1行の JSON object とする
+- 行終端は `\n`、受信側は `\r\n` も許可してよい
+- 複数行 JSON は無効
+- `stdout` に JSON 以外の行を混在させてはならない
 
 ### 標準メソッド
 
-プラットフォームは以下のメソッド名を予約する。
-
-- `init`: 試合開始時に1回送る
-- `turn`: 各 AI の意思決定ポイントごとに送る
-- `game_over`: 試合終了時に1回送る notification
-
-ゲームごとに `params` の中身を拡張してよいが、これらのメソッド名は再定義しない。
+- `init`: request / response
+- `turn`: request / response
+- `game_over`: notification
 
 ### `init`
 
-目的:
-
-- 試合の静的メタデータを AI に知らせる
-- ゲーム識別子とゲーム固有の初期状態を渡す
-
-必須 `params` フィールド:
+必須 `params`:
 
 - `match_id`
 - `player_id`
-- `game`
+- `game_id`
+- `game_version`
 - `ruleset_version`
 - `deadline_ms`
 - `state`
 
-`state` には、その AI から見えるゲーム固有の初期状態を入れる。
-
-`init` は単なる起動確認ではなく、ゲーム固有初期化を伴う最初のプロトコル要求である。プラットフォームは起動済みインスタンスに対して `init` を送り、その応答により「少なくともこのゲームの初期化要求を解釈して返答できる状態にあるか」を確認する。
-
-プラットフォームが `init` 応答から直接確認できるのは protocol-ready かどうかであり、より細かいゲーム固有 readiness の意味は各ゲーム仕様が定義する。
+`init` response は protocol-ready ACK として扱う。ゲーム固有 readiness の詳細は各ゲーム仕様が定義する。
 
 ### `turn`
 
-目的:
-
-- 現在のターンまたは行動窓に対する1回の意思決定を要求する
-
-必須 `params` フィールド:
+必須 `params`:
 
 - `turn`
 - `visible_state`
 - `legal_action_hint`
 - `deadline_ms`
 
-`legal_action_hint` は Phase 1 では必須とする。もともと合法手の事前列挙が自然でないゲームであっても、AI の試作と観戦デバッグを簡単にするため、Phase 1 のゲーム仕様では何らかの形で与える。
-
-### `turn` 前の AI 差し替え前処理
-
-プラットフォームは各 `turn` を開始する前に、必要ならそのプレイヤー AI を差し替える前処理を走らせてよい。
-
-この前処理の基本形:
-
-1. 新しい AI 提出物がそのプレイヤーに対して有効化されているか確認する
-2. 差し替え対象であれば、現在の AI インスタンスを停止する
-3. 新しい WASM バイナリを起動し直す
-4. そのゲーム仕様で必要な状態を含めて `init` を再送する
-5. 以後の `turn` 処理を継続する
-
-プラットフォームは、少なくとも以下のメタデータを AI 提出物ごとに管理できることが望ましい。
-
-- 提出物バージョン
-- 登録タイムスタンプ
-
-差し替え条件そのものは platform 共通仕様としては固定しない。ゲーム仕様や運営ルールに応じて:
-
-- 次のターン開始前
-- 死亡/転生などの状態遷移時
-- 試合内の特定イベント発生時
-
-のように定義してよい。
-
-差し替え後の `init` へ何を渡すかもゲーム仕様に委ねる。真の初期状態ではなく、途中参加・途中再開に必要な状態を追加で含めてよい。
-
-Phase 1 のじゃんけんゲームでは、この差し替え前処理は使わない。
+`turn` response の `result` shape はゲーム固有である。
 
 ### `game_over`
 
-目的:
+- `id` を持たない notification とする
+- AI response は不要
+- `params` には少なくとも `final_visible_state` と `summary` を含められる
+- 必要なら `shutdown_after_ms` を含めてよい
 
-- 試合終了を AI に通知する
-- 最終順位とゲーム固有の結果情報を渡す
-- AI に最終振り返りとレポート出力の機会を与える
-- その後のシャットダウン猶予を知らせる
+## Failure reason 分類
 
-`game_over` は JSON-RPC notification として送るため、`id` は持たずレスポンスも期待しない。
+platform は action そのものと failure reason を分離して記録する。
 
-必須 `params` フィールドの基本形:
+### action outcome
 
-- `placement`
-- `score`
-- `summary`
-- `shutdown_after_ms`
+- `accepted`: game master に渡せる action を受理した
+- `no_action`: game master に渡す action が存在しない
 
-各ゲームは必要に応じて、最終ターンの結果を含む `final_visible_state` や AI 自身の振り返りに必要な追加入力をここへ含めてよい。
+### failure reason
 
-`game_over` の後に追加のゲームプレイ用リクエストは送らない。プラットフォームは `shutdown_after_ms` の猶予のあいだ `stderr` の出力を受け付け、その後 AI インスタンスを終了させる。
+- `invalid-timeout`: 締切までに response が来なかった
+- `invalid-protocol-malformed`: JSON 破損、JSON-RPC envelope 不正、複数行 JSON など
+- `invalid-protocol-mismatched-id`: request と異なる `id` の response
+- `invalid-illegal-action`: protocol 上は正常だがゲーム仕様上の action validation に失敗
+- `invalid-protocol-late-response`: timeout 後に届いた旧 response
 
-### 終了とシャットダウン
+`accepted` と `failure reason` は同居しない。`accepted` のとき `failure reason` は空とする。
+`no_action` のときだけ `failure reason` を持ってよい。
 
-WASM / WASI 自体には、ホストからゲストへ一般化された graceful-shutdown シグナルが標準で存在するわけではない。標準的に存在するのは、ゲスト側から終了を宣言する `proc_exit` のような仕組みである。
+## Match loop 契約
 
-そのため、AI Arena では graceful shutdown の契機をゲームプロトコル上の `game_over` notification で明示する。AI はこれを受けて:
+### decision window
 
-- 最終状態を内部で振り返る
-- 改善用レポートを `stderr` へ出力する
-- 必要なら自発的に終了する
+game master は次に必要な意思決定窓を platform に返す。
+decision window は以下を持つ。
 
-プラットフォームは猶予時間経過後、未終了の AI インスタンスを強制終了してよい。
+- `turn`
+- `mode`: `simultaneous` または `sequential`
+- `requests`: player ごとの `turn` request payload
 
-## エラーハンドリング
+### simultaneous
 
-### タイムアウト
+- platform は対象プレイヤー全員へ同一 turn window の request を送る
+- 全員の response か timeout を待つ
+- 収集結果をまとめて game master に渡す
 
-AI が締切前に応答しなかった場合:
+### sequential
 
-- プラットフォームはタイムアウトイベントを記録する
-- その行動窓のアクションは `no_action` とみなす
-- ゲームマスターはゲーム仕様に従って `no_action` を解決する
+- platform は指定順に1人ずつ request を送る
+- 各 response を受けたら直ちに game master へ反映して次の request を決めてよい
 
-### ゲームマスター処理時間
+### late response
 
-AI 応答待ちにはゲームごとの締切を設ける。一方で、ゲームマスター内部の状態更新処理には原則として短いターン締切を課さない。
+timeout 済み request の response が後から届いても、後続 turn の response と混線させてはならない。
+platform はそれを `invalid-protocol-late-response` として event log にのみ残し、現在の pending request には紐付けない。
 
-ただし安全策として、プラットフォームはゲームマスターの1回の進行処理に対して防御的な上限時間を設けてよい。Phase 1 の既定値は 30 秒程度を想定し、設定で変更可能とする。
+## Record / Event / Snapshot
 
-この上限は「ゲームマスターが無限ループや異常に長い計算へ入った場合に試合全体を保護する」ためのものであり、通常のターン制締切とは別目的である。
+### match record
 
-### 不正なプロトコル出力
+最小 schema:
 
-不正な JSON、無効な JSON-RPC エンベロープ、または `id` が一致しないレスポンスは、プラットフォーム層で判定できる transport/protocol 違反とする。プラットフォームはそのエラーを記録し、そのターンを `no_action` として扱う。
+```json
+{
+  "match_id": "match-001",
+  "game": {
+    "game_id": "janken",
+    "game_version": "2.1.0",
+    "ruleset_version": "phase2"
+  },
+  "players": [
+    {"player_id": "p1", "ai_id": "bot-a"},
+    {"player_id": "p2", "ai_id": "bot-b"}
+  ],
+  "status": "completed",
+  "result": {
+    "placements": [
+      {"player_id": "p1", "place": 1},
+      {"player_id": "p2", "place": 2}
+    ]
+  }
+}
+```
 
-これとは別に、JSON-RPC としては正しいがゲーム仕様に合わない内容は、ゲームマスターまたはゲーム仕様側で判定されるゲームプロトコル違反である。
+### event log
 
-プラットフォームは transport/protocol 違反回数を AI インスタンス単位で数える。一定回数を超えて繰り返した場合、その AI インスタンスを強制停止してよい。これは誤実装だけでなく、攻撃的な入力や資源消費を抑制するためでもある。
+最小 event 共通項目:
 
-強制停止後の扱いはゲーム仕様に委ねるが、最低でも以後の行動は `no_action` 相当として解決できなければならない。
+- `seq`
+- `kind`
+- `turn`
+- `player_id` optional
+- `payload`
 
-### ゲーム内で無効なアクション
+foundation で最低限必要な `kind`:
 
-AI が JSON-RPC としては正しいが、ゲームルール上は無効なアクションを返した場合:
+- `match_started`
+- `session_initialized`
+- `turn_requested`
+- `turn_result`
+- `turn_timeout`
+- `protocol_error`
+- `late_response_ignored`
+- `game_over_sent`
+- `match_completed`
 
-- プラットフォームは無効アクションとして記録する
-- ゲームマスターはそのゲームの無効アクション方針を適用する
+### snapshot
 
-各ゲーム仕様は、無効アクションを `no_action` に落とすのか、代替挙動に置き換えるのか、即敗北扱いにするのかを明記しなければならない。
+snapshot は match 実行中または終了時点の現在状態を表す内部向け構造である。
+最小で以下を持つ。
 
-## ゲーム統合契約
+- `match_id`
+- `turn`
+- `status`
+- `game_state`
+- `per_player`
 
-各ゲームは少なくとも以下を提供する。
+`per_player` には少なくとも以下を含められる。
 
-- 人間向けのゲーム仕様書
-- 機械可読なアクション/可視状態スキーマ定義
-- ゲームマスター実装
-- 観戦者や運営向けの全体状態エクスポートモデル
+- 最後に見せた `visible_state`
+- 最後に得た action outcome
+- stderr bytes summary
 
-### ゲームマスターの実装形態
+### exported snapshot
 
-Phase 1 では、ゲームマスターはプラットフォーム内部の同一ソースツリー内に実装された Go パッケージとして提供する前提とする。
+exported snapshot は観戦・debug 用に外へ出せる shape で、内部 snapshot をそのまま露出しない。
+foundation では最小で以下を持つ。
 
-つまり、現時点では:
+- `match_id`
+- `turn`
+- `status`
+- `public_state`
+- `players`
 
-- AI 提出物だけを WASM とする
-- ゲームマスターを別 WASM や外部プロセスにすることは前提としない
-- ゲーム追加はプラットフォームへの内蔵実装追加として行う
+## Verification 基準
 
-将来フェーズでは、ゲームプラグイン機構や外部登録機構を検討してよいが、この spec では未定義とする。
+Phase 2a foundation の受け入れ基準:
 
-### ゲームマスターの責務
-
-ゲームマスターは以下のロジックを実装する。
-
-- 初期試合状態の生成
-- プレイヤーごとの可視状態生成
-- アクション検証
-- 全体状態へのアクション適用
-- 必要に応じた同時提出アクションの解決
-- ラウンド終了判定と試合終了判定
-- スコア算出と順位決定
-- 観戦用の全体状態スナップショット出力
-
-### 全体状態エクスポート
-
-プラットフォームは、各ゲームが観戦者や運営者向けに安全に利用できる全体状態表現を出せることを前提とする。この表現には、各 AI には見えていない隠し情報が含まれていてよい。
-
-将来の観戦 API は、内部メモリを直接読むのではなく、この全体状態エクスポートを土台に構築する。
-
-## ターンモデル
-
-### 同時行動ゲーム
-
-流れ:
-
-1. プラットフォームは全アクティブプレイヤーへ `turn` を送る
-2. 全プレイヤーの応答またはタイムアウトまで待つ
-3. ゲームマスターが集まったアクション集合を使ってターンを解決する
-4. 次のターンへ進む
-
-### 順番制ゲーム
-
-流れ:
-
-1. プラットフォームは現在の手番プレイヤーにだけ `turn` を送る
-2. ゲームマスターが応答またはタイムアウト代替行動を適用する
-3. 次の手番へ進む
-
-AI 通信方式を変えずに、プラットフォームは両モデルを扱えなければならない。
-
-## 順位決定
-
-各ゲームは独自のスコア・順位ルールを定義する。プラットフォームが共通で前提とするのは、1試合の結果として次が得られることだけである。
-
-- プレイヤーごとのスコア値
-- 最終順位または同順位グループ
-- ログや将来のランキング集計に使える結果サマリ
-
-Phase 1 では、ゲーム横断のレーティングやラダー集計は標準化しない。
-
-## ログと観測性
-
-- AI の `stderr` は、プレイヤー・試合・時刻メタデータとともに保存する
-- 試合実行記録にはタイムアウト、無効アクション、プロトコル違反を含める
-- 全体状態スナップショットは少なくともターン境界で保持する
-
-これらのデータは以下のために必要である。
-
-- AI のデバッグ
-- 観戦リプレイ
-- 運営側の障害調査
-
-## 後続フェーズへ送る項目
-
-以下は意図的に Phase 1 の対象外とする。
-
-- 観戦 API の具体的な伝送方式
-- マッチメイキングとトーナメント運営
-- 永続レーティングシステム
-- サードパーティ向けゲームプラグインの配布/発見方式
-- 試合中の AI バージョン差し替え
+- protocol encode/decode と NDJSON framing の unit test が通る
+- malformed / mismatched id / late response を分類できる
+- metadata 互換性判定が unit test で通る
+- subprocess runtime の起動、stderr capture、shutdown timeout が確認できる
+- `init` ACK、`turn` timeout、`game_over` notification を session test で確認できる
+- simultaneous / sequential match loop が unit test で通る
+- record / event log / snapshot 最小整合が unit test で確認できる
