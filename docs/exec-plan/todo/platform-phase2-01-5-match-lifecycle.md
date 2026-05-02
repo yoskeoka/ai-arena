@@ -9,7 +9,7 @@
 
 ## Why Now
 
-`phase2-02` は fixture e2e により runner の外部挙動を固定する。現状の `internal/platform/match.Run` は foundation としては動くが、以下の暫定実装を e2e で固定すると、後続の正しい lifecycle 実装が不要に壊しにくくなる。
+`phase2-02` は fixture e2e により runner の外部挙動を固定する。現状の `internal/platform/match.Runner.Run` は foundation としては動くが、以下の暫定実装を e2e で固定すると、後続の正しい lifecycle 実装が不要に壊しにくくなる。
 
 - `Run` が init / decision loop / game_over / snapshot / record 作成を1つの直線的な関数に持っている
 - 途中失敗時に partial record、event log、stderr summary、session shutdown を一貫して残す責務がない
@@ -39,7 +39,7 @@
 
 ### Must Fix Before `phase2-02`
 
-- `internal/platform/match.Run`
+- `internal/platform/match.Runner.Run`
   - lifecycle state が暗黙で、`completed` / `failed` / `canceled` を一貫して扱えない
   - `return Record{}, err` が多く、途中失敗時の record と event log が失われる
   - cleanup が `Run` の正常終了 path に寄っており、失敗時の `game_over` / shutdown / stderr capture が曖昧
@@ -56,6 +56,10 @@
 - `internal/platform/runtime.Adapter`
   - subprocess の exit / crash / forced kill が match lifecycle event へ伝播する contract が弱い
   - stderr capture はあるが、失敗時 record に必ず反映する責務が match 側にない
+  - `Start` が stdout reader、stderr capture、process wait を goroutine で起動するが、adapter 全体の状態遷移としては表現していない
+  - `Close` が通常 shutdown、context cancellation、forced kill、process already exited を扱うが、呼び出し側が「正常終了」「AI crash」「platform による kill」を安定して分類できる型を返していない
+  - `Send` が stdin write error をそのまま返すだけなので、session/match 側で runtime stopped / pipe closed / protocol failure を区別しにくい
+  - stdout reader の malformed response が `Message.Err` として流れるだけで、process exit や current request との関係を match lifecycle に写像しづらい
 
 ### Defer Beyond This Plan
 
@@ -144,6 +148,9 @@
 ### `internal/platform/runtime/`
 
 - subprocess exit / crash / forced kill を session/match に伝えられる error shape を整理する
+- runtime state を最低限 `running` / `exited` / `closing` / `killed` として扱えるようにする
+- stdin write failure、stdout decode failure、process exit を session/match 側が別 event にできるようにする
+- stderr capture goroutine が完了した後の byte summary を shutdown/failure record に反映できるようにする
 - cleanup 時の forced kill と通常の crash を区別できる test を追加する
 
 ## Verification
@@ -163,7 +170,7 @@
 
 - [ ] Update `docs/specs/platform.md` for match lifecycle phases, terminal statuses, and sequential contract
 - [ ] Redesign `internal/platform/game.Master` around decision steps that support true sequential progression
-- [ ] Refactor `internal/platform/match.Run` into lifecycle phase / step helpers
+- [ ] Refactor `internal/platform/match.Runner.Run` into lifecycle phase / step helpers
 - [ ] Add partial record generation for failed and canceled matches
 - [ ] Add cleanup event handling for game_over and session shutdown outcomes
 - [ ] Tighten session/runtime failure propagation into match lifecycle events
@@ -174,6 +181,7 @@
 
 - `docs/specs/platform.md` lifecycle update and code interface design should happen first and are blocking
 - session/runtime failure-shape tests can be implemented in parallel after the lifecycle event contract is fixed
+- runtime adapter state/error-shape tests can be implemented in parallel with session failure propagation tests
 - match runner normal/failure/cancel tests can be split by path after `Runner` phase structure exists
 
 ## Risks and Mitigations
