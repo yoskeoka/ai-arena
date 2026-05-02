@@ -12,6 +12,7 @@
 depends on:
 
 - `platform-phase2-01-foundation.md`
+- `platform-phase2-01-5-match-lifecycle.md`
 
 ## Scope
 
