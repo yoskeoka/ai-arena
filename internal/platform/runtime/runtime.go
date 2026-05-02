@@ -43,6 +43,7 @@ func Start(ctx context.Context, cfg Config) (*Adapter, error) {
 		return nil, errors.New("runtime: command is required")
 	}
 
+	// #nosec G204 -- the platform executes a pre-tokenized command array, not a shell string.
 	cmd := exec.CommandContext(ctx, cfg.Command[0], cfg.Command[1:]...)
 	cmd.Dir = cfg.Dir
 	cmd.Env = append(os.Environ(), cfg.Env...)
