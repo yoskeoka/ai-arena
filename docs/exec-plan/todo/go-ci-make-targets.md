@@ -8,6 +8,7 @@ PR #108 で追加された Go platform foundation を、GitHub Actions CI とロ
 この plan は以下を成立させる。
 
 - `make test` で unit test を実行できる
+- `make fmt` で `goimports` による auto fix を実行できる
 - `make lint` で formatter check と必要最小限の Go lint を実行できる
 - CI で `make test` と `make lint` を実行し、formatter fix が必要な状態を lint failure として扱う
 - `golangci-lint` は導入せず、必要な checker だけを個別に固定して使う
@@ -44,13 +45,14 @@ PR #108 で追加された Go platform foundation を、GitHub Actions CI とロ
 Go module の品質ゲート仕様を追加する。
 
 - `make test` は `go test ./...` を実行する
+- `make fmt` は tracked `.go` files に `goimports` を適用し、formatting / import ordering を auto fix する
 - `make lint` は少なくとも以下を実行する
-  - `goimports` formatting check
+  - `goimports` formatting check without auto fix
   - `go vet ./...`
-  - `noctx`
+  - `go vet -vettool=<noctx> ./...`
   - `staticcheck ./...`
   - `gosec ./...`
-- formatter は `goimports` とし、CI では自動修正せず、修正が必要なファイルを出力して失敗する
+- formatter は `goimports` とし、CI lint では自動修正せず、修正が必要なファイルを出力して失敗する
 - lint tool は `golangci-lint` ではなく個別 tool として固定する
 - CI とローカル Makefile は同じ command surface を使う
 
