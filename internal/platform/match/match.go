@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -18,7 +19,7 @@ import (
 type PlayerSession interface {
 	Init(context.Context, session.Request) session.Result
 	Turn(context.Context, session.Request) session.Result
-	GameOver(context.Context, any) error
+	GameOver(context.Context, session.Request) session.Result
 	Close(context.Context) error
 	StderrSnapshot() runtime.StderrSnapshot
 }
@@ -57,8 +58,10 @@ type Runner struct {
 }
 
 const (
-	initDeadline     = time.Second
-	shutdownDeadline = time.Second
+	initDeadline               = time.Second
+	shutdownDeadline           = time.Second
+	defaultGameOverAckDeadline = 3 * time.Second
+	gameOverTimeoutEnv         = "AI_ARENA_GAME_OVER_TIMEOUT"
 )
 
 type turnExecution struct {
@@ -221,17 +224,35 @@ func (r *Runner) runSimultaneousStep(ctx context.Context, step game.DecisionStep
 }
 
 func (r *Runner) shutdownSessions(ctx context.Context) {
+	gameOverDeadline := configuredGameOverAckDeadline()
 	for _, player := range r.players {
 		playerID := player.PlayerID
 
 		if r.status == game.StatusCompleted {
-			if err := r.sessions[playerID].GameOver(ctx, map[string]any{"match_id": r.matchID}); err != nil {
+			result := r.sessions[playerID].GameOver(ctx, session.Request{
+				ID:       "game-over",
+				Method:   "game_over",
+				Deadline: gameOverDeadline,
+				Params: map[string]any{
+					"match_id":            r.matchID,
+					"final_visible_state": json.RawMessage(r.lastSeen[playerID]),
+					"summary":             r.master.Result(),
+					"shutdown_after_ms":   gameOverDeadline.Milliseconds(),
+				},
+			})
+			if result.FailureReason == session.ReasonRuntimeStop {
+				r.appendRuntimeExited(0, playerID, map[string]any{"stage": "game_over"})
+			}
+			if result.Outcome != session.OutcomeAccepted {
 				r.appendEvent("session_shutdown_failed", 0, playerID, map[string]any{
-					"stage": "game_over",
-					"error": err.Error(),
+					"stage":          "game_over",
+					"failure_reason": result.FailureReason,
 				})
 			} else {
-				r.appendEvent("game_over_sent", 0, playerID, map[string]any{"match_id": r.matchID})
+				r.appendEvent("game_over_sent", 0, playerID, map[string]any{
+					"match_id":          r.matchID,
+					"shutdown_after_ms": gameOverDeadline.Milliseconds(),
+				})
 			}
 		}
 
@@ -412,4 +433,17 @@ func errString(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func configuredGameOverAckDeadline() time.Duration {
+	value := os.Getenv(gameOverTimeoutEnv)
+	if value == "" {
+		return defaultGameOverAckDeadline
+	}
+
+	parsed, err := time.ParseDuration(value)
+	if err != nil || parsed <= 0 {
+		return defaultGameOverAckDeadline
+	}
+	return parsed
 }

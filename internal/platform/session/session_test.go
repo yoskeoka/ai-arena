@@ -73,8 +73,14 @@ func TestSessionInitTurnTimeoutGameOverAndLateResponse(t *testing.T) {
 		t.Fatalf("lateIDs = %v, want [turn-timeout]", lateIDs)
 	}
 
-	if err := sess.GameOver(context.Background(), map[string]any{"summary": "done"}); err != nil {
-		t.Fatalf("GameOver: %v", err)
+	result := sess.GameOver(context.Background(), Request{
+		ID:       "game-over",
+		Method:   "game_over",
+		Params:   map[string]any{"summary": "done", "shutdown_after_ms": 3000},
+		Deadline: time.Second,
+	})
+	if result.Outcome != OutcomeAccepted {
+		t.Fatalf("GameOver outcome = %q, want accepted", result.Outcome)
 	}
 }
 
@@ -96,6 +102,7 @@ func TestHelperProcess(t *testing.T) {
 			fmt.Println(`{"jsonrpc":"2.0","id":"turn-next","result":{"action":"paper"}}`)
 		case strings.Contains(line, `"method":"game_over"`):
 			fmt.Fprintln(os.Stderr, "game over received")
+			fmt.Println(`{"jsonrpc":"2.0","id":"game-over","result":{"ack":true}}`)
 			os.Exit(0)
 		}
 	}

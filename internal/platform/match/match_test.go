@@ -171,8 +171,8 @@ func TestRunnerLogsGameOverAndShutdownFailures(t *testing.T) {
 	}
 	sessions := map[string]PlayerSession{
 		"p1": &fakeSession{
-			gameOverErr: errors.New("game_over failed"),
-			closeErr:    errors.New("close failed"),
+			gameOverResult: session.Result{Outcome: session.OutcomeNoAction, FailureReason: session.ReasonTimeout},
+			closeErr:       errors.New("close failed"),
 		},
 	}
 
@@ -262,11 +262,11 @@ func (f *fakeMaster) Result() game.MatchResult {
 }
 
 type fakeSession struct {
-	initResult  session.Result
-	turnResults []session.Result
-	turnIndex   int
-	gameOverErr error
-	closeErr    error
+	initResult     session.Result
+	turnResults    []session.Result
+	turnIndex      int
+	gameOverResult session.Result
+	closeErr       error
 }
 
 func (f *fakeSession) Init(context.Context, session.Request) session.Result {
@@ -285,8 +285,11 @@ func (f *fakeSession) Turn(context.Context, session.Request) session.Result {
 	return result
 }
 
-func (f *fakeSession) GameOver(context.Context, any) error {
-	return f.gameOverErr
+func (f *fakeSession) GameOver(context.Context, session.Request) session.Result {
+	if f.gameOverResult.Outcome == "" {
+		return session.Result{Outcome: session.OutcomeAccepted, Payload: raw(`{"ack":true}`)}
+	}
+	return f.gameOverResult
 }
 
 func (f *fakeSession) Close(context.Context) error {

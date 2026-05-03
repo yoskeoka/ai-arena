@@ -225,11 +225,12 @@
 
 ### `game_over`
 
-notification:
+request:
 
 ```json
 {
   "jsonrpc": "2.0",
+  "id": "game-over",
   "method": "game_over",
   "params": {
     "placement": 1,
@@ -287,7 +288,19 @@ notification:
 }
 ```
 
-`game_over` はレスポンス不要であり、AI はこの通知を受けたあとに最終ラウンド結果も含めて自己評価し、必要なら改善用レポートを `stderr` へ出力してよい。プラットフォームは `shutdown_after_ms` の猶予後にインスタンスを終了させる。
+response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "game-over",
+  "result": {
+    "ack": true
+  }
+}
+```
+
+`game_over` ACK は、AI が終了前 cleanup を完了したあとに返す。AI はこの request を受けたあとに最終ラウンド結果も含めて自己評価し、必要なら改善用レポートを `stderr` へ出力してよいが、その完了は `shutdown_after_ms` の猶予内でなければならない。プラットフォームは `AI_ARENA_GAME_OVER_TIMEOUT` に基づく待機上限まで ACK を待ち、期限超過時は shutdown failure として扱う。
 
 ## 観戦向け全体状態
 

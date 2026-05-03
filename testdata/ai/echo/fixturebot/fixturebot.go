@@ -115,6 +115,13 @@ func Run(behavior Behavior) error {
 					}
 				}
 			}
+			resp, err := protocol.NewResponse(req.ID, map[string]any{"ack": true})
+			if err != nil {
+				return err
+			}
+			if err := enc.Encode(resp); err != nil {
+				return err
+			}
 			return nil
 		}
 	}

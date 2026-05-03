@@ -72,12 +72,8 @@ func (s *Session) Turn(ctx context.Context, req Request) Result {
 	return s.call(ctx, req)
 }
 
-func (s *Session) GameOver(ctx context.Context, params any) error {
-	req, err := protocol.NewNotification("game_over", params)
-	if err != nil {
-		return err
-	}
-	return s.transport.Send(req)
+func (s *Session) GameOver(ctx context.Context, req Request) Result {
+	return s.call(ctx, req)
 }
 
 func (s *Session) Close(ctx context.Context) error {

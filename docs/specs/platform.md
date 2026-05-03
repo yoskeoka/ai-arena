@@ -252,10 +252,46 @@ error response:
 
 ### `game_over`
 
-- `id` を持たない notification とする
-- AI response は不要
-- `params` には少なくとも `final_visible_state` と `summary` を含められる
-- 必要なら `shutdown_after_ms` を含めてよい
+- `game_over` は request / response とする
+- AI は、終了前 cleanup が完了したあとに ACK response を返す
+- `params` には少なくとも `final_visible_state` と `summary` を含める
+- `params.shutdown_after_ms` には、platform がその環境で最大何 ms 待つかを入れる
+- AI は `shutdown_after_ms` を超えて cleanup を継続する前提を持ってはならない
+
+最小 request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "game-over",
+  "method": "game_over",
+  "params": {
+    "final_visible_state": {},
+    "summary": {},
+    "shutdown_after_ms": 3000
+  }
+}
+```
+
+最小 ACK:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "game-over",
+  "result": {
+    "ack": true
+  }
+}
+```
+
+platform 側待機上限:
+
+- platform は環境変数 `AI_ARENA_GAME_OVER_TIMEOUT` を読む
+- 未設定時の既定は 3 秒
+- local / CI では 3 秒を使う
+- online 環境では暫定的に 30 秒を設定してよい
+- `game_over` ACK が期限までに返らなければ shutdown failure として記録し、その後の process cleanup へ進む
 
 ## Failure reason 分類
 
