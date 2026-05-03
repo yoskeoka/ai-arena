@@ -31,11 +31,23 @@ type DecisionRequest struct {
 	Deadline        time.Duration
 }
 
-type DecisionWindow struct {
+type DecisionStep struct {
 	Turn     int
 	Mode     DecisionMode
 	Requests []DecisionRequest
 }
+
+type MatchStatus string
+
+const (
+	StatusStarting     MatchStatus = "starting"
+	StatusInitializing MatchStatus = "initializing"
+	StatusRunning      MatchStatus = "running"
+	StatusFinishing    MatchStatus = "finishing"
+	StatusCompleted    MatchStatus = "completed"
+	StatusFailed       MatchStatus = "failed"
+	StatusCanceled     MatchStatus = "canceled"
+)
 
 type ActionOutcome struct {
 	PlayerID      string          `json:"player_id"`
@@ -83,8 +95,8 @@ type ExportedSnapshot struct {
 type Master interface {
 	Metadata() catalog.GameMetadata
 	Init(context.Context) (InitState, error)
-	NextDecision(context.Context) (*DecisionWindow, error)
-	ApplyDecision(context.Context, DecisionWindow, []ActionOutcome) error
+	NextStep(context.Context) (*DecisionStep, error)
+	ApplyStep(context.Context, DecisionStep, []ActionOutcome) error
 	Snapshot() Snapshot
 	ExportedSnapshot() ExportedSnapshot
 	Result() MatchResult
