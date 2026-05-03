@@ -37,10 +37,9 @@ func main() {
 func run(args []string) error {
 	var (
 		gameName         string
-		mode             string
+		gameVersion      string
+		ruleset          string
 		matchID          string
-		turns            int
-		deadlineMS       int
 		stderrLimitBytes int
 		playerArgs       multiFlag
 	)
@@ -48,10 +47,9 @@ func run(args []string) error {
 	fs := flag.NewFlagSet("arena-runner", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	fs.StringVar(&gameName, "game", "", "game id")
-	fs.StringVar(&mode, "mode", "simultaneous", "match mode")
+	fs.StringVar(&gameVersion, "game-version", "", "game version")
+	fs.StringVar(&ruleset, "ruleset", "", "game ruleset")
 	fs.StringVar(&matchID, "match-id", "", "match id")
-	fs.IntVar(&turns, "turns", 3, "number of turns")
-	fs.IntVar(&deadlineMS, "deadline-ms", 100, "per-turn deadline in milliseconds")
 	fs.IntVar(&stderrLimitBytes, "stderr-limit-bytes", defaultStderrLimitBytes, "captured stderr bytes per player")
 	fs.Var(&playerArgs, "player", "player_id=entry-path")
 
@@ -64,27 +62,30 @@ func run(args []string) error {
 	if len(playerArgs) == 0 {
 		return fmt.Errorf("at least one --player is required")
 	}
+	if gameVersion == "" {
+		return fmt.Errorf("--game-version is required")
+	}
+	if ruleset == "" {
+		return fmt.Errorf("--ruleset is required")
+	}
 	if matchID == "" {
 		matchID = "match-" + uuid.NewString()
 	}
 
-	decisionMode := game.DecisionMode(mode)
-	meta := catalog.GameMetadata{
-		GameID:         echo.GameID,
-		GameVersion:    echo.GameVersion,
-		RulesetVersion: echo.RulesetVersion,
-		TurnMode:       string(decisionMode),
-	}
-	players, sessions, err := loadPlayersAndSessions(meta, playerArgs, stderrLimitBytes)
+	playersForGame, err := parsePlayersForGame(playerArgs)
 	if err != nil {
 		return err
 	}
-	master, err := echo.New(echo.Config{
-		Mode:     decisionMode,
-		Turns:    turns,
-		Players:  players,
-		Deadline: time.Duration(deadlineMS) * time.Millisecond,
-	})
+
+	master, err := newMaster(gameName, gameVersion, ruleset, playersForGame)
+	if err != nil {
+		return err
+	}
+	if meta := master.Metadata(); meta.GameVersion != gameVersion {
+		return fmt.Errorf("selected game version %q does not match implementation version %q", gameVersion, meta.GameVersion)
+	}
+
+	players, sessions, err := loadPlayersAndSessions(master.Metadata(), playerArgs, stderrLimitBytes)
 	if err != nil {
 		return err
 	}
@@ -97,6 +98,39 @@ func run(args []string) error {
 		fmt.Fprintln(os.Stderr, runErr)
 	}
 	return nil
+}
+
+func newMaster(gameName, gameVersion, ruleset string, players []game.Player) (game.Master, error) {
+	switch gameName {
+	case echo.GameID:
+		return echo.New(echo.Config{
+			GameVersion: gameVersion,
+			Ruleset:     ruleset,
+			Players:     players,
+		})
+	default:
+		return nil, fmt.Errorf("unsupported game %q", gameName)
+	}
+}
+
+func parsePlayersForGame(args []string) ([]game.Player, error) {
+	players := make([]game.Player, 0, len(args))
+	seenPlayerIDs := make(map[string]struct{}, len(args))
+	for _, arg := range args {
+		spec, err := parsePlayerSpec(arg)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := seenPlayerIDs[spec.PlayerID]; exists {
+			return nil, fmt.Errorf("duplicate player_id %q", spec.PlayerID)
+		}
+		seenPlayerIDs[spec.PlayerID] = struct{}{}
+		players = append(players, game.Player{
+			PlayerID: spec.PlayerID,
+			AIID:     spec.PlayerID,
+		})
+	}
+	return players, nil
 }
 
 func loadPlayersAndSessions(meta catalog.GameMetadata, args []string, stderrLimitBytes int) ([]game.Player, map[string]match.PlayerSession, error) {

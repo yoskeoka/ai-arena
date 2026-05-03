@@ -16,8 +16,8 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 	t.Run("simultaneous", func(t *testing.T) {
 		record, stderr := runArena(t,
 			"--game", "echo-count",
-			"--mode", "simultaneous",
-			"--turns", "3",
+			"--game-version", "2.0.0",
+			"--ruleset", "phase2-simultaneous-3turn",
 			"--match-id", "sim-happy",
 			"--player", "p1=./testdata/ai/echo/echo-ai",
 			"--player", "p2=./testdata/ai/echo/echo-ai",
@@ -39,11 +39,11 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 	t.Run("sequential", func(t *testing.T) {
 		record, _ := runArena(t,
 			"--game", "echo-count",
-			"--mode", "sequential",
-			"--turns", "3",
+			"--game-version", "2.0.0",
+			"--ruleset", "phase2-sequential-3turn",
 			"--match-id", "seq-happy",
-			"--player", "p1=./testdata/ai/echo/echo-ai",
-			"--player", "p2=./testdata/ai/echo/echo-ai",
+			"--player", "p1=./testdata/ai/echo/echo-ai-sequential",
+			"--player", "p2=./testdata/ai/echo/echo-ai-sequential",
 		)
 		if record.Status != "completed" {
 			t.Fatalf("status = %q, want completed", record.Status)
@@ -57,7 +57,8 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 func TestArenaRunnerPreflightMetadataMismatch(t *testing.T) {
 	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
 		"--game", "echo-count",
-		"--mode", "simultaneous",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
 		"--player", "p1=./testdata/ai/echo/echo-ai",
 		"--player", "p2=./testdata/ai/echo/version3-ai",
 	)
@@ -74,7 +75,8 @@ func TestArenaRunnerPreflightMetadataMismatch(t *testing.T) {
 func TestArenaRunnerRejectsDuplicatePlayerIDs(t *testing.T) {
 	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
 		"--game", "echo-count",
-		"--mode", "simultaneous",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
 		"--player", "p1=./testdata/ai/echo/echo-ai",
 		"--player", "p1=./testdata/ai/echo/echo-ai",
 	)
@@ -110,10 +112,10 @@ func TestArenaRunnerFailurePaths(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			record, _ := runArena(t,
 				"--game", "echo-count",
-				"--mode", "simultaneous",
-				"--turns", "2",
+				"--game-version", "2.0.0",
+				"--ruleset", "phase2-simultaneous-2turn",
 				"--match-id", tc.name,
-				"--player", "p1=./testdata/ai/echo/echo-ai",
+				"--player", "p1=./testdata/ai/echo/echo-ai-2turn",
 				"--player", "p2="+tc.player2,
 			)
 			if record.Status != tc.status {

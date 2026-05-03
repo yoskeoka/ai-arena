@@ -3,14 +3,13 @@ package echo
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
 
 func TestSimultaneousScoringAndPlacements(t *testing.T) {
-	master := newTestMaster(t, game.Simultaneous)
+	master := newTestMaster(t, RulesetSimultaneous3Turn)
 
 	step, err := master.NextStep(context.Background())
 	if err != nil {
@@ -35,7 +34,7 @@ func TestSimultaneousScoringAndPlacements(t *testing.T) {
 }
 
 func TestSequentialAdvancesPlayerOrder(t *testing.T) {
-	master := newTestMaster(t, game.Sequential)
+	master := newTestMaster(t, RulesetSequential3Turn)
 
 	step1, err := master.NextStep(context.Background())
 	if err != nil {
@@ -63,7 +62,7 @@ func TestSequentialAdvancesPlayerOrder(t *testing.T) {
 }
 
 func TestNormalizeIllegalActionBecomesNoAction(t *testing.T) {
-	master := newTestMaster(t, game.Simultaneous)
+	master := newTestMaster(t, RulesetSimultaneous3Turn)
 
 	step, err := master.NextStep(context.Background())
 	if err != nil {
@@ -82,17 +81,16 @@ func TestNormalizeIllegalActionBecomesNoAction(t *testing.T) {
 	}
 }
 
-func newTestMaster(t *testing.T, mode game.DecisionMode) *Master {
+func newTestMaster(t *testing.T, ruleset string) *Master {
 	t.Helper()
 
 	master, err := New(Config{
-		Mode:  mode,
-		Turns: 2,
+		GameVersion: GameVersion,
+		Ruleset:     ruleset,
 		Players: []game.Player{
 			{PlayerID: "p1", AIID: "bot-a"},
 			{PlayerID: "p2", AIID: "bot-b"},
 		},
-		Deadline: 50 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

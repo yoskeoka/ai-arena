@@ -9,6 +9,7 @@
 したがって、`echo-count` で既に閉じている以下は `janken` の主責務ではない。
 
 - `arena-runner` の match 起動自体
+- game / game_version / ruleset selection
 - metadata compatibility 判定
 - timeout / malformed / mismatched id / late response / shutdown failure の platform 記録分類
 

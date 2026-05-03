@@ -1,5 +1,5 @@
 {
-  "ai_id": "hung-after-game-over-ai",
+  "ai_id": "echo-ai-2turn",
   "protocol": {
     "transport": "stdio-jsonrpc-ndjson",
     "game_id": "echo-count",
@@ -8,6 +8,6 @@
   },
   "runtime": {
     "kind": "local-subprocess",
-    "command": ["go", "run", "./testdata/ai/echo/hung-after-game-over-ai"]
+    "command": ["go", "run", "./testdata/ai/echo/echo-ai"]
   }
 }

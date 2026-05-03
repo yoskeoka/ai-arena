@@ -474,9 +474,9 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 最小 contract:
 
 - `--game echo-count`
-- `--mode simultaneous|sequential`
+- `--game-version 2.0.0`
+- `--ruleset <ruleset-version>`
 - `--player player_id=entry-path`
-- `--turns <n>`
 - `--match-id <id>` は省略可能
 - `--stderr-limit-bytes <n>` は省略時に既定値を使ってよい
 
@@ -499,6 +499,14 @@ AI metadata 読み取り:
 - runner は `ruleset_version` 完全一致を要求する
 - どれか 1 つでも不一致なら match loop を開始しない
 
+runner の非責務:
+
+- turn 数を決めること
+- `turn_mode` を注入すること
+- per-turn deadline を決めること
+
+これらは game 側の metadata / ruleset に属する。runner は `game_id` と `ruleset_version` を指定して対象 game を起動するだけで、match の進行条件そのものは game master が定義する。
+
 ## `echo-count` fixture appendix
 
 `echo-count` は platform 検証用 fixture であり、独立ゲーム仕様ではない。
@@ -506,17 +514,36 @@ AI metadata 読み取り:
 
 ### metadata
 
-`echo-count` は以下を使う。
+`echo-count` は以下の ruleset を持つ。
 
 ```json
 {
   "game_id": "echo-count",
   "game_version": "2.0.0",
-  "ruleset_version": "phase2"
+  "ruleset_version": "phase2-simultaneous-3turn",
+  "turn_mode": "simultaneous"
 }
 ```
 
-`turn_mode` は match ごとに `simultaneous` または `sequential` を切り替える。
+```json
+{
+  "game_id": "echo-count",
+  "game_version": "2.0.0",
+  "ruleset_version": "phase2-sequential-3turn",
+  "turn_mode": "sequential"
+}
+```
+
+```json
+{
+  "game_id": "echo-count",
+  "game_version": "2.0.0",
+  "ruleset_version": "phase2-simultaneous-2turn",
+  "turn_mode": "simultaneous"
+}
+```
+
+`turn_mode` は runner から注入せず、ruleset 側で固定する。turn 数も ruleset に含める。
 
 ### ルール
 
@@ -528,20 +555,28 @@ AI metadata 読み取り:
 - `accepted` は 1 点、`no_action` は 0 点
 - 最終順位は score 降順。同点は同順位
 
-### mode 別進行
+### ruleset 別進行
 
-`simultaneous`:
+`phase2-simultaneous-3turn`:
 
 - 同一 turn で全 player に同じ `expected` を送る
 - 全員の結果が揃ってから score と public state を進める
+- 3 turns で終了する
 
-`sequential`:
+`phase2-sequential-3turn`:
 
 - 1 turn の中で player 順に個別 request を送る
 - 各 response を直ちに反映してから次 player の request を作る
 - turn 完了後に score と public state を確定する
+- 3 turns で終了する
 
-既定では 2 player, 3 turns を使ってよい。
+`phase2-simultaneous-2turn`:
+
+- 同一 turn で全 player に同じ `expected` を送る
+- 全員の結果が揃ってから score と public state を進める
+- 2 turns で終了する
+
+全 ruleset で per-turn deadline は game 側仕様として 100ms を使う。
 期待値列は deterministic に `1, 2, 3, ...` とする。
 
 ### payload 形
