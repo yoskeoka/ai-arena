@@ -15,8 +15,8 @@
 
 ## PostToolUse Contract
 
-- `PostToolUse` は `apply_patch` 系 edit の後にだけ起動する
-- patch payload に `.go` file が含まれる場合だけ `make fmt` を実行する
+- `PostToolUse` は `apply_patch`, `Edit`, `Write` の edit event を対象にする
+- hook payload の `tool_input` 全体に `.go` path が含まれる場合だけ `make fmt` を実行する
 - formatter hook は auto fix を目的とし、`make fmt` の失敗時は Codex へ failure reason を返す
 - formatter 実装は `docs/specs/go-quality-gates.md` の `make fmt` 契約に従う
 
@@ -35,7 +35,8 @@
   - `make lint`
   - `make test`
 - 最初の stop pass で gate が失敗した場合、hook は Codex に continuation reason を返して修正を促す
-- `stop_hook_active = true` の continuation turn では再度 block しない
+- `stop_hook_active = true` の continuation turn でも `make lint` / `make test` 自体は再実行してよい
+- ただし `stop_hook_active = true` の continuation turn では再度 block しない
 
 ## Workspace Dispatch Compatibility
 

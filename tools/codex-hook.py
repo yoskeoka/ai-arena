@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+POST_TOOL_NAMES = {"apply_patch", "Edit", "Write"}
+VALID_MODES = {"post-tool-use", "stop"}
 
 RELEVANT_STOP_PREFIXES = (
     ".codex/",
@@ -34,11 +36,14 @@ def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def tool_input_text(payload: dict) -> str:
+    return json.dumps(payload.get("tool_input", {}), sort_keys=True)
+
+
 def is_go_edit(payload: dict) -> bool:
-    if payload.get("tool_name") != "apply_patch":
+    if str(payload.get("tool_name", "")) not in POST_TOOL_NAMES:
         return False
-    command = str(payload.get("tool_input", {}).get("command", ""))
-    return bool(re.search(r"\.go(\s|$)", command))
+    return bool(re.search(r"\.go([\s\"'`:,}\]]|$)", tool_input_text(payload)))
 
 
 def changed_paths() -> list[str]:
@@ -91,8 +96,6 @@ def post_tool_use(payload: dict) -> int:
 
 
 def stop(payload: dict) -> int:
-    if payload.get("stop_hook_active"):
-        return 0
     if not should_run_stop():
         return 0
 
@@ -109,6 +112,11 @@ def stop(payload: dict) -> int:
 
     if not failures:
         return 0
+    if payload.get("stop_hook_active"):
+        sys.stderr.write("\n\n".join(failures))
+        if failures and not failures[-1].endswith("\n"):
+            sys.stderr.write("\n")
+        return 0
 
     return emit_stop_block(
         "ai-arena stop hook found failing `make lint` or `make test`. Fix the quality gates before ending the turn.",
@@ -117,13 +125,16 @@ def stop(payload: dict) -> int:
 
 
 def main() -> int:
+    if len(sys.argv) != 2 or sys.argv[1] not in VALID_MODES:
+        sys.stderr.write("usage: codex-hook.py {post-tool-use|stop}\n")
+        return 2
     mode = sys.argv[1]
     payload = json.load(sys.stdin)
     if mode == "post-tool-use":
         return post_tool_use(payload)
     if mode == "stop":
         return stop(payload)
-    raise ValueError(f"unknown mode: {mode}")
+    return 2
 
 
 if __name__ == "__main__":
