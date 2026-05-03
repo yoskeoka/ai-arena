@@ -42,5 +42,6 @@
 ## CI Contract
 
 - GitHub Actions 上の Go CI は `make test` と `make lint` を実行する
+- `make test` と `make lint` は独立 job として並行に実行してよい
 - CI は module/tool cache を持ってよいが、品質判定の入口は Makefile targets に揃える
 - formatter drift は test failure ではなく lint failure として扱う

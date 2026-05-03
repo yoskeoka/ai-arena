@@ -140,8 +140,9 @@ func (a *Adapter) readStdout(stdout io.Reader, done chan<- struct{}) {
 			if errors.Is(err, io.EOF) {
 				return
 			}
+			// Report one terminal decode failure, then stop draining so Close/Wait cannot deadlock.
 			a.incoming <- Message{Err: err}
-			continue
+			return
 		}
 		respCopy := resp
 		a.incoming <- Message{Response: &respCopy}
