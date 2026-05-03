@@ -120,6 +120,28 @@ func TestRunnerReturnsFailedRecordForInitFailure(t *testing.T) {
 	}
 }
 
+func TestRunnerReturnsCanceledRecordForInitCancellation(t *testing.T) {
+	players := []game.Player{{PlayerID: "p1", AIID: "bot-a"}}
+	master := &fakeMaster{
+		metadata: baseMetadata(),
+		initErr:  context.Canceled,
+	}
+	sessions := map[string]PlayerSession{
+		"p1": &fakeSession{},
+	}
+
+	record, err := NewRunner("match-002-canceled", players, master, sessions).Run(context.Background())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run error = %v, want context.Canceled", err)
+	}
+	if record.Status != string(game.StatusCanceled) {
+		t.Fatalf("record.Status = %q, want canceled", record.Status)
+	}
+	if !hasEventKind(record.EventLog, "match_canceled") {
+		t.Fatalf("event log missing match_canceled: %+v", record.EventLog)
+	}
+}
+
 func TestRunnerReturnsCanceledRecordWhenContextCanceled(t *testing.T) {
 	players := []game.Player{{PlayerID: "p1", AIID: "bot-a"}}
 	master := &fakeMaster{

@@ -94,6 +94,10 @@ func (r *Runner) Run(ctx context.Context) (record Record, runErr error) {
 	}()
 
 	if err := r.initializeSessions(ctx, meta); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			runErr = r.cancel(err)
+			return record, runErr
+		}
 		runErr = r.fail(err)
 		return record, runErr
 	}
