@@ -1,0 +1,68 @@
+name: go-ci
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/go-ci.yml"
+      - "Makefile"
+      - "go.mod"
+      - "go.sum"
+      - "**/*.go"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/go-ci.yml"
+      - "Makefile"
+      - "go.mod"
+      - "go.sum"
+      - "**/*.go"
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Cache Go module and build state
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/ai-arena-go-quality-gates/go
+            /tmp/ai-arena-go-quality-gates/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum', 'Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run unit tests
+        run: make test
+
+  go-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Cache Go module and build state
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/ai-arena-go-quality-gates/go
+            /tmp/ai-arena-go-quality-gates/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum', 'Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run lint
+        run: make lint
