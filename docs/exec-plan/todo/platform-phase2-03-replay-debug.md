@@ -12,9 +12,11 @@ turn 境界 snapshot と event history を使って、debug 用の `start-from-s
 depends on:
 
 - `platform-phase2-02-fixture-e2e.md`
+- `platform-phase2-02-5-arena-runner-log-persist-split.md`
 
 ## Scope
 
+- persisted snapshot/history artifact input
 - snapshot file input
 - history file input
 - target turn 指定による replay/resume
@@ -32,6 +34,7 @@ depends on:
 
 - `start-from-snapshot` の入力 shape と再現範囲を定義する
 - `resume-from-history-and-continue` の入力 shape と再現範囲を定義する
+- replay/debug CLI が読む snapshot/history は persisted artifact 由来であり、runner log stream とは分離されることを定義する
 - AI memory continuity 非保証を明記する
 - snapshot と exported snapshot の違いを再確認できるようにする
 
