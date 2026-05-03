@@ -427,3 +427,231 @@ foundation では最小で以下を持つ。
 - `status`: 公開上の試合状態
 - `public_state`: 観戦や debug に出してよい公開状態
 - `players`: プレイヤーごとの公開向け状態一覧
+
+## `arena-runner` CLI
+
+Phase 2a の black-box verification は `arena-runner` を入口にする。
+この CLI は単発 match を起動し、最終 record を JSON で出力する。
+
+最小 contract:
+
+- `--game echo-count`
+- `--mode simultaneous|sequential`
+- `--player player_id=entry-path`
+- `--turns <n>`
+- `--match-id <id>` は省略可能
+- `--stderr-limit-bytes <n>` は省略時に既定値を使ってよい
+
+出力:
+
+- 正常終了時は stdout に final match record JSON を出す
+- 起動前 metadata 不整合などで match を開始できない場合も、stderr に説明を出して非 0 終了する
+- CLI は platform record の `event_log` / `snapshot` / `exported_snapshot` を加工せずそのまま露出する
+
+AI metadata 読み取り:
+
+- `--player` で指定した実行物の横に `<entry>.arena.json` があれば、それを優先して読む
+- sidecar がある場合、`runtime.command` を実行コマンドとし、`protocol.game_id` / `game_version` / `ruleset_version` を compatibility 判定に使う
+- sidecar がない場合、entry-path 自体を実行コマンドとし、protocol metadata は match 側設定と同一でなければならない
+
+起動前 compatibility:
+
+- runner は game master metadata と各 AI metadata の `game_id` 完全一致を要求する
+- runner は `game_version` major 一致を要求する
+- runner は `ruleset_version` 完全一致を要求する
+- どれか 1 つでも不一致なら match loop を開始しない
+
+## `echo-count` fixture appendix
+
+`echo-count` は platform 検証用 fixture であり、独立ゲーム仕様ではない。
+目的は deterministic な payload で session / match / record の責務を black-box に閉じることにある。
+
+### metadata
+
+`echo-count` は以下を使う。
+
+```json
+{
+  "game_id": "echo-count",
+  "game_version": "2.0.0",
+  "ruleset_version": "phase2"
+}
+```
+
+`turn_mode` は match ごとに `simultaneous` または `sequential` を切り替える。
+
+### ルール
+
+- platform は各 decision window ごとに期待値 `expected` を player へ渡す
+- AI は `{"echo": <expected>}` を返す
+- 値が一致すれば `accepted`
+- schema 不正または期待値不一致なら `invalid-illegal-action` を記録し、game master へは `no_action` として渡す
+- timeout / malformed / mismatched id / late response / runtime stop も game master へは `no_action` として渡す
+- `accepted` は 1 点、`no_action` は 0 点
+- 最終順位は score 降順。同点は同順位
+
+### mode 別進行
+
+`simultaneous`:
+
+- 同一 turn で全 player に同じ `expected` を送る
+- 全員の結果が揃ってから score と public state を進める
+
+`sequential`:
+
+- 1 turn の中で player 順に個別 request を送る
+- 各 response を直ちに反映してから次 player の request を作る
+- turn 完了後に score と public state を確定する
+
+既定では 2 player, 3 turns を使ってよい。
+期待値列は deterministic に `1, 2, 3, ...` とする。
+
+### payload 形
+
+`init.params.state`:
+
+```json
+{
+  "mode": "simultaneous",
+  "turns": 3,
+  "player_order": ["p1", "p2"]
+}
+```
+
+`turn.params.visible_state`:
+
+```json
+{
+  "turn": 1,
+  "expected": 1,
+  "score": {
+    "p1": 0,
+    "p2": 0
+  }
+}
+```
+
+`turn.params.legal_action_hint`:
+
+```json
+{
+  "type": "object",
+  "required": ["echo"]
+}
+```
+
+`turn.result`:
+
+```json
+{
+  "echo": 1
+}
+```
+
+`game_over.params.summary`:
+
+```json
+{
+  "placements": [
+    {"player_id": "p1", "place": 1},
+    {"player_id": "p2", "place": 2}
+  ],
+  "score": {
+    "p1": 3,
+    "p2": 2
+  }
+}
+```
+
+### record 上の扱い
+
+- game master が受ける入力は `accepted` または `no_action` だけ
+- `failure_reason` は platform record 側にのみ残す
+- `invalid-illegal-action` は game validator が返した理由として記録する
+- `accepted` では `failure_reason` を空にする
+
+代表例:
+
+```json
+{
+  "player_id": "p1",
+  "outcome": "accepted",
+  "action": {"echo": 2}
+}
+```
+
+```json
+{
+  "player_id": "p2",
+  "outcome": "no_action",
+  "failure_reason": "invalid-timeout"
+}
+```
+
+```json
+{
+  "player_id": "p2",
+  "outcome": "no_action",
+  "failure_reason": "invalid-illegal-action"
+}
+```
+
+late response は現在 turn の outcome に復帰させず、`late_response_ignored` event にだけ残す。
+
+```json
+{
+  "kind": "late_response_ignored",
+  "turn": 1,
+  "player_id": "p2",
+  "payload": {"response_id": "turn-1-p2"}
+}
+```
+
+init failure と shutdown failure は lifecycle event として残す。
+
+```json
+{
+  "kind": "runtime_exited",
+  "turn": 0,
+  "player_id": "p1",
+  "payload": {"stage": "init"}
+}
+```
+
+```json
+{
+  "kind": "session_shutdown_failed",
+  "turn": 0,
+  "player_id": "p2",
+  "payload": {"stage": "close", "error": "context deadline exceeded"}
+}
+```
+
+### snapshot / exported snapshot
+
+`snapshot.game_state` は少なくとも以下を持つ。
+
+```json
+{
+  "mode": "simultaneous",
+  "turn": 3,
+  "expected": 3,
+  "score": {
+    "p1": 3,
+    "p2": 2
+  }
+}
+```
+
+`exported_snapshot.public_state` は内部状態をそのまま出さず、観戦に必要な公開情報だけを持つ。
+
+```json
+{
+  "mode": "simultaneous",
+  "resolved_turns": 3,
+  "score": {
+    "p1": 3,
+    "p2": 2
+  }
+}
+```

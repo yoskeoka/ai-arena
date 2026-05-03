@@ -96,6 +96,7 @@ type Master interface {
 	Metadata() catalog.GameMetadata
 	Init(context.Context) (InitState, error)
 	NextStep(context.Context) (*DecisionStep, error)
+	NormalizeAction(DecisionRequest, ActionOutcome) ActionOutcome
 	ApplyStep(context.Context, DecisionStep, []ActionOutcome) error
 	Snapshot() Snapshot
 	ExportedSnapshot() ExportedSnapshot

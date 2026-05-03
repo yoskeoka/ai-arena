@@ -225,6 +225,10 @@ func (f *fakeMaster) NextStep(context.Context) (*game.DecisionStep, error) {
 	return step, nil
 }
 
+func (f *fakeMaster) NormalizeAction(_ game.DecisionRequest, outcome game.ActionOutcome) game.ActionOutcome {
+	return outcome
+}
+
 func (f *fakeMaster) ApplyStep(_ context.Context, _ game.DecisionStep, outcomes []game.ActionOutcome) error {
 	copied := make([]game.ActionOutcome, len(outcomes))
 	copy(copied, outcomes)

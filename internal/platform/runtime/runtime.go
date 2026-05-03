@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/protocol"
 )
@@ -115,6 +116,13 @@ func (a *Adapter) Close(ctx context.Context) error {
 	}
 
 	_ = a.stdin.Close()
+
+	select {
+	case err := <-a.done:
+		return err
+	case <-time.After(50 * time.Millisecond):
+	}
+
 	_ = a.cmd.Process.Signal(os.Interrupt)
 
 	select {

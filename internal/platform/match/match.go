@@ -344,12 +344,12 @@ func (r *Runner) executeTurn(ctx context.Context, turn int, req game.DecisionReq
 	return turnExecution{
 		request: req,
 		result:  result,
-		outcome: game.ActionOutcome{
+		outcome: r.master.NormalizeAction(req, game.ActionOutcome{
 			PlayerID:      req.PlayerID,
 			Outcome:       result.Outcome,
 			FailureReason: result.FailureReason,
 			Action:        result.Payload,
-		},
+		}),
 	}
 }
 

@@ -2,6 +2,18 @@
 
 ## 目的
 
+`janken` は `echo-count` fixture 完了後の richer integration game である。
+`echo-count` が担うのは deterministic payload による platform core の verification であり、
+`janken` はその上で隠し情報、同時解決、`self_history` / `public_history`、複数ラウンドの勝敗解決を担保する。
+
+したがって、`echo-count` で既に閉じている以下は `janken` の主責務ではない。
+
+- `arena-runner` の match 起動自体
+- metadata compatibility 判定
+- timeout / malformed / mismatched id / late response / shutdown failure の platform 記録分類
+
+`janken` 側で追加で担保するのは、fixture では薄いゲーム固有責務である。
+
 じゃんけんは、プラットフォームの Phase 2 実証用ゲームである。より複雑なダンジョンゲームへ進む前に、プラットフォームの基本ループを最小構成で検証することを目的とする。
 
 このゲームで検証したい要素は以下。
