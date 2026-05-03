@@ -103,10 +103,11 @@ should be completed before:
 この plan で先に固定する top-level contract は以下。
 
 - structured log は NDJSON の stream として出す
-- structured log の既定出力先は `stderr` とする
+- structured log の既定出力先は `stdout` とする
 - final match record は `--persist-record <target>` のような persist target に書く
 - `<target>` は file path を基本とし、明示的に `stdout` も指定できる
-- `stdout` を persist target に使う場合でも、structured log は `stderr` に残し、同じ stream に混在させない
+- `stdout` を persist target に使う場合は、structured log の既定出力先を `stderr` へ切り替えるか、同等の別出力先を明示させる
+- 観測用 log と persisted record は同じ stream に混在させない
 - 互換モードとしての「既定で stdout に final JSON を出す」は維持しない。必要なら `--persist-record stdout` を明示する
 
 この固定により、進行中観測と将来のログ分析は structured log stream が担い、replay/debug 入力としての source of truth は persisted final record が担う。
@@ -119,7 +120,8 @@ should be completed before:
 - structured log の目的を「進行中観測」と将来のログ分析の両方として定義する
 - final match record の目的を「persist artifact」として定義する
 - `stdout` / `stderr` / file output の責務分担を明記する
-- structured log は `stderr` に流し、final record は persist target に書く既定 contract を明記する
+- structured log は通常 `stdout` に流し、final record は persist target に書く既定 contract を明記する
+- final record の persist target が `stdout` の場合は、structured log を `stderr` または別出力先へ退避させる contract を明記する
 - final record の persist target は file path を基本とし、明示的な `stdout` 指定も受け付けることを明記する
 - 既定の `stdout = final JSON` 契約は廃止し、必要なら persist target として `stdout` を指定することを明記する
 - structured log record の最低 shape を定義する
