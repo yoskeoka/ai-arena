@@ -63,7 +63,7 @@ should be completed before:
 - `stdout` 単発巨大 JSON と「保存対象 artifact」の責務が分離されない
 - `platform-phase2-03-replay-debug.md` が `stdout` dump 前提のまま進み、保存境界が曖昧なままになる
 
-#### Option B: structured log を stream として出し、final record は file persist を主契約にする
+#### Option B: structured log を stream として出し、final record は persist target を主契約にする
 
 利点:
 
@@ -96,16 +96,32 @@ should be completed before:
 
 - この issue の主題は「巨大単発 JSON をやめる」ことではなく、「log と persist data の責務を分ける」ことにある
 - `platform-phase2-03-replay-debug.md` は persisted snapshot/history を読む plan なので、入力元を file artifact として先に固定した方が整合的
-- Phase 2 の現在地では storage backend を増やすより、local CLI で file persist を選べるようにする方が最小コストで効果が高い
+- Phase 2 の現在地では storage backend を増やすより、local CLI で persist target を明示できるようにする方が最小コストで効果が高い
+
+### Channel-Level Contract To Lock In
+
+この plan で先に固定する top-level contract は以下。
+
+- structured log は NDJSON の stream として出す
+- structured log の既定出力先は `stderr` とする
+- final match record は `--persist-record <target>` のような persist target に書く
+- `<target>` は file path を基本とし、明示的に `stdout` も指定できる
+- `stdout` を persist target に使う場合でも、structured log は `stderr` に残し、同じ stream に混在させない
+- 互換モードとしての「既定で stdout に final JSON を出す」は維持しない。必要なら `--persist-record stdout` を明示する
+
+この固定により、進行中観測と将来のログ分析は structured log stream が担い、replay/debug 入力としての source of truth は persisted final record が担う。
 
 ## Spec Changes
 
 ### `docs/specs/platform.md`
 
 - `arena-runner` の output contract を更新する
-- structured log の目的を「進行中観測」として定義する
+- structured log の目的を「進行中観測」と将来のログ分析の両方として定義する
 - final match record の目的を「persist artifact」として定義する
 - `stdout` / `stderr` / file output の責務分担を明記する
+- structured log は `stderr` に流し、final record は persist target に書く既定 contract を明記する
+- final record の persist target は file path を基本とし、明示的な `stdout` 指定も受け付けることを明記する
+- 既定の `stdout = final JSON` 契約は廃止し、必要なら persist target として `stdout` を指定することを明記する
 - structured log record の最低 shape を定義する
   - `match_id`
   - `seq` または stable ordering field
@@ -128,7 +144,7 @@ should be completed before:
 必要なら以下も含める。
 
 - runner event を log record へ写像する小さな adapter
-- file persist 未指定時の扱いを明示する usage / error path
+- persist target 未指定時の扱いを明示する usage / error path
 
 ## Verification
 
@@ -139,13 +155,14 @@ should be completed before:
 - `completed` / `failed` / `canceled` の各 terminal path で terminal summary log が出る
 - terminal 時に snapshot / exported snapshot を log と persisted record の両方で辿れる
 - final match record を file に保存できる
+- final match record の persist target に `stdout` を明示指定できる
 - replay/debug 向け入力として読むべき artifact が persisted file だと分かる CLI/example になっている
 - log stream と persisted record が同じ出力先に混在しない
 
 ## Sub-tasks
 
 - [ ] Update `docs/specs/platform.md` for runner log/persist contract
-- [ ] Design CLI flags and default behavior for persisted record output
+- [ ] Design CLI flags and default behavior for structured log stream and persisted record target
 - [ ] Implement structured log emission for match start, per-event progress, and terminal summaries
 - [ ] Implement final record persistence to a separate file target
 - [ ] Add black-box verification for completed, failed, and canceled output behavior
