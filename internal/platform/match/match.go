@@ -43,11 +43,19 @@ type Event struct {
 	Payload  json.RawMessage `json:"payload,omitempty"`
 }
 
+type Observer interface {
+	OnEvent(Event)
+	OnRecordBuilt(Record)
+}
+
+type RunnerOption func(*Runner)
+
 type Runner struct {
 	matchID     string
 	players     []game.Player
 	master      game.Master
 	sessions    map[string]PlayerSession
+	observer    Observer
 	events      []Event
 	nextSeq     int
 	lastSeen    map[string]json.RawMessage
@@ -68,10 +76,15 @@ type turnExecution struct {
 	request      game.DecisionRequest
 	result       session.Result
 	actionStatus game.ActionStatus
+	err          error
 }
 
 func NewRunner(matchID string, players []game.Player, master game.Master, sessions map[string]PlayerSession) *Runner {
-	return &Runner{
+	return NewRunnerWithOptions(matchID, players, master, sessions)
+}
+
+func NewRunnerWithOptions(matchID string, players []game.Player, master game.Master, sessions map[string]PlayerSession, opts ...RunnerOption) *Runner {
+	runner := &Runner{
 		matchID:    matchID,
 		players:    players,
 		master:     master,
@@ -81,11 +94,25 @@ func NewRunner(matchID string, players []game.Player, master game.Master, sessio
 		phase:      game.StatusStarting,
 		status:     game.StatusStarting,
 	}
+	for _, opt := range opts {
+		opt(runner)
+	}
+	return runner
+}
+
+func WithObserver(observer Observer) RunnerOption {
+	return func(r *Runner) {
+		r.observer = observer
+	}
 }
 
 func (r *Runner) Run(ctx context.Context) (record Record, runErr error) {
 	meta := r.master.Metadata()
-	r.appendEvent("match_started", 0, "", map[string]any{"match_id": r.matchID})
+	r.appendEvent("match_started", 0, "", map[string]any{
+		"match_id": r.matchID,
+		"game":     meta,
+		"players":  r.players,
+	})
 
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownDeadline)
@@ -94,6 +121,9 @@ func (r *Runner) Run(ctx context.Context) (record Record, runErr error) {
 		r.shutdownSessions(shutdownCtx)
 		r.emitTerminalEvent()
 		record = r.buildRecord(meta)
+		if r.observer != nil {
+			r.observer.OnRecordBuilt(record)
+		}
 	}()
 
 	if err := r.initializeSessions(ctx, meta); err != nil {
@@ -145,6 +175,9 @@ func (r *Runner) initializeSessions(ctx context.Context, meta catalog.GameMetada
 			Deadline: initDeadline,
 		})
 		r.appendEvent("session_initialized", 0, player.PlayerID, result)
+		if ctxErr := ctx.Err(); ctxErr != nil && result.FailureReason == session.ReasonTimeout {
+			return ctxErr
+		}
 		if result.FailureReason == session.ReasonRuntimeStop {
 			r.appendRuntimeExited(0, player.PlayerID, map[string]any{"stage": "init"})
 		}
@@ -174,7 +207,10 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 
 		switch step.Mode {
 		case game.Simultaneous:
-			outcomes := r.runSimultaneousStep(ctx, *step)
+			outcomes, err := r.runSimultaneousStep(ctx, *step)
+			if err != nil {
+				return err
+			}
 			if err := r.master.ApplyStep(ctx, *step, outcomes); err != nil {
 				return err
 			}
@@ -185,6 +221,9 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 			req := step.Requests[0]
 			r.prepareTurn(step.Turn, req)
 			exec := r.executeTurn(ctx, step.Turn, req)
+			if exec.err != nil {
+				return exec.err
+			}
 			exec.actionStatus = r.master.NormalizeAction(req, exec.actionStatus)
 			actionStatus := r.recordTurn(step.Turn, exec)
 			if err := r.master.ApplyStep(ctx, *step, []game.ActionStatus{actionStatus}); err != nil {
@@ -196,7 +235,7 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 	}
 }
 
-func (r *Runner) runSimultaneousStep(ctx context.Context, step game.DecisionStep) []game.ActionStatus {
+func (r *Runner) runSimultaneousStep(ctx context.Context, step game.DecisionStep) ([]game.ActionStatus, error) {
 	executions := make([]turnExecution, len(step.Requests))
 	for i, req := range step.Requests {
 		r.prepareTurn(step.Turn, req)
@@ -217,10 +256,13 @@ func (r *Runner) runSimultaneousStep(ctx context.Context, step game.DecisionStep
 
 	outcomes := make([]game.ActionStatus, len(executions))
 	for i, exec := range executions {
+		if exec.err != nil {
+			return nil, exec.err
+		}
 		exec.actionStatus = r.master.NormalizeAction(exec.request, exec.actionStatus)
 		outcomes[i] = r.recordTurn(step.Turn, exec)
 	}
-	return outcomes
+	return outcomes, nil
 }
 
 func (r *Runner) shutdownSessions(ctx context.Context) {
@@ -364,7 +406,7 @@ func (r *Runner) executeTurn(ctx context.Context, turn int, req game.DecisionReq
 		Deadline: req.Deadline,
 	})
 
-	return turnExecution{
+	exec := turnExecution{
 		request: req,
 		result:  result,
 		actionStatus: game.ActionStatus{
@@ -374,6 +416,10 @@ func (r *Runner) executeTurn(ctx context.Context, turn int, req game.DecisionReq
 			Action:        result.Payload,
 		},
 	}
+	if ctxErr := ctx.Err(); ctxErr != nil && result.FailureReason == session.ReasonTimeout {
+		exec.err = ctxErr
+	}
+	return exec
 }
 
 func (r *Runner) recordTurn(turn int, exec turnExecution) game.ActionStatus {
@@ -402,13 +448,17 @@ func (r *Runner) appendRuntimeExited(turn int, playerID string, payload any) {
 func (r *Runner) appendEvent(kind string, turn int, playerID string, payload any) {
 	r.nextSeq++
 	raw := mustMarshalPayload(payload)
-	r.events = append(r.events, Event{
+	event := Event{
 		Seq:      r.nextSeq,
 		Kind:     kind,
 		Turn:     turn,
 		PlayerID: playerID,
 		Payload:  raw,
-	})
+	}
+	r.events = append(r.events, event)
+	if r.observer != nil {
+		r.observer.OnEvent(event)
+	}
 }
 
 func mustMarshalPayload(payload any) json.RawMessage {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +28,21 @@ type playerSpec struct {
 	Entry    string
 }
 
+type logRecord struct {
+	MatchID  string          `json:"match_id"`
+	Seq      int             `json:"seq"`
+	Kind     string          `json:"kind"`
+	Turn     int             `json:"turn"`
+	PlayerID string          `json:"player_id,omitempty"`
+	Payload  json.RawMessage `json:"payload,omitempty"`
+}
+
+type streamObserver struct {
+	matchID string
+	enc     *json.Encoder
+	nextSeq int
+}
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -40,6 +56,8 @@ func run(args []string) error {
 		gameVersion      string
 		ruleset          string
 		matchID          string
+		persistRecord    string
+		matchTimeout     time.Duration
 		stderrLimitBytes int
 		playerArgs       multiFlag
 	)
@@ -50,6 +68,8 @@ func run(args []string) error {
 	fs.StringVar(&gameVersion, "game-version", "", "game version")
 	fs.StringVar(&ruleset, "ruleset", "", "game ruleset")
 	fs.StringVar(&matchID, "match-id", "", "match id")
+	fs.StringVar(&persistRecord, "persist-record", "", "record persistence target path or stdout")
+	fs.DurationVar(&matchTimeout, "match-timeout", 0, "cancel the match after the given duration")
 	fs.IntVar(&stderrLimitBytes, "stderr-limit-bytes", defaultStderrLimitBytes, "captured stderr bytes per player")
 	fs.Var(&playerArgs, "player", "player_id=entry-path")
 
@@ -90,14 +110,116 @@ func run(args []string) error {
 		return err
 	}
 
-	record, runErr := match.NewRunner(matchID, players, master, sessions).Run(context.Background())
-	if err := json.NewEncoder(os.Stdout).Encode(record); err != nil {
+	ctx := context.Background()
+	if matchTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, matchTimeout)
+		defer cancel()
+	}
+
+	observer := &streamObserver{
+		matchID: matchID,
+		enc:     json.NewEncoder(os.Stdout),
+	}
+
+	record, runErr := match.NewRunnerWithOptions(
+		matchID,
+		players,
+		master,
+		sessions,
+		match.WithObserver(observer),
+	).Run(ctx)
+	if err := persistRecordToTarget(persistRecord, record, os.Stdout); err != nil {
 		return err
 	}
 	if runErr != nil {
 		fmt.Fprintln(os.Stderr, runErr)
 	}
 	return nil
+}
+
+func (o *streamObserver) OnEvent(event match.Event) {
+	o.nextSeq = event.Seq
+	_ = o.enc.Encode(logRecord{
+		MatchID:  o.matchID,
+		Seq:      event.Seq,
+		Kind:     event.Kind,
+		Turn:     event.Turn,
+		PlayerID: event.PlayerID,
+		Payload:  event.Payload,
+	})
+}
+
+func (o *streamObserver) OnRecordBuilt(record match.Record) {
+	o.emitTerminalRecord("terminal_snapshot", record.Snapshot.Turn, mustMarshal(record.Snapshot))
+	o.emitTerminalRecord("terminal_exported_snapshot", record.ExportedSnapshot.Turn, mustMarshal(record.ExportedSnapshot))
+	o.emitTerminalRecord("terminal_summary", record.Snapshot.Turn, mustMarshal(terminalSummary(record)))
+}
+
+func (o *streamObserver) emitTerminalRecord(kind string, turn int, payload json.RawMessage) {
+	o.nextSeq++
+	_ = o.enc.Encode(logRecord{
+		MatchID: o.matchID,
+		Seq:     o.nextSeq,
+		Kind:    kind,
+		Turn:    turn,
+		Payload: payload,
+	})
+}
+
+func terminalSummary(record match.Record) map[string]any {
+	summary := map[string]any{
+		"status": record.Status,
+		"result": record.Result,
+	}
+	if errMsg := terminalError(record); errMsg != "" {
+		summary["error"] = errMsg
+	}
+	return summary
+}
+
+func terminalError(record match.Record) string {
+	for i := len(record.EventLog) - 1; i >= 0; i-- {
+		event := record.EventLog[i]
+		if event.Kind != "match_failed" && event.Kind != "match_canceled" {
+			continue
+		}
+		var payload struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(event.Payload, &payload); err == nil {
+			return payload.Error
+		}
+	}
+	return ""
+}
+
+func persistRecordToTarget(target string, record match.Record, stdout io.Writer) error {
+	switch target {
+	case "":
+		return nil
+	case "stdout":
+		return json.NewEncoder(stdout).Encode(record)
+	default:
+		// #nosec G304 -- the caller explicitly selects the local persistence target path.
+		file, err := os.Create(target)
+		if err != nil {
+			return fmt.Errorf("create persist target %s: %w", target, err)
+		}
+		defer file.Close()
+		if err := json.NewEncoder(file).Encode(record); err != nil {
+			return fmt.Errorf("write persist target %s: %w", target, err)
+		}
+		return nil
+	}
+}
+
+func mustMarshal(v any) json.RawMessage {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return json.RawMessage(`{"marshal_error":"failed to encode log payload"}`)
+	}
+	return raw
 }
 
 func newMaster(gameName, gameVersion, ruleset string, players []game.Player) (game.Master, error) {

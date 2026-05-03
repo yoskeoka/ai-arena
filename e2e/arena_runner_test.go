@@ -1,8 +1,10 @@
 package e2e
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -12,9 +14,23 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
 
+type runnerLogRecord struct {
+	MatchID string          `json:"match_id"`
+	Seq     int             `json:"seq"`
+	Kind    string          `json:"kind"`
+	Turn    int             `json:"turn"`
+	Payload json.RawMessage `json:"payload,omitempty"`
+}
+
+type arenaRunResult struct {
+	Logs   []runnerLogRecord
+	Record match.Record
+	Stderr string
+}
+
 func TestArenaRunnerHappyPaths(t *testing.T) {
 	t.Run("simultaneous", func(t *testing.T) {
-		record, stderr := runArena(t,
+		result := runArena(t,
 			"--game", "echo-count",
 			"--game-version", "2.0.0",
 			"--ruleset", "phase2-simultaneous-3turn",
@@ -22,6 +38,7 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 			"--player", "p1=./testdata/ai/echo/echo-ai",
 			"--player", "p2=./testdata/ai/echo/echo-ai",
 		)
+		record := result.Record
 		if record.Status != "completed" {
 			t.Fatalf("status = %q, want completed", record.Status)
 		}
@@ -31,13 +48,19 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 		if record.Snapshot.PerPlayer["p1"].StderrBytes == 0 {
 			t.Fatal("expected stderr bytes for p1")
 		}
-		if strings.TrimSpace(stderr) != "" {
-			t.Fatalf("stderr = %q, want empty", stderr)
+		if !hasLogKind(result.Logs, "match_started") {
+			t.Fatalf("logs missing match_started: %+v", result.Logs)
+		}
+		if !hasLogKind(result.Logs, "terminal_snapshot") || !hasLogKind(result.Logs, "terminal_exported_snapshot") || !hasLogKind(result.Logs, "terminal_summary") {
+			t.Fatalf("logs missing terminal records: %+v", result.Logs)
+		}
+		if strings.TrimSpace(result.Stderr) != "" {
+			t.Fatalf("stderr = %q, want empty", result.Stderr)
 		}
 	})
 
 	t.Run("sequential", func(t *testing.T) {
-		record, _ := runArena(t,
+		result := runArena(t,
 			"--game", "echo-count",
 			"--game-version", "2.0.0",
 			"--ruleset", "phase2-sequential-3turn",
@@ -45,6 +68,7 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 			"--player", "p1=./testdata/ai/echo/echo-ai-sequential",
 			"--player", "p2=./testdata/ai/echo/echo-ai-sequential",
 		)
+		record := result.Record
 		if record.Status != "completed" {
 			t.Fatalf("status = %q, want completed", record.Status)
 		}
@@ -110,7 +134,7 @@ func TestArenaRunnerFailurePaths(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			record, _ := runArena(t,
+			result := runArena(t,
 				"--game", "echo-count",
 				"--game-version", "2.0.0",
 				"--ruleset", "phase2-simultaneous-2turn",
@@ -118,6 +142,7 @@ func TestArenaRunnerFailurePaths(t *testing.T) {
 				"--player", "p1=./testdata/ai/echo/echo-ai-2turn",
 				"--player", "p2="+tc.player2,
 			)
+			record := result.Record
 			if record.Status != tc.status {
 				t.Fatalf("status = %q, want %q", record.Status, tc.status)
 			}
@@ -127,14 +152,69 @@ func TestArenaRunnerFailurePaths(t *testing.T) {
 			if tc.reason != "" && !hasFailureReason(record.EventLog, tc.reason) && record.Snapshot.PerPlayer["p2"].LastActionStatus.FailureReason != tc.reason {
 				t.Fatalf("missing failure reason %q", tc.reason)
 			}
+			if !hasLogKind(result.Logs, "terminal_summary") {
+				t.Fatalf("logs missing terminal_summary: %+v", result.Logs)
+			}
 		})
 	}
 }
 
-func runArena(t *testing.T, args ...string) (match.Record, string) {
+func TestArenaRunnerCanceledPath(t *testing.T) {
+	result := runArena(t,
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-2turn",
+		"--match-id", "canceled",
+		"--match-timeout", "10ms",
+		"--player", "p1=./testdata/ai/echo/echo-ai-2turn",
+		"--player", "p2=./testdata/ai/echo/timeout-ai",
+	)
+
+	if result.Record.Status != "canceled" {
+		t.Fatalf("status = %q, want canceled", result.Record.Status)
+	}
+	if !hasEvent(result.Record.EventLog, "match_canceled") {
+		t.Fatalf("event log missing match_canceled: %+v", result.Record.EventLog)
+	}
+	if !hasLogKind(result.Logs, "terminal_snapshot") || !hasLogKind(result.Logs, "terminal_summary") {
+		t.Fatalf("logs missing canceled terminal records: %+v", result.Logs)
+	}
+	if !strings.Contains(result.Stderr, "context deadline exceeded") {
+		t.Fatalf("stderr = %q, want context deadline exceeded", result.Stderr)
+	}
+}
+
+func TestArenaRunnerCanPersistRecordToStdout(t *testing.T) {
+	result := runArenaWithPersistTarget(t, "stdout",
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "stdout-persist",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+
+	if result.Record.MatchID != "stdout-persist" {
+		t.Fatalf("record match id = %q, want stdout-persist", result.Record.MatchID)
+	}
+	if !hasLogKind(result.Logs, "match_started") {
+		t.Fatalf("logs missing match_started: %+v", result.Logs)
+	}
+}
+
+func runArena(t *testing.T, args ...string) arenaRunResult {
 	t.Helper()
 
-	cmd := exec.CommandContext(newTestContext(t), "go", append([]string{"run", "./cmd/arena-runner"}, args...)...)
+	recordPath := filepath.Join(t.TempDir(), "record.json")
+	return runArenaWithPersistTarget(t, recordPath, args...)
+}
+
+func runArenaWithPersistTarget(t *testing.T, persistTarget string, args ...string) arenaRunResult {
+	t.Helper()
+
+	fullArgs := append([]string{"run", "./cmd/arena-runner"}, args...)
+	fullArgs = append(fullArgs, "--persist-record", persistTarget)
+	cmd := exec.CommandContext(newTestContext(t), "go", fullArgs...)
 	cmd.Dir = repoRoot(t)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
@@ -143,11 +223,65 @@ func runArena(t *testing.T, args ...string) (match.Record, string) {
 		t.Fatalf("arena-runner failed: %v\nstderr=%s", err, stderr.String())
 	}
 
-	var record match.Record
-	if err := json.Unmarshal([]byte(stdout.String()), &record); err != nil {
-		t.Fatalf("decode record: %v\nstdout=%s", err, stdout.String())
+	logs, record, err := parseArenaOutput(stdout.String())
+	if err != nil {
+		t.Fatalf("decode output: %v\nstdout=%s", err, stdout.String())
 	}
-	return record, stderr.String()
+	if persistTarget != "stdout" {
+		data, err := os.ReadFile(persistTarget)
+		if err != nil {
+			t.Fatalf("read persisted record: %v", err)
+		}
+		if err := json.Unmarshal(data, &record); err != nil {
+			t.Fatalf("decode persisted record: %v\nrecord=%s", err, data)
+		}
+	}
+
+	return arenaRunResult{
+		Logs:   logs,
+		Record: record,
+		Stderr: stderr.String(),
+	}
+}
+
+func parseArenaOutput(stdout string) ([]runnerLogRecord, match.Record, error) {
+	var (
+		logs   []runnerLogRecord
+		record match.Record
+	)
+
+	scanner := bufio.NewScanner(strings.NewReader(stdout))
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		var envelope map[string]json.RawMessage
+		if err := json.Unmarshal(line, &envelope); err != nil {
+			return nil, match.Record{}, err
+		}
+		if _, ok := envelope["event_log"]; ok {
+			if err := json.Unmarshal(line, &record); err != nil {
+				return nil, match.Record{}, err
+			}
+			continue
+		}
+		var logRecord runnerLogRecord
+		if err := json.Unmarshal(line, &logRecord); err != nil {
+			return nil, match.Record{}, err
+		}
+		logs = append(logs, logRecord)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, match.Record{}, err
+	}
+	return logs, record, nil
+}
+
+func hasLogKind(logs []runnerLogRecord, kind string) bool {
+	for _, record := range logs {
+		if record.Kind == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func hasEvent(events []match.Event, kind string) bool {
