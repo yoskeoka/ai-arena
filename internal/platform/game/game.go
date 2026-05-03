@@ -49,9 +49,9 @@ const (
 	StatusCanceled     MatchStatus = "canceled"
 )
 
-type ActionOutcome struct {
+type ActionStatus struct {
 	PlayerID      string          `json:"player_id"`
-	Outcome       string          `json:"outcome"`
+	ActionStatus  string          `json:"action_status"`
 	FailureReason string          `json:"failure_reason,omitempty"`
 	Action        json.RawMessage `json:"action,omitempty"`
 }
@@ -66,9 +66,9 @@ type MatchResult struct {
 }
 
 type PlayerSnapshot struct {
-	VisibleState json.RawMessage `json:"visible_state,omitempty"`
-	LastOutcome  ActionOutcome   `json:"last_outcome"`
-	StderrBytes  int             `json:"stderr_bytes"`
+	VisibleState     json.RawMessage `json:"visible_state,omitempty"`
+	LastActionStatus ActionStatus    `json:"last_action_status"`
+	StderrBytes      int             `json:"stderr_bytes"`
 }
 
 type Snapshot struct {
@@ -80,8 +80,8 @@ type Snapshot struct {
 }
 
 type ExportedPlayerSnapshot struct {
-	PlayerID    string        `json:"player_id"`
-	LastOutcome ActionOutcome `json:"last_outcome"`
+	PlayerID         string       `json:"player_id"`
+	LastActionStatus ActionStatus `json:"last_action_status"`
 }
 
 type ExportedSnapshot struct {
@@ -96,7 +96,8 @@ type Master interface {
 	Metadata() catalog.GameMetadata
 	Init(context.Context) (InitState, error)
 	NextStep(context.Context) (*DecisionStep, error)
-	ApplyStep(context.Context, DecisionStep, []ActionOutcome) error
+	NormalizeAction(DecisionRequest, ActionStatus) ActionStatus
+	ApplyStep(context.Context, DecisionStep, []ActionStatus) error
 	Snapshot() Snapshot
 	ExportedSnapshot() ExportedSnapshot
 	Result() MatchResult

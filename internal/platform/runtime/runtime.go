@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/protocol"
 )
@@ -37,6 +38,8 @@ type Adapter struct {
 	done     chan error
 	stderr   *captureBuffer
 }
+
+const stdinCloseGracePeriod = 50 * time.Millisecond
 
 func Start(ctx context.Context, cfg Config) (*Adapter, error) {
 	if len(cfg.Command) == 0 {
@@ -115,6 +118,16 @@ func (a *Adapter) Close(ctx context.Context) error {
 	}
 
 	_ = a.stdin.Close()
+
+	// Give cooperative bots a brief chance to exit on stdin EOF before escalating
+	// to an interrupt signal. This avoids misclassifying normal post-game shutdown
+	// as a forced shutdown when the process would have exited on its own.
+	select {
+	case err := <-a.done:
+		return err
+	case <-time.After(stdinCloseGracePeriod):
+	}
+
 	_ = a.cmd.Process.Signal(os.Interrupt)
 
 	select {

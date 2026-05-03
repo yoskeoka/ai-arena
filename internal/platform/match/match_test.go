@@ -53,9 +53,9 @@ func TestRunnerBuildsCompletedRecordAcrossSimultaneousAndSequentialSteps(t *test
 	sessions := map[string]PlayerSession{
 		"p1": &fakeSession{
 			turnResults: []session.Result{
-				{Outcome: session.OutcomeAccepted, Payload: raw(`{"action":"a"}`)},
+				{Status: session.StatusAccepted, Payload: raw(`{"action":"a"}`)},
 				{
-					Outcome:                session.OutcomeAccepted,
+					Status:                 session.StatusAccepted,
 					Payload:                raw(`{"action":"c"}`),
 					IgnoredLateResponseIDs: []string{"turn-1-p1"},
 				},
@@ -63,8 +63,8 @@ func TestRunnerBuildsCompletedRecordAcrossSimultaneousAndSequentialSteps(t *test
 		},
 		"p2": &fakeSession{
 			turnResults: []session.Result{
-				{Outcome: session.OutcomeAccepted, Payload: raw(`{"action":"b"}`)},
-				{Outcome: session.OutcomeNoAction, FailureReason: session.ReasonTimeout},
+				{Status: session.StatusAccepted, Payload: raw(`{"action":"b"}`)},
+				{Status: session.StatusNoAction, FailureReason: session.ReasonTimeout},
 			},
 		},
 	}
@@ -80,7 +80,7 @@ func TestRunnerBuildsCompletedRecordAcrossSimultaneousAndSequentialSteps(t *test
 	if len(master.applied) != 3 {
 		t.Fatalf("ApplyStep call count = %d, want 3", len(master.applied))
 	}
-	if got := record.Snapshot.PerPlayer["p2"].LastOutcome.FailureReason; got != session.ReasonTimeout {
+	if got := record.Snapshot.PerPlayer["p2"].LastActionStatus.FailureReason; got != session.ReasonTimeout {
 		t.Fatalf("p2 failure reason = %q, want timeout", got)
 	}
 	if !hasEventKind(record.EventLog, "late_response_ignored") {
@@ -101,7 +101,7 @@ func TestRunnerReturnsFailedRecordForInitFailure(t *testing.T) {
 	}
 	sessions := map[string]PlayerSession{
 		"p1": &fakeSession{
-			initResult: session.Result{Outcome: session.OutcomeNoAction, FailureReason: session.ReasonRuntimeStop},
+			initResult: session.Result{Status: session.StatusNoAction, FailureReason: session.ReasonRuntimeStop},
 		},
 	}
 
@@ -171,8 +171,8 @@ func TestRunnerLogsGameOverAndShutdownFailures(t *testing.T) {
 	}
 	sessions := map[string]PlayerSession{
 		"p1": &fakeSession{
-			gameOverErr: errors.New("game_over failed"),
-			closeErr:    errors.New("close failed"),
+			gameOverResult: session.Result{Status: session.StatusNoAction, FailureReason: session.ReasonTimeout},
+			closeErr:       errors.New("close failed"),
 		},
 	}
 
@@ -192,7 +192,7 @@ type fakeMaster struct {
 	metadata         catalog.GameMetadata
 	steps            []*game.DecisionStep
 	index            int
-	applied          [][]game.ActionOutcome
+	applied          [][]game.ActionStatus
 	initErr          error
 	cancelOnNextStep bool
 }
@@ -225,9 +225,13 @@ func (f *fakeMaster) NextStep(context.Context) (*game.DecisionStep, error) {
 	return step, nil
 }
 
-func (f *fakeMaster) ApplyStep(_ context.Context, _ game.DecisionStep, outcomes []game.ActionOutcome) error {
-	copied := make([]game.ActionOutcome, len(outcomes))
-	copy(copied, outcomes)
+func (f *fakeMaster) NormalizeAction(_ game.DecisionRequest, actionStatus game.ActionStatus) game.ActionStatus {
+	return actionStatus
+}
+
+func (f *fakeMaster) ApplyStep(_ context.Context, _ game.DecisionStep, actionStatuses []game.ActionStatus) error {
+	copied := make([]game.ActionStatus, len(actionStatuses))
+	copy(copied, actionStatuses)
 	f.applied = append(f.applied, copied)
 	return nil
 }
@@ -258,31 +262,34 @@ func (f *fakeMaster) Result() game.MatchResult {
 }
 
 type fakeSession struct {
-	initResult  session.Result
-	turnResults []session.Result
-	turnIndex   int
-	gameOverErr error
-	closeErr    error
+	initResult     session.Result
+	turnResults    []session.Result
+	turnIndex      int
+	gameOverResult session.Result
+	closeErr       error
 }
 
 func (f *fakeSession) Init(context.Context, session.Request) session.Result {
-	if f.initResult.Outcome == "" {
-		return session.Result{Outcome: session.OutcomeAccepted, Payload: raw(`{"ready":true}`)}
+	if f.initResult.Status == "" {
+		return session.Result{Status: session.StatusAccepted, Payload: raw(`{"ready":true}`)}
 	}
 	return f.initResult
 }
 
 func (f *fakeSession) Turn(context.Context, session.Request) session.Result {
 	if f.turnIndex >= len(f.turnResults) {
-		return session.Result{Outcome: session.OutcomeAccepted, Payload: raw(`{"action":"noop"}`)}
+		return session.Result{Status: session.StatusAccepted, Payload: raw(`{"action":"noop"}`)}
 	}
 	result := f.turnResults[f.turnIndex]
 	f.turnIndex++
 	return result
 }
 
-func (f *fakeSession) GameOver(context.Context, any) error {
-	return f.gameOverErr
+func (f *fakeSession) GameOver(context.Context, session.Request) session.Result {
+	if f.gameOverResult.Status == "" {
+		return session.Result{Status: session.StatusAccepted, Payload: raw(`{"ack":true}`)}
+	}
+	return f.gameOverResult
 }
 
 func (f *fakeSession) Close(context.Context) error {

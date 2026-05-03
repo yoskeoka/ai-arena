@@ -1,0 +1,13 @@
+{
+  "ai_id": "echo-ai",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "echo-count",
+    "game_version": "2.0.0",
+    "ruleset_version": "phase2-simultaneous-3turn"
+  },
+  "runtime": {
+    "kind": "local-subprocess",
+    "command": ["go", "run", "./testdata/ai/echo/echo-ai"]
+  }
+}

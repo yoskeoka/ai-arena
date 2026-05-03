@@ -6,7 +6,7 @@ GOCACHE = $(CACHE_ROOT)/go-build
 GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
 GOFILES = $(shell git ls-files -- '*.go')
 
-.PHONY: test fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec
+.PHONY: test fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec run-echo-simultaneous run-echo-sequential
 
 test:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
@@ -44,3 +44,23 @@ lint-staticcheck:
 lint-gosec:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	$(GO_ENV) $(GO) tool gosec -exclude-dir=.cache ./...
+
+run-echo-simultaneous:
+	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
+	$(GO_ENV) $(GO) run ./cmd/arena-runner \
+		--game echo-count \
+		--game-version 2.0.0 \
+		--ruleset phase2-simultaneous-3turn \
+		--match-id sim-happy \
+		--player p1=./testdata/ai/echo/echo-ai \
+		--player p2=./testdata/ai/echo/echo-ai
+
+run-echo-sequential:
+	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
+	$(GO_ENV) $(GO) run ./cmd/arena-runner \
+		--game echo-count \
+		--game-version 2.0.0 \
+		--ruleset phase2-sequential-3turn \
+		--match-id seq-happy \
+		--player p1=./testdata/ai/echo/echo-ai-sequential \
+		--player p2=./testdata/ai/echo/echo-ai-sequential

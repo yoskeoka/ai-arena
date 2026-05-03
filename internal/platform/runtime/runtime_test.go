@@ -115,6 +115,7 @@ func runSessionBot() {
 			fmt.Println(`{"jsonrpc":"2.0","id":"turn-next","result":{"action":"paper"}}`)
 		case strings.Contains(line, `"method":"game_over"`):
 			fmt.Fprintln(os.Stderr, "game over received")
+			fmt.Println(`{"jsonrpc":"2.0","id":"game-over","result":{"ack":true}}`)
 			return
 		}
 	}

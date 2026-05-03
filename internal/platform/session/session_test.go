@@ -38,8 +38,8 @@ func TestSessionInitTurnTimeoutGameOverAndLateResponse(t *testing.T) {
 		Params:   map[string]any{"match_id": "match-001"},
 		Deadline: time.Second,
 	})
-	if initResult.Outcome != OutcomeAccepted {
-		t.Fatalf("init outcome = %q, want accepted", initResult.Outcome)
+	if initResult.Status != StatusAccepted {
+		t.Fatalf("init status = %q, want accepted", initResult.Status)
 	}
 
 	timeoutResult := sess.Turn(context.Background(), Request{
@@ -58,8 +58,8 @@ func TestSessionInitTurnTimeoutGameOverAndLateResponse(t *testing.T) {
 		Params:   map[string]any{"turn": 2},
 		Deadline: time.Second,
 	})
-	if nextResult.Outcome != OutcomeAccepted {
-		t.Fatalf("next outcome = %q, want accepted", nextResult.Outcome)
+	if nextResult.Status != StatusAccepted {
+		t.Fatalf("next status = %q, want accepted", nextResult.Status)
 	}
 	if len(nextResult.IgnoredLateResponseIDs) != 1 || nextResult.IgnoredLateResponseIDs[0] != "turn-timeout" {
 		t.Fatalf("ignored late response ids = %v, want [turn-timeout]", nextResult.IgnoredLateResponseIDs)
@@ -73,8 +73,14 @@ func TestSessionInitTurnTimeoutGameOverAndLateResponse(t *testing.T) {
 		t.Fatalf("lateIDs = %v, want [turn-timeout]", lateIDs)
 	}
 
-	if err := sess.GameOver(context.Background(), map[string]any{"summary": "done"}); err != nil {
-		t.Fatalf("GameOver: %v", err)
+	result := sess.GameOver(context.Background(), Request{
+		ID:       "game-over",
+		Method:   "game_over",
+		Params:   map[string]any{"summary": "done", "shutdown_after_ms": 3000},
+		Deadline: time.Second,
+	})
+	if result.Status != StatusAccepted {
+		t.Fatalf("GameOver status = %q, want accepted", result.Status)
 	}
 }
 
@@ -96,6 +102,7 @@ func TestHelperProcess(t *testing.T) {
 			fmt.Println(`{"jsonrpc":"2.0","id":"turn-next","result":{"action":"paper"}}`)
 		case strings.Contains(line, `"method":"game_over"`):
 			fmt.Fprintln(os.Stderr, "game over received")
+			fmt.Println(`{"jsonrpc":"2.0","id":"game-over","result":{"ack":true}}`)
 			os.Exit(0)
 		}
 	}

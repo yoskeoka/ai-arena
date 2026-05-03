@@ -2,6 +2,19 @@
 
 ## 目的
 
+`janken` は `echo-count` fixture 完了後の richer integration game である。
+`echo-count` が担うのは deterministic payload による platform core の verification であり、
+`janken` はその上で隠し情報、同時解決、`self_history` / `public_history`、複数ラウンドの勝敗解決を担保する。
+
+したがって、`echo-count` で既に閉じている以下は `janken` の主責務ではない。
+
+- `arena-runner` の match 起動自体
+- game / game_version / ruleset selection
+- metadata compatibility 判定
+- timeout / malformed / mismatched id / late response / shutdown failure の platform 記録分類
+
+`janken` 側で追加で担保するのは、fixture では薄いゲーム固有責務である。
+
 じゃんけんは、プラットフォームの Phase 2 実証用ゲームである。より複雑なダンジョンゲームへ進む前に、プラットフォームの基本ループを最小構成で検証することを目的とする。
 
 このゲームで検証したい要素は以下。
@@ -213,11 +226,12 @@
 
 ### `game_over`
 
-notification:
+request:
 
 ```json
 {
   "jsonrpc": "2.0",
+  "id": "game-over",
   "method": "game_over",
   "params": {
     "placement": 1,
@@ -275,7 +289,21 @@ notification:
 }
 ```
 
-`game_over` はレスポンス不要であり、AI はこの通知を受けたあとに最終ラウンド結果も含めて自己評価し、必要なら改善用レポートを `stderr` へ出力してよい。プラットフォームは `shutdown_after_ms` の猶予後にインスタンスを終了させる。
+response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "game-over",
+  "result": {
+    "ack": true
+  }
+}
+```
+
+`game_over` ACK は、AI が終了前 cleanup を完了したあとに返す。AI はこの request を受けたあとに最終ラウンド結果も含めて自己評価し、必要なら改善用レポートを `stderr` へ出力してよいが、その完了は `shutdown_after_ms` の猶予内でなければならない。プラットフォームは `AI_ARENA_GAME_OVER_TIMEOUT` に基づく待機上限まで ACK を待ち、期限超過時は shutdown failure として扱う。
+
+`shutdown_after_ms` 超過後に AI が `stderr` やその他出力を続けても、その取得や反映は保証しない。実装や環境によって一部拾えることはあるが、contract 上は未定義である。
 
 ## 観戦向け全体状態
 
