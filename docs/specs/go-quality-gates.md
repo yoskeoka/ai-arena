@@ -1,6 +1,6 @@
 # Go 品質ゲート
 
-`ai-arena` の Go module は、ローカル開発と CI で同じ command surface を使って検証する。
+`ai-arena` の Go module は、ローカル開発と CI のどちらでも同じ quality-gate targets を入口として検証する。
 
 ## Command Surface
 
@@ -44,10 +44,12 @@
 - `Makefile` は local default として `/tmp/ai-arena-go-quality-gates` を cache root に使ってよい
 - local default は `ww` で分かれた worktree 間でも再利用できる stable path として扱う
 - `Makefile` は `GOPATH` / `GOMODCACHE` / `GOCACHE` を個別に override できなければならない
+- ローカル開発では plain `make test` / `make fmt` / `make lint` が追加オプションなしで動かなければならない
 - CI は workflow から `GOPATH` / `GOMODCACHE` / `GOCACHE` を上書きし、runner 標準の Go cache path を使ってよい
-- local default と CI override は command surface を変えない。どちらも quality gate の入口は `make test` / `make fmt` / `make lint` に揃える
+- CI の override 手段は workflow env または `make` の variable assignment でよい
+- local default と CI override のどちらでも quality gate の入口は `make test` / `make fmt` / `make lint` に揃える
 - GitHub Actions の Go cache strategy は `actions/setup-go` built-in cache と明示 cache を併用せず、1 系統に統一する
-- GitHub Actions の cache entry は job ごとに分離してよい。`go-test` と `go-lint` は同じ dependency hash を共有しても、同じ cache key を共有しない
+- GitHub Actions の cache entry は job ごとに分離してよい。`go-test` と `go-lint` は同じ dependency hash を共有しつつ、job suffix で最終 key を分けてよい
 
 ## CI Contract
 

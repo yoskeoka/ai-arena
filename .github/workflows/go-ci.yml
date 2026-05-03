@@ -36,9 +36,10 @@ jobs:
           path: |
             /home/runner/go/pkg/mod
             /home/runner/.cache/go-build
-          key: ${{ runner.os }}-go-test-${{ hashFiles('go.mod', 'go.sum', 'Makefile') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum', 'Makefile') }}-test
           restore-keys: |
-            ${{ runner.os }}-go-test-
+            ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum', 'Makefile') }}-
+            ${{ runner.os }}-go-
 
       - name: Run unit tests
         run: make GOPATH=/home/runner/go GOMODCACHE=/home/runner/go/pkg/mod GOCACHE=/home/runner/.cache/go-build test
@@ -60,9 +61,10 @@ jobs:
           path: |
             /home/runner/go/pkg/mod
             /home/runner/.cache/go-build
-          key: ${{ runner.os }}-go-lint-${{ hashFiles('go.mod', 'go.sum', 'Makefile') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum', 'Makefile') }}-lint
           restore-keys: |
-            ${{ runner.os }}-go-lint-
+            ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum', 'Makefile') }}-
+            ${{ runner.os }}-go-
 
       - name: Run lint
         run: make GOPATH=/home/runner/go GOMODCACHE=/home/runner/go/pkg/mod GOCACHE=/home/runner/.cache/go-build lint
