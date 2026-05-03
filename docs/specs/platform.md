@@ -292,6 +292,8 @@ platform 側待機上限:
 - local / CI では 3 秒を使う
 - online 環境では暫定的に 30 秒を設定してよい
 - `game_over` ACK が期限までに返らなければ shutdown failure として記録し、その後の process cleanup へ進む
+- `shutdown_after_ms` 超過後に AI が `stderr` やその他出力を続けても、platform はそれを拾えることを保証しない
+- したがって `shutdown_after_ms` 超過後の出力可視性は未定義とする。実装や環境次第で一部拾えることはあっても、contract 上は保証しない
 
 ## Failure reason 分類
 

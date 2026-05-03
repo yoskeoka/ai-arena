@@ -302,6 +302,8 @@ response:
 
 `game_over` ACK は、AI が終了前 cleanup を完了したあとに返す。AI はこの request を受けたあとに最終ラウンド結果も含めて自己評価し、必要なら改善用レポートを `stderr` へ出力してよいが、その完了は `shutdown_after_ms` の猶予内でなければならない。プラットフォームは `AI_ARENA_GAME_OVER_TIMEOUT` に基づく待機上限まで ACK を待ち、期限超過時は shutdown failure として扱う。
 
+`shutdown_after_ms` 超過後に AI が `stderr` やその他出力を続けても、その取得や反映は保証しない。実装や環境によって一部拾えることはあるが、contract 上は未定義である。
+
 ## 観戦向け全体状態
 
 じゃんけんの全体状態エクスポートには以下を含める。
