@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	OutcomeAccepted = "accepted"
-	OutcomeNoAction = "no_action"
+	StatusAccepted = "accepted"
+	StatusNoAction = "no_action"
 
 	ReasonTimeout      = "invalid-timeout"
 	ReasonMalformed    = "invalid-protocol-malformed"
@@ -36,7 +36,7 @@ type Request struct {
 }
 
 type Result struct {
-	Outcome                string
+	Status                 string
 	FailureReason          string
 	Payload                json.RawMessage
 	IgnoredLateResponseIDs []string
@@ -89,10 +89,10 @@ func (s *Session) call(ctx context.Context, req Request) Result {
 
 	msg, err := protocol.NewRequest(req.ID, req.Method, req.Params)
 	if err != nil {
-		return Result{Outcome: OutcomeNoAction, FailureReason: ReasonMalformed}
+		return Result{Status: StatusNoAction, FailureReason: ReasonMalformed}
 	}
 	if err := s.transport.Send(msg); err != nil {
-		return Result{Outcome: OutcomeNoAction, FailureReason: ReasonRuntimeStop}
+		return Result{Status: StatusNoAction, FailureReason: ReasonRuntimeStop}
 	}
 
 	timer := time.NewTimer(req.Deadline)
@@ -102,19 +102,19 @@ func (s *Session) call(ctx context.Context, req Request) Result {
 		select {
 		case <-ctx.Done():
 			s.lateIDs[req.ID] = struct{}{}
-			return Result{Outcome: OutcomeNoAction, FailureReason: ReasonTimeout}
+			return Result{Status: StatusNoAction, FailureReason: ReasonTimeout}
 		case <-timer.C:
 			s.lateIDs[req.ID] = struct{}{}
-			return Result{Outcome: OutcomeNoAction, FailureReason: ReasonTimeout}
+			return Result{Status: StatusNoAction, FailureReason: ReasonTimeout}
 		case incoming, ok := <-s.transport.Incoming():
 			if !ok {
-				return Result{Outcome: OutcomeNoAction, FailureReason: ReasonRuntimeStop}
+				return Result{Status: StatusNoAction, FailureReason: ReasonRuntimeStop}
 			}
 			if incoming.Err != nil {
 				if s.onMalformed != nil {
 					s.onMalformed(incoming.Err)
 				}
-				return Result{Outcome: OutcomeNoAction, FailureReason: ReasonMalformed}
+				return Result{Status: StatusNoAction, FailureReason: ReasonMalformed}
 			}
 			if incoming.Response == nil {
 				continue
@@ -129,19 +129,19 @@ func (s *Session) call(ctx context.Context, req Request) Result {
 			}
 			if err := protocol.MatchResponseID(req.ID, *incoming.Response); err != nil {
 				if errors.Is(err, protocol.ErrMismatchedID) {
-					return Result{Outcome: OutcomeNoAction, FailureReason: ReasonMismatchedID}
+					return Result{Status: StatusNoAction, FailureReason: ReasonMismatchedID}
 				}
-				return Result{Outcome: OutcomeNoAction, FailureReason: ReasonMalformed}
+				return Result{Status: StatusNoAction, FailureReason: ReasonMalformed}
 			}
 			if incoming.Response.Error != nil {
 				return Result{
-					Outcome:                OutcomeNoAction,
+					Status:                 StatusNoAction,
 					FailureReason:          ReasonMalformed,
 					IgnoredLateResponseIDs: ignoredLateResponseIDs,
 				}
 			}
 			return Result{
-				Outcome:                OutcomeAccepted,
+				Status:                 StatusAccepted,
 				Payload:                incoming.Response.Result,
 				IgnoredLateResponseIDs: ignoredLateResponseIDs,
 			}

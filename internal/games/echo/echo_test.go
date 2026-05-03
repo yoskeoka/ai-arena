@@ -19,9 +19,9 @@ func TestSimultaneousScoringAndPlacements(t *testing.T) {
 		t.Fatalf("unexpected step: %+v", step)
 	}
 
-	outcomes := []game.ActionOutcome{
-		master.NormalizeAction(step.Requests[0], game.ActionOutcome{PlayerID: "p1", Outcome: session.OutcomeAccepted, Action: raw(`{"echo":1}`)}),
-		master.NormalizeAction(step.Requests[1], game.ActionOutcome{PlayerID: "p2", Outcome: session.OutcomeAccepted, Action: raw(`{"echo":1}`)}),
+	outcomes := []game.ActionStatus{
+		master.NormalizeAction(step.Requests[0], game.ActionStatus{PlayerID: "p1", ActionStatus: session.StatusAccepted, Action: raw(`{"echo":1}`)}),
+		master.NormalizeAction(step.Requests[1], game.ActionStatus{PlayerID: "p2", ActionStatus: session.StatusAccepted, Action: raw(`{"echo":1}`)}),
 	}
 	if err := master.ApplyStep(context.Background(), *step, outcomes); err != nil {
 		t.Fatalf("ApplyStep: %v", err)
@@ -43,8 +43,8 @@ func TestSequentialAdvancesPlayerOrder(t *testing.T) {
 	if got := step1.Requests[0].PlayerID; got != "p1" {
 		t.Fatalf("first player = %q, want p1", got)
 	}
-	if err := master.ApplyStep(context.Background(), *step1, []game.ActionOutcome{
-		master.NormalizeAction(step1.Requests[0], game.ActionOutcome{PlayerID: "p1", Outcome: session.OutcomeAccepted, Action: raw(`{"echo":1}`)}),
+	if err := master.ApplyStep(context.Background(), *step1, []game.ActionStatus{
+		master.NormalizeAction(step1.Requests[0], game.ActionStatus{PlayerID: "p1", ActionStatus: session.StatusAccepted, Action: raw(`{"echo":1}`)}),
 	}); err != nil {
 		t.Fatalf("ApplyStep 1: %v", err)
 	}
@@ -68,16 +68,16 @@ func TestNormalizeIllegalActionBecomesNoAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NextStep: %v", err)
 	}
-	outcome := master.NormalizeAction(step.Requests[0], game.ActionOutcome{
-		PlayerID: "p1",
-		Outcome:  session.OutcomeAccepted,
-		Action:   raw(`{"echo":999}`),
+	actionStatus := master.NormalizeAction(step.Requests[0], game.ActionStatus{
+		PlayerID:     "p1",
+		ActionStatus: session.StatusAccepted,
+		Action:       raw(`{"echo":999}`),
 	})
-	if outcome.Outcome != session.OutcomeNoAction {
-		t.Fatalf("outcome = %q, want no_action", outcome.Outcome)
+	if actionStatus.ActionStatus != session.StatusNoAction {
+		t.Fatalf("action status = %q, want no_action", actionStatus.ActionStatus)
 	}
-	if outcome.FailureReason != "invalid-illegal-action" {
-		t.Fatalf("failure reason = %q, want invalid-illegal-action", outcome.FailureReason)
+	if actionStatus.FailureReason != "invalid-illegal-action" {
+		t.Fatalf("failure reason = %q, want invalid-illegal-action", actionStatus.FailureReason)
 	}
 }
 

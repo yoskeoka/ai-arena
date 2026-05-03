@@ -51,7 +51,7 @@ type Runner struct {
 	events      []Event
 	nextSeq     int
 	lastSeen    map[string]json.RawMessage
-	lastResult  map[string]game.ActionOutcome
+	lastResult  map[string]game.ActionStatus
 	phase       game.MatchStatus
 	status      game.MatchStatus
 	terminalErr error
@@ -65,9 +65,9 @@ const (
 )
 
 type turnExecution struct {
-	request game.DecisionRequest
-	result  session.Result
-	outcome game.ActionOutcome
+	request      game.DecisionRequest
+	result       session.Result
+	actionStatus game.ActionStatus
 }
 
 func NewRunner(matchID string, players []game.Player, master game.Master, sessions map[string]PlayerSession) *Runner {
@@ -77,7 +77,7 @@ func NewRunner(matchID string, players []game.Player, master game.Master, sessio
 		master:     master,
 		sessions:   sessions,
 		lastSeen:   make(map[string]json.RawMessage),
-		lastResult: make(map[string]game.ActionOutcome),
+		lastResult: make(map[string]game.ActionStatus),
 		phase:      game.StatusStarting,
 		status:     game.StatusStarting,
 	}
@@ -148,7 +148,7 @@ func (r *Runner) initializeSessions(ctx context.Context, meta catalog.GameMetada
 		if result.FailureReason == session.ReasonRuntimeStop {
 			r.appendRuntimeExited(0, player.PlayerID, map[string]any{"stage": "init"})
 		}
-		if result.Outcome != session.OutcomeAccepted {
+		if result.Status != session.StatusAccepted {
 			return fmt.Errorf("init failed for %s: %s", player.PlayerID, result.FailureReason)
 		}
 	}
@@ -185,9 +185,9 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 			req := step.Requests[0]
 			r.prepareTurn(step.Turn, req)
 			exec := r.executeTurn(ctx, step.Turn, req)
-			exec.outcome = r.master.NormalizeAction(req, exec.outcome)
-			outcome := r.recordTurn(step.Turn, exec)
-			if err := r.master.ApplyStep(ctx, *step, []game.ActionOutcome{outcome}); err != nil {
+			exec.actionStatus = r.master.NormalizeAction(req, exec.actionStatus)
+			actionStatus := r.recordTurn(step.Turn, exec)
+			if err := r.master.ApplyStep(ctx, *step, []game.ActionStatus{actionStatus}); err != nil {
 				return err
 			}
 		default:
@@ -196,7 +196,7 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 	}
 }
 
-func (r *Runner) runSimultaneousStep(ctx context.Context, step game.DecisionStep) []game.ActionOutcome {
+func (r *Runner) runSimultaneousStep(ctx context.Context, step game.DecisionStep) []game.ActionStatus {
 	executions := make([]turnExecution, len(step.Requests))
 	for i, req := range step.Requests {
 		r.prepareTurn(step.Turn, req)
@@ -215,9 +215,9 @@ func (r *Runner) runSimultaneousStep(ctx context.Context, step game.DecisionStep
 	}
 	wg.Wait()
 
-	outcomes := make([]game.ActionOutcome, len(executions))
+	outcomes := make([]game.ActionStatus, len(executions))
 	for i, exec := range executions {
-		exec.outcome = r.master.NormalizeAction(exec.request, exec.outcome)
+		exec.actionStatus = r.master.NormalizeAction(exec.request, exec.actionStatus)
 		outcomes[i] = r.recordTurn(step.Turn, exec)
 	}
 	return outcomes
@@ -243,7 +243,7 @@ func (r *Runner) shutdownSessions(ctx context.Context) {
 			if result.FailureReason == session.ReasonRuntimeStop {
 				r.appendRuntimeExited(0, playerID, map[string]any{"stage": "game_over"})
 			}
-			if result.Outcome != session.OutcomeAccepted {
+			if result.Status != session.StatusAccepted {
 				r.appendEvent("session_shutdown_failed", 0, playerID, map[string]any{
 					"stage":          "game_over",
 					"failure_reason": result.FailureReason,
@@ -281,9 +281,9 @@ func (r *Runner) buildRecord(meta catalog.GameMetadata) Record {
 		playerID := player.PlayerID
 		stderr := r.sessions[playerID].StderrSnapshot()
 		snapshot.PerPlayer[playerID] = game.PlayerSnapshot{
-			VisibleState: r.lastSeen[playerID],
-			LastOutcome:  r.lastResult[playerID],
-			StderrBytes:  stderr.BytesRead,
+			VisibleState:     r.lastSeen[playerID],
+			LastActionStatus: r.lastResult[playerID],
+			StderrBytes:      stderr.BytesRead,
 		}
 	}
 
@@ -293,8 +293,8 @@ func (r *Runner) buildRecord(meta catalog.GameMetadata) Record {
 	if len(exported.Players) == 0 {
 		for _, player := range r.players {
 			exported.Players = append(exported.Players, game.ExportedPlayerSnapshot{
-				PlayerID:    player.PlayerID,
-				LastOutcome: r.lastResult[player.PlayerID],
+				PlayerID:         player.PlayerID,
+				LastActionStatus: r.lastResult[player.PlayerID],
 			})
 		}
 		sort.Slice(exported.Players, func(i, j int) bool {
@@ -367,32 +367,32 @@ func (r *Runner) executeTurn(ctx context.Context, turn int, req game.DecisionReq
 	return turnExecution{
 		request: req,
 		result:  result,
-		outcome: game.ActionOutcome{
+		actionStatus: game.ActionStatus{
 			PlayerID:      req.PlayerID,
-			Outcome:       result.Outcome,
+			ActionStatus:  result.Status,
 			FailureReason: result.FailureReason,
 			Action:        result.Payload,
 		},
 	}
 }
 
-func (r *Runner) recordTurn(turn int, exec turnExecution) game.ActionOutcome {
-	r.lastResult[exec.request.PlayerID] = exec.outcome
+func (r *Runner) recordTurn(turn int, exec turnExecution) game.ActionStatus {
+	r.lastResult[exec.request.PlayerID] = exec.actionStatus
 	for _, lateID := range exec.result.IgnoredLateResponseIDs {
 		r.appendEvent("late_response_ignored", turn, exec.request.PlayerID, map[string]any{"response_id": lateID})
 	}
 
 	switch exec.result.FailureReason {
 	case "":
-		r.appendEvent("turn_result", turn, exec.request.PlayerID, exec.outcome)
+		r.appendEvent("turn_result", turn, exec.request.PlayerID, exec.actionStatus)
 	case session.ReasonTimeout:
-		r.appendEvent("turn_timeout", turn, exec.request.PlayerID, exec.outcome)
+		r.appendEvent("turn_timeout", turn, exec.request.PlayerID, exec.actionStatus)
 	case session.ReasonRuntimeStop:
-		r.appendRuntimeExited(turn, exec.request.PlayerID, exec.outcome)
+		r.appendRuntimeExited(turn, exec.request.PlayerID, exec.actionStatus)
 	default:
-		r.appendEvent("protocol_error", turn, exec.request.PlayerID, exec.outcome)
+		r.appendEvent("protocol_error", turn, exec.request.PlayerID, exec.actionStatus)
 	}
-	return exec.outcome
+	return exec.actionStatus
 }
 
 func (r *Runner) appendRuntimeExited(turn int, playerID string, payload any) {

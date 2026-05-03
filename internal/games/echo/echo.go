@@ -36,7 +36,7 @@ type Master struct {
 	resolved   int
 	nextPlayer int
 	score      map[string]int
-	lastAction map[string]game.ActionOutcome
+	lastAction map[string]game.ActionStatus
 }
 
 type visibleState struct {
@@ -75,12 +75,12 @@ func New(cfg Config) (*Master, error) {
 	}
 
 	score := make(map[string]int, len(cfg.Players))
-	lastAction := make(map[string]game.ActionOutcome, len(cfg.Players))
+	lastAction := make(map[string]game.ActionStatus, len(cfg.Players))
 	playerIDs := make([]string, 0, len(cfg.Players))
 	for _, player := range cfg.Players {
 		playerIDs = append(playerIDs, player.PlayerID)
 		score[player.PlayerID] = 0
-		lastAction[player.PlayerID] = game.ActionOutcome{PlayerID: player.PlayerID, Outcome: session.OutcomeNoAction}
+		lastAction[player.PlayerID] = game.ActionStatus{PlayerID: player.PlayerID, ActionStatus: session.StatusNoAction}
 	}
 
 	return &Master{
@@ -179,35 +179,35 @@ func (m *Master) NextStep(context.Context) (*game.DecisionStep, error) {
 	}
 }
 
-func (m *Master) NormalizeAction(req game.DecisionRequest, outcome game.ActionOutcome) game.ActionOutcome {
-	if outcome.Outcome != session.OutcomeAccepted {
-		outcome.Action = nil
-		return outcome
+func (m *Master) NormalizeAction(req game.DecisionRequest, actionStatus game.ActionStatus) game.ActionStatus {
+	if actionStatus.ActionStatus != session.StatusAccepted {
+		actionStatus.Action = nil
+		return actionStatus
 	}
 
 	var act action
-	if err := json.Unmarshal(outcome.Action, &act); err != nil {
-		return game.ActionOutcome{
+	if err := json.Unmarshal(actionStatus.Action, &act); err != nil {
+		return game.ActionStatus{
 			PlayerID:      req.PlayerID,
-			Outcome:       session.OutcomeNoAction,
+			ActionStatus:  session.StatusNoAction,
 			FailureReason: "invalid-illegal-action",
 		}
 	}
 	if act.Echo != m.expectedForTurn(req) {
-		return game.ActionOutcome{
+		return game.ActionStatus{
 			PlayerID:      req.PlayerID,
-			Outcome:       session.OutcomeNoAction,
+			ActionStatus:  session.StatusNoAction,
 			FailureReason: "invalid-illegal-action",
 		}
 	}
-	return outcome
+	return actionStatus
 }
 
-func (m *Master) ApplyStep(_ context.Context, step game.DecisionStep, outcomes []game.ActionOutcome) error {
-	for _, outcome := range outcomes {
-		m.lastAction[outcome.PlayerID] = outcome
-		if outcome.Outcome == session.OutcomeAccepted {
-			m.score[outcome.PlayerID]++
+func (m *Master) ApplyStep(_ context.Context, step game.DecisionStep, actionStatuses []game.ActionStatus) error {
+	for _, actionStatus := range actionStatuses {
+		m.lastAction[actionStatus.PlayerID] = actionStatus
+		if actionStatus.ActionStatus == session.StatusAccepted {
+			m.score[actionStatus.PlayerID]++
 		}
 	}
 

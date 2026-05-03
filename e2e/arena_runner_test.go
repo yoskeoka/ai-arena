@@ -124,7 +124,7 @@ func TestArenaRunnerFailurePaths(t *testing.T) {
 			if !hasEvent(record.EventLog, tc.eventKind) {
 				t.Fatalf("event log missing %q", tc.eventKind)
 			}
-			if tc.reason != "" && !hasFailureReason(record.EventLog, tc.reason) && record.Snapshot.PerPlayer["p2"].LastOutcome.FailureReason != tc.reason {
+			if tc.reason != "" && !hasFailureReason(record.EventLog, tc.reason) && record.Snapshot.PerPlayer["p2"].LastActionStatus.FailureReason != tc.reason {
 				t.Fatalf("missing failure reason %q", tc.reason)
 			}
 		})
