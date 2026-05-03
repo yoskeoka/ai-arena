@@ -18,6 +18,7 @@ const (
 	ReasonMalformed    = "invalid-protocol-malformed"
 	ReasonMismatchedID = "invalid-protocol-mismatched-id"
 	ReasonLateResponse = "invalid-protocol-late-response"
+	ReasonRuntimeStop  = "runtime-stopped"
 )
 
 type Transport interface {
@@ -95,7 +96,7 @@ func (s *Session) call(ctx context.Context, req Request) Result {
 		return Result{Outcome: OutcomeNoAction, FailureReason: ReasonMalformed}
 	}
 	if err := s.transport.Send(msg); err != nil {
-		return Result{Outcome: OutcomeNoAction, FailureReason: ReasonMalformed}
+		return Result{Outcome: OutcomeNoAction, FailureReason: ReasonRuntimeStop}
 	}
 
 	timer := time.NewTimer(req.Deadline)
@@ -111,7 +112,7 @@ func (s *Session) call(ctx context.Context, req Request) Result {
 			return Result{Outcome: OutcomeNoAction, FailureReason: ReasonTimeout}
 		case incoming, ok := <-s.transport.Incoming():
 			if !ok {
-				return Result{Outcome: OutcomeNoAction, FailureReason: ReasonMalformed}
+				return Result{Outcome: OutcomeNoAction, FailureReason: ReasonRuntimeStop}
 			}
 			if incoming.Err != nil {
 				if s.onMalformed != nil {
