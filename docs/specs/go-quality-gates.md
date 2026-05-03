@@ -45,3 +45,9 @@
 - `make test` と `make lint` は独立 job として並行に実行してよい
 - CI は module/tool cache を持ってよいが、品質判定の入口は Makefile targets に揃える
 - formatter drift は test failure ではなく lint failure として扱う
+
+## Codex Hook Integration
+
+- Codex の `PostToolUse` hook は `.go` edit の直後に `make fmt` を呼び出してよい
+- Codex の `Stop` hook は turn 終了時に `make lint` と `make test` を呼び出してよい
+- hook wiring と dispatch path は `docs/specs/codex-hooks.md` の契約に従う
