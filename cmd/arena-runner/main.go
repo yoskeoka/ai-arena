@@ -102,13 +102,20 @@ func run(args []string) error {
 func loadPlayersAndSessions(meta catalog.GameMetadata, args []string, stderrLimitBytes int) ([]game.Player, map[string]match.PlayerSession, error) {
 	players := make([]game.Player, 0, len(args))
 	sessions := make(map[string]match.PlayerSession, len(args))
+	seenPlayerIDs := make(map[string]struct{}, len(args))
 	for _, arg := range args {
 		spec, err := parsePlayerSpec(arg)
 		if err != nil {
 			return nil, nil, err
 		}
+		if _, exists := seenPlayerIDs[spec.PlayerID]; exists {
+			closeSessions(sessions)
+			return nil, nil, fmt.Errorf("duplicate player_id %q", spec.PlayerID)
+		}
+		seenPlayerIDs[spec.PlayerID] = struct{}{}
 		loaded, err := loadEntry(meta, spec)
 		if err != nil {
+			closeSessions(sessions)
 			return nil, nil, err
 		}
 		players = append(players, game.Player{
@@ -121,6 +128,7 @@ func loadPlayersAndSessions(meta catalog.GameMetadata, args []string, stderrLimi
 			StderrLimitBytes: stderrLimitBytes,
 		})
 		if err != nil {
+			closeSessions(sessions)
 			return nil, nil, err
 		}
 		sessions[spec.PlayerID] = session.New(adapter)
@@ -156,6 +164,8 @@ func loadEntry(matchMeta catalog.GameMetadata, spec playerSpec) (loadedEntry, er
 			return loadedEntry{}, fmt.Errorf("%s runtime.command is required", spec.PlayerID)
 		}
 		return loadedEntry{Command: manifest.Runtime.Command, AIID: manifest.AIID}, nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return loadedEntry{}, err
 	}
 
 	if err := catalog.ValidateMetadata(matchMeta); err != nil {
@@ -195,6 +205,15 @@ func repoRoot() string {
 		return "."
 	}
 	return wd
+}
+
+func closeSessions(sessions map[string]match.PlayerSession) {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	for _, sess := range sessions {
+		_ = sess.Close(ctx)
+	}
 }
 
 type multiFlag []string

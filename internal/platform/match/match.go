@@ -182,6 +182,7 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 			req := step.Requests[0]
 			r.prepareTurn(step.Turn, req)
 			exec := r.executeTurn(ctx, step.Turn, req)
+			exec.outcome = r.master.NormalizeAction(req, exec.outcome)
 			outcome := r.recordTurn(step.Turn, exec)
 			if err := r.master.ApplyStep(ctx, *step, []game.ActionOutcome{outcome}); err != nil {
 				return err
@@ -213,6 +214,7 @@ func (r *Runner) runSimultaneousStep(ctx context.Context, step game.DecisionStep
 
 	outcomes := make([]game.ActionOutcome, len(executions))
 	for i, exec := range executions {
+		exec.outcome = r.master.NormalizeAction(exec.request, exec.outcome)
 		outcomes[i] = r.recordTurn(step.Turn, exec)
 	}
 	return outcomes
@@ -344,12 +346,12 @@ func (r *Runner) executeTurn(ctx context.Context, turn int, req game.DecisionReq
 	return turnExecution{
 		request: req,
 		result:  result,
-		outcome: r.master.NormalizeAction(req, game.ActionOutcome{
+		outcome: game.ActionOutcome{
 			PlayerID:      req.PlayerID,
 			Outcome:       result.Outcome,
 			FailureReason: result.FailureReason,
 			Action:        result.Payload,
-		}),
+		},
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
@@ -54,7 +55,7 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 }
 
 func TestArenaRunnerPreflightMetadataMismatch(t *testing.T) {
-	cmd := exec.CommandContext(context.Background(), "go", "run", "./cmd/arena-runner",
+	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
 		"--game", "echo-count",
 		"--mode", "simultaneous",
 		"--player", "p1=./testdata/ai/echo/echo-ai",
@@ -67,6 +68,23 @@ func TestArenaRunnerPreflightMetadataMismatch(t *testing.T) {
 	}
 	if !strings.Contains(string(output), "metadata incompatible") {
 		t.Fatalf("output = %s, want metadata incompatible", output)
+	}
+}
+
+func TestArenaRunnerRejectsDuplicatePlayerIDs(t *testing.T) {
+	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+		"--game", "echo-count",
+		"--mode", "simultaneous",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected duplicate player_id error")
+	}
+	if !strings.Contains(string(output), "duplicate player_id") {
+		t.Fatalf("output = %s, want duplicate player_id", output)
 	}
 }
 
@@ -114,7 +132,7 @@ func TestArenaRunnerFailurePaths(t *testing.T) {
 func runArena(t *testing.T, args ...string) (match.Record, string) {
 	t.Helper()
 
-	cmd := exec.CommandContext(context.Background(), "go", append([]string{"run", "./cmd/arena-runner"}, args...)...)
+	cmd := exec.CommandContext(newTestContext(t), "go", append([]string{"run", "./cmd/arena-runner"}, args...)...)
 	cmd.Dir = repoRoot(t)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
@@ -151,4 +169,21 @@ func hasFailureReason(events []match.Event, reason string) bool {
 func repoRoot(t *testing.T) string {
 	t.Helper()
 	return filepath.Clean("..")
+}
+
+func newTestContext(t *testing.T) context.Context {
+	t.Helper()
+
+	if deadline, ok := t.Deadline(); ok {
+		timeout := time.Until(deadline) - time.Second
+		if timeout > 0 {
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			t.Cleanup(cancel)
+			return ctx
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	t.Cleanup(cancel)
+	return ctx
 }
