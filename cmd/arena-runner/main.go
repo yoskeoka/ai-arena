@@ -524,14 +524,11 @@ func openOutputTarget(target string, stdout io.Writer) (io.Writer, func() error,
 }
 
 func writeJSONToTarget(target string, value any, stdout io.Writer, label string) error {
-	writer, closeWriter, err := openOutputTarget(target, os.Stdout)
+	writer, closeWriter, err := openOutputTarget(target, stdout)
 	if err != nil {
 		return err
 	}
 	defer closeWriter()
-	if target == "stdout" {
-		writer = stdout
-	}
 	if err := json.NewEncoder(writer).Encode(value); err != nil {
 		return fmt.Errorf("write %s %s: %w", label, target, err)
 	}

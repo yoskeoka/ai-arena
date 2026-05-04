@@ -89,7 +89,14 @@ func echoSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, e
 		case "turn_result", "turn_timeout", "protocol_error", "runtime_exited":
 			var actionStatus game.ActionStatus
 			if err := json.Unmarshal(event.Payload, &actionStatus); err != nil {
-				continue
+				return game.Snapshot{}, fmt.Errorf(
+					"decode history event payload seq=%d kind=%q turn=%d player_id=%q: %w",
+					event.Seq,
+					event.Kind,
+					event.Turn,
+					event.PlayerID,
+					err,
+				)
 			}
 			if _, ok := perPlayer[event.PlayerID]; !ok {
 				return game.Snapshot{}, fmt.Errorf("history has unknown player %q", event.PlayerID)
