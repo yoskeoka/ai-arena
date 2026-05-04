@@ -49,6 +49,7 @@
 - CI の override 手段は workflow env または `make` の variable assignment でよい
 - local default と CI override のどちらでも quality gate の入口は `make test` / `make fmt` / `make lint` に揃える
 - GitHub Actions の Go cache strategy は `actions/setup-go` built-in cache と明示 cache を併用せず、1 系統に統一する
+- GitHub Actions の明示 cache action は Node 24 runtime 対応版を使う。現行標準は `actions/cache@v5` とする
 - GitHub Actions の cache entry は job ごとに分離してよい。`go-test` と `go-lint` は同じ dependency hash を共有しつつ、job suffix で最終 key を分けてよい
 
 ## CI Contract
