@@ -106,6 +106,23 @@ func WithObserver(observer Observer) RunnerOption {
 	}
 }
 
+func WithResumeState(snapshot game.Snapshot) RunnerOption {
+	return func(r *Runner) {
+		for playerID, playerState := range snapshot.PerPlayer {
+			if len(playerState.VisibleState) > 0 {
+				r.lastSeen[playerID] = append(json.RawMessage(nil), playerState.VisibleState...)
+			}
+			status := playerState.LastActionStatus
+			if status.PlayerID == "" {
+				status.PlayerID = playerID
+			}
+			if status.ActionStatus != "" {
+				r.lastResult[playerID] = status
+			}
+		}
+	}
+}
+
 func (r *Runner) Run(ctx context.Context) (record Record, runErr error) {
 	meta := r.master.Metadata()
 	r.appendEvent("match_started", 0, "", map[string]any{

@@ -72,11 +72,14 @@ type PlayerSnapshot struct {
 }
 
 type Snapshot struct {
-	MatchID   string                    `json:"match_id"`
-	Turn      int                       `json:"turn"`
-	Status    string                    `json:"status"`
-	GameState json.RawMessage           `json:"game_state,omitempty"`
-	PerPlayer map[string]PlayerSnapshot `json:"per_player"`
+	MatchID        string                    `json:"match_id"`
+	GameID         string                    `json:"game_id,omitempty"`
+	GameVersion    string                    `json:"game_version,omitempty"`
+	RulesetVersion string                    `json:"ruleset_version,omitempty"`
+	Turn           int                       `json:"turn"`
+	Status         string                    `json:"status"`
+	GameState      json.RawMessage           `json:"game_state,omitempty"`
+	PerPlayer      map[string]PlayerSnapshot `json:"per_player"`
 }
 
 type ExportedPlayerSnapshot struct {
@@ -85,11 +88,14 @@ type ExportedPlayerSnapshot struct {
 }
 
 type ExportedSnapshot struct {
-	MatchID     string                   `json:"match_id"`
-	Turn        int                      `json:"turn"`
-	Status      string                   `json:"status"`
-	PublicState json.RawMessage          `json:"public_state,omitempty"`
-	Players     []ExportedPlayerSnapshot `json:"players"`
+	MatchID        string                   `json:"match_id"`
+	GameID         string                   `json:"game_id,omitempty"`
+	GameVersion    string                   `json:"game_version,omitempty"`
+	RulesetVersion string                   `json:"ruleset_version,omitempty"`
+	Turn           int                      `json:"turn"`
+	Status         string                   `json:"status"`
+	PublicState    json.RawMessage          `json:"public_state,omitempty"`
+	Players        []ExportedPlayerSnapshot `json:"players"`
 }
 
 type Master interface {

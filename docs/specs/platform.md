@@ -491,19 +491,28 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--ruleset <ruleset-version>`
 - `--player player_id=entry-path`
 - `--match-id <id>` は省略可能
-- `--persist-record <target>` は file path または `stdout` を受け付ける
+- `--log-output <target>` は file path または `stdout` を受け付け、省略時は `stdout` を使う
+- `--persist-record <target>` は source-of-truth final match-record artifact の出力先として file path または `stdout` を受け付ける
+- `--exported-snapshot-output <target>` は optional な derived debug artifact として file path または `stdout` を受け付ける
 - `--match-timeout <duration>` は省略可能で、指定時はその duration 経過で match を `canceled` として打ち切る
 - `--stderr-limit-bytes <n>` は省略時に既定値を使ってよい
+- `--snapshot-input <path>` は hand-crafted snapshot または persisted final record から抽出した snapshot file を受け付ける
+- `--history-input <path>` は persisted final record の `event_log` を抽出した history file を受け付ける
+- `--record-input <path>` は source-of-truth persisted final match-record artifact を受け付ける
+- `--target-turn <n>` は `--history-input` または `--record-input` と組み合わせて使う replay / resume の turn 境界を指定する
 
 出力:
 
 - structured log の既定出力先は `stdout` とする
+- `--log-output <target>` が file path の場合、structured log はその file に NDJSON で書く
 - structured log は NDJSON で 1 レコード 1 行とし、少なくとも `match_started` / per-event / `terminal_snapshot` / `terminal_exported_snapshot` / `terminal_summary` を出す
 - `terminal_summary` は少なくとも `status` を持ち、`completed` では最終 `result`、`failed` / `canceled` では failure summary を含められる
 - final match record は persist artifact であり、`--persist-record <target>` に書く
 - `<target>` が file path の場合、既定運用では log stream と persisted record は別出力先に分かれる
 - `<target>` が `stdout` の場合だけ、利用者が明示的に mixed `stdout` を選んだものとして structured log と final record の混在を許容する
 - `--persist-record` 未指定時は persisted artifact を書かず、log stream だけを出す
+- `--exported-snapshot-output <target>` 指定時は、selected debug entrypoint に対応する exported snapshot を continuation 前に書く。fresh run では terminal exported snapshot を書く
+- dedicated な history output flag はまだ持たず、history を file input として使いたい場合は persisted final record の `event_log` を抽出して渡す
 - 起動前 metadata 不整合などで match を開始できない場合も、stderr に説明を出して非 0 終了する
 - CLI が persist する final record は platform record の `event_log` / `snapshot` / `exported_snapshot` を加工せずそのまま露出する
 
@@ -530,6 +539,17 @@ runner の非責務:
 
 replay/debug で読むべき source of truth は structured log stream ではなく persisted final record artifact である。
 必要に応じて snapshot/history file をその artifact から抽出して使う。
+通常の replay/debug entrypoint は `--record-input <path>` を優先し、hand-crafted 編集を前提にしてよいのは snapshot だけとする。
+
+replay/debug entrypoint:
+
+- `start-from-snapshot` は `--snapshot-input <path>` を使い、その snapshot を初期局面として新しい AI process で続きを実行する
+- `resume-from-history-and-continue` は `--history-input <path>` または `--record-input <path>` と `--target-turn <n>` を使い、target turn 境界までの履歴を replay した後、その続きだけ新しい AI process で実行する
+- `--record-input <path>` 指定時は persisted final record の metadata / snapshot / history を source of truth とし、未指定の `--game` / `--game-version` / `--ruleset` をそこから補える
+- `--history-input <path>` は raw history file を直接与えたい場合の補助 entrypoint であり、通常は `--record-input <path>` を優先する
+- hand-crafted snapshot file は debug entrypoint として許可するが、AI process memory continuity は保証しない
+- history replay は記録済み choice / timeout / protocol-failure を再問い合わせせず target turn 境界まで再現するが、AI process memory continuity や in-flight transport state の復元はしない
+- replay/debug path も fresh run と同じ runner log contract に従うが、log stream 自体は replay source of truth とみなさない
 
 ## `echo-count` fixture appendix
 

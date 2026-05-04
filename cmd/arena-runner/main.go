@@ -17,6 +17,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
+	"github.com/yoskeoka/ai-arena/internal/platform/replay"
 	"github.com/yoskeoka/ai-arena/internal/platform/runtime"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
@@ -57,7 +58,13 @@ func run(args []string) error {
 		gameVersion      string
 		ruleset          string
 		matchID          string
+		logOutput        string
 		persistRecord    string
+		exportedOutput   string
+		recordInput      string
+		snapshotInput    string
+		historyInput     string
+		targetTurn       int
 		matchTimeout     time.Duration
 		stderrLimitBytes int
 		playerArgs       multiFlag
@@ -69,7 +76,13 @@ func run(args []string) error {
 	fs.StringVar(&gameVersion, "game-version", "", "game version")
 	fs.StringVar(&ruleset, "ruleset", "", "game ruleset")
 	fs.StringVar(&matchID, "match-id", "", "match id")
-	fs.StringVar(&persistRecord, "persist-record", "", "record persistence target path or stdout")
+	fs.StringVar(&logOutput, "log-output", "stdout", "structured log output target path or stdout")
+	fs.StringVar(&persistRecord, "persist-record", "", "source-of-truth final match-record output target path or stdout")
+	fs.StringVar(&exportedOutput, "exported-snapshot-output", "", "optional exported snapshot output target path or stdout")
+	fs.StringVar(&recordInput, "record-input", "", "source-of-truth final match-record input path")
+	fs.StringVar(&snapshotInput, "snapshot-input", "", "snapshot input path for debug resume (hand-crafted or extracted from a record)")
+	fs.StringVar(&historyInput, "history-input", "", "history input path extracted from a match-record event_log")
+	fs.IntVar(&targetTurn, "target-turn", 0, "replay/resume boundary turn used with --history-input or --record-input")
 	fs.DurationVar(&matchTimeout, "match-timeout", 0, "cancel the match after the given duration")
 	fs.IntVar(&stderrLimitBytes, "stderr-limit-bytes", defaultStderrLimitBytes, "captured stderr bytes per player")
 	fs.Var(&playerArgs, "player", "player_id=entry-path")
@@ -77,17 +90,8 @@ func run(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if gameName != echo.GameID {
-		return fmt.Errorf("unsupported game %q", gameName)
-	}
 	if len(playerArgs) == 0 {
 		return fmt.Errorf("at least one --player is required")
-	}
-	if gameVersion == "" {
-		return fmt.Errorf("--game-version is required")
-	}
-	if ruleset == "" {
-		return fmt.Errorf("--ruleset is required")
 	}
 	if matchID == "" {
 		matchID = "match-" + uuid.NewString()
@@ -98,12 +102,128 @@ func run(args []string) error {
 		return err
 	}
 
-	master, err := newMaster(gameName, gameVersion, ruleset, playersForGame)
+	debugInputCount := 0
+	for _, value := range []string{recordInput, snapshotInput, historyInput} {
+		if value != "" {
+			debugInputCount++
+		}
+	}
+	if snapshotInput != "" && historyInput != "" {
+		return fmt.Errorf("--snapshot-input and --history-input cannot be combined")
+	}
+	if snapshotInput != "" && recordInput != "" {
+		return fmt.Errorf("--snapshot-input and --record-input cannot be combined")
+	}
+	if historyInput != "" && recordInput != "" {
+		return fmt.Errorf("--history-input and --record-input cannot be combined")
+	}
+	if debugInputCount > 1 {
+		return fmt.Errorf("at most one debug input source can be selected")
+	}
+	if historyInput != "" && targetTurn <= 0 {
+		return fmt.Errorf("--target-turn is required with --history-input")
+	}
+	if targetTurn < 0 {
+		return fmt.Errorf("--target-turn must be non-negative")
+	}
+
+	var (
+		recordSource   *match.Record
+		resumeSnapshot *game.Snapshot
+	)
+	if recordInput != "" {
+		record, err := replay.LoadRecord(recordInput)
+		if err != nil {
+			return err
+		}
+		recordSource = &record
+		if gameName == "" {
+			gameName = record.Game.GameID
+		}
+		if gameVersion == "" {
+			gameVersion = record.Game.GameVersion
+		}
+		if ruleset == "" {
+			ruleset = record.Game.RulesetVersion
+		}
+		if snapshotInput == "" && historyInput == "" && targetTurn == 0 {
+			snapshot := record.Snapshot
+			resumeSnapshot = &snapshot
+		}
+	}
+	if snapshotInput != "" {
+		snapshot, err := replay.LoadSnapshot(snapshotInput)
+		if err != nil {
+			return err
+		}
+		resumeSnapshot = &snapshot
+		if gameName == "" {
+			gameName = snapshot.GameID
+		}
+		if gameVersion == "" {
+			gameVersion = snapshot.GameVersion
+		}
+		if ruleset == "" {
+			ruleset = snapshot.RulesetVersion
+		}
+	}
+	if gameName == "" {
+		return fmt.Errorf("--game is required")
+	}
+	if gameVersion == "" {
+		return fmt.Errorf("--game-version is required")
+	}
+	if ruleset == "" {
+		return fmt.Errorf("--ruleset is required")
+	}
+	if gameName != echo.GameID {
+		return fmt.Errorf("unsupported game %q", gameName)
+	}
+
+	var metaOverride *catalog.GameMetadata
+	if historyInput != "" {
+		history, err := replay.LoadHistory(historyInput)
+		if err != nil {
+			return err
+		}
+		master, err := newMaster(gameName, gameVersion, ruleset, playersForGame)
+		if err != nil {
+			return err
+		}
+		metaOverride = ptr(master.Metadata())
+		snapshot, err := replay.SnapshotFromHistory(master.Metadata(), playersForGame, history, targetTurn)
+		if err != nil {
+			return err
+		}
+		resumeSnapshot = &snapshot
+	} else if recordSource != nil && targetTurn > 0 {
+		snapshot, err := replay.SnapshotFromHistory(recordSource.Game, recordSource.Players, recordSource.EventLog, targetTurn)
+		if err != nil {
+			return err
+		}
+		resumeSnapshot = &snapshot
+		metaOverride = &recordSource.Game
+	}
+
+	master, err := newMasterForMode(gameName, gameVersion, ruleset, playersForGame, resumeSnapshot)
 	if err != nil {
 		return err
 	}
 	if meta := master.Metadata(); meta.GameVersion != gameVersion {
 		return fmt.Errorf("selected game version %q does not match implementation version %q", gameVersion, meta.GameVersion)
+	}
+	if metaOverride != nil {
+		if err := catalog.Compatible(*metaOverride, master.Metadata()); err != nil {
+			return fmt.Errorf("resume metadata incompatible: %w", err)
+		}
+	}
+	if exportedOutput != "" && resumeSnapshot != nil {
+		exported := master.ExportedSnapshot()
+		exported.MatchID = matchID
+		exported.Status = string(game.StatusRunning)
+		if err := writeJSONToTarget(exportedOutput, exported, os.Stdout, "exported snapshot"); err != nil {
+			return err
+		}
 	}
 
 	players, sessions, err := loadPlayersAndSessions(master.Metadata(), playerArgs, stderrLimitBytes)
@@ -118,9 +238,21 @@ func run(args []string) error {
 		defer cancel()
 	}
 
+	logWriter, closeLog, err := openOutputTarget(logOutput, os.Stdout)
+	if err != nil {
+		closeSessions(sessions)
+		return err
+	}
+	defer closeLog()
+
 	observer := &streamObserver{
 		matchID: matchID,
-		enc:     json.NewEncoder(os.Stdout),
+		enc:     json.NewEncoder(logWriter),
+	}
+
+	opts := []match.RunnerOption{match.WithObserver(observer)}
+	if resumeSnapshot != nil {
+		opts = append(opts, match.WithResumeState(*resumeSnapshot))
 	}
 
 	record, runErr := match.NewRunnerWithOptions(
@@ -128,10 +260,15 @@ func run(args []string) error {
 		players,
 		master,
 		sessions,
-		match.WithObserver(observer),
+		opts...,
 	).Run(ctx)
 	if observer.err != nil {
 		return fmt.Errorf("stream log: %w", observer.err)
+	}
+	if exportedOutput != "" && resumeSnapshot == nil {
+		if err := writeJSONToTarget(exportedOutput, record.ExportedSnapshot, os.Stdout, "exported snapshot"); err != nil {
+			return err
+		}
 	}
 	if err := persistRecordToTarget(persistRecord, record, os.Stdout); err != nil {
 		return err
@@ -205,23 +342,10 @@ func terminalError(record match.Record) string {
 }
 
 func persistRecordToTarget(target string, record match.Record, stdout io.Writer) error {
-	switch target {
-	case "":
-		return nil
-	case "stdout":
-		return json.NewEncoder(stdout).Encode(record)
-	default:
-		// #nosec G304 -- the caller explicitly selects the local persistence target path.
-		file, err := os.Create(target)
-		if err != nil {
-			return fmt.Errorf("create persist target %s: %w", target, err)
-		}
-		defer file.Close()
-		if err := json.NewEncoder(file).Encode(record); err != nil {
-			return fmt.Errorf("write persist target %s: %w", target, err)
-		}
+	if target == "" {
 		return nil
 	}
+	return writeJSONToTarget(target, record, stdout, "persist target")
 }
 
 func mustMarshal(v any) json.RawMessage {
@@ -232,6 +356,13 @@ func mustMarshal(v any) json.RawMessage {
 	return raw
 }
 
+func newMasterForMode(gameName, gameVersion, ruleset string, players []game.Player, snapshot *game.Snapshot) (game.Master, error) {
+	if snapshot != nil {
+		return newMasterFromSnapshot(gameName, gameVersion, ruleset, players, *snapshot)
+	}
+	return newMaster(gameName, gameVersion, ruleset, players)
+}
+
 func newMaster(gameName, gameVersion, ruleset string, players []game.Player) (game.Master, error) {
 	switch gameName {
 	case echo.GameID:
@@ -240,6 +371,19 @@ func newMaster(gameName, gameVersion, ruleset string, players []game.Player) (ga
 			Ruleset:     ruleset,
 			Players:     players,
 		})
+	default:
+		return nil, fmt.Errorf("unsupported game %q", gameName)
+	}
+}
+
+func newMasterFromSnapshot(gameName, gameVersion, ruleset string, players []game.Player, snapshot game.Snapshot) (game.Master, error) {
+	switch gameName {
+	case echo.GameID:
+		return echo.NewFromSnapshot(echo.Config{
+			GameVersion: gameVersion,
+			Ruleset:     ruleset,
+			Players:     players,
+		}, snapshot)
 	default:
 		return nil, fmt.Errorf("unsupported game %q", gameName)
 	}
@@ -363,6 +507,36 @@ func readJSON(path string, dest any) error {
 		return fmt.Errorf("decode %s: %w", path, err)
 	}
 	return nil
+}
+
+func openOutputTarget(target string, stdout io.Writer) (io.Writer, func() error, error) {
+	switch target {
+	case "", "stdout":
+		return stdout, func() error { return nil }, nil
+	default:
+		// #nosec G304 -- the caller explicitly selects the local output target path.
+		file, err := os.Create(target)
+		if err != nil {
+			return nil, nil, fmt.Errorf("create output target %s: %w", target, err)
+		}
+		return file, file.Close, nil
+	}
+}
+
+func writeJSONToTarget(target string, value any, stdout io.Writer, label string) error {
+	writer, closeWriter, err := openOutputTarget(target, stdout)
+	if err != nil {
+		return err
+	}
+	defer closeWriter()
+	if err := json.NewEncoder(writer).Encode(value); err != nil {
+		return fmt.Errorf("write %s %s: %w", label, target, err)
+	}
+	return nil
+}
+
+func ptr[T any](value T) *T {
+	return &value
 }
 
 func repoRoot() string {

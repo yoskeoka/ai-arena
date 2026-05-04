@@ -201,6 +201,141 @@ func TestArenaRunnerCanPersistRecordToStdout(t *testing.T) {
 	}
 }
 
+func TestArenaRunnerCanWriteStructuredLogToFile(t *testing.T) {
+	recordPath := filepath.Join(t.TempDir(), "record.json")
+	logPath := filepath.Join(t.TempDir(), "runner.ndjson")
+
+	result := runArenaWithOptions(t, arenaRunOptions{
+		PersistTarget: recordPath,
+		LogTarget:     logPath,
+		Args: []string{
+			"--game", "echo-count",
+			"--game-version", "2.0.0",
+			"--ruleset", "phase2-simultaneous-3turn",
+			"--match-id", "file-log",
+			"--player", "p1=./testdata/ai/echo/echo-ai",
+			"--player", "p2=./testdata/ai/echo/echo-ai",
+		},
+	})
+
+	if len(result.Logs) != 0 {
+		t.Fatalf("stdout logs = %+v, want empty when --log-output is a file", result.Logs)
+	}
+	logData, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read log output: %v", err)
+	}
+	logs, _, err := parseArenaOutput(string(logData))
+	if err != nil {
+		t.Fatalf("parse log output: %v", err)
+	}
+	if !hasLogKind(logs, "terminal_summary") {
+		t.Fatalf("file logs missing terminal_summary: %+v", logs)
+	}
+}
+
+func TestArenaRunnerStartFromSnapshot(t *testing.T) {
+	snapshotPath := filepath.Join(t.TempDir(), "snapshot.json")
+	if err := os.WriteFile(snapshotPath, []byte(`{
+		"game_id":"echo-count",
+		"game_version":"2.0.0",
+		"ruleset_version":"phase2-simultaneous-3turn",
+		"turn":1,
+		"status":"running",
+		"game_state":{
+			"mode":"simultaneous",
+			"turn":1,
+			"expected":2,
+			"score":{"p1":1,"p2":1}
+		},
+		"per_player":{
+			"p1":{"last_action_status":{"player_id":"p1","action_status":"accepted"}},
+			"p2":{"last_action_status":{"player_id":"p2","action_status":"accepted"}}
+		}
+	}`), 0o644); err != nil {
+		t.Fatalf("write snapshot input: %v", err)
+	}
+	exportedPath := filepath.Join(t.TempDir(), "exported.json")
+	result := runArenaWithOptions(t, arenaRunOptions{
+		PersistTarget:  filepath.Join(t.TempDir(), "record.json"),
+		ExportedTarget: exportedPath,
+		Args: []string{
+			"--game", "echo-count",
+			"--game-version", "2.0.0",
+			"--ruleset", "phase2-simultaneous-3turn",
+			"--match-id", "snapshot-start",
+			"--snapshot-input", snapshotPath,
+			"--player", "p1=./testdata/ai/echo/echo-ai",
+			"--player", "p2=./testdata/ai/echo/echo-ai",
+		},
+	})
+
+	if result.Record.Status != "completed" {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
+	}
+	if result.Record.Snapshot.Turn != 3 {
+		t.Fatalf("final snapshot turn = %d, want 3", result.Record.Snapshot.Turn)
+	}
+	var exported struct {
+		Turn int `json:"turn"`
+	}
+	data, err := os.ReadFile(exportedPath)
+	if err != nil {
+		t.Fatalf("read exported snapshot output: %v", err)
+	}
+	if err := json.Unmarshal(data, &exported); err != nil {
+		t.Fatalf("decode exported snapshot output: %v", err)
+	}
+	if exported.Turn != 1 {
+		t.Fatalf("exported snapshot turn = %d, want 1", exported.Turn)
+	}
+}
+
+func TestArenaRunnerResumeFromHistoryAndContinue(t *testing.T) {
+	base := runArena(t,
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "history-source",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	historyPath := filepath.Join(t.TempDir(), "history.json")
+	historyData, err := json.Marshal(base.Record.EventLog)
+	if err != nil {
+		t.Fatalf("marshal history: %v", err)
+	}
+	if err := os.WriteFile(historyPath, historyData, 0o644); err != nil {
+		t.Fatalf("write history input: %v", err)
+	}
+
+	result := runArenaWithOptions(t, arenaRunOptions{
+		PersistTarget: filepath.Join(t.TempDir(), "resumed.json"),
+		Args: []string{
+			"--game", "echo-count",
+			"--game-version", "2.0.0",
+			"--ruleset", "phase2-simultaneous-3turn",
+			"--match-id", "history-resume",
+			"--history-input", historyPath,
+			"--target-turn", "2",
+			"--player", "p1=./testdata/ai/echo/echo-ai",
+			"--player", "p2=./testdata/ai/echo/echo-ai",
+		},
+	})
+
+	if result.Record.Status != "completed" {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
+	}
+	for _, event := range result.Record.EventLog {
+		if event.Turn > 0 && event.Turn != 3 {
+			t.Fatalf("resumed event turn = %d, want only turn 3 events in %+v", event.Turn, result.Record.EventLog)
+		}
+	}
+	if result.Record.Snapshot.Turn != 3 {
+		t.Fatalf("final snapshot turn = %d, want 3", result.Record.Snapshot.Turn)
+	}
+}
+
 func runArena(t *testing.T, args ...string) arenaRunResult {
 	t.Helper()
 
@@ -211,8 +346,27 @@ func runArena(t *testing.T, args ...string) arenaRunResult {
 func runArenaWithPersistTarget(t *testing.T, persistTarget string, args ...string) arenaRunResult {
 	t.Helper()
 
-	fullArgs := append([]string{"run", "./cmd/arena-runner"}, args...)
-	fullArgs = append(fullArgs, "--persist-record", persistTarget)
+	return runArenaWithOptions(t, arenaRunOptions{PersistTarget: persistTarget, Args: args})
+}
+
+type arenaRunOptions struct {
+	PersistTarget  string
+	LogTarget      string
+	ExportedTarget string
+	Args           []string
+}
+
+func runArenaWithOptions(t *testing.T, opts arenaRunOptions) arenaRunResult {
+	t.Helper()
+
+	fullArgs := append([]string{"run", "./cmd/arena-runner"}, opts.Args...)
+	fullArgs = append(fullArgs, "--persist-record", opts.PersistTarget)
+	if opts.LogTarget != "" {
+		fullArgs = append(fullArgs, "--log-output", opts.LogTarget)
+	}
+	if opts.ExportedTarget != "" {
+		fullArgs = append(fullArgs, "--exported-snapshot-output", opts.ExportedTarget)
+	}
 	cmd := exec.CommandContext(newTestContext(t), "go", fullArgs...)
 	cmd.Dir = repoRoot(t)
 	var stdout, stderr strings.Builder
@@ -226,8 +380,8 @@ func runArenaWithPersistTarget(t *testing.T, persistTarget string, args ...strin
 	if err != nil {
 		t.Fatalf("decode output: %v\nstdout=%s", err, stdout.String())
 	}
-	if persistTarget != "stdout" {
-		data, err := os.ReadFile(persistTarget)
+	if opts.PersistTarget != "stdout" {
+		data, err := os.ReadFile(opts.PersistTarget)
 		if err != nil {
 			t.Fatalf("read persisted record: %v", err)
 		}

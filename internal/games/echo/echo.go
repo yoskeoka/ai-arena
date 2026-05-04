@@ -61,6 +61,13 @@ type publicState struct {
 	Score         map[string]int `json:"score"`
 }
 
+type snapshotState struct {
+	Mode     string         `json:"mode"`
+	Turn     int            `json:"turn"`
+	Expected int            `json:"expected"`
+	Score    map[string]int `json:"score"`
+}
+
 func New(cfg Config) (*Master, error) {
 	if len(cfg.Players) == 0 {
 		return nil, fmt.Errorf("echo: at least one player is required")
@@ -92,6 +99,17 @@ func New(cfg Config) (*Master, error) {
 		score:      score,
 		lastAction: lastAction,
 	}, nil
+}
+
+func NewFromSnapshot(cfg Config, snapshot game.Snapshot) (*Master, error) {
+	master, err := New(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := master.applySnapshot(snapshot); err != nil {
+		return nil, err
+	}
+	return master, nil
 }
 
 func (m *Master) Metadata() catalog.GameMetadata {
@@ -228,18 +246,31 @@ func (m *Master) ApplyStep(_ context.Context, step game.DecisionStep, actionStat
 
 func (m *Master) Snapshot() game.Snapshot {
 	return game.Snapshot{
-		Turn:      m.resolved,
-		Status:    "running",
-		GameState: mustRaw(m.snapshotState()),
+		GameID:         m.meta.GameID,
+		GameVersion:    m.meta.GameVersion,
+		RulesetVersion: m.meta.RulesetVersion,
+		Turn:           m.resolved,
+		Status:         "running",
+		GameState:      mustRaw(m.snapshotState()),
 	}
 }
 
 func (m *Master) ExportedSnapshot() game.ExportedSnapshot {
-	return game.ExportedSnapshot{
-		Turn:        m.resolved,
-		Status:      "running",
-		PublicState: mustRaw(publicState{Mode: m.meta.TurnMode, ResolvedTurns: m.resolved, Score: cloneScore(m.score)}),
+	exported := game.ExportedSnapshot{
+		GameID:         m.meta.GameID,
+		GameVersion:    m.meta.GameVersion,
+		RulesetVersion: m.meta.RulesetVersion,
+		Turn:           m.resolved,
+		Status:         "running",
+		PublicState:    mustRaw(publicState{Mode: m.meta.TurnMode, ResolvedTurns: m.resolved, Score: cloneScore(m.score)}),
 	}
+	for _, playerID := range m.playerIDs {
+		exported.Players = append(exported.Players, game.ExportedPlayerSnapshot{
+			PlayerID:         playerID,
+			LastActionStatus: m.lastAction[playerID],
+		})
+	}
+	return exported
 }
 
 func (m *Master) Result() game.MatchResult {
@@ -294,6 +325,54 @@ func (m *Master) snapshotState() map[string]any {
 		"expected": expected,
 		"score":    cloneScore(m.score),
 	}
+}
+
+func (m *Master) applySnapshot(snapshot game.Snapshot) error {
+	if snapshot.GameID != "" && snapshot.GameID != m.meta.GameID {
+		return fmt.Errorf("echo: snapshot game id %q does not match %q", snapshot.GameID, m.meta.GameID)
+	}
+	if snapshot.GameVersion != "" && snapshot.GameVersion != m.meta.GameVersion {
+		return fmt.Errorf("echo: snapshot game version %q does not match %q", snapshot.GameVersion, m.meta.GameVersion)
+	}
+	if snapshot.RulesetVersion != "" && snapshot.RulesetVersion != m.meta.RulesetVersion {
+		return fmt.Errorf("echo: snapshot ruleset %q does not match %q", snapshot.RulesetVersion, m.meta.RulesetVersion)
+	}
+
+	var state snapshotState
+	if err := json.Unmarshal(snapshot.GameState, &state); err != nil {
+		return fmt.Errorf("echo: decode snapshot game_state: %w", err)
+	}
+	if state.Mode != "" && state.Mode != m.meta.TurnMode {
+		return fmt.Errorf("echo: snapshot mode %q does not match %q", state.Mode, m.meta.TurnMode)
+	}
+	if snapshot.Turn < 0 || snapshot.Turn > m.turns {
+		return fmt.Errorf("echo: snapshot turn %d out of range 0..%d", snapshot.Turn, m.turns)
+	}
+
+	m.resolved = snapshot.Turn
+	m.nextPlayer = 0
+	for _, playerID := range m.playerIDs {
+		m.score[playerID] = 0
+		m.lastAction[playerID] = game.ActionStatus{PlayerID: playerID, ActionStatus: session.StatusNoAction}
+	}
+	for playerID, score := range state.Score {
+		if _, ok := m.score[playerID]; !ok {
+			return fmt.Errorf("echo: snapshot score has unknown player %q", playerID)
+		}
+		m.score[playerID] = score
+	}
+	for playerID, playerState := range snapshot.PerPlayer {
+		if _, ok := m.lastAction[playerID]; !ok {
+			return fmt.Errorf("echo: snapshot per_player has unknown player %q", playerID)
+		}
+		if playerState.LastActionStatus.PlayerID == "" {
+			playerState.LastActionStatus.PlayerID = playerID
+		}
+		if playerState.LastActionStatus.ActionStatus != "" {
+			m.lastAction[playerID] = playerState.LastActionStatus
+		}
+	}
+	return nil
 }
 
 func (m *Master) expectedForTurn(req game.DecisionRequest) int {
