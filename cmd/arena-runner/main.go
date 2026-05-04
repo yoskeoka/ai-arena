@@ -41,6 +41,7 @@ type streamObserver struct {
 	matchID string
 	enc     *json.Encoder
 	nextSeq int
+	err     error // first encode/write error
 }
 
 func main() {
@@ -129,6 +130,9 @@ func run(args []string) error {
 		sessions,
 		match.WithObserver(observer),
 	).Run(ctx)
+	if observer.err != nil {
+		return fmt.Errorf("stream log: %w", observer.err)
+	}
 	if err := persistRecordToTarget(persistRecord, record, os.Stdout); err != nil {
 		return err
 	}
@@ -139,8 +143,11 @@ func run(args []string) error {
 }
 
 func (o *streamObserver) OnEvent(event match.Event) {
+	if o.err != nil {
+		return
+	}
 	o.nextSeq = event.Seq
-	_ = o.enc.Encode(logRecord{
+	o.err = o.enc.Encode(logRecord{
 		MatchID:  o.matchID,
 		Seq:      event.Seq,
 		Kind:     event.Kind,
@@ -157,8 +164,11 @@ func (o *streamObserver) OnRecordBuilt(record match.Record) {
 }
 
 func (o *streamObserver) emitTerminalRecord(kind string, turn int, payload json.RawMessage) {
+	if o.err != nil {
+		return
+	}
 	o.nextSeq++
-	_ = o.enc.Encode(logRecord{
+	o.err = o.enc.Encode(logRecord{
 		MatchID: o.matchID,
 		Seq:     o.nextSeq,
 		Kind:    kind,

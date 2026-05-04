@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"os"
@@ -250,27 +249,29 @@ func parseArenaOutput(stdout string) ([]runnerLogRecord, match.Record, error) {
 		record match.Record
 	)
 
-	scanner := bufio.NewScanner(strings.NewReader(stdout))
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		var envelope map[string]json.RawMessage
-		if err := json.Unmarshal(line, &envelope); err != nil {
+	dec := json.NewDecoder(strings.NewReader(stdout))
+	for dec.More() {
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
 			return nil, match.Record{}, err
 		}
-		if _, ok := envelope["event_log"]; ok {
-			if err := json.Unmarshal(line, &record); err != nil {
+		var envelope struct {
+			EventLog json.RawMessage `json:"event_log"`
+		}
+		if err := json.Unmarshal(raw, &envelope); err != nil {
+			return nil, match.Record{}, err
+		}
+		if envelope.EventLog != nil {
+			if err := json.Unmarshal(raw, &record); err != nil {
 				return nil, match.Record{}, err
 			}
 			continue
 		}
 		var logRecord runnerLogRecord
-		if err := json.Unmarshal(line, &logRecord); err != nil {
+		if err := json.Unmarshal(raw, &logRecord); err != nil {
 			return nil, match.Record{}, err
 		}
 		logs = append(logs, logRecord)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, match.Record{}, err
 	}
 	return logs, record, nil
 }
