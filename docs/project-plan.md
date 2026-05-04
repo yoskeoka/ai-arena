@@ -82,8 +82,8 @@
 - オンラインで複数のAIが参加・対戦できるインフラ
 - マッチメイキングやリーグ/トーナメント形式の対戦管理
 - ゲームマスター実装の配置先として、platform 内実行と trusted external game backend 実行の両方を将来的に扱える設計
-- trusted external game backend を使う場合でも、AI 実行環境・match lifecycle・監査・記録の主導権は platform 側に残す
-- trusted external game backend との接続には、少なくとも認証済みの専用チャネルを要求し、恒久運用では相互認証を前提に検討する
+- trusted external game backend を使う場合でも、AI 実行環境・match lifecycle・監査・記録の主導権は platform 側に残し、`event_log` / `snapshot` / `exported_snapshot` は platform 側で保持する正本とする
+- trusted external game backend との接続には、少なくとも認証済みの専用チャネルを要求し、恒久運用では相互認証を前提に検討する。あわせて external backend は各 turn の結果、監査に必要なイベント列、および観戦・公開に使える状態スナップショットを platform に返送する責務を負う
 
 ## Milestones
 - [ ] Phase 1: プラットフォーム設計・ゲームコンセプト策定（ドキュメントのみ）
