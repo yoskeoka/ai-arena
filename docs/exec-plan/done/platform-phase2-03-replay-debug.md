@@ -58,12 +58,12 @@ depends on:
 
 ## Sub-tasks
 
-- [ ] Update `docs/specs/platform.md` replay/debug sections
-- [ ] Add runner snapshot input path
-- [ ] Add runner history replay and resume path
-- [ ] Add unit coverage for snapshot restore and history replay
-- [ ] Add CLI / e2e verification for snapshot start
-- [ ] Add CLI / e2e verification for history resume
+- [x] Update `docs/specs/platform.md` replay/debug sections
+- [x] Add runner snapshot input path
+- [x] Add runner history replay and resume path
+- [x] Add unit coverage for snapshot restore and history replay
+- [x] Add CLI / e2e verification for snapshot start
+- [x] Add CLI / e2e verification for history resume
 
 ## Parallelism
 
