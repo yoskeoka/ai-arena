@@ -435,6 +435,19 @@ foundation で最低限必要な `kind`:
 
 `game_over_sent` は `completed` path の final notification event であり、`failed` / `canceled` path の cleanup event とは別に扱う。
 
+`arena-runner` が出す structured log は、上記 event を NDJSON の逐次 stream に写した観測用チャネルである。
+最小共通項目は以下とする。
+
+- `match_id`
+- `seq`
+- `kind`
+- `turn`
+- `player_id` if applicable
+- `payload`
+
+structured log は replay/debug の入力 source of truth ではない。
+replay/debug plan が読むのは persisted final match-record artifact であり、log stream は進行中観測と将来のログ分析に使う。
+
 ### snapshot
 
 snapshot は match 実行中または終了時点の現在状態を表す内部向け構造である。
@@ -469,7 +482,7 @@ foundation では最小で以下を持つ。
 ## `arena-runner` CLI
 
 Phase 2a の black-box verification は `arena-runner` を入口にする。
-この CLI は単発 match を起動し、最終 record を JSON で出力する。
+この CLI は単発 match を起動し、観測用 structured log stream と persisted final record artifact を分離して扱う。
 
 最小 contract:
 
@@ -478,13 +491,21 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--ruleset <ruleset-version>`
 - `--player player_id=entry-path`
 - `--match-id <id>` は省略可能
+- `--persist-record <target>` は file path または `stdout` を受け付ける
+- `--match-timeout <duration>` は省略可能で、指定時はその duration 経過で match を `canceled` として打ち切る
 - `--stderr-limit-bytes <n>` は省略時に既定値を使ってよい
 
 出力:
 
-- 正常終了時は stdout に final match record JSON を出す
+- structured log の既定出力先は `stdout` とする
+- structured log は NDJSON で 1 レコード 1 行とし、少なくとも `match_started` / per-event / `terminal_snapshot` / `terminal_exported_snapshot` / `terminal_summary` を出す
+- `terminal_summary` は少なくとも `status` を持ち、`completed` では最終 `result`、`failed` / `canceled` では failure summary を含められる
+- final match record は persist artifact であり、`--persist-record <target>` に書く
+- `<target>` が file path の場合、既定運用では log stream と persisted record は別出力先に分かれる
+- `<target>` が `stdout` の場合だけ、利用者が明示的に mixed `stdout` を選んだものとして structured log と final record の混在を許容する
+- `--persist-record` 未指定時は persisted artifact を書かず、log stream だけを出す
 - 起動前 metadata 不整合などで match を開始できない場合も、stderr に説明を出して非 0 終了する
-- CLI は platform record の `event_log` / `snapshot` / `exported_snapshot` を加工せずそのまま露出する
+- CLI が persist する final record は platform record の `event_log` / `snapshot` / `exported_snapshot` を加工せずそのまま露出する
 
 AI metadata 読み取り:
 
@@ -506,6 +527,9 @@ runner の非責務:
 - per-turn deadline を決めること
 
 これらは game 側の metadata / ruleset に属する。runner は `game_id` と `ruleset_version` を指定して対象 game を起動するだけで、match の進行条件そのものは game master が定義する。
+
+replay/debug で読むべき source of truth は structured log stream ではなく persisted final record artifact である。
+必要に応じて snapshot/history file をその artifact から抽出して使う。
 
 ## `echo-count` fixture appendix
 
