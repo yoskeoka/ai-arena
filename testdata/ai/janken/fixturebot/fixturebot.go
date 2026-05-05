@@ -14,7 +14,6 @@ type Behavior struct {
 	AIID          string
 	Actions       []string
 	TimeoutRounds map[int]bool
-	InvalidRounds map[int]bool
 }
 
 func Run(behavior Behavior) error {
@@ -57,9 +56,6 @@ func Run(behavior Behavior) error {
 			}
 
 			action := pickAction(behavior.Actions, round)
-			if behavior.InvalidRounds[round] {
-				action = "lizard"
-			}
 			resp, err := protocol.NewResponse(req.ID, map[string]any{"action": action})
 			if err != nil {
 				return err

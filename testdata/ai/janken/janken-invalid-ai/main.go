@@ -8,9 +8,8 @@ import (
 
 func main() {
 	if err := fixturebot.Run(fixturebot.Behavior{
-		AIID:          "janken-invalid-ai",
-		Actions:       []string{"rock", "rock", "rock", "rock", "rock"},
-		InvalidRounds: map[int]bool{1: true},
+		AIID:    "janken-invalid-ai",
+		Actions: []string{"lizard", "lizard", "lizard", "lizard", "lizard"},
 	}); err != nil {
 		log.Fatal(err)
 	}
