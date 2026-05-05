@@ -67,15 +67,15 @@ type action struct {
 }
 
 type selfRound struct {
-	Round   int    `json:"round"`
-	Action  string `json:"action"`
-	Outcome string `json:"outcome"`
+	Round  int    `json:"round"`
+	Action string `json:"action"`
+	Result string `json:"result"`
 }
 
 type publicRound struct {
-	Round    int               `json:"round"`
-	Actions  map[string]string `json:"actions"`
-	Outcomes map[string]string `json:"outcomes"`
+	Round   int               `json:"round"`
+	Actions map[string]string `json:"actions"`
+	Results map[string]string `json:"results"`
 }
 
 type score struct {
@@ -276,16 +276,16 @@ func (m *Master) ApplyStep(_ context.Context, step game.DecisionStep, actionStat
 		}
 		m.scores[playerID] = current
 		m.selfHistory[playerID] = append(m.selfHistory[playerID], selfRound{
-			Round:   step.Turn,
-			Action:  actionsByPlayer[playerID],
-			Outcome: outcomesByPlayer[playerID],
+			Round:  step.Turn,
+			Action: actionsByPlayer[playerID],
+			Result: outcomesByPlayer[playerID],
 		})
 	}
 
 	m.publicHistory = append(m.publicHistory, publicRound{
-		Round:    step.Turn,
-		Actions:  cloneActionMap(actionsByPlayer),
-		Outcomes: cloneActionMap(outcomesByPlayer),
+		Round:   step.Turn,
+		Actions: cloneActionMap(actionsByPlayer),
+		Results: cloneActionMap(outcomesByPlayer),
 	})
 	m.resolved++
 	return nil
@@ -494,9 +494,9 @@ func clonePublicHistory(src []publicRound) []publicRound {
 	cloned := make([]publicRound, 0, len(src))
 	for _, round := range src {
 		cloned = append(cloned, publicRound{
-			Round:    round.Round,
-			Actions:  cloneActionMap(round.Actions),
-			Outcomes: cloneActionMap(round.Outcomes),
+			Round:   round.Round,
+			Actions: cloneActionMap(round.Actions),
+			Results: cloneActionMap(round.Results),
 		})
 	}
 	return cloned

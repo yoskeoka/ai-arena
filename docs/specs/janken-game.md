@@ -121,7 +121,7 @@
 {
   "round": 1,
   "action": "rock",
-  "outcome": "win"
+  "result": "win"
 }
 ```
 
@@ -134,7 +134,7 @@
     "p1": "rock",
     "p2": "scissors"
   },
-  "outcomes": {
+  "results": {
     "p1": "win",
     "p2": "loss"
   }
@@ -233,23 +233,23 @@ request:
   "method": "turn",
   "params": {
     "turn": 3,
-    "visible_state": {
+        "visible_state": {
       "round": 3,
       "rounds": 5,
       "self_history": [
-        {"round": 1, "action": "rock", "outcome": "win"},
-        {"round": 2, "action": "paper", "outcome": "draw"}
+        {"round": 1, "action": "rock", "result": "win"},
+        {"round": 2, "action": "paper", "result": "draw"}
       ],
       "public_history": [
         {
           "round": 1,
           "actions": {"p1": "rock", "p2": "scissors"},
-          "outcomes": {"p1": "win", "p2": "loss"}
+          "results": {"p1": "win", "p2": "loss"}
         },
         {
           "round": 2,
           "actions": {"p1": "paper", "p2": "paper"},
-          "outcomes": {"p1": "draw", "p2": "draw"}
+          "results": {"p1": "draw", "p2": "draw"}
         }
       ]
     },
@@ -295,37 +295,37 @@ request:
       "round": 5,
       "rounds": 5,
       "self_history": [
-        {"round": 1, "action": "rock", "outcome": "win"},
-        {"round": 2, "action": "paper", "outcome": "draw"},
-        {"round": 3, "action": "scissors", "outcome": "loss"},
-        {"round": 4, "action": "rock", "outcome": "win"},
-        {"round": 5, "action": "paper", "outcome": "win"}
+        {"round": 1, "action": "rock", "result": "win"},
+        {"round": 2, "action": "paper", "result": "draw"},
+        {"round": 3, "action": "scissors", "result": "loss"},
+        {"round": 4, "action": "rock", "result": "win"},
+        {"round": 5, "action": "paper", "result": "win"}
       ],
       "public_history": [
         {
           "round": 1,
           "actions": {"p1": "rock", "p2": "scissors"},
-          "outcomes": {"p1": "win", "p2": "loss"}
+          "results": {"p1": "win", "p2": "loss"}
         },
         {
           "round": 2,
           "actions": {"p1": "paper", "p2": "paper"},
-          "outcomes": {"p1": "draw", "p2": "draw"}
+          "results": {"p1": "draw", "p2": "draw"}
         },
         {
           "round": 3,
           "actions": {"p1": "scissors", "p2": "rock"},
-          "outcomes": {"p1": "loss", "p2": "win"}
+          "results": {"p1": "loss", "p2": "win"}
         },
         {
           "round": 4,
           "actions": {"p1": "rock", "p2": "scissors"},
-          "outcomes": {"p1": "win", "p2": "loss"}
+          "results": {"p1": "win", "p2": "loss"}
         },
         {
           "round": 5,
           "actions": {"p1": "paper", "p2": "rock"},
-          "outcomes": {"p1": "win", "p2": "loss"}
+          "results": {"p1": "win", "p2": "loss"}
         }
       ]
     },

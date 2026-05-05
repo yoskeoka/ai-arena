@@ -85,8 +85,5 @@ func pickAction(actions []string, round int) string {
 	if index < 0 {
 		index = 0
 	}
-	if index >= len(actions) {
-		return actions[len(actions)-1]
-	}
-	return actions[index]
+	return actions[index%len(actions)]
 }
