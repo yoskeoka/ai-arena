@@ -3,10 +3,16 @@
 ## 目的
 
 `janken` は `echo-count` fixture 完了後の richer integration game である。
-`echo-count` が担うのは deterministic payload による platform core の verification であり、
-`janken` はその上で隠し情報、同時解決、`self_history` / `public_history`、複数ラウンドの勝敗解決を担保する。
+`echo-count` が閉じるのは deterministic payload による platform core の verification までであり、
+`janken` はその上で以下を実検証する。
 
-したがって、`echo-count` で既に閉じている以下は `janken` の主責務ではない。
+- hidden action reveal
+- simultaneous round resolution
+- game-specific action schema
+- `self_history` / `public_history` の更新
+- multi-round ranking / tie-break
+
+したがって、以下は `echo-count` で担保済みの platform 共通責務であり、`janken` の主責務ではない。
 
 - `arena-runner` の match 起動自体
 - game / game_version / ruleset selection
@@ -14,42 +20,30 @@
 - timeout / malformed / mismatched id / late response / shutdown failure の platform 記録分類
 - replay/debug entrypoint や persisted artifact 読み出し
 
-`janken` 側で追加で担保するのは、fixture では薄いゲーム固有責務である。
+`janken` 側では、fixture では薄いゲーム固有の visible state と勝敗解決を担保する。
 
-この責務分担は次の 2 段階で進める。
+## Metadata
 
-1. `platform-phase2-04-janken-integration`
-   - `janken` package と test skeleton を置く
-   - `echo-count` と `janken` の責務境界を docs で固定する
-   - 本実装用 follow-up plan を作る
-2. `platform-phase2-05-janken-richer-integration`
-   - `janken` game master 実装
-   - hidden action reveal / simultaneous resolution / ranking tie-break verification
-   - sample AI / CLI / e2e / replay integration
+- `game_id`: `janken`
+- `game_version`: `2.1.0`
+- `ruleset_version`: `regular`
+- `turn_mode`: `simultaneous`
 
-じゃんけんは、プラットフォームの Phase 2 実証用ゲームである。より複雑なダンジョンゲームへ進む前に、プラットフォームの基本ループを最小構成で検証することを目的とする。
-
-現在の `platform-phase2-04-janken-integration` では、`internal/games/janken/` の skeleton package と test skeleton、そして後続実装 plan の受け皿だけを整える。ここに書くルールと payload shape は `platform-phase2-05-janken-richer-integration.md` で本実装と richer verification に接続する前提であり、この plan 自体では game logic、sample AI、CLI、e2e はまだ持たない。
-
-このゲームで検証したい要素は以下。
-
-- 同時行動ターン処理
-- 解決まで相手の手が見えない隠し情報
-- タイムアウト処理
-- 無効アクション処理
-- 勝率ベースの複数ラウンド順位付け
+`regular` ruleset は 5 ラウンド固定とする。
 
 ## 試合形式
 
 - プレイヤー数: 2人以上
 - ターンモデル: 同時行動
-- ラウンド数: 事前設定された固定 `N`
+- ラウンド数: 5
 - 選択可能な手: `rock`, `paper`, `scissors`
-- 試合終了: `N` ラウンド終了時
+- 試合終了: 5 ラウンド終了時
+
+試合途中でプレイヤーが脱落することはない。
 
 ## ラウンド解決
 
-各アクティブプレイヤーは、各ラウンドで1つの手を提出する。
+各プレイヤーは、各ラウンドで 1 つの行動を提出する。
 
 ### 勝敗ルール
 
@@ -59,13 +53,11 @@
 
 ### 多人数戦での解釈
 
-2人を超える場合の1ラウンド解決は以下とする。
+有効な手だけを見て 1 ラウンドを解決する。
 
 - 全員が同じ手なら全員引き分け
-- 3種類すべての手が出たら全員引き分け
-- ちょうど2種類の手だけが出たら、勝つ側の手を出したプレイヤー全員を勝ち、負ける側の手を出したプレイヤー全員を負けとする
-
-試合途中でプレイヤーが脱落することはない。
+- 3 種類すべての手が出たら全員引き分け
+- ちょうど 2 種類の手だけが出たら、勝つ側の手を出したプレイヤー全員を勝ち、負ける側の手を出したプレイヤー全員を負けとする
 
 ## タイムアウトと無効アクション
 
@@ -73,10 +65,10 @@
 - 無効アクションも `no_action` とみなす
 - `no_action` を出したプレイヤーは、そのラウンド全体の勝敗がどう解決されたかに関係なく個別に負け扱いとする
 - 有効な手を出したプレイヤー同士の勝敗は通常のじゃんけんルールで解決する
-- その結果、有効な手を出したプレイヤー同士が引き分けでも、`no_action` を出したプレイヤーだけは負けになる
+- 有効な手を出したプレイヤー同士が引き分けでも、`no_action` を出したプレイヤーだけは負けになる
 - 全員が `no_action` の場合は全員負け扱いとする
 
-この方針により、別の罰則システムを増やさずに、タイムアウトや不正行動を最終順位へ反映できる。また、意図的に手を出さないことで引き分けに逃げるメリットを与えない。
+この方針により、意図的に手を出さないことで引き分けに逃げるメリットを与えない。
 
 ## スコアと順位
 
@@ -90,7 +82,7 @@
 
 主順位指標:
 
-- 勝率 = `wins / N`
+- 勝率 = `wins / rounds`
 
 同率時のタイブレーク順:
 
@@ -99,37 +91,77 @@
 3. `invalid_actions` が少ない方
 4. それでも同じなら同順位
 
+最終 match record の `result.placements` は上記規則で決める。
+
 ## 可視情報モデル
 
-### 初期情報
+### `init.state`
 
-`init` 時に各プレイヤーへ渡す情報:
+`init` の `params.state` は以下の shape を持つ。
 
-- `game`: `janken`
-- `player_id`
-- `players`: プレイヤー ID の順序付き配列
+```json
+{
+  "players": ["p1", "p2"],
+  "rounds": 5
+}
+```
+
+### `turn.visible_state`
+
+各 `turn` request の `visible_state` は以下を持つ。
+
+- `round`: 現在ラウンド番号。1 始まり
 - `rounds`: 総ラウンド数
-- `deadline_ms`
+- `self_history`: 自分視点の解決済みラウンド履歴
+- `public_history`: 全員に公開される解決済みラウンド履歴
 
-### 各ラウンド情報
+`self_history` の各要素:
 
-各 `turn` の `visible_state` には以下を含める。
+```json
+{
+  "round": 1,
+  "action": "rock",
+  "outcome": "win"
+}
+```
 
-- `round`
-- `rounds`
-- `self_history`
-- `public_history`
+`public_history` の各要素:
 
-`self_history` は、そのプレイヤー自身の過去の手と結果を含む。
+```json
+{
+  "round": 1,
+  "actions": {
+    "p1": "rock",
+    "p2": "scissors"
+  },
+  "outcomes": {
+    "p1": "win",
+    "p2": "loss"
+  }
+}
+```
 
-`public_history` と一部情報が重複するが、AI が自分の選択と結果の対応を自己検証しやすい形を先に踏ませるため、意図的に独立フィールドとして持たせる。
+ここでの `action` 値は `rock` / `paper` / `scissors` / `no_action` のいずれかである。
 
-`public_history` は、すでに解決済みの過去ラウンドのみを含む。現在ラウンドの未解決提出内容は含めず、同時行動の隠し手を維持する。
+`public_history` は、すでに解決済みの過去ラウンドのみを含む。現在ラウンドの提出内容は解決完了まで含めず、同時行動の隠し手を維持する。
+
+`self_history` は `public_history` と一部情報が重複するが、AI が自分の選択と結果の対応を自己検証しやすい形を先に踏ませるため、意図的に独立フィールドとして持たせる。
+
+### `turn.legal_action_hint`
 
 `legal_action_hint` は `visible_state` の外側に置き、常に以下とする。
 
 ```json
-["rock", "paper", "scissors"]
+{
+  "type": "object",
+  "required": ["action"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["rock", "paper", "scissors"]
+    }
+  }
+}
 ```
 
 ## アクションスキーマ
@@ -148,13 +180,13 @@
 - `paper`
 - `scissors`
 
-それ以外は無効アクションとする。
+それ以外は無効アクションとし、platform 上は `invalid-illegal-action` として記録しつつ、ゲーム内では `no_action` として解決する。
 
 ## JSON-RPC 例
 
 ### `init`
 
-リクエスト:
+request:
 
 ```json
 {
@@ -164,9 +196,10 @@
   "params": {
     "match_id": "match-001",
     "player_id": "p1",
-    "game": "janken",
-    "ruleset_version": "phase1",
-    "deadline_ms": 100,
+    "game_id": "janken",
+    "game_version": "2.1.0",
+    "ruleset_version": "regular",
+    "deadline_ms": 1000,
     "state": {
       "players": ["p1", "p2"],
       "rounds": 5
@@ -175,7 +208,7 @@
 }
 ```
 
-レスポンス:
+response:
 
 ```json
 {
@@ -187,16 +220,16 @@
 }
 ```
 
-ここでの `ready: true` は「WASM が起動していた」ことだけを示すものではなく、この AI が `janken` の `init` request を解釈し、初期状態を受け取ったうえでプロトコル応答できたことを示す ACK として扱う。
+ここでの `ready: true` は、AI が `janken` の `init` request を解釈し、初期状態を受け取ったうえでプロトコル応答できたことを示す ACK として扱う。
 
 ### `turn`
 
-リクエスト:
+request:
 
 ```json
 {
   "jsonrpc": "2.0",
-  "id": "round-3",
+  "id": "turn-3-p1",
   "method": "turn",
   "params": {
     "turn": 3,
@@ -220,18 +253,27 @@
         }
       ]
     },
-    "legal_action_hint": ["rock", "paper", "scissors"],
+    "legal_action_hint": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["rock", "paper", "scissors"]
+        }
+      }
+    },
     "deadline_ms": 100
   }
 }
 ```
 
-レスポンス:
+response:
 
 ```json
 {
   "jsonrpc": "2.0",
-  "id": "round-3",
+  "id": "turn-3-p1",
   "result": {
     "action": "scissors"
   }
@@ -248,18 +290,7 @@ request:
   "id": "game-over",
   "method": "game_over",
   "params": {
-    "placement": 1,
-    "score": {
-      "wins": 3,
-      "losses": 1,
-      "draws": 1,
-      "win_rate": 0.6
-    },
-    "summary": {
-      "players": 2,
-      "rounds": 5,
-      "tie_breakers_applied": []
-    },
+    "match_id": "match-001",
     "final_visible_state": {
       "round": 5,
       "rounds": 5,
@@ -298,7 +329,13 @@ request:
         }
       ]
     },
-    "shutdown_after_ms": 500
+    "summary": {
+      "placements": [
+        {"player_id": "p1", "place": 1},
+        {"player_id": "p2", "place": 2}
+      ]
+    },
+    "shutdown_after_ms": 3000
   }
 }
 ```
@@ -315,22 +352,19 @@ response:
 }
 ```
 
-`game_over` ACK は、AI が終了前 cleanup を完了したあとに返す。AI はこの request を受けたあとに最終ラウンド結果も含めて自己評価し、必要なら改善用レポートを `stderr` へ出力してよいが、その完了は `shutdown_after_ms` の猶予内でなければならない。プラットフォームは `AI_ARENA_GAME_OVER_TIMEOUT` に基づく待機上限まで ACK を待ち、期限超過時は shutdown failure として扱う。
-
-`shutdown_after_ms` 超過後に AI が `stderr` やその他出力を続けても、その取得や反映は保証しない。実装や環境によって一部拾えることはあるが、contract 上は未定義である。
+`game_over` ACK は、AI が終了前 cleanup を完了したあとに返す。AI はこの request を受けたあとに最終ラウンド結果も含めて自己評価し、必要なら改善用レポートを `stderr` へ出力してよいが、その完了は `shutdown_after_ms` の猶予内でなければならない。
 
 ## 観戦向け全体状態
 
-じゃんけんの全体状態エクスポートには以下を含める。
+じゃんけんの exported public state には少なくとも以下を含める。
 
 - 設定ラウンド数
-- 現在ラウンド番号
+- 現在の解決済みラウンド数
 - 解決済みラウンドの全プレイヤー提出内容
 - 各ラウンド結果
 - 累積スコア表
-- 現在ラウンドで未提出のプレイヤー一覧
 
-これで将来の観戦 UI でラウンドごとの reveal 表示が可能になる。
+これにより、観戦 UI や replay/debug でラウンドごとの reveal を再構築できる。
 
 ## このゲームを使う理由
 

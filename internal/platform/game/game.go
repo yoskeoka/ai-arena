@@ -104,6 +104,7 @@ type Master interface {
 	NextStep(context.Context) (*DecisionStep, error)
 	NormalizeAction(DecisionRequest, ActionStatus) ActionStatus
 	ApplyStep(context.Context, DecisionStep, []ActionStatus) error
+	VisibleState(playerID string) json.RawMessage
 	Snapshot() Snapshot
 	ExportedSnapshot() ExportedSnapshot
 	Result() MatchResult

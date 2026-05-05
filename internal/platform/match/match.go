@@ -294,7 +294,7 @@ func (r *Runner) shutdownSessions(ctx context.Context) {
 				Deadline: gameOverDeadline,
 				Params: map[string]any{
 					"match_id":            r.matchID,
-					"final_visible_state": json.RawMessage(r.lastSeen[playerID]),
+					"final_visible_state": json.RawMessage(r.visibleStateForPlayer(playerID)),
 					"summary":             r.master.Result(),
 					"shutdown_after_ms":   gameOverDeadline.Milliseconds(),
 				},
@@ -339,8 +339,9 @@ func (r *Runner) buildRecord(meta catalog.GameMetadata) Record {
 	for _, player := range r.players {
 		playerID := player.PlayerID
 		stderr := r.sessions[playerID].StderrSnapshot()
+		visibleState := r.visibleStateForPlayer(playerID)
 		snapshot.PerPlayer[playerID] = game.PlayerSnapshot{
-			VisibleState:     r.lastSeen[playerID],
+			VisibleState:     visibleState,
 			LastActionStatus: r.lastResult[playerID],
 			StderrBytes:      stderr.BytesRead,
 		}
@@ -460,6 +461,13 @@ func (r *Runner) recordTurn(turn int, exec turnExecution) game.ActionStatus {
 
 func (r *Runner) appendRuntimeExited(turn int, playerID string, payload any) {
 	r.appendEvent("runtime_exited", turn, playerID, payload)
+}
+
+func (r *Runner) visibleStateForPlayer(playerID string) json.RawMessage {
+	if visibleState := r.master.VisibleState(playerID); len(visibleState) > 0 {
+		return append(json.RawMessage(nil), visibleState...)
+	}
+	return append(json.RawMessage(nil), r.lastSeen[playerID]...)
 }
 
 func (r *Runner) appendEvent(kind string, turn int, playerID string, payload any) {

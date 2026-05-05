@@ -255,6 +255,15 @@ func (m *Master) Snapshot() game.Snapshot {
 	}
 }
 
+func (m *Master) VisibleState(string) json.RawMessage {
+	turn := m.resolved + 1
+	if turn > m.turns {
+		turn = m.turns
+	}
+	expected := turn
+	return mustRaw(m.currentVisibleState(turn, expected))
+}
+
 func (m *Master) ExportedSnapshot() game.ExportedSnapshot {
 	exported := game.ExportedSnapshot{
 		GameID:         m.meta.GameID,

@@ -1,11 +1,13 @@
 package replay
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
+	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
@@ -55,6 +57,8 @@ func SnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, event
 	switch meta.GameID {
 	case echo.GameID:
 		return echoSnapshotFromHistory(meta, players, events, targetTurn)
+	case janken.GameID:
+		return jankenSnapshotFromHistory(meta, players, events, targetTurn)
 	default:
 		return game.Snapshot{}, fmt.Errorf("unsupported history replay game %q", meta.GameID)
 	}
@@ -106,6 +110,7 @@ func echoSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, e
 			}
 			playerState := perPlayer[event.PlayerID]
 			playerState.LastActionStatus = actionStatus
+			playerState.VisibleState = mustVisibleState(meta, players, targetTurn, score, event.PlayerID)
 			perPlayer[event.PlayerID] = playerState
 			if actionStatus.ActionStatus == session.StatusAccepted {
 				score[event.PlayerID]++
@@ -138,6 +143,87 @@ func echoSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, e
 	}, nil
 }
 
+func jankenSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
+	master, err := janken.New(janken.Config{
+		GameVersion: meta.GameVersion,
+		Ruleset:     meta.RulesetVersion,
+		Players:     players,
+	})
+	if err != nil {
+		return game.Snapshot{}, err
+	}
+	if targetTurn < 0 || targetTurn > regularTurnLimit(meta) {
+		return game.Snapshot{}, fmt.Errorf("target turn %d out of range 0..%d", targetTurn, regularTurnLimit(meta))
+	}
+
+	statusesByTurn := make(map[int]map[string]game.ActionStatus)
+	for _, event := range events {
+		if event.Turn == 0 || event.Turn > targetTurn {
+			continue
+		}
+		switch event.Kind {
+		case "turn_result", "turn_timeout", "protocol_error", "runtime_exited":
+			var actionStatus game.ActionStatus
+			if err := json.Unmarshal(event.Payload, &actionStatus); err != nil {
+				return game.Snapshot{}, fmt.Errorf(
+					"decode history event payload seq=%d kind=%q turn=%d player_id=%q: %w",
+					event.Seq,
+					event.Kind,
+					event.Turn,
+					event.PlayerID,
+					err,
+				)
+			}
+			if _, ok := statusesByTurn[event.Turn]; !ok {
+				statusesByTurn[event.Turn] = make(map[string]game.ActionStatus)
+			}
+			if actionStatus.PlayerID == "" {
+				actionStatus.PlayerID = event.PlayerID
+			}
+			statusesByTurn[event.Turn][event.PlayerID] = actionStatus
+		}
+	}
+
+	for turn := 1; turn <= targetTurn; turn++ {
+		step, err := master.NextStep(context.Background())
+		if err != nil {
+			return game.Snapshot{}, err
+		}
+		if step == nil {
+			return game.Snapshot{}, fmt.Errorf("history ended before target turn %d", targetTurn)
+		}
+
+		resolved := make([]game.ActionStatus, 0, len(step.Requests))
+		for _, req := range step.Requests {
+			status := game.ActionStatus{PlayerID: req.PlayerID, ActionStatus: session.StatusNoAction}
+			if perTurn, ok := statusesByTurn[turn]; ok {
+				if replayed, ok := perTurn[req.PlayerID]; ok {
+					status = replayed
+				}
+			}
+			resolved = append(resolved, master.NormalizeAction(req, status))
+		}
+		if err := master.ApplyStep(context.Background(), *step, resolved); err != nil {
+			return game.Snapshot{}, err
+		}
+	}
+
+	snapshot := master.Snapshot()
+	snapshot.PerPlayer = make(map[string]game.PlayerSnapshot, len(players))
+	exported := master.ExportedSnapshot()
+	lastAction := make(map[string]game.ActionStatus, len(exported.Players))
+	for _, player := range exported.Players {
+		lastAction[player.PlayerID] = player.LastActionStatus
+	}
+	for _, player := range players {
+		snapshot.PerPlayer[player.PlayerID] = game.PlayerSnapshot{
+			VisibleState:     master.VisibleState(player.PlayerID),
+			LastActionStatus: lastAction[player.PlayerID],
+		}
+	}
+	return snapshot, nil
+}
+
 func echoRulesetTurns(ruleset string) (int, error) {
 	switch ruleset {
 	case echo.RulesetSimultaneous3Turn, echo.RulesetSequential3Turn:
@@ -147,4 +233,34 @@ func echoRulesetTurns(ruleset string) (int, error) {
 	default:
 		return 0, fmt.Errorf("unsupported echo ruleset %q", ruleset)
 	}
+}
+
+func regularTurnLimit(meta catalog.GameMetadata) int {
+	if meta.GameID == janken.GameID && meta.RulesetVersion == janken.RulesetRegular {
+		return 5
+	}
+	return 0
+}
+
+func mustVisibleState(meta catalog.GameMetadata, players []game.Player, targetTurn int, score map[string]int, playerID string) json.RawMessage {
+	if meta.GameID != echo.GameID {
+		return nil
+	}
+	expected := targetTurn + 1
+	maxTurns, err := echoRulesetTurns(meta.RulesetVersion)
+	if err != nil {
+		return nil
+	}
+	if expected > maxTurns {
+		expected = maxTurns
+	}
+	raw, err := json.Marshal(map[string]any{
+		"turn":     targetTurn,
+		"expected": expected,
+		"score":    score,
+	})
+	if err != nil {
+		return nil
+	}
+	return raw
 }
