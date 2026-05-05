@@ -1,6 +1,9 @@
 package janken
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestGameIDMatchesSpec(t *testing.T) {
 	if GameID != "janken" {
@@ -9,5 +12,7 @@ func TestGameIDMatchesSpec(t *testing.T) {
 }
 
 func TestSkeletonTracksFollowUpPlan(t *testing.T) {
-	t.Skip("platform-phase2-05-janken-richer-integration will add the master implementation and richer verification")
+	if _, err := os.Stat("../../../docs/exec-plan/todo/platform-phase2-05-janken-richer-integration.md"); err != nil {
+		t.Fatalf("follow-up plan missing: %v", err)
+	}
 }
