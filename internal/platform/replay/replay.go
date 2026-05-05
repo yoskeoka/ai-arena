@@ -110,7 +110,6 @@ func echoSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, e
 			}
 			playerState := perPlayer[event.PlayerID]
 			playerState.LastActionStatus = actionStatus
-			playerState.VisibleState = mustVisibleState(meta, players, targetTurn, score, event.PlayerID)
 			perPlayer[event.PlayerID] = playerState
 			if actionStatus.ActionStatus == session.StatusAccepted {
 				score[event.PlayerID]++
@@ -121,6 +120,11 @@ func echoSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, e
 	expected := targetTurn + 1
 	if targetTurn >= maxTurns {
 		expected = maxTurns
+	}
+	for _, player := range players {
+		playerState := perPlayer[player.PlayerID]
+		playerState.VisibleState = mustEchoVisibleState(expected, score)
+		perPlayer[player.PlayerID] = playerState
 	}
 	gameState, err := json.Marshal(map[string]any{
 		"mode":     meta.TurnMode,
@@ -152,8 +156,8 @@ func jankenSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player,
 	if err != nil {
 		return game.Snapshot{}, err
 	}
-	if targetTurn < 0 || targetTurn > regularTurnLimit(meta) {
-		return game.Snapshot{}, fmt.Errorf("target turn %d out of range 0..%d", targetTurn, regularTurnLimit(meta))
+	if targetTurn < 0 || targetTurn > janken.RegularRounds {
+		return game.Snapshot{}, fmt.Errorf("target turn %d out of range 0..%d", targetTurn, janken.RegularRounds)
 	}
 
 	statusesByTurn := make(map[int]map[string]game.ActionStatus)
@@ -235,27 +239,9 @@ func echoRulesetTurns(ruleset string) (int, error) {
 	}
 }
 
-func regularTurnLimit(meta catalog.GameMetadata) int {
-	if meta.GameID == janken.GameID && meta.RulesetVersion == janken.RulesetRegular {
-		return 5
-	}
-	return 0
-}
-
-func mustVisibleState(meta catalog.GameMetadata, players []game.Player, targetTurn int, score map[string]int, playerID string) json.RawMessage {
-	if meta.GameID != echo.GameID {
-		return nil
-	}
-	expected := targetTurn + 1
-	maxTurns, err := echoRulesetTurns(meta.RulesetVersion)
-	if err != nil {
-		return nil
-	}
-	if expected > maxTurns {
-		expected = maxTurns
-	}
+func mustEchoVisibleState(expected int, score map[string]int) json.RawMessage {
 	raw, err := json.Marshal(map[string]any{
-		"turn":     targetTurn,
+		"turn":     expected,
 		"expected": expected,
 		"score":    score,
 	})

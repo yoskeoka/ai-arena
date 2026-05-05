@@ -1,3 +1,4 @@
-// Package janken reserves the game package boundary for the richer Phase 2
-// integration that follows the echo-count fixture coverage.
+// Package janken implements the richer Phase 2 integration game used to verify
+// hidden reveal, simultaneous resolution, and placement handling on the
+// platform runtime.
 package janken

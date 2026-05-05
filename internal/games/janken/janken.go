@@ -16,7 +16,7 @@ const (
 	GameID              = "janken"
 	GameVersion         = "2.1.0"
 	RulesetRegular      = "regular"
-	regularRounds       = 5
+	RegularRounds       = 5
 	defaultTurnDeadline = 100 * time.Millisecond
 )
 
@@ -163,7 +163,7 @@ func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, in
 			GameVersion:    gameVersion,
 			RulesetVersion: RulesetRegular,
 			TurnMode:       string(game.Simultaneous),
-		}, regularRounds, defaultTurnDeadline, nil
+		}, RegularRounds, defaultTurnDeadline, nil
 	default:
 		return catalog.GameMetadata{}, 0, 0, fmt.Errorf("janken: unsupported ruleset %q", ruleset)
 	}

@@ -487,7 +487,7 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 最小 contract:
 
 - `--game <game-id>`
-- `--game-version 2.0.0`
+- `--game-version <game-version>`
 - `--ruleset <ruleset-version>`
 - `--player player_id=entry-path`
 - `--match-id <id>` は省略可能

@@ -38,17 +38,38 @@ func TestSnapshotFromHistoryBuildsTurnBoundarySnapshot(t *testing.T) {
 		t.Fatalf("p1 failure reason = %q, want %q", got, session.ReasonTimeout)
 	}
 	var state struct {
+		Turn     int            `json:"turn"`
 		Expected int            `json:"expected"`
 		Score    map[string]int `json:"score"`
 	}
 	if err := json.Unmarshal(snapshot.GameState, &state); err != nil {
 		t.Fatalf("decode snapshot.GameState: %v", err)
 	}
+	if state.Turn != 2 {
+		t.Fatalf("state.Turn = %d, want 2", state.Turn)
+	}
 	if state.Expected != 3 {
 		t.Fatalf("state.Expected = %d, want 3", state.Expected)
 	}
 	if state.Score["p1"] != 1 || state.Score["p2"] != 2 {
 		t.Fatalf("state.Score = %+v, want p1=1 p2=2", state.Score)
+	}
+	var visible struct {
+		Turn     int            `json:"turn"`
+		Expected int            `json:"expected"`
+		Score    map[string]int `json:"score"`
+	}
+	if err := json.Unmarshal(snapshot.PerPlayer["p2"].VisibleState, &visible); err != nil {
+		t.Fatalf("decode snapshot.PerPlayer[p2].VisibleState: %v", err)
+	}
+	if visible.Turn != 3 {
+		t.Fatalf("visible.Turn = %d, want 3", visible.Turn)
+	}
+	if visible.Expected != 3 {
+		t.Fatalf("visible.Expected = %d, want 3", visible.Expected)
+	}
+	if visible.Score["p1"] != 1 || visible.Score["p2"] != 2 {
+		t.Fatalf("visible.Score = %+v, want p1=1 p2=2", visible.Score)
 	}
 }
 
