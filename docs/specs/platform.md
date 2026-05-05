@@ -491,30 +491,58 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--ruleset <ruleset-version>`
 - `--player player_id=entry-path`
 - `--match-id <id>` は省略可能
+- `--output-dir <dir>` は標準 artifact layout の base directory を指定する。省略時は `arena-runner-output` を使う
 - `--log-output <target>` は file path または `stdout` を受け付け、省略時は `stdout` を使う
-- `--persist-record <target>` は source-of-truth final match-record artifact の出力先として file path または `stdout` を受け付ける
-- `--exported-snapshot-output <target>` は optional な derived debug artifact として file path または `stdout` を受け付ける
+- `--persist-record <target>` は source-of-truth final match-record artifact の追加出力先として file path または `stdout` を受け付ける
+- `--exported-snapshot-output <target>` は derived exported snapshot の追加出力先として file path または `stdout` を受け付ける
 - `--match-timeout <duration>` は省略可能で、指定時はその duration 経過で match を `canceled` として打ち切る
 - `--stderr-limit-bytes <n>` は省略時に既定値を使ってよい
-- `--snapshot-input <path>` は hand-crafted snapshot または persisted final record から抽出した snapshot file を受け付ける
-- `--history-input <path>` は persisted final record の `event_log` を抽出した history file を受け付ける
+- `--snapshot-input <path>` は hand-crafted snapshot または persisted final record から抽出した `snapshot.json` を受け付ける
+- `--history-input <path>` は persisted final record の `event_log` を抽出した `history.json` を受け付ける
 - `--record-input <path>` は source-of-truth persisted final match-record artifact を受け付ける
 - `--target-turn <n>` は `--history-input` または `--record-input` と組み合わせて使う replay / resume の turn 境界を指定する
+
+artifact hierarchy:
+
+- source of truth は persisted final `record.json` 1 個に固定する
+- `history.json` / `snapshot.json` / `exported-snapshot.json` は `record.json` から導出できる derived artifact とする
+- structured log は進行中観測用の stream / archive であり、replay/debug の source of truth にはしない
+- replay/debug の primary entrypoint は常に `--record-input <path>` とする
+- `--history-input <path>` は `record.json` から切り出した `history.json` を直接使いたい場合の補助 entrypoint とする
+- `--snapshot-input <path>` は hand-crafted debug 開始点も許す補助 entrypoint とする
+
+標準 artifact layout:
+
+```text
+<output-dir>/
+  <match-id>/
+    record.json
+    structured-log.ndjson
+    snapshot.json
+    exported-snapshot.json
+    history.json
+```
+
+- `--output-dir` が指すのは base path であり、runner はその直下に `match-id` ごとの subdirectory を切る
+- `--output-dir` に空文字や無効 path は許可しない。存在しない path は runner が作成を試み、作成できない場合は session 起動前に失敗させる
+- `record.json` は platform record を加工せずそのまま露出した source-of-truth final match-record artifact とする
+- `history.json` は `record.json.event_log` をそのまま JSON array として抜き出した file format とし、`--history-input` にそのまま再投入できる
+- `snapshot.json` は `record.json.snapshot` をそのまま抜き出した derived snapshot とする
+- `exported-snapshot.json` は `record.json.exported_snapshot` をそのまま抜き出した derived exported snapshot とする
+- `structured-log.ndjson` は `stdout` に流れる structured log と同じ NDJSON record を保存する
 
 出力:
 
 - structured log の既定出力先は `stdout` とする
-- `--log-output <target>` が file path の場合、structured log はその file に NDJSON で書く
+- `structured-log.ndjson` は `stdout` の置き換えではなく複製であり、標準 artifact layout に常に保存する
+- `--log-output <target>` が file path の場合、structured log はその file にも NDJSON で追加出力する
 - structured log は NDJSON で 1 レコード 1 行とし、少なくとも `match_started` / per-event / `terminal_snapshot` / `terminal_exported_snapshot` / `terminal_summary` を出す
 - `terminal_summary` は少なくとも `status` を持ち、`completed` では最終 `result`、`failed` / `canceled` では failure summary を含められる
-- final match record は persist artifact であり、`--persist-record <target>` に書く
-- `<target>` が file path の場合、既定運用では log stream と persisted record は別出力先に分かれる
-- `<target>` が `stdout` の場合だけ、利用者が明示的に mixed `stdout` を選んだものとして structured log と final record の混在を許容する
-- `--persist-record` 未指定時は persisted artifact を書かず、log stream だけを出す
-- `--exported-snapshot-output <target>` 指定時は、selected debug entrypoint に対応する exported snapshot を continuation 前に書く。fresh run では terminal exported snapshot を書く
-- dedicated な history output flag はまだ持たず、history を file input として使いたい場合は persisted final record の `event_log` を抽出して渡す
+- `record.json` は fresh run / replay/debug のどちらでも標準 artifact layout に常に保存する
+- `--persist-record <target>` が file path の場合、標準 `record.json` に加えて同じ final record をその file にも追加出力する
+- `--persist-record stdout` の場合だけ、利用者が明示的に mixed `stdout` を選んだものとして structured log と final record の混在を許容する
+- `--exported-snapshot-output <target>` 指定時は、標準 `exported-snapshot.json` に加えて selected debug entrypoint に対応する exported snapshot をその target にも追加出力する。fresh run では terminal exported snapshot、resume 開始時は continuation 前 exported snapshot を使う
 - 起動前 metadata 不整合などで match を開始できない場合も、stderr に説明を出して非 0 終了する
-- CLI が persist する final record は platform record の `event_log` / `snapshot` / `exported_snapshot` を加工せずそのまま露出する
 
 AI metadata 読み取り:
 
@@ -537,8 +565,8 @@ runner の非責務:
 
 これらは game 側の metadata / ruleset に属する。runner は `game_id` と `ruleset_version` を指定して対象 game を起動するだけで、match の進行条件そのものは game master が定義する。
 
-replay/debug で読むべき source of truth は structured log stream ではなく persisted final record artifact である。
-必要に応じて snapshot/history file をその artifact から抽出して使う。
+replay/debug で読むべき source of truth は structured log stream ではなく persisted final `record.json` である。
+必要に応じて `snapshot.json` / `history.json` をその artifact から抽出して使う。
 通常の replay/debug entrypoint は `--record-input <path>` を優先し、hand-crafted 編集を前提にしてよいのは snapshot だけとする。
 
 replay/debug entrypoint:
@@ -546,10 +574,36 @@ replay/debug entrypoint:
 - `start-from-snapshot` は `--snapshot-input <path>` を使い、その snapshot を初期局面として新しい AI process で続きを実行する
 - `resume-from-history-and-continue` は `--history-input <path>` または `--record-input <path>` と `--target-turn <n>` を使い、target turn 境界までの履歴を replay した後、その続きだけ新しい AI process で実行する
 - `--record-input <path>` 指定時は persisted final record の metadata / snapshot / history を source of truth とし、未指定の `--game` / `--game-version` / `--ruleset` をそこから補える
-- `--history-input <path>` は raw history file を直接与えたい場合の補助 entrypoint であり、通常は `--record-input <path>` を優先する
+- `--history-input <path>` は `history.json` を直接与えたい場合の補助 entrypoint であり、通常は `--record-input <path>` を優先する
 - hand-crafted snapshot file は debug entrypoint として許可するが、AI process memory continuity は保証しない
 - history replay は記録済み choice / timeout / protocol-failure を再問い合わせせず target turn 境界まで再現するが、AI process memory continuity や in-flight transport state の復元はしない
 - replay/debug path も fresh run と同じ runner log contract に従うが、log stream 自体は replay source of truth とみなさない
+
+local debug の既定導線:
+
+```sh
+go run ./cmd/arena-runner \
+  --game echo-count \
+  --game-version 2.0.0 \
+  --ruleset phase2-simultaneous-3turn \
+  --match-id local-debug \
+  --player p1=./testdata/ai/echo/echo-ai \
+  --player p2=./testdata/ai/echo/echo-ai
+```
+
+- この実行では structured log は `stdout` に流れ続け、artifact は `./arena-runner-output/local-debug/` に保存される
+- 次の debug 操作は `record.json` を第一入口として始める
+
+```sh
+go run ./cmd/arena-runner \
+  --record-input ./arena-runner-output/local-debug/record.json \
+  --target-turn 2 \
+  --match-id local-debug-resume \
+  --player p1=./testdata/ai/echo/echo-ai \
+  --player p2=./testdata/ai/echo/echo-ai
+```
+
+- `history.json` を直接使うのは `record.json` を介さず replay 境界だけ差し替えて試したい場合に限る
 
 ## `echo-count` fixture appendix
 

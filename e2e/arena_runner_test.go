@@ -22,9 +22,11 @@ type runnerLogRecord struct {
 }
 
 type arenaRunResult struct {
-	Logs   []runnerLogRecord
-	Record match.Record
-	Stderr string
+	OutputDir string
+	MatchDir  string
+	Logs      []runnerLogRecord
+	Record    match.Record
+	Stderr    string
 }
 
 func TestArenaRunnerHappyPaths(t *testing.T) {
@@ -196,18 +198,19 @@ func TestArenaRunnerCanPersistRecordToStdout(t *testing.T) {
 	if result.Record.MatchID != "stdout-persist" {
 		t.Fatalf("record match id = %q, want stdout-persist", result.Record.MatchID)
 	}
+	if _, err := os.Stat(filepath.Join(result.MatchDir, "record.json")); err != nil {
+		t.Fatalf("standard record.json missing: %v", err)
+	}
 	if !hasLogKind(result.Logs, "match_started") {
 		t.Fatalf("logs missing match_started: %+v", result.Logs)
 	}
 }
 
-func TestArenaRunnerCanWriteStructuredLogToFile(t *testing.T) {
-	recordPath := filepath.Join(t.TempDir(), "record.json")
+func TestArenaRunnerCanWriteStructuredLogToExtraFile(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "runner.ndjson")
 
 	result := runArenaWithOptions(t, arenaRunOptions{
-		PersistTarget: recordPath,
-		LogTarget:     logPath,
+		LogTarget: logPath,
 		Args: []string{
 			"--game", "echo-count",
 			"--game-version", "2.0.0",
@@ -218,8 +221,8 @@ func TestArenaRunnerCanWriteStructuredLogToFile(t *testing.T) {
 		},
 	})
 
-	if len(result.Logs) != 0 {
-		t.Fatalf("stdout logs = %+v, want empty when --log-output is a file", result.Logs)
+	if len(result.Logs) == 0 {
+		t.Fatal("stdout logs missing")
 	}
 	logData, err := os.ReadFile(logPath)
 	if err != nil {
@@ -231,6 +234,13 @@ func TestArenaRunnerCanWriteStructuredLogToFile(t *testing.T) {
 	}
 	if !hasLogKind(logs, "terminal_summary") {
 		t.Fatalf("file logs missing terminal_summary: %+v", logs)
+	}
+	standardLogData, err := os.ReadFile(filepath.Join(result.MatchDir, "structured-log.ndjson"))
+	if err != nil {
+		t.Fatalf("read standard structured log: %v", err)
+	}
+	if string(standardLogData) != string(logData) {
+		t.Fatalf("standard structured log did not match extra log output")
 	}
 }
 
@@ -257,7 +267,6 @@ func TestArenaRunnerStartFromSnapshot(t *testing.T) {
 	}
 	exportedPath := filepath.Join(t.TempDir(), "exported.json")
 	result := runArenaWithOptions(t, arenaRunOptions{
-		PersistTarget:  filepath.Join(t.TempDir(), "record.json"),
 		ExportedTarget: exportedPath,
 		Args: []string{
 			"--game", "echo-count",
@@ -289,6 +298,19 @@ func TestArenaRunnerStartFromSnapshot(t *testing.T) {
 	if exported.Turn != 1 {
 		t.Fatalf("exported snapshot turn = %d, want 1", exported.Turn)
 	}
+	standardExportedData, err := os.ReadFile(filepath.Join(result.MatchDir, "exported-snapshot.json"))
+	if err != nil {
+		t.Fatalf("read standard exported snapshot: %v", err)
+	}
+	var standardExported struct {
+		Turn int `json:"turn"`
+	}
+	if err := json.Unmarshal(standardExportedData, &standardExported); err != nil {
+		t.Fatalf("decode standard exported snapshot: %v", err)
+	}
+	if standardExported.Turn != 3 {
+		t.Fatalf("standard exported snapshot turn = %d, want 3", standardExported.Turn)
+	}
 }
 
 func TestArenaRunnerResumeFromHistoryAndContinue(t *testing.T) {
@@ -310,7 +332,6 @@ func TestArenaRunnerResumeFromHistoryAndContinue(t *testing.T) {
 	}
 
 	result := runArenaWithOptions(t, arenaRunOptions{
-		PersistTarget: filepath.Join(t.TempDir(), "resumed.json"),
 		Args: []string{
 			"--game", "echo-count",
 			"--game-version", "2.0.0",
@@ -339,8 +360,7 @@ func TestArenaRunnerResumeFromHistoryAndContinue(t *testing.T) {
 func runArena(t *testing.T, args ...string) arenaRunResult {
 	t.Helper()
 
-	recordPath := filepath.Join(t.TempDir(), "record.json")
-	return runArenaWithPersistTarget(t, recordPath, args...)
+	return runArenaWithOptions(t, arenaRunOptions{OutputDir: t.TempDir(), Args: args})
 }
 
 func runArenaWithPersistTarget(t *testing.T, persistTarget string, args ...string) arenaRunResult {
@@ -350,6 +370,7 @@ func runArenaWithPersistTarget(t *testing.T, persistTarget string, args ...strin
 }
 
 type arenaRunOptions struct {
+	OutputDir      string
 	PersistTarget  string
 	LogTarget      string
 	ExportedTarget string
@@ -359,8 +380,22 @@ type arenaRunOptions struct {
 func runArenaWithOptions(t *testing.T, opts arenaRunOptions) arenaRunResult {
 	t.Helper()
 
+	outputDir := opts.OutputDir
+	if outputDir == "" {
+		outputDir = t.TempDir()
+	}
+	matchID := findFlagValue(opts.Args, "--match-id")
+	if matchID == "" {
+		t.Fatal("runArenaWithOptions requires --match-id")
+	}
+	matchDir := filepath.Join(outputDir, matchID)
+	recordPath := filepath.Join(matchDir, "record.json")
+
 	fullArgs := append([]string{"run", "./cmd/arena-runner"}, opts.Args...)
-	fullArgs = append(fullArgs, "--persist-record", opts.PersistTarget)
+	fullArgs = append(fullArgs, "--output-dir", outputDir)
+	if opts.PersistTarget != "" {
+		fullArgs = append(fullArgs, "--persist-record", opts.PersistTarget)
+	}
 	if opts.LogTarget != "" {
 		fullArgs = append(fullArgs, "--log-output", opts.LogTarget)
 	}
@@ -380,21 +415,178 @@ func runArenaWithOptions(t *testing.T, opts arenaRunOptions) arenaRunResult {
 	if err != nil {
 		t.Fatalf("decode output: %v\nstdout=%s", err, stdout.String())
 	}
-	if opts.PersistTarget != "stdout" {
-		data, err := os.ReadFile(opts.PersistTarget)
-		if err != nil {
-			t.Fatalf("read persisted record: %v", err)
-		}
-		if err := json.Unmarshal(data, &record); err != nil {
-			t.Fatalf("decode persisted record: %v\nrecord=%s", err, data)
-		}
+	data, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatalf("read standard persisted record: %v", err)
+	}
+	if err := json.Unmarshal(data, &record); err != nil {
+		t.Fatalf("decode standard persisted record: %v\nrecord=%s", err, data)
 	}
 
 	return arenaRunResult{
-		Logs:   logs,
-		Record: record,
-		Stderr: stderr.String(),
+		OutputDir: outputDir,
+		MatchDir:  matchDir,
+		Logs:      logs,
+		Record:    record,
+		Stderr:    stderr.String(),
 	}
+}
+
+func TestArenaRunnerWritesStandardArtifactsToDefaultOutputDir(t *testing.T) {
+	repo := repoRoot(t)
+	matchID := "default-output-dir"
+	artifactRoot := filepath.Join(repo, "arena-runner-output")
+	matchDir := filepath.Join(artifactRoot, matchID)
+	t.Cleanup(func() {
+		_ = os.RemoveAll(matchDir)
+	})
+
+	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", matchID,
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	cmd.Dir = repo
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("arena-runner failed: %v\nstderr=%s", err, stderr.String())
+	}
+
+	for _, name := range []string{"record.json", "structured-log.ndjson", "snapshot.json", "exported-snapshot.json", "history.json"} {
+		if _, err := os.Stat(filepath.Join(matchDir, name)); err != nil {
+			t.Fatalf("default artifact %s missing: %v", name, err)
+		}
+	}
+}
+
+func TestArenaRunnerRejectsEmptyOutputDir(t *testing.T) {
+	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "empty-output-dir",
+		"--output-dir", "",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected empty output-dir error")
+	}
+	if !strings.Contains(string(output), "--output-dir must not be empty") {
+		t.Fatalf("output = %s, want empty output-dir error", output)
+	}
+}
+
+func TestArenaRunnerFailsBeforeSessionStartWhenOutputDirCannotBeCreated(t *testing.T) {
+	base := t.TempDir()
+	blockingPath := filepath.Join(base, "not-a-directory")
+	if err := os.WriteFile(blockingPath, []byte("block"), 0o644); err != nil {
+		t.Fatalf("write blocking path: %v", err)
+	}
+
+	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "unwritable-output-dir",
+		"--output-dir", blockingPath,
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected output-dir creation failure")
+	}
+	if !strings.Contains(string(output), "create artifact directory") {
+		t.Fatalf("output = %s, want artifact directory error", output)
+	}
+	if strings.Contains(string(output), `"kind":"match_started"`) {
+		t.Fatalf("output = %s, want fail-fast before session start", output)
+	}
+}
+
+func TestArenaRunnerWritesDerivedArtifacts(t *testing.T) {
+	result := runArena(t,
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "derived-artifacts",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+
+	snapshotData, err := os.ReadFile(filepath.Join(result.MatchDir, "snapshot.json"))
+	if err != nil {
+		t.Fatalf("read snapshot: %v", err)
+	}
+	recordSnapshotData, err := json.Marshal(result.Record.Snapshot)
+	if err != nil {
+		t.Fatalf("marshal record snapshot: %v", err)
+	}
+	if !jsonEqual(snapshotData, recordSnapshotData) {
+		t.Fatal("snapshot.json did not match record snapshot")
+	}
+
+	exportedData, err := os.ReadFile(filepath.Join(result.MatchDir, "exported-snapshot.json"))
+	if err != nil {
+		t.Fatalf("read exported snapshot: %v", err)
+	}
+	recordExportedData, err := json.Marshal(result.Record.ExportedSnapshot)
+	if err != nil {
+		t.Fatalf("marshal record exported snapshot: %v", err)
+	}
+	if !jsonEqual(exportedData, recordExportedData) {
+		t.Fatal("exported-snapshot.json did not match record exported_snapshot")
+	}
+
+	historyData, err := os.ReadFile(filepath.Join(result.MatchDir, "history.json"))
+	if err != nil {
+		t.Fatalf("read history: %v", err)
+	}
+	recordHistoryData, err := json.Marshal(result.Record.EventLog)
+	if err != nil {
+		t.Fatalf("marshal record history: %v", err)
+	}
+	if !jsonEqual(historyData, recordHistoryData) {
+		t.Fatal("history.json did not match record event_log")
+	}
+}
+
+func findFlagValue(args []string, name string) string {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == name {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
+func jsonEqual(a, b []byte) bool {
+	var left any
+	if err := json.Unmarshal(a, &left); err != nil {
+		return false
+	}
+	var right any
+	if err := json.Unmarshal(b, &right); err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(mustJSON(left))) == strings.TrimSpace(string(mustJSON(right)))
+}
+
+func mustJSON(v any) []byte {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }
 
 func parseArenaOutput(stdout string) ([]runnerLogRecord, match.Record, error) {
