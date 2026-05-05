@@ -47,26 +47,26 @@ lint-gosec:
 
 run-echo-simultaneous:
 	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
-	persist_path="$$(mktemp /tmp/ai-arena-sim-XXXXXX.json)"; \
-	echo "persisted record: $$persist_path"; \
+	output_dir="$$(mktemp -d /tmp/ai-arena-sim-XXXXXX)"; \
+	echo "artifact dir: $$output_dir/sim-happy"; \
 	$(GO_ENV) $(GO) run ./cmd/arena-runner \
 		--game echo-count \
 		--game-version 2.0.0 \
 		--ruleset phase2-simultaneous-3turn \
 		--match-id sim-happy \
-		--persist-record "$$persist_path" \
+		--output-dir "$$output_dir" \
 		--player p1=./testdata/ai/echo/echo-ai \
 		--player p2=./testdata/ai/echo/echo-ai
 
 run-echo-sequential:
 	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
-	persist_path="$$(mktemp /tmp/ai-arena-seq-XXXXXX.json)"; \
-	echo "persisted record: $$persist_path"; \
+	output_dir="$$(mktemp -d /tmp/ai-arena-seq-XXXXXX)"; \
+	echo "artifact dir: $$output_dir/seq-happy"; \
 	$(GO_ENV) $(GO) run ./cmd/arena-runner \
 		--game echo-count \
 		--game-version 2.0.0 \
 		--ruleset phase2-sequential-3turn \
 		--match-id seq-happy \
-		--persist-record "$$persist_path" \
+		--output-dir "$$output_dir" \
 		--player p1=./testdata/ai/echo/echo-ai-sequential \
 		--player p2=./testdata/ai/echo/echo-ai-sequential

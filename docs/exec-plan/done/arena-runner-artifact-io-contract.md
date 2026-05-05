@@ -124,13 +124,13 @@ depends on:
 
 ## Sub-tasks
 
-- [ ] Update `docs/specs/platform.md` to define `output-dir`-centered artifact contract and naming
-- [ ] Decide final flag surface, including `record` primary entrypoint naming and replay boundary naming
-- [ ] Decide the default artifact base path, `match-id` subdirectory rule, and collision policy
-- [ ] Implement defaulted `--output-dir` artifact layout and extraction flow from final record
-- [ ] Keep or adapt per-file output flags as compatibility/extra-output paths with explicit dual-output rules
-- [ ] Update runner help text and representative CLI examples for local human verification
-- [ ] Add black-box verification for fresh run, record replay, history replay, and snapshot start under the new layout
+- [x] Update `docs/specs/platform.md` to define `output-dir`-centered artifact contract and naming
+- [x] Decide final flag surface, including `record` primary entrypoint naming and replay boundary naming
+- [x] Decide the default artifact base path, `match-id` subdirectory rule, and collision policy
+- [x] Implement defaulted `--output-dir` artifact layout and extraction flow from final record
+- [x] Keep or adapt per-file output flags as compatibility/extra-output paths with explicit dual-output rules
+- [x] Update runner help text and representative CLI examples for local human verification
+- [x] Add black-box verification for fresh run, record replay, history replay, and snapshot start under the new layout
 
 ## Parallelism
 

@@ -23,6 +23,7 @@ import (
 )
 
 const defaultStderrLimitBytes = 4096
+const defaultOutputDir = "arena-runner-output"
 
 type playerSpec struct {
 	PlayerID string
@@ -45,6 +46,16 @@ type streamObserver struct {
 	err     error // first encode/write error
 }
 
+type artifactLayout struct {
+	BaseDir              string
+	MatchDir             string
+	RecordPath           string
+	StructuredLogPath    string
+	SnapshotPath         string
+	ExportedSnapshotPath string
+	HistoryPath          string
+}
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -58,6 +69,7 @@ func run(args []string) error {
 		gameVersion      string
 		ruleset          string
 		matchID          string
+		outputDir        string
 		logOutput        string
 		persistRecord    string
 		exportedOutput   string
@@ -76,12 +88,13 @@ func run(args []string) error {
 	fs.StringVar(&gameVersion, "game-version", "", "game version")
 	fs.StringVar(&ruleset, "ruleset", "", "game ruleset")
 	fs.StringVar(&matchID, "match-id", "", "match id")
+	fs.StringVar(&outputDir, "output-dir", defaultOutputDir, "base directory for standard runner artifacts")
 	fs.StringVar(&logOutput, "log-output", "stdout", "structured log output target path or stdout")
-	fs.StringVar(&persistRecord, "persist-record", "", "source-of-truth final match-record output target path or stdout")
-	fs.StringVar(&exportedOutput, "exported-snapshot-output", "", "optional exported snapshot output target path or stdout")
+	fs.StringVar(&persistRecord, "persist-record", "", "additional source-of-truth final match-record output target path or stdout")
+	fs.StringVar(&exportedOutput, "exported-snapshot-output", "", "additional exported snapshot output target path or stdout")
 	fs.StringVar(&recordInput, "record-input", "", "source-of-truth final match-record input path")
 	fs.StringVar(&snapshotInput, "snapshot-input", "", "snapshot input path for debug resume (hand-crafted or extracted from a record)")
-	fs.StringVar(&historyInput, "history-input", "", "history input path extracted from a match-record event_log")
+	fs.StringVar(&historyInput, "history-input", "", "history input path extracted from a record event_log")
 	fs.IntVar(&targetTurn, "target-turn", 0, "replay/resume boundary turn used with --history-input or --record-input")
 	fs.DurationVar(&matchTimeout, "match-timeout", 0, "cancel the match after the given duration")
 	fs.IntVar(&stderrLimitBytes, "stderr-limit-bytes", defaultStderrLimitBytes, "captured stderr bytes per player")
@@ -96,6 +109,7 @@ func run(args []string) error {
 	if matchID == "" {
 		matchID = "match-" + uuid.NewString()
 	}
+	layout := newArtifactLayout(outputDir, matchID)
 
 	playersForGame, err := parsePlayersForGame(playerArgs)
 	if err != nil {
@@ -238,7 +252,12 @@ func run(args []string) error {
 		defer cancel()
 	}
 
-	logWriter, closeLog, err := openOutputTarget(logOutput, os.Stdout)
+	if err := ensureArtifactLayout(layout); err != nil {
+		closeSessions(sessions)
+		return err
+	}
+
+	logWriter, closeLog, err := openLogOutputs(layout.StructuredLogPath, logOutput, os.Stdout)
 	if err != nil {
 		closeSessions(sessions)
 		return err
@@ -269,6 +288,9 @@ func run(args []string) error {
 		if err := writeJSONToTarget(exportedOutput, record.ExportedSnapshot, os.Stdout, "exported snapshot"); err != nil {
 			return err
 		}
+	}
+	if err := writeStandardArtifacts(layout, record); err != nil {
+		return err
 	}
 	if err := persistRecordToTarget(persistRecord, record, os.Stdout); err != nil {
 		return err
@@ -346,6 +368,66 @@ func persistRecordToTarget(target string, record match.Record, stdout io.Writer)
 		return nil
 	}
 	return writeJSONToTarget(target, record, stdout, "persist target")
+}
+
+func newArtifactLayout(outputDir, matchID string) artifactLayout {
+	matchDir := filepath.Join(outputDir, matchID)
+	return artifactLayout{
+		BaseDir:              outputDir,
+		MatchDir:             matchDir,
+		RecordPath:           filepath.Join(matchDir, "record.json"),
+		StructuredLogPath:    filepath.Join(matchDir, "structured-log.ndjson"),
+		SnapshotPath:         filepath.Join(matchDir, "snapshot.json"),
+		ExportedSnapshotPath: filepath.Join(matchDir, "exported-snapshot.json"),
+		HistoryPath:          filepath.Join(matchDir, "history.json"),
+	}
+}
+
+func ensureArtifactLayout(layout artifactLayout) error {
+	if err := os.MkdirAll(layout.MatchDir, 0o750); err != nil {
+		return fmt.Errorf("create artifact directory %s: %w", layout.MatchDir, err)
+	}
+	return nil
+}
+
+func openLogOutputs(standardPath, extraTarget string, stdout io.Writer) (io.Writer, func() error, error) {
+	writers := []io.Writer{stdout}
+	closers := make([]io.Closer, 0, 2)
+
+	standardFile, err := createFileOutput(standardPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create standard log output %s: %w", standardPath, err)
+	}
+	writers = append(writers, standardFile)
+	closers = append(closers, standardFile)
+
+	if extraTarget != "" && extraTarget != "stdout" && !sameCleanPath(extraTarget, standardPath) {
+		extraFile, err := createFileOutput(extraTarget)
+		if err != nil {
+			_ = closeAll(closers)
+			return nil, nil, fmt.Errorf("create extra log output %s: %w", extraTarget, err)
+		}
+		writers = append(writers, extraFile)
+		closers = append(closers, extraFile)
+	}
+
+	return io.MultiWriter(writers...), func() error { return closeAll(closers) }, nil
+}
+
+func writeStandardArtifacts(layout artifactLayout, record match.Record) error {
+	if err := writeJSONFile(layout.RecordPath, record, "record"); err != nil {
+		return err
+	}
+	if err := writeJSONFile(layout.SnapshotPath, record.Snapshot, "snapshot"); err != nil {
+		return err
+	}
+	if err := writeJSONFile(layout.ExportedSnapshotPath, record.ExportedSnapshot, "exported snapshot"); err != nil {
+		return err
+	}
+	if err := writeJSONFile(layout.HistoryPath, record.EventLog, "history"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func mustMarshal(v any) json.RawMessage {
@@ -514,13 +596,20 @@ func openOutputTarget(target string, stdout io.Writer) (io.Writer, func() error,
 	case "", "stdout":
 		return stdout, func() error { return nil }, nil
 	default:
-		// #nosec G304 -- the caller explicitly selects the local output target path.
-		file, err := os.Create(target)
+		file, err := createFileOutput(target)
 		if err != nil {
 			return nil, nil, fmt.Errorf("create output target %s: %w", target, err)
 		}
 		return file, file.Close, nil
 	}
+}
+
+func createFileOutput(path string) (*os.File, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return nil, err
+	}
+	// #nosec G304 -- the caller explicitly selects the local output target path.
+	return os.Create(path)
 }
 
 func writeJSONToTarget(target string, value any, stdout io.Writer, label string) error {
@@ -533,6 +622,32 @@ func writeJSONToTarget(target string, value any, stdout io.Writer, label string)
 		return fmt.Errorf("write %s %s: %w", label, target, err)
 	}
 	return nil
+}
+
+func writeJSONFile(path string, value any, label string) error {
+	file, err := createFileOutput(path)
+	if err != nil {
+		return fmt.Errorf("create %s %s: %w", label, path, err)
+	}
+	defer file.Close()
+	if err := json.NewEncoder(file).Encode(value); err != nil {
+		return fmt.Errorf("write %s %s: %w", label, path, err)
+	}
+	return nil
+}
+
+func closeAll(closers []io.Closer) error {
+	var firstErr error
+	for _, closer := range closers {
+		if err := closer.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func sameCleanPath(a, b string) bool {
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 func ptr[T any](value T) *T {
