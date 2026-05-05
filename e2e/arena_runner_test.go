@@ -439,7 +439,6 @@ func TestArenaRunnerWritesStandardArtifactsToDefaultOutputDir(t *testing.T) {
 	matchDir := filepath.Join(artifactRoot, matchID)
 	t.Cleanup(func() {
 		_ = os.RemoveAll(matchDir)
-		_ = os.Remove(artifactRoot)
 	})
 
 	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
@@ -462,6 +461,55 @@ func TestArenaRunnerWritesStandardArtifactsToDefaultOutputDir(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(matchDir, name)); err != nil {
 			t.Fatalf("default artifact %s missing: %v", name, err)
 		}
+	}
+}
+
+func TestArenaRunnerRejectsEmptyOutputDir(t *testing.T) {
+	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "empty-output-dir",
+		"--output-dir", "",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected empty output-dir error")
+	}
+	if !strings.Contains(string(output), "--output-dir must not be empty") {
+		t.Fatalf("output = %s, want empty output-dir error", output)
+	}
+}
+
+func TestArenaRunnerFailsBeforeSessionStartWhenOutputDirCannotBeCreated(t *testing.T) {
+	base := t.TempDir()
+	blockingPath := filepath.Join(base, "not-a-directory")
+	if err := os.WriteFile(blockingPath, []byte("block"), 0o644); err != nil {
+		t.Fatalf("write blocking path: %v", err)
+	}
+
+	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "unwritable-output-dir",
+		"--output-dir", blockingPath,
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected output-dir creation failure")
+	}
+	if !strings.Contains(string(output), "create artifact directory") {
+		t.Fatalf("output = %s, want artifact directory error", output)
+	}
+	if strings.Contains(string(output), `"kind":"match_started"`) {
+		t.Fatalf("output = %s, want fail-fast before session start", output)
 	}
 }
 

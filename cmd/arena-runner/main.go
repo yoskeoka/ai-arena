@@ -106,10 +106,16 @@ func run(args []string) error {
 	if len(playerArgs) == 0 {
 		return fmt.Errorf("at least one --player is required")
 	}
+	if strings.TrimSpace(outputDir) == "" {
+		return fmt.Errorf("--output-dir must not be empty")
+	}
 	if matchID == "" {
 		matchID = "match-" + uuid.NewString()
 	}
 	layout := newArtifactLayout(outputDir, matchID)
+	if err := ensureArtifactLayout(layout); err != nil {
+		return err
+	}
 
 	playersForGame, err := parsePlayersForGame(playerArgs)
 	if err != nil {
@@ -250,11 +256,6 @@ func run(args []string) error {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, matchTimeout)
 		defer cancel()
-	}
-
-	if err := ensureArtifactLayout(layout); err != nil {
-		closeSessions(sessions)
-		return err
 	}
 
 	logWriter, closeLog, err := openLogOutputs(layout.StructuredLogPath, logOutput, os.Stdout)

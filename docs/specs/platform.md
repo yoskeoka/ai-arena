@@ -524,6 +524,7 @@ artifact hierarchy:
 ```
 
 - `--output-dir` が指すのは base path であり、runner はその直下に `match-id` ごとの subdirectory を切る
+- `--output-dir` に空文字や無効 path は許可しない。存在しない path は runner が作成を試み、作成できない場合は session 起動前に失敗させる
 - `record.json` は platform record を加工せずそのまま露出した source-of-truth final match-record artifact とする
 - `history.json` は `record.json.event_log` をそのまま JSON array として抜き出した file format とし、`--history-input` にそのまま再投入できる
 - `snapshot.json` は `record.json.snapshot` をそのまま抜き出した derived snapshot とする
