@@ -65,10 +65,10 @@ depends on:
 
 ## Sub-tasks
 
-- [ ] Update `docs/specs/janken-game.md` to clarify skeleton-only scope and remaining `janken` responsibilities
-- [ ] Add empty `internal/games/janken/` package
-- [ ] Add `janken` test skeleton without committing game logic
-- [ ] Write a separate follow-up exec plan for `janken` implementation and richer platform verification
+- [x] Update `docs/specs/janken-game.md` to clarify skeleton-only scope and remaining `janken` responsibilities
+- [x] Add empty `internal/games/janken/` package
+- [x] Add `janken` test skeleton without committing game logic
+- [x] Write a separate follow-up exec plan for `janken` implementation and richer platform verification
 
 ## Parallelism
 

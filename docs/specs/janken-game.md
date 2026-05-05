@@ -12,10 +12,24 @@
 - game / game_version / ruleset selection
 - metadata compatibility 判定
 - timeout / malformed / mismatched id / late response / shutdown failure の platform 記録分類
+- replay/debug entrypoint や persisted artifact 読み出し
 
 `janken` 側で追加で担保するのは、fixture では薄いゲーム固有責務である。
 
+この責務分担は次の 2 段階で進める。
+
+1. `platform-phase2-04-janken-integration`
+   - `janken` package と test skeleton を置く
+   - `echo-count` と `janken` の責務境界を docs で固定する
+   - 本実装用 follow-up plan を作る
+2. `platform-phase2-05-janken-richer-integration`
+   - `janken` game master 実装
+   - hidden action reveal / simultaneous resolution / ranking tie-break verification
+   - sample AI / CLI / e2e / replay integration
+
 じゃんけんは、プラットフォームの Phase 2 実証用ゲームである。より複雑なダンジョンゲームへ進む前に、プラットフォームの基本ループを最小構成で検証することを目的とする。
+
+現在の `platform-phase2-04-janken-integration` では、`internal/games/janken/` の skeleton package と test skeleton、そして後続実装 plan の受け皿だけを整える。ここに書くルールと payload shape は `platform-phase2-05-janken-richer-integration.md` で本実装と richer verification に接続する前提であり、この plan 自体では game logic、sample AI、CLI、e2e はまだ持たない。
 
 このゲームで検証したい要素は以下。
 
