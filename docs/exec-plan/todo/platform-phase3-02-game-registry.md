@@ -30,12 +30,13 @@ depends on:
 
 ### `docs/specs/platform.md`
 
-- runner は `game_id` と `ruleset_version` から対象 game を選ぶことを、registry 経由の contract として明記する
+- runner は `game_id + game_version major` で registry lookup し、その上で `ruleset_version` を各 game build 入口へ渡して対象 game を選ぶことを、registry 経由の contract として明記する
 - runner の責務と game registry の責務を分離して書く
 - compatibility 判定のタイミングを、game registry lookup 後の game metadata 確定フェーズとして整理する
 
 ### New registry spec or section
 
+- registry contract は `docs/specs/platform-game-registry.md` を新設して定義する
 - platform が保持する registered game の最小要件を定義する
 - 少なくとも以下を含める
   - `game_id`
@@ -130,5 +131,6 @@ depends on:
 - registry の登録単位は constructor 群ではなく `GameDescriptor` とする
 - `GameDescriptor` は fresh run / snapshot resume / history replay の 3 入口を持つ
 - registry key は `game_id + game_version major` とする
+- runner は registry lookup に `game_id + game_version major` を使い、`ruleset_version` は lookup 後の game 固有 build に渡す
 - game master との接続形態は capability ではなく descriptor の動作モードとして保持する
 - registry は後続の game master subprocess / external backend adapter の受け皿になる形にする
