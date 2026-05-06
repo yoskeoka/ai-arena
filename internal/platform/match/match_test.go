@@ -236,6 +236,10 @@ func (f *fakeMaster) ApplyStep(_ context.Context, _ game.DecisionStep, actionSta
 	return nil
 }
 
+func (f *fakeMaster) VisibleState(string) json.RawMessage {
+	return raw(`{"visible":"current"}`)
+}
+
 func (f *fakeMaster) Snapshot() game.Snapshot {
 	return game.Snapshot{
 		Turn:      2,

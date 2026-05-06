@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
+	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
@@ -196,7 +197,7 @@ func run(args []string) error {
 	if ruleset == "" {
 		return fmt.Errorf("--ruleset is required")
 	}
-	if gameName != echo.GameID {
+	if gameName != echo.GameID && gameName != janken.GameID {
 		return fmt.Errorf("unsupported game %q", gameName)
 	}
 
@@ -454,6 +455,12 @@ func newMaster(gameName, gameVersion, ruleset string, players []game.Player) (ga
 			Ruleset:     ruleset,
 			Players:     players,
 		})
+	case janken.GameID:
+		return janken.New(janken.Config{
+			GameVersion: gameVersion,
+			Ruleset:     ruleset,
+			Players:     players,
+		})
 	default:
 		return nil, fmt.Errorf("unsupported game %q", gameName)
 	}
@@ -463,6 +470,12 @@ func newMasterFromSnapshot(gameName, gameVersion, ruleset string, players []game
 	switch gameName {
 	case echo.GameID:
 		return echo.NewFromSnapshot(echo.Config{
+			GameVersion: gameVersion,
+			Ruleset:     ruleset,
+			Players:     players,
+		}, snapshot)
+	case janken.GameID:
+		return janken.NewFromSnapshot(janken.Config{
 			GameVersion: gameVersion,
 			Ruleset:     ruleset,
 			Players:     players,

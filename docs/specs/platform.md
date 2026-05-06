@@ -486,8 +486,8 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 
 最小 contract:
 
-- `--game echo-count`
-- `--game-version 2.0.0`
+- `--game <game-id>`
+- `--game-version <game-version>`
 - `--ruleset <ruleset-version>`
 - `--player player_id=entry-path`
 - `--match-id <id>` は省略可能
@@ -501,6 +501,10 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--history-input <path>` は persisted final record の `event_log` を抽出した `history.json` を受け付ける
 - `--record-input <path>` は source-of-truth persisted final match-record artifact を受け付ける
 - `--target-turn <n>` は `--history-input` または `--record-input` と組み合わせて使う replay / resume の turn 境界を指定する
+
+`echo-count` は platform fixture 用の最小 game であり、`janken` は richer integration 用の game として同じ runner contract に乗る。
+runner が担保するのはゲーム非依存の起動・artifact・replay/debug entrypoint までであり、
+hidden action reveal、simultaneous resolution、game-specific action schema、ranking / tie-break の正しさは `janken` 側 spec と verification で担保する。
 
 artifact hierarchy:
 

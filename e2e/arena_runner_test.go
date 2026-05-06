@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
+	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
 
 type runnerLogRecord struct {
@@ -354,6 +356,109 @@ func TestArenaRunnerResumeFromHistoryAndContinue(t *testing.T) {
 	}
 	if result.Record.Snapshot.Turn != 3 {
 		t.Fatalf("final snapshot turn = %d, want 3", result.Record.Snapshot.Turn)
+	}
+}
+
+func TestArenaRunnerJankenHappyPath(t *testing.T) {
+	result := runArena(t,
+		"--game", "janken",
+		"--game-version", janken.GameVersion,
+		"--ruleset", janken.RulesetRegular,
+		"--match-id", "janken-happy",
+		"--player", "p1=./testdata/ai/janken/janken-cycle-ai",
+		"--player", "p2=./testdata/ai/janken/janken-rock-ai",
+	)
+
+	if result.Record.Status != "completed" {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
+	}
+	if result.Record.Result.Placements[0].PlayerID != "p1" || result.Record.Result.Placements[0].Place != 1 {
+		t.Fatalf("first placement = %+v, want p1 place 1", result.Record.Result.Placements[0])
+	}
+
+	var visible struct {
+		Round         int `json:"round"`
+		PublicHistory []struct {
+			Actions map[string]string `json:"actions"`
+		} `json:"public_history"`
+	}
+	if err := json.Unmarshal(result.Record.Snapshot.PerPlayer["p1"].VisibleState, &visible); err != nil {
+		t.Fatalf("decode final visible state: %v", err)
+	}
+	if visible.Round != 5 {
+		t.Fatalf("final visible round = %d, want 5", visible.Round)
+	}
+	if len(visible.PublicHistory) != 5 {
+		t.Fatalf("len(public_history) = %d, want 5", len(visible.PublicHistory))
+	}
+	if got := visible.PublicHistory[4].Actions["p1"]; got != "paper" {
+		t.Fatalf("round5 p1 action = %q, want paper", got)
+	}
+}
+
+func TestArenaRunnerJankenResumeFromHistoryAndContinue(t *testing.T) {
+	base := runArena(t,
+		"--game", "janken",
+		"--game-version", janken.GameVersion,
+		"--ruleset", janken.RulesetRegular,
+		"--match-id", "janken-history-source",
+		"--player", "p1=./testdata/ai/janken/janken-cycle-ai",
+		"--player", "p2=./testdata/ai/janken/janken-rock-ai",
+	)
+	historyPath := filepath.Join(t.TempDir(), "history.json")
+	historyData, err := json.Marshal(base.Record.EventLog)
+	if err != nil {
+		t.Fatalf("marshal history: %v", err)
+	}
+	if err := os.WriteFile(historyPath, historyData, 0o644); err != nil {
+		t.Fatalf("write history input: %v", err)
+	}
+
+	result := runArenaWithOptions(t, arenaRunOptions{
+		Args: []string{
+			"--game", "janken",
+			"--game-version", janken.GameVersion,
+			"--ruleset", janken.RulesetRegular,
+			"--match-id", "janken-history-resume",
+			"--history-input", historyPath,
+			"--target-turn", "3",
+			"--player", "p1=./testdata/ai/janken/janken-cycle-ai",
+			"--player", "p2=./testdata/ai/janken/janken-rock-ai",
+		},
+	})
+
+	if result.Record.Status != "completed" {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
+	}
+	for _, event := range result.Record.EventLog {
+		if event.Turn > 0 && event.Turn != 4 && event.Turn != 5 {
+			t.Fatalf("resumed event turn = %d, want only turns 4-5 in %+v", event.Turn, result.Record.EventLog)
+		}
+	}
+}
+
+func TestArenaRunnerJankenTimeoutAndInvalidAffectPlacement(t *testing.T) {
+	result := runArena(t,
+		"--game", "janken",
+		"--game-version", janken.GameVersion,
+		"--ruleset", janken.RulesetRegular,
+		"--match-id", "janken-failures",
+		"--player", "p1=./testdata/ai/janken/janken-rock-ai",
+		"--player", "p2=./testdata/ai/janken/janken-timeout-ai",
+		"--player", "p3=./testdata/ai/janken/janken-invalid-ai",
+	)
+
+	if result.Record.Result.Placements[0].PlayerID != "p1" {
+		t.Fatalf("winner = %q, want p1", result.Record.Result.Placements[0].PlayerID)
+	}
+	if got := result.Record.Snapshot.PerPlayer["p2"].LastActionStatus.FailureReason; got != "" {
+		t.Fatalf("final p2 failure reason = %q, want empty after later accepted turns", got)
+	}
+	if !hasFailureReason(result.Record.EventLog, session.ReasonTimeout) {
+		t.Fatalf("event log missing timeout failure: %+v", result.Record.EventLog)
+	}
+	if !hasFailureReason(result.Record.EventLog, "invalid-illegal-action") {
+		t.Fatalf("event log missing invalid action failure: %+v", result.Record.EventLog)
 	}
 }
 
