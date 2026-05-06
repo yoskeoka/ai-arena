@@ -86,13 +86,24 @@
 - trusted external game backend との接続には、少なくとも認証済みの専用チャネルを要求し、恒久運用では相互認証を前提に検討する。あわせて external backend は各 turn の結果、監査に必要なイベント列、および観戦・公開に使える状態スナップショットを platform に返送する責務を負う
 
 ## Milestones
+
+以下の phase は厳密な直列ではなく、先に固定すべき interface 契約を gate としつつ、依存関係を守りながら並行で進める。
+
 - [ ] Phase 1: プラットフォーム設計・ゲームコンセプト策定（ドキュメントのみ）
-- [ ] Phase 2: プラットフォームコア実装 + じゃんけんゲームで実証テスト（ローカル実行）
-- [ ] Phase 3: ダンジョン探索ゲームの設計・実装
-- [ ] Phase 4: 観戦用ビジュアライザの実装
-- [ ] Phase 5: マッチメイキング・対戦管理・順位システム
-- [ ] Phase 6: サンプルAI・ドキュメント整備
-- [ ] Phase 7: オンラインインフラ構築・デプロイ
+- [ ] Phase 2: プラットフォームコア実装 + `janken` によるローカル実行での実証
+- [ ] Phase 3: AI player / platform / game master の共通 interface 契約を固定し、複数ゲーム対応と trusted external game backend 対応の土台を整える
+- [ ] Phase 4: WASM/WASI 実行を正式な AI 実行経路として成立させ、Go 製 AI を基準に `janken` で検証する
+- [ ] Phase 5: ダンジョンゲーム MVP を、プラットフォーム改善と並行で進める
+- [ ] Phase 6: match state・artifact・公開用 game state を扱える永続化基盤と service skeleton を整える
+- [ ] Phase 7: AI 提出、game 提出、matchmaking、ranking、早期 deploy pipeline を含むオンライン運営基盤を整える
+- [ ] Phase 8: public な external game state を読み取る観戦用ビジュアライザを整える
+
+### Phase の意図
+
+- Phase 3 は、ダンジョンゲーム開発で無駄な手戻りを避けるために、先に共通 interface 契約を固める phase である
+- Phase 4 は、project-plan の最終要件である WASM 提出を開発用の暫定経路ではなく正式な実行経路へ寄せる phase である
+- Phase 5 のダンジョンゲーム開発は、Phase 3 の契約固定後に着手し、以後の platform 改善と並行で進める
+- Phase 6 で公開向け state の永続化と供給基盤を整えた後は、Phase 8 のビジュアライザを段階的に前倒しで進めてよい
 
 ### 将来構想（優先度未定）
 - ダンジョン探索ゲームの段階的拡張:
