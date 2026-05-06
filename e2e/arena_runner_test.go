@@ -42,7 +42,7 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 			"--player", "p2=./testdata/ai/echo/echo-ai",
 		)
 		record := result.Record
-		if record.Status != "completed" {
+		if string(record.Status) != "completed" {
 			t.Fatalf("status = %q, want completed", record.Status)
 		}
 		if got := record.Result.Placements[0].Place; got != 1 {
@@ -72,7 +72,7 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 			"--player", "p2=./testdata/ai/echo/echo-ai-sequential",
 		)
 		record := result.Record
-		if record.Status != "completed" {
+		if string(record.Status) != "completed" {
 			t.Fatalf("status = %q, want completed", record.Status)
 		}
 		if record.Snapshot.Turn != 3 {
@@ -146,13 +146,13 @@ func TestArenaRunnerFailurePaths(t *testing.T) {
 				"--player", "p2="+tc.player2,
 			)
 			record := result.Record
-			if record.Status != tc.status {
+			if string(record.Status) != tc.status {
 				t.Fatalf("status = %q, want %q", record.Status, tc.status)
 			}
 			if !hasEvent(record.EventLog, tc.eventKind) {
 				t.Fatalf("event log missing %q", tc.eventKind)
 			}
-			if tc.reason != "" && !hasFailureReason(record.EventLog, tc.reason) && record.Snapshot.PerPlayer["p2"].LastActionStatus.FailureReason != tc.reason {
+			if tc.reason != "" && !hasFailureReason(record.EventLog, tc.reason) && string(record.Snapshot.PerPlayer["p2"].LastActionStatus.FailureReason) != tc.reason {
 				t.Fatalf("missing failure reason %q", tc.reason)
 			}
 			if !hasLogKind(result.Logs, "terminal_summary") {
@@ -454,7 +454,7 @@ func TestArenaRunnerJankenTimeoutAndInvalidAffectPlacement(t *testing.T) {
 	if got := result.Record.Snapshot.PerPlayer["p2"].LastActionStatus.FailureReason; got != "" {
 		t.Fatalf("final p2 failure reason = %q, want empty after later accepted turns", got)
 	}
-	if !hasFailureReason(result.Record.EventLog, session.ReasonTimeout) {
+	if !hasFailureReason(result.Record.EventLog, string(session.ReasonTimeout)) {
 		t.Fatalf("event log missing timeout failure: %+v", result.Record.EventLog)
 	}
 	if !hasFailureReason(result.Record.EventLog, "invalid-illegal-action") {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
@@ -31,6 +32,7 @@ type Master struct {
 	meta       catalog.GameMetadata
 	players    []game.Player
 	playerIDs  []string
+	mode       game.DecisionMode
 	turns      int
 	deadline   time.Duration
 	resolved   int
@@ -76,7 +78,7 @@ func New(cfg Config) (*Master, error) {
 		return nil, fmt.Errorf("echo: game version is required")
 	}
 
-	meta, turns, deadline, err := metadataForSelection(cfg.GameVersion, cfg.Ruleset)
+	meta, mode, turns, deadline, err := metadataForSelection(cfg.GameVersion, cfg.Ruleset)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +96,7 @@ func New(cfg Config) (*Master, error) {
 		meta:       meta,
 		players:    append([]game.Player(nil), cfg.Players...),
 		playerIDs:  playerIDs,
+		mode:       mode,
 		turns:      turns,
 		deadline:   deadline,
 		score:      score,
@@ -116,9 +119,9 @@ func (m *Master) Metadata() catalog.GameMetadata {
 	return m.meta
 }
 
-func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, int, time.Duration, error) {
+func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
 	if gameVersion != GameVersion {
-		return catalog.GameMetadata{}, 0, 0, fmt.Errorf("echo: unsupported game version %q", gameVersion)
+		return catalog.GameMetadata{}, "", 0, 0, fmt.Errorf("echo: unsupported game version %q", gameVersion)
 	}
 
 	switch ruleset {
@@ -127,30 +130,27 @@ func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, in
 			GameID:         GameID,
 			GameVersion:    gameVersion,
 			RulesetVersion: RulesetSimultaneous3Turn,
-			TurnMode:       string(game.Simultaneous),
-		}, 3, defaultTurnDeadline, nil
+		}, game.Simultaneous, 3, defaultTurnDeadline, nil
 	case RulesetSequential3Turn:
 		return catalog.GameMetadata{
 			GameID:         GameID,
 			GameVersion:    gameVersion,
 			RulesetVersion: RulesetSequential3Turn,
-			TurnMode:       string(game.Sequential),
-		}, 3, defaultTurnDeadline, nil
+		}, game.Sequential, 3, defaultTurnDeadline, nil
 	case RulesetSimultaneous2Turn:
 		return catalog.GameMetadata{
 			GameID:         GameID,
 			GameVersion:    gameVersion,
 			RulesetVersion: RulesetSimultaneous2Turn,
-			TurnMode:       string(game.Simultaneous),
-		}, 2, defaultTurnDeadline, nil
+		}, game.Simultaneous, 2, defaultTurnDeadline, nil
 	default:
-		return catalog.GameMetadata{}, 0, 0, fmt.Errorf("echo: unsupported ruleset %q", ruleset)
+		return catalog.GameMetadata{}, "", 0, 0, fmt.Errorf("echo: unsupported ruleset %q", ruleset)
 	}
 }
 
 func (m *Master) Init(context.Context) (game.InitState, error) {
 	state := mustRaw(initState{
-		Mode:        m.meta.TurnMode,
+		Mode:        string(m.mode),
 		Turns:       m.turns,
 		PlayerOrder: append([]string(nil), m.playerIDs...),
 	})
@@ -168,7 +168,7 @@ func (m *Master) NextStep(context.Context) (*game.DecisionStep, error) {
 
 	turn := m.resolved + 1
 	expected := turn
-	switch game.DecisionMode(m.meta.TurnMode) {
+	switch m.mode {
 	case game.Simultaneous:
 		reqs := make([]game.DecisionRequest, 0, len(m.players))
 		for _, player := range m.players {
@@ -193,7 +193,7 @@ func (m *Master) NextStep(context.Context) (*game.DecisionStep, error) {
 			}},
 		}, nil
 	default:
-		return nil, fmt.Errorf("echo: unsupported mode %q", m.meta.TurnMode)
+		return nil, fmt.Errorf("echo: unsupported mode %q", m.mode)
 	}
 }
 
@@ -208,14 +208,14 @@ func (m *Master) NormalizeAction(req game.DecisionRequest, actionStatus game.Act
 		return game.ActionStatus{
 			PlayerID:      req.PlayerID,
 			ActionStatus:  session.StatusNoAction,
-			FailureReason: "invalid-illegal-action",
+			FailureReason: contract.ReasonIllegalAction,
 		}
 	}
 	if act.Echo != m.expectedForTurn(req) {
 		return game.ActionStatus{
 			PlayerID:      req.PlayerID,
 			ActionStatus:  session.StatusNoAction,
-			FailureReason: "invalid-illegal-action",
+			FailureReason: contract.ReasonIllegalAction,
 		}
 	}
 	return actionStatus
@@ -250,7 +250,7 @@ func (m *Master) Snapshot() game.Snapshot {
 		GameVersion:    m.meta.GameVersion,
 		RulesetVersion: m.meta.RulesetVersion,
 		Turn:           m.resolved,
-		Status:         "running",
+		Status:         game.StatusRunning,
 		GameState:      mustRaw(m.snapshotState()),
 	}
 }
@@ -270,8 +270,8 @@ func (m *Master) ExportedSnapshot() game.ExportedSnapshot {
 		GameVersion:    m.meta.GameVersion,
 		RulesetVersion: m.meta.RulesetVersion,
 		Turn:           m.resolved,
-		Status:         "running",
-		PublicState:    mustRaw(publicState{Mode: m.meta.TurnMode, ResolvedTurns: m.resolved, Score: cloneScore(m.score)}),
+		Status:         game.StatusRunning,
+		PublicState:    mustRaw(publicState{Mode: string(m.mode), ResolvedTurns: m.resolved, Score: cloneScore(m.score)}),
 	}
 	for _, playerID := range m.playerIDs {
 		exported.Players = append(exported.Players, game.ExportedPlayerSnapshot{
@@ -329,7 +329,7 @@ func (m *Master) snapshotState() map[string]any {
 		expected = m.turns
 	}
 	return map[string]any{
-		"mode":     m.meta.TurnMode,
+		"mode":     m.mode,
 		"turn":     m.resolved,
 		"expected": expected,
 		"score":    cloneScore(m.score),
@@ -351,8 +351,8 @@ func (m *Master) applySnapshot(snapshot game.Snapshot) error {
 	if err := json.Unmarshal(snapshot.GameState, &state); err != nil {
 		return fmt.Errorf("echo: decode snapshot game_state: %w", err)
 	}
-	if state.Mode != "" && state.Mode != m.meta.TurnMode {
-		return fmt.Errorf("echo: snapshot mode %q does not match %q", state.Mode, m.meta.TurnMode)
+	if state.Mode != "" && state.Mode != string(m.mode) {
+		return fmt.Errorf("echo: snapshot mode %q does not match %q", state.Mode, m.mode)
 	}
 	if snapshot.Turn < 0 || snapshot.Turn > m.turns {
 		return fmt.Errorf("echo: snapshot turn %d out of range 0..%d", snapshot.Turn, m.turns)

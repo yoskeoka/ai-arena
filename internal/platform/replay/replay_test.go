@@ -7,6 +7,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
@@ -17,7 +18,6 @@ func TestSnapshotFromHistoryBuildsTurnBoundarySnapshot(t *testing.T) {
 		GameID:         echo.GameID,
 		GameVersion:    echo.GameVersion,
 		RulesetVersion: echo.RulesetSimultaneous3Turn,
-		TurnMode:       string(game.Simultaneous),
 	}, []game.Player{
 		{PlayerID: "p1"},
 		{PlayerID: "p2"},
@@ -78,7 +78,6 @@ func TestSnapshotFromHistoryBuildsJankenRoundBoundary(t *testing.T) {
 		GameID:         janken.GameID,
 		GameVersion:    janken.GameVersion,
 		RulesetVersion: janken.RulesetRegular,
-		TurnMode:       string(game.Simultaneous),
 	}, []game.Player{
 		{PlayerID: "p1"},
 		{PlayerID: "p2"},
@@ -86,7 +85,7 @@ func TestSnapshotFromHistoryBuildsJankenRoundBoundary(t *testing.T) {
 		event(1, "turn_result", "p1", game.ActionStatus{PlayerID: "p1", ActionStatus: session.StatusAccepted, Action: json.RawMessage(`{"action":"rock"}`)}),
 		event(1, "turn_timeout", "p2", game.ActionStatus{PlayerID: "p2", ActionStatus: session.StatusNoAction, FailureReason: session.ReasonTimeout}),
 		event(2, "turn_result", "p1", game.ActionStatus{PlayerID: "p1", ActionStatus: session.StatusAccepted, Action: json.RawMessage(`{"action":"paper"}`)}),
-		event(2, "protocol_error", "p2", game.ActionStatus{PlayerID: "p2", ActionStatus: session.StatusNoAction, FailureReason: "invalid-illegal-action"}),
+		event(2, "protocol_error", "p2", game.ActionStatus{PlayerID: "p2", ActionStatus: session.StatusNoAction, FailureReason: contract.ReasonIllegalAction}),
 	}, 2)
 	if err != nil {
 		t.Fatalf("SnapshotFromHistory: %v", err)
@@ -104,7 +103,7 @@ func TestSnapshotFromHistoryBuildsJankenRoundBoundary(t *testing.T) {
 	if len(state.PublicHistory) != 2 {
 		t.Fatalf("len(public_history) = %d, want 2", len(state.PublicHistory))
 	}
-	if got := snapshot.PerPlayer["p2"].LastActionStatus.FailureReason; got != "invalid-illegal-action" {
+	if got := snapshot.PerPlayer["p2"].LastActionStatus.FailureReason; got != contract.ReasonIllegalAction {
 		t.Fatalf("p2 failure reason = %q, want invalid-illegal-action", got)
 	}
 }

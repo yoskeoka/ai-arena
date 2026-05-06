@@ -9,6 +9,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
@@ -65,7 +66,7 @@ func SnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, event
 }
 
 func echoSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
-	maxTurns, err := echoRulesetTurns(meta.RulesetVersion)
+	mode, maxTurns, err := echoRulesetConfig(meta.RulesetVersion)
 	if err != nil {
 		return game.Snapshot{}, err
 	}
@@ -127,7 +128,7 @@ func echoSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, e
 		perPlayer[player.PlayerID] = playerState
 	}
 	gameState, err := json.Marshal(map[string]any{
-		"mode":     meta.TurnMode,
+		"mode":     mode,
 		"turn":     targetTurn,
 		"expected": expected,
 		"score":    score,
@@ -141,7 +142,7 @@ func echoSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, e
 		GameVersion:    meta.GameVersion,
 		RulesetVersion: meta.RulesetVersion,
 		Turn:           targetTurn,
-		Status:         string(game.StatusRunning),
+		Status:         game.StatusRunning,
 		GameState:      gameState,
 		PerPlayer:      perPlayer,
 	}, nil
@@ -228,14 +229,16 @@ func jankenSnapshotFromHistory(meta catalog.GameMetadata, players []game.Player,
 	return snapshot, nil
 }
 
-func echoRulesetTurns(ruleset string) (int, error) {
+func echoRulesetConfig(ruleset string) (contract.DecisionMode, int, error) {
 	switch ruleset {
-	case echo.RulesetSimultaneous3Turn, echo.RulesetSequential3Turn:
-		return 3, nil
+	case echo.RulesetSimultaneous3Turn:
+		return game.Simultaneous, 3, nil
+	case echo.RulesetSequential3Turn:
+		return game.Sequential, 3, nil
 	case echo.RulesetSimultaneous2Turn:
-		return 2, nil
+		return game.Simultaneous, 2, nil
 	default:
-		return 0, fmt.Errorf("unsupported echo ruleset %q", ruleset)
+		return "", 0, fmt.Errorf("unsupported echo ruleset %q", ruleset)
 	}
 }
 

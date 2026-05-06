@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/runtime"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
@@ -28,7 +29,7 @@ type Record struct {
 	MatchID          string                `json:"match_id"`
 	Game             catalog.GameMetadata  `json:"game"`
 	Players          []game.Player         `json:"players"`
-	Status           string                `json:"status"`
+	Status           game.MatchStatus      `json:"status"`
 	Result           game.MatchResult      `json:"result"`
 	EventLog         []Event               `json:"event_log"`
 	Snapshot         game.Snapshot         `json:"snapshot"`
@@ -176,14 +177,14 @@ func (r *Runner) initializeSessions(ctx context.Context, meta catalog.GameMetada
 
 	for _, player := range r.players {
 		state := initState.PerPlayer[player.PlayerID]
-		params := map[string]any{
-			"match_id":        r.matchID,
-			"player_id":       player.PlayerID,
-			"game_id":         meta.GameID,
-			"game_version":    meta.GameVersion,
-			"ruleset_version": meta.RulesetVersion,
-			"deadline_ms":     initDeadline.Milliseconds(),
-			"state":           json.RawMessage(state),
+		params := contract.InitParams{
+			MatchID:        r.matchID,
+			PlayerID:       player.PlayerID,
+			GameID:         meta.GameID,
+			GameVersion:    meta.GameVersion,
+			RulesetVersion: meta.RulesetVersion,
+			DeadlineMS:     initDeadline.Milliseconds(),
+			State:          json.RawMessage(state),
 		}
 		result := r.sessions[player.PlayerID].Init(ctx, session.Request{
 			ID:       "init",
@@ -292,11 +293,11 @@ func (r *Runner) shutdownSessions(ctx context.Context) {
 				ID:       "game-over",
 				Method:   "game_over",
 				Deadline: gameOverDeadline,
-				Params: map[string]any{
-					"match_id":            r.matchID,
-					"final_visible_state": json.RawMessage(r.visibleStateForPlayer(playerID)),
-					"summary":             r.master.Result(),
-					"shutdown_after_ms":   gameOverDeadline.Milliseconds(),
+				Params: contract.GameOverParams{
+					MatchID:           r.matchID,
+					FinalVisibleState: json.RawMessage(r.visibleStateForPlayer(playerID)),
+					Summary:           r.master.Result(),
+					ShutdownAfterMS:   gameOverDeadline.Milliseconds(),
 				},
 			})
 			if result.FailureReason == session.ReasonRuntimeStop {
@@ -331,7 +332,7 @@ func (r *Runner) shutdownSessions(ctx context.Context) {
 func (r *Runner) buildRecord(meta catalog.GameMetadata) Record {
 	snapshot := r.master.Snapshot()
 	snapshot.MatchID = r.matchID
-	snapshot.Status = string(r.status)
+	snapshot.Status = r.status
 	if snapshot.PerPlayer == nil {
 		snapshot.PerPlayer = make(map[string]game.PlayerSnapshot)
 	}
@@ -349,7 +350,7 @@ func (r *Runner) buildRecord(meta catalog.GameMetadata) Record {
 
 	exported := r.master.ExportedSnapshot()
 	exported.MatchID = r.matchID
-	exported.Status = string(r.status)
+	exported.Status = r.status
 	if len(exported.Players) == 0 {
 		for _, player := range r.players {
 			exported.Players = append(exported.Players, game.ExportedPlayerSnapshot{
@@ -366,7 +367,7 @@ func (r *Runner) buildRecord(meta catalog.GameMetadata) Record {
 		MatchID:          r.matchID,
 		Game:             meta,
 		Players:          r.players,
-		Status:           string(r.status),
+		Status:           r.status,
 		Result:           r.master.Result(),
 		EventLog:         append([]Event(nil), r.events...),
 		Snapshot:         snapshot,
@@ -415,11 +416,11 @@ func (r *Runner) executeTurn(ctx context.Context, turn int, req game.DecisionReq
 	result := r.sessions[req.PlayerID].Turn(ctx, session.Request{
 		ID:     fmt.Sprintf("turn-%d-%s", turn, req.PlayerID),
 		Method: "turn",
-		Params: map[string]any{
-			"turn":              turn,
-			"visible_state":     json.RawMessage(req.VisibleState),
-			"legal_action_hint": json.RawMessage(req.LegalActionHint),
-			"deadline_ms":       req.Deadline.Milliseconds(),
+		Params: contract.TurnParams{
+			Turn:            turn,
+			VisibleState:    json.RawMessage(req.VisibleState),
+			LegalActionHint: json.RawMessage(req.LegalActionHint),
+			DeadlineMS:      req.Deadline.Milliseconds(),
 		},
 		Deadline: req.Deadline,
 	})

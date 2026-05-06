@@ -6,19 +6,20 @@ import (
 	"errors"
 	"time"
 
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/protocol"
 	"github.com/yoskeoka/ai-arena/internal/platform/runtime"
 )
 
 const (
-	StatusAccepted = "accepted"
-	StatusNoAction = "no_action"
+	StatusAccepted = contract.ActionAccepted
+	StatusNoAction = contract.ActionNoAction
 
-	ReasonTimeout      = "invalid-timeout"
-	ReasonMalformed    = "invalid-protocol-malformed"
-	ReasonMismatchedID = "invalid-protocol-mismatched-id"
-	ReasonLateResponse = "invalid-protocol-late-response"
-	ReasonRuntimeStop  = "runtime-stopped"
+	ReasonTimeout      = contract.ReasonTimeout
+	ReasonMalformed    = contract.ReasonMalformed
+	ReasonMismatchedID = contract.ReasonMismatchedID
+	ReasonLateResponse = contract.ReasonLateResponse
+	ReasonRuntimeStop  = contract.ReasonRuntimeStop
 )
 
 type Transport interface {
@@ -36,8 +37,8 @@ type Request struct {
 }
 
 type Result struct {
-	Status                 string
-	FailureReason          string
+	Status                 contract.ActionDecision
+	FailureReason          contract.FailureReason
 	Payload                json.RawMessage
 	IgnoredLateResponseIDs []string
 }

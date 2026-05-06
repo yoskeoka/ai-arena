@@ -2,9 +2,10 @@
 
 ## 目的
 
-このドキュメントは、AI Arena の Phase 2a foundation におけるプラットフォーム層の仕様を定義する。
-このフェーズの目的は、ゲーム非依存の platform core を local subprocess 上で成立させ、
-後続の `echo-count` fixture と `janken` 実装の土台を固めることである。
+このドキュメントは、AI Arena の platform core 全体像と runner / fixture の仕様を定義する。
+Phase 3 では、AI player / platform / game master が共有する共通語彙そのものは
+`docs/specs/platform-common-contract.md` に切り出し、この文書では platform core の責務、
+runner contract、fixture appendix との境界を扱う。
 
 最終的な提出形式は引き続き WASM を目指すが、このフェーズでは実行基盤の切り分けを優先し、
 AI 実行アダプタはローカルプロセスを使う。
@@ -68,7 +69,13 @@ AI 実行アダプタはローカルプロセスを使う。
 
 protocol と game logic は分離する。runtime adapter と session / match loop も分離する。
 
-## ゲーム metadata 契約
+## 参照関係
+
+- `docs/specs/platform-common-contract.md`: metadata / action status / failure 分類 / record core schema の正本
+- `docs/specs/janken-game.md`: `janken` 固有 payload / validation / ranking
+- `docs/specs/dungeon-game.md`: 本命 game が要求する platform 性質
+
+## ゲーム metadata と ruleset の扱い
 
 ### 必須 metadata
 
@@ -77,7 +84,6 @@ protocol と game logic は分離する。runtime adapter と session / match lo
 - `game_id`
 - `game_version`
 - `ruleset_version`
-- `turn_mode`
 
 例:
 
@@ -85,8 +91,7 @@ protocol と game logic は分離する。runtime adapter と session / match lo
 {
   "game_id": "janken",
   "game_version": "2.1.0",
-  "ruleset_version": "regular",
-  "turn_mode": "simultaneous"
+  "ruleset_version": "regular"
 }
 ```
 
@@ -115,6 +120,14 @@ protocol と game logic は分離する。runtime adapter と session / match lo
 - `ruleset_version` 不一致
 
 minor / patch 差分は同一 major の範囲で互換とみなす。
+
+### `turn_mode` の再分類
+
+Phase 2 では `turn_mode` を metadata に含めていたが、Phase 3 では互換性 metadata から外す。
+
+- 同時行動 / 順番制の表現は `DecisionStep.mode` と `DecisionStep.requests` に寄せる
+- game 固有 spec が mode を説明したい場合は、ruleset の説明や game state に載せてよい
+- runner は `turn_mode` を注入せず、game master が返す decision step をそのまま実行する
 
 ## AI metadata sidecar manifest
 
@@ -295,7 +308,9 @@ platform 側待機上限:
 - `shutdown_after_ms` 超過後に AI が `stderr` やその他出力を続けても、platform はそれを拾えることを保証しない
 - したがって `shutdown_after_ms` 超過後の出力可視性は未定義とする。実装や環境次第で一部拾えることはあっても、contract 上は保証しない
 
-## Failure reason 分類
+## Failure 分類
+
+failure 分類の正本は `docs/specs/platform-common-contract.md` とする。ここでは platform core 上の扱いだけを補足する。
 
 platform は action そのものと failure reason を分離して記録する。
 
@@ -564,10 +579,10 @@ AI metadata 読み取り:
 runner の非責務:
 
 - turn 数を決めること
-- `turn_mode` を注入すること
+- decision mode を metadata から注入すること
 - per-turn deadline を決めること
 
-これらは game 側の metadata / ruleset に属する。runner は `game_id` と `ruleset_version` を指定して対象 game を起動するだけで、match の進行条件そのものは game master が定義する。
+これらは game 側の ruleset / decision step contract に属する。runner は `game_id` と `ruleset_version` を指定して対象 game を起動するだけで、match の進行条件そのものは game master が定義する。
 
 replay/debug で読むべき source of truth は structured log stream ではなく persisted final `record.json` である。
 必要に応じて `snapshot.json` / `history.json` をその artifact から抽出して使う。
@@ -622,8 +637,7 @@ go run ./cmd/arena-runner \
 {
   "game_id": "echo-count",
   "game_version": "2.0.0",
-  "ruleset_version": "phase2-simultaneous-3turn",
-  "turn_mode": "simultaneous"
+  "ruleset_version": "phase2-simultaneous-3turn"
 }
 ```
 
@@ -631,8 +645,7 @@ go run ./cmd/arena-runner \
 {
   "game_id": "echo-count",
   "game_version": "2.0.0",
-  "ruleset_version": "phase2-sequential-3turn",
-  "turn_mode": "sequential"
+  "ruleset_version": "phase2-sequential-3turn"
 }
 ```
 
@@ -640,12 +653,11 @@ go run ./cmd/arena-runner \
 {
   "game_id": "echo-count",
   "game_version": "2.0.0",
-  "ruleset_version": "phase2-simultaneous-2turn",
-  "turn_mode": "simultaneous"
+  "ruleset_version": "phase2-simultaneous-2turn"
 }
 ```
 
-`turn_mode` は runner から注入せず、ruleset 側で固定する。turn 数も ruleset に含める。
+同時行動 / 順番制の違いは ruleset の意味と decision step の返し方で表現する。turn 数も ruleset に含める。
 
 ### ルール
 

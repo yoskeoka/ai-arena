@@ -10,7 +10,6 @@ func TestValidateMetadata(t *testing.T) {
 		GameID:         "janken",
 		GameVersion:    "2.1.0",
 		RulesetVersion: "phase2",
-		TurnMode:       "simultaneous",
 	}
 	if err := ValidateMetadata(meta); err != nil {
 		t.Fatalf("ValidateMetadata: %v", err)
@@ -22,13 +21,11 @@ func TestCompatibleUsesGameVersionMajorAndRuleset(t *testing.T) {
 		GameID:         "janken",
 		GameVersion:    "2.1.0",
 		RulesetVersion: "phase2",
-		TurnMode:       "simultaneous",
 	}
 	actual := GameMetadata{
 		GameID:         "janken",
 		GameVersion:    "2.9.4",
 		RulesetVersion: "phase2",
-		TurnMode:       "simultaneous",
 	}
 	if err := Compatible(expected, actual); err != nil {
 		t.Fatalf("Compatible: %v", err)

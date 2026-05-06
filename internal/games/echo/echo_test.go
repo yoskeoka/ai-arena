@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
@@ -77,7 +78,7 @@ func TestNormalizeIllegalActionBecomesNoAction(t *testing.T) {
 	if actionStatus.ActionStatus != session.StatusNoAction {
 		t.Fatalf("action status = %q, want no_action", actionStatus.ActionStatus)
 	}
-	if actionStatus.FailureReason != "invalid-illegal-action" {
+	if actionStatus.FailureReason != contract.ReasonIllegalAction {
 		t.Fatalf("failure reason = %q, want invalid-illegal-action", actionStatus.FailureReason)
 	}
 }
