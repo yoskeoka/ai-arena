@@ -56,12 +56,22 @@ type ActionStatus struct {
 }
 
 func ValidateActionStatus(status ActionStatus) error {
+	if status.PlayerID == "" {
+		return fmt.Errorf("player_id is required")
+	}
+
 	switch status.ActionStatus {
 	case ActionAccepted:
 		if status.FailureReason != "" {
 			return fmt.Errorf("accepted action must not carry failure_reason")
 		}
+		if len(status.Action) == 0 {
+			return fmt.Errorf("accepted action must carry action payload")
+		}
 	case ActionNoAction:
+		if len(status.Action) != 0 {
+			return fmt.Errorf("no_action must not carry action payload")
+		}
 	default:
 		return fmt.Errorf("unknown action_status %q", status.ActionStatus)
 	}

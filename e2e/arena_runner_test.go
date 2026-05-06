@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
@@ -457,7 +458,7 @@ func TestArenaRunnerJankenTimeoutAndInvalidAffectPlacement(t *testing.T) {
 	if !hasFailureReason(result.Record.EventLog, string(session.ReasonTimeout)) {
 		t.Fatalf("event log missing timeout failure: %+v", result.Record.EventLog)
 	}
-	if !hasFailureReason(result.Record.EventLog, "invalid-illegal-action") {
+	if !hasFailureReason(result.Record.EventLog, string(contract.ReasonIllegalAction)) {
 		t.Fatalf("event log missing invalid action failure: %+v", result.Record.EventLog)
 	}
 }

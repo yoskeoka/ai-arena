@@ -1,6 +1,9 @@
 package contract
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestValidateActionStatus(t *testing.T) {
 	tests := []struct {
@@ -13,6 +16,7 @@ func TestValidateActionStatus(t *testing.T) {
 			status: ActionStatus{
 				PlayerID:     "p1",
 				ActionStatus: ActionAccepted,
+				Action:       json.RawMessage(`{"action":"rock"}`),
 			},
 			wantOK: true,
 		},
@@ -22,6 +26,14 @@ func TestValidateActionStatus(t *testing.T) {
 				PlayerID:      "p1",
 				ActionStatus:  ActionAccepted,
 				FailureReason: ReasonTimeout,
+				Action:        json.RawMessage(`{"action":"rock"}`),
+			},
+		},
+		{
+			name: "accepted requires action payload",
+			status: ActionStatus{
+				PlayerID:     "p1",
+				ActionStatus: ActionAccepted,
 			},
 		},
 		{
@@ -32,6 +44,20 @@ func TestValidateActionStatus(t *testing.T) {
 				FailureReason: ReasonTimeout,
 			},
 			wantOK: true,
+		},
+		{
+			name: "no_action rejects action payload",
+			status: ActionStatus{
+				PlayerID:     "p2",
+				ActionStatus: ActionNoAction,
+				Action:       json.RawMessage(`{"action":"rock"}`),
+			},
+		},
+		{
+			name: "player_id is required",
+			status: ActionStatus{
+				ActionStatus: ActionNoAction,
+			},
 		},
 	}
 
