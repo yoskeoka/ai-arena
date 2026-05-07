@@ -125,6 +125,36 @@ deny-by-default を基本方針とする。
 - memory limit の適用
 - cooperative shutdown 後の forced shutdown
 
+## Support Policy
+
+WASM/WASI runtime contract 自体は言語非依存で共通とする。一方で、公式の guide・sample・verification assets
+を整備して継続的に動作保証する範囲は、toolchain ごとに段階的に管理する。
+
+Phase 4 時点の区分:
+
+- `supported`: Go
+- `experiment-only`: Rust
+- `future candidate`: TypeScript, Python
+
+区分基準:
+
+- `supported`
+  - repo 内に公式 sample、build helper、targeted verification path がある
+  - `janken` で再現可能な verification asset があり、継続確認の責務を負う
+- `experiment-only`
+  - WASM/WASI contract に沿う module の提出自体は許可する
+  - repo 内に最小評価用 sample または再現可能 artifact を置いてよい
+  - build/runtime 成否の観測は残すが、常設 gate や外部向け guide 整備までは約束しない
+- `future candidate`
+  - support 拡張候補として意図だけ残す
+  - sample、helper、verification asset はまだ持たない
+
+運用ルール:
+
+- `supported` 以外を、公式サポート済み言語として告知してはならない
+- `experiment-only` の評価結果は恒久 spec へ詳細に埋め込まず、必要に応じて appendix / issue note / PR artifact に逃がしてよい
+- runtime host 側は language ごとの差別扱いをせず、manifest と module の contract だけを正本として扱う
+
 ## Go 参照フロー
 
 Phase 4 の first supported reference path は Go source から `GOOS=wasip1 GOARCH=wasm` で build した
@@ -170,6 +200,23 @@ Go sample で期待する runtime 振る舞い:
 - `stdout`: `init` / `turn` / `game_over` への JSON-RPC response だけを NDJSON で返す
 - `stderr`: `janken-go-wasm-ai init`, `turn <n>`, `game_over` のような debug/audit 用ログを出してよい
 - exit/shutdown: `game_over` に ACK 後は clean exit してよく、platform が `stdin` close 後に cooperative shutdown を完了できること
+
+## Rust Evaluation Lane
+
+Rust は Phase 4 時点では `experiment-only` とする。最初の non-Go candidate として、
+`janken` で最小の WASM/WASI evaluation lane を持ってよい。
+
+前提:
+
+- module は command-style WASI program として起動できること
+- `stdout` / `stderr` / shutdown contract は Go 参照フローと同じであること
+- toolchain 前提や blocker 切り分けは helper / appendix / issue note 側へ残し、外部 developer guide には昇格しないこと
+
+この lane が意味するもの:
+
+- Rust module の提出可否を runtime contract 上で評価できる
+- `janken` の targeted verification path で build/runtime 観測を再現できる
+- ただし official support は Go のみであり、Rust の成功は将来サポート判断の材料に留まる
 
 ## 監査対象
 
