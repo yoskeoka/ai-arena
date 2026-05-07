@@ -96,7 +96,8 @@ depends on:
 - targeted test で以下を確認する
   - `wasm-wasi` manifest を解決して adapter を起動できる
   - `stdout` JSON-RPC / `stderr` log capture が subprocess と同じ contract で動く
-  - deadline 超過が `invalid-timeout` または `runtime-stopped` に一貫して写像される
+  - deadline 超過は canonical に `invalid-timeout` へ写像される
+  - deadline 前に transport 継続不能になったケースは `runtime-stopped` へ写像される
   - malformed response と起動失敗が spec 通り分類される
   - shutdown 時に module 実行が停止し、stderr summary が取得できる
 - `arena-runner` が runtime kind ごとに正しい adapter を選ぶ unit/integration test を追加する
@@ -105,6 +106,7 @@ depends on:
 
 - [ ] Define the official AI runtime contract in spec
 - [ ] Define the WASM runtime manifest shape and runtime kind selection rules
+- [ ] Define the canonical failure mapping for timeout vs runtime stop
 - [ ] Refactor runtime adapter boundaries so subprocess and WASM share one session-facing interface
 - [ ] Implement the wazero-based WASM/WASI adapter
 - [ ] Update runner/catalog loading paths to resolve runtime kind from player metadata

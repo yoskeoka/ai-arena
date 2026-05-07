@@ -55,7 +55,9 @@ depends on:
 
 ### `testdata/ai/` and verification helpers
 
-- `arena-runner` から直接参照できる Go 製 WASM fixture を追加する
+- `arena-runner` から直接参照できる Go 製 WASM fixture を、source + reproducible build step を正本として追加する
+  - build 生成物の `.wasm` を恒常的に commit する前提にはしない
+  - local helper / targeted verification / CI が必要に応じて build して使う形を優先する
 - `make run-janken-go-wasm` などの lightweight helper を追加し、artifact path や期待結果を確認しやすくする
 
 ### tests / runner integration
@@ -77,6 +79,7 @@ depends on:
 - [ ] Define the Go-to-WASM reference flow in spec
 - [ ] Add a Go-based `janken` sample AI intended for WASM/WASI build output
 - [ ] Add build helpers and sidecar metadata for the sample AI
+- [ ] Define the checked-in artifact policy for Go-built WASM fixtures
 - [ ] Add runner verification for `janken` with WASM players
 - [ ] [parallel] Add a manual `make` helper for visible local verification
 - [ ] [parallel] Add tests for manifest/build/runtime failure cases
@@ -100,4 +103,5 @@ depends on:
 
 - Phase 4 の first supported path は Go 製 WASM とする
 - `janken` を WASM runtime の最初の公式検証ゲームとして使う
+- checked-in binary artifact を正本にせず、source + reproducible build step を fixture の正本にする
 - visible confirmation を重視し、automated test だけでなく `make` helper も追加対象に含める

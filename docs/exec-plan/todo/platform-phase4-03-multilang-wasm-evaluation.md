@@ -19,7 +19,8 @@ depends on:
 - 非 Go toolchain の WASM module を `janken` で流すための評価手順の整備
 - candidate language ごとの build/runtime 差分、制約、失敗例の記録
 - Phase 4 時点での「supported」「experiment-only」「unsupported」の区分整理
-- 必要なら最小 1 言語分の reference sample を追加
+- 必要なら最小 1 言語分の reference sample を追加する
+  - sample を追加しなくても、build blocker や runtime blocker を再現可能な形で記録できれば evaluation 完了としてよい
 
 この plan では以下は扱わない。
 
@@ -48,7 +49,7 @@ depends on:
 
 ### evaluation fixtures
 
-- 少なくとも 1 つの非 Go WASM sample、またはそれに準ずる評価 artifact を追加する
+- candidate language の評価に sample が必要な場合のみ、非 Go WASM sample かそれに準ずる評価 artifact を追加する
 - 言語固有の build helper が必要なら最小限追加する
 
 ### verification helpers
@@ -72,7 +73,7 @@ depends on:
 
 - [ ] Decide the support classification policy for non-Go WASM toolchains
 - [ ] Select the first candidate language(s) for evaluation
-- [ ] Add the minimum evaluation sample or fixture
+- [ ] Add the minimum evaluation sample or fixture if the chosen evaluation path requires one
 - [ ] Add a targeted `janken` verification path for non-Go WASM
 - [ ] Record success cases, failure modes, and environment assumptions
 - [ ] Reflect the support boundary back into `ai-runtime.md`
