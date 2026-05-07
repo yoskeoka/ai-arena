@@ -80,6 +80,27 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 			t.Fatalf("snapshot turn = %d, want 3", record.Snapshot.Turn)
 		}
 	})
+
+	t.Run("local-subprocess-gamemaster", func(t *testing.T) {
+		result := runArena(t,
+			"--game", "echo-count",
+			"--game-master-mode", "local-subprocess",
+			"--game-version", "2.0.0",
+			"--ruleset", "phase2-simultaneous-3turn",
+			"--match-id", "subprocess-gm-happy",
+			"--player", "p1=./testdata/ai/echo/echo-ai",
+			"--player", "p2=./testdata/ai/echo/echo-ai",
+		)
+		if result.Record.Status != contract.StatusCompleted {
+			t.Fatalf("status = %q, want completed", result.Record.Status)
+		}
+		if !hasEvent(result.Record.EventLog, "game_master_initialized") {
+			t.Fatalf("event log missing game_master_initialized: %+v", result.Record.EventLog)
+		}
+		if !hasEvent(result.Record.EventLog, "game_master_shutdown_completed") {
+			t.Fatalf("event log missing game_master_shutdown_completed: %+v", result.Record.EventLog)
+		}
+	})
 }
 
 func TestArenaRunnerPreflightMetadataMismatch(t *testing.T) {

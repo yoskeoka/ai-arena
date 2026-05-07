@@ -207,7 +207,7 @@ func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, eve
 	}, nil
 }
 
-func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
+func MetadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
 	if gameVersion != GameVersion {
 		return catalog.GameMetadata{}, "", 0, 0, fmt.Errorf("echo: unsupported game version %q", gameVersion)
 	}
@@ -234,6 +234,10 @@ func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, ga
 	default:
 		return catalog.GameMetadata{}, "", 0, 0, fmt.Errorf("echo: unsupported ruleset %q", ruleset)
 	}
+}
+
+func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
+	return MetadataForSelection(gameVersion, ruleset)
 }
 
 func (m *Master) Init(context.Context) (game.InitState, error) {

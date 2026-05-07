@@ -7,6 +7,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
+	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
 
@@ -21,8 +22,11 @@ func TestLookupFindsDescriptorByGameIDAndMajorVersion(t *testing.T) {
 	if descriptor.RegistryKey.GameVersionMajor != 2 {
 		t.Fatalf("descriptor.RegistryKey.GameVersionMajor = %d, want 2", descriptor.RegistryKey.GameVersionMajor)
 	}
-	if descriptor.BuildMode != BuildModeInProcess {
-		t.Fatalf("descriptor.BuildMode = %q, want %q", descriptor.BuildMode, BuildModeInProcess)
+	if descriptor.DefaultMode != BuildModeInProcess {
+		t.Fatalf("descriptor.DefaultMode = %q, want %q", descriptor.DefaultMode, BuildModeInProcess)
+	}
+	if len(descriptor.SupportedModes) != 1 || descriptor.SupportedModes[0] != BuildModeInProcess {
+		t.Fatalf("descriptor.SupportedModes = %+v, want only in-process", descriptor.SupportedModes)
 	}
 }
 
@@ -44,22 +48,22 @@ func TestLookupRejectsUnsupportedMajorForKnownGame(t *testing.T) {
 	}
 }
 
-func TestDescriptorBuildFreshReturnsRulesetError(t *testing.T) {
+func TestDescriptorBuildSessionReturnsRulesetError(t *testing.T) {
 	descriptor, err := Lookup(echo.GameID, echo.GameVersion)
 	if err != nil {
 		t.Fatalf("Lookup: %v", err)
 	}
-	_, err = descriptor.BuildFresh(BuildSpec{
+	_, err = descriptor.BuildSession(BuildModeInProcess, BuildSpec{
 		GameVersion: echo.GameVersion,
 		Ruleset:     "missing-ruleset",
 		Players:     []game.Player{{PlayerID: "p1"}},
 	})
 	if err == nil || !strings.Contains(err.Error(), `unsupported ruleset "missing-ruleset"`) {
-		t.Fatalf("BuildFresh error = %v, want unsupported ruleset", err)
+		t.Fatalf("BuildSession error = %v, want unsupported ruleset", err)
 	}
 }
 
-func TestRegisterRejectsMissingBuildMode(t *testing.T) {
+func TestRegisterRejectsMissingDefaultMode(t *testing.T) {
 	r, err := New()
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -67,17 +71,27 @@ func TestRegisterRejectsMissingBuildMode(t *testing.T) {
 	err = r.Register(GameDescriptor{
 		RegistryKey: RegistryKey{GameID: "test", GameVersionMajor: 1},
 		GameID:      "test",
-		BuildFresh: func(BuildSpec) (game.Master, error) {
+		BuildSession: func(BuildMode, BuildSpec) (gamemaster.Session, error) {
 			return nil, nil
 		},
-		BuildFromSnapshot: func(BuildSpec, game.Snapshot) (game.Master, error) {
+		BuildSessionFromSnapshot: func(BuildMode, BuildSpec, game.Snapshot) (gamemaster.Session, error) {
 			return nil, nil
 		},
 		SnapshotFromHistory: func(BuildSpec, []match.Event, int) (game.Snapshot, error) {
 			return game.Snapshot{}, nil
 		},
 	})
-	if err == nil || !strings.Contains(err.Error(), "registry: BuildMode is required") {
-		t.Fatalf("Register error = %v, want BuildMode required", err)
+	if err == nil || !strings.Contains(err.Error(), "registry: DefaultMode is required") {
+		t.Fatalf("Register error = %v, want DefaultMode required", err)
+	}
+}
+
+func TestLookupEchoSupportsDualModes(t *testing.T) {
+	descriptor, err := Lookup(echo.GameID, echo.GameVersion)
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if len(descriptor.SupportedModes) != 2 {
+		t.Fatalf("len(SupportedModes) = %d, want 2", len(descriptor.SupportedModes))
 	}
 }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
+	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
 	"github.com/yoskeoka/ai-arena/internal/platform/replay"
@@ -67,6 +68,7 @@ func run(args []string) error {
 	var (
 		gameName         string
 		gameVersion      string
+		gameMasterMode   string
 		ruleset          string
 		matchID          string
 		outputDir        string
@@ -86,6 +88,7 @@ func run(args []string) error {
 	fs.SetOutput(os.Stderr)
 	fs.StringVar(&gameName, "game", "", "game id")
 	fs.StringVar(&gameVersion, "game-version", "", "game version")
+	fs.StringVar(&gameMasterMode, "game-master-mode", "", "game master connection mode")
 	fs.StringVar(&ruleset, "ruleset", "", "game ruleset")
 	fs.StringVar(&matchID, "match-id", "", "match id")
 	fs.StringVar(&outputDir, "output-dir", defaultOutputDir, "base directory for standard runner artifacts")
@@ -200,6 +203,10 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	selectedMode, err := resolveGameMasterMode(descriptor, gameMasterMode)
+	if err != nil {
+		return err
+	}
 
 	var metaOverride *catalog.GameMetadata
 	if historyInput != "" {
@@ -212,11 +219,12 @@ func run(args []string) error {
 			Ruleset:     ruleset,
 			Players:     append([]game.Player(nil), playersForGame...),
 		}
-		master, err := descriptor.BuildFresh(buildSpec)
+		master, err := descriptor.BuildSession(selectedMode, buildSpec)
 		if err != nil {
 			return err
 		}
 		metaOverride = ptr(master.Metadata())
+		_ = master.Shutdown(context.Background())
 		snapshot, err := descriptor.SnapshotFromHistory(buildSpec, history, targetTurn)
 		if err != nil {
 			return err
@@ -231,7 +239,7 @@ func run(args []string) error {
 		metaOverride = &recordSource.Game
 	}
 
-	master, err := newMasterForMode(descriptor, registry.BuildSpec{
+	master, err := newGameMasterSession(descriptor, selectedMode, registry.BuildSpec{
 		GameVersion: gameVersion,
 		Ruleset:     ruleset,
 		Players:     append([]game.Player(nil), playersForGame...),
@@ -248,16 +256,22 @@ func run(args []string) error {
 		}
 	}
 	if exportedOutput != "" && resumeSnapshot != nil {
-		exported := master.ExportedSnapshot()
+		exported, err := master.CurrentExportedSnapshot(context.Background())
+		if err != nil {
+			_ = master.Shutdown(context.Background())
+			return err
+		}
 		exported.MatchID = matchID
 		exported.Status = game.StatusRunning
 		if err := writeJSONToTarget(exportedOutput, exported, os.Stdout, "exported snapshot"); err != nil {
+			_ = master.Shutdown(context.Background())
 			return err
 		}
 	}
 
 	players, sessions, err := loadPlayersAndSessions(master.Metadata(), playerArgs, stderrLimitBytes)
 	if err != nil {
+		_ = master.Shutdown(context.Background())
 		return err
 	}
 
@@ -449,11 +463,24 @@ func mustMarshal(v any) json.RawMessage {
 	return raw
 }
 
-func newMasterForMode(descriptor registry.GameDescriptor, spec registry.BuildSpec, snapshot *game.Snapshot) (game.Master, error) {
+func newGameMasterSession(descriptor registry.GameDescriptor, mode registry.BuildMode, spec registry.BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
 	if snapshot != nil {
-		return descriptor.BuildFromSnapshot(spec, *snapshot)
+		return descriptor.BuildSessionFromSnapshot(mode, spec, *snapshot)
 	}
-	return descriptor.BuildFresh(spec)
+	return descriptor.BuildSession(mode, spec)
+}
+
+func resolveGameMasterMode(descriptor registry.GameDescriptor, raw string) (registry.BuildMode, error) {
+	if raw == "" {
+		return descriptor.DefaultMode, nil
+	}
+	mode := registry.BuildMode(raw)
+	for _, supported := range descriptor.SupportedModes {
+		if supported == mode {
+			return mode, nil
+		}
+	}
+	return "", fmt.Errorf("game master mode %q is unsupported for game %q", raw, descriptor.GameID)
 }
 
 func parsePlayersForGame(args []string) ([]game.Player, error) {

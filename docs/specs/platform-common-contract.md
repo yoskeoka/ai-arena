@@ -26,6 +26,7 @@
 ## 参照関係
 
 - `docs/specs/platform.md`: platform core 全体像、runner contract、fixture appendix
+- `docs/specs/game-master.md`: game master 開発者向けの論理 API と transport 契約
 - `docs/specs/janken-game.md`: `janken` 固有 payload と validation
 - `docs/specs/dungeon-game.md`: Phase 3 の本命 game が platform に要求する性質
 
