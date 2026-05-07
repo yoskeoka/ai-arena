@@ -82,26 +82,10 @@ func mustDefaultRegistry() *Registry {
 				SupportedRulesets: janken.SupportedRulesets(),
 			},
 			BuildSession: func(spec BuildSpec) (gamemaster.Session, error) {
-				master, err := janken.New(janken.Config{
-					GameVersion: spec.GameVersion,
-					Ruleset:     spec.Ruleset,
-					Players:     append([]game.Player(nil), spec.Players...),
-				})
-				if err != nil {
-					return nil, err
-				}
-				return gamemaster.NewInProcessSession(master), nil
+				return buildJankenInProcessSession(spec, nil)
 			},
 			BuildSessionFromSnapshot: func(spec BuildSpec, snapshot game.Snapshot) (gamemaster.Session, error) {
-				master, err := janken.NewFromSnapshot(janken.Config{
-					GameVersion: spec.GameVersion,
-					Ruleset:     spec.Ruleset,
-					Players:     append([]game.Player(nil), spec.Players...),
-				}, snapshot)
-				if err != nil {
-					return nil, err
-				}
-				return gamemaster.NewInProcessSession(master), nil
+				return buildJankenInProcessSession(spec, &snapshot)
 			},
 			SnapshotFromHistory: func(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
 				return janken.SnapshotFromHistory(spec.GameVersion, spec.Ruleset, append([]game.Player(nil), spec.Players...), events, targetTurn)
@@ -165,4 +149,25 @@ func buildEchoLocalSubprocessSession(spec BuildSpec, snapshot *game.Snapshot) (g
 		ResumeSnapshot:   snapshot,
 		StderrLimitBytes: 4096,
 	})
+}
+
+func buildJankenInProcessSession(spec BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
+	cfg := janken.Config{
+		GameVersion: spec.GameVersion,
+		Ruleset:     spec.Ruleset,
+		Players:     append([]game.Player(nil), spec.Players...),
+	}
+	var (
+		master game.Master
+		err    error
+	)
+	if snapshot == nil {
+		master, err = janken.New(cfg)
+	} else {
+		master, err = janken.NewFromSnapshot(cfg, *snapshot)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return gamemaster.NewInProcessSession(master), nil
 }

@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -417,6 +418,32 @@ func TestArenaRunnerJankenHappyPath(t *testing.T) {
 	}
 }
 
+func TestArenaRunnerJankenGoWASMMixedRuntimePath(t *testing.T) {
+	buildJankenGoWASMFixture(t)
+
+	result := runArena(t,
+		"--game", janken.GameID,
+		"--game-version", janken.GameVersion,
+		"--ruleset", janken.RulesetRegular,
+		"--match-id", "janken-go-wasm-happy",
+		"--player", "p1=./testdata/ai/janken/janken-go-wasm-ai",
+		"--player", "p2=./testdata/ai/janken/janken-rock-ai-wasm",
+	)
+
+	if result.Record.Status != contract.StatusCompleted {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
+	}
+	if result.Record.Result.Placements[0].PlayerID != "p1" {
+		t.Fatalf("winner = %q, want p1", result.Record.Result.Placements[0].PlayerID)
+	}
+	if result.Record.Snapshot.PerPlayer["p1"].StderrBytes == 0 {
+		t.Fatal("expected stderr bytes for Go-WASM player")
+	}
+	if _, err := os.Stat(filepath.Join(result.MatchDir, "history.json")); err != nil {
+		t.Fatalf("history.json missing: %v", err)
+	}
+}
+
 func TestArenaRunnerJankenResumeFromHistoryAndContinue(t *testing.T) {
 	base := runArena(t,
 		"--game", "janken",
@@ -480,6 +507,56 @@ func TestArenaRunnerJankenTimeoutAndInvalidAffectPlacement(t *testing.T) {
 	}
 	if !hasFailureReason(result.Record.EventLog, contract.ReasonIllegalAction) {
 		t.Fatalf("event log missing invalid action failure: %+v", result.Record.EventLog)
+	}
+}
+
+func TestArenaRunnerJankenGoWASMMissingModuleFails(t *testing.T) {
+	entryPath := filepath.Join(t.TempDir(), "missing-go-wasm-ai")
+	manifestPath := entryPath + ".arena.json"
+	manifest := `{
+  "ai_id": "missing-go-wasm-ai",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "janken",
+    "game_version": "2.1.0",
+    "ruleset_version": "regular"
+  },
+  "runtime": {
+    "kind": "wasm-wasi",
+    "module": "./missing-go-wasm-ai.wasm"
+  }
+}`
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+		"--game", janken.GameID,
+		"--game-version", janken.GameVersion,
+		"--ruleset", janken.RulesetRegular,
+		"--match-id", "janken-go-wasm-missing-module",
+		"--output-dir", t.TempDir(),
+		"--player", "p1="+entryPath,
+		"--player", "p2=./testdata/ai/janken/janken-rock-ai",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected missing module error")
+	}
+	if !strings.Contains(string(output), "openat") && !strings.Contains(string(output), "no such file") {
+		t.Fatalf("output = %s, want missing wasm module read failure", output)
+	}
+}
+
+func TestBuildGoWASMReportsBuildFailure(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "missing.wasm")
+	err := buildGoWASM(newTestContext(t), repoRoot(t), "./testdata/ai/janken/does-not-exist", outputPath)
+	if err == nil {
+		t.Fatal("expected build failure for missing package")
+	}
+	if _, statErr := os.Stat(outputPath); !os.IsNotExist(statErr) {
+		t.Fatalf("output path = %q, want missing artifact", outputPath)
 	}
 }
 
@@ -777,7 +854,34 @@ func hasFailureReason(events []match.Event, reason contract.FailureReason) bool 
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	return filepath.Clean("..")
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatalf("abs repo root: %v", err)
+	}
+	return root
+}
+
+func buildJankenGoWASMFixture(t *testing.T) {
+	t.Helper()
+
+	outputPath := filepath.Join(repoRoot(t), "testdata/ai/janken/janken-go-wasm-ai.wasm")
+	if err := buildGoWASM(newTestContext(t), repoRoot(t), "./testdata/ai/janken/janken-go-wasm-ai", outputPath); err != nil {
+		t.Fatalf("build Go-WASM fixture: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(outputPath)
+	})
+}
+
+func buildGoWASM(ctx context.Context, dir, pkg, outputPath string) error {
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", outputPath, pkg)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("build wasm %s: %w\n%s", pkg, err, output)
+	}
+	return nil
 }
 
 func newTestContext(t *testing.T) context.Context {

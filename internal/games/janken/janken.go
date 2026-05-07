@@ -240,6 +240,10 @@ func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, eve
 	return snapshot, nil
 }
 
+func MetadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, int, time.Duration, error) {
+	return metadataForSelection(gameVersion, ruleset)
+}
+
 func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, int, time.Duration, error) {
 	if gameVersion != GameVersion {
 		return catalog.GameMetadata{}, 0, 0, fmt.Errorf("janken: unsupported game version %q", gameVersion)

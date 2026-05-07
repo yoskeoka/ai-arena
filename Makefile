@@ -6,7 +6,7 @@ GOCACHE = $(CACHE_ROOT)/go-build
 GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
 GOFILES = $(shell git ls-files -- '*.go')
 
-.PHONY: test fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec run-echo-simultaneous run-echo-sequential
+.PHONY: test fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec build-janken-go-wasm run-janken-go-wasm run-echo-simultaneous run-echo-sequential
 
 test:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
@@ -44,6 +44,23 @@ lint-staticcheck:
 lint-gosec:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	$(GO_ENV) $(GO) tool gosec -exclude-dir=.cache ./...
+
+build-janken-go-wasm:
+	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	$(GO_ENV) GOOS=wasip1 GOARCH=wasm $(GO) build -o ./testdata/ai/janken/janken-go-wasm-ai.wasm ./testdata/ai/janken/janken-go-wasm-ai
+
+run-janken-go-wasm: build-janken-go-wasm
+	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
+	output_dir="$$(mktemp -d /tmp/ai-arena-janken-wasm-XXXXXX)"; \
+	echo "artifact dir: $$output_dir/janken-go-wasm"; \
+	$(GO_ENV) $(GO) run ./cmd/arena-runner \
+		--game janken \
+		--game-version 2.1.0 \
+		--ruleset regular \
+		--match-id janken-go-wasm \
+		--output-dir "$$output_dir" \
+		--player p1=./testdata/ai/janken/janken-go-wasm-ai \
+		--player p2=./testdata/ai/janken/janken-rock-ai-wasm
 
 run-echo-simultaneous:
 	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"

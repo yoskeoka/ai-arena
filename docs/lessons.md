@@ -55,3 +55,10 @@
 - **Pattern**: 現在のコード構造をそのまま spec に写してしまい、責務は同じでも小さなリファクタリングで spec 修正が必要な書き方になる
 - **Rule**: spec では concrete な関数名・メソッド名・型名をむやみに持ち込まず、まず責務・入出力・境界を書く。実装で使っている型や interface を書く場合も、それが安定した抽象概念として spec の主語になっているときだけに限る
 - **Applied**: `docs/specs/platform-game-registry.md` の lookup 流れ、今後の platform / registry / runner 系 spec 全般
+
+## [2026-05-08] AI runtime 差分と game id を混同しない
+
+- **Mistake**: Go-WASM AI player の検証線を追加するとき、AI player runtime の差分をそのまま game id 差分へ持ち込み、`janken-wasm` を別 game として切り出した
+- **Pattern**: `runner` が受ける AI player runtime の違いと、game master / game ruleset identity の違いを同じ層で扱ってしまう
+- **Rule**: game master 実装と ruleset が同一なら game id は分けない。`local-subprocess` と `wasm-wasi` のような AI player runtime 差分は、まず同一 game id の sidecar/runtime 設定差分として表現する
+- **Applied**: `janken` の Go-WASM verification path、今後の AI runtime fixture 設計

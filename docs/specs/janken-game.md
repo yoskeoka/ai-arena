@@ -22,6 +22,10 @@
 
 `janken` 側では、fixture では薄いゲーム固有の visible state と勝敗解決を担保する。
 
+Phase 4 では `janken` を、Go 製 WASM/WASI AI runtime の最初の公式検証ゲームとして使う。
+この役割では、game ルール自体の検証に加えて、Go で書いた AI を WASM/WASI へ build し、
+`arena-runner` が同じ `janken` game id のまま subprocess AI と WASM AI の両方を正式経路として完走できることも確認対象に含める。
+
 ## Metadata
 
 - `game_id`: `janken`
@@ -221,6 +225,29 @@ response:
   }
 }
 ```
+
+## Phase 4 Go-WASM 検証構成
+
+Go 製 WASM/WASI sample AI verification では、少なくとも以下を満たす構成を基準とする。
+
+- game: `janken`
+- game_version: `2.1.0`
+- ruleset_version: `regular`
+- players:
+  - `p1=./testdata/ai/janken/janken-go-wasm-ai`
+  - `p2=./testdata/ai/janken/janken-rock-ai-wasm` または同等の比較用 fixture
+
+期待結果:
+
+- match は `completed` で終了する
+- standard artifact として `record.json` / `history.json` が `<output-dir>/<match-id>/` に残る
+- Go-WASM player の `stderr_bytes` が 0 より大きく、runtime 経由で `stderr` capture が効いている
+- mixed runtime 構成でも `public_history` / placement / failure 分類 contract が崩れない
+
+負例として最低限確認するもの:
+
+- sidecar manifest が指す module が存在しない場合、runner は match 開始前に起動失敗を返す
+- manifest metadata が match metadata と不整合な場合、runner は compatibility error を返す
 
 ここでの `ready: true` は、AI が `janken` の `init` request を解釈し、初期状態を受け取ったうえでプロトコル応答できたことを示す ACK として扱う。
 
