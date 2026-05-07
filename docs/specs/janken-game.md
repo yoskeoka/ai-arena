@@ -27,9 +27,11 @@
 - `game_id`: `janken`
 - `game_version`: `2.1.0`
 - `ruleset_version`: `regular`
-- `turn_mode`: `simultaneous`
 
 `regular` ruleset は 5 ラウンド固定とする。
+
+同時行動であることは metadata 互換性 key ではなく、`DecisionStep.mode = simultaneous` を返す
+game master 契約として表現する。
 
 ## 試合形式
 

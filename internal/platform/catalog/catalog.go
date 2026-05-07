@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 )
 
 var (
@@ -12,12 +14,7 @@ var (
 	ErrIncompatibleMetadata = errors.New("catalog: incompatible metadata")
 )
 
-type GameMetadata struct {
-	GameID         string `json:"game_id"`
-	GameVersion    string `json:"game_version"`
-	RulesetVersion string `json:"ruleset_version"`
-	TurnMode       string `json:"turn_mode"`
-}
+type GameMetadata = contract.GameMetadata
 
 type SidecarManifest struct {
 	AIID     string           `json:"ai_id"`
@@ -46,9 +43,6 @@ func ValidateMetadata(meta GameMetadata) error {
 	}
 	if meta.RulesetVersion == "" {
 		return fmt.Errorf("%w: ruleset_version is required", ErrInvalidMetadata)
-	}
-	if meta.TurnMode != "simultaneous" && meta.TurnMode != "sequential" {
-		return fmt.Errorf("%w: turn_mode must be simultaneous or sequential", ErrInvalidMetadata)
 	}
 	if _, err := majorVersion(meta.GameVersion); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidMetadata, err)

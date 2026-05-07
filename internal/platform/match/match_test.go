@@ -23,7 +23,6 @@ func TestRunnerBuildsCompletedRecordAcrossSimultaneousAndSequentialSteps(t *test
 			GameID:         "echo-count",
 			GameVersion:    "2.0.0",
 			RulesetVersion: "phase2",
-			TurnMode:       "simultaneous",
 		},
 		steps: []*game.DecisionStep{
 			{
@@ -74,7 +73,7 @@ func TestRunnerBuildsCompletedRecordAcrossSimultaneousAndSequentialSteps(t *test
 		t.Fatalf("Run: %v", err)
 	}
 
-	if record.Status != string(game.StatusCompleted) {
+	if record.Status != game.StatusCompleted {
 		t.Fatalf("record.Status = %q, want completed", record.Status)
 	}
 	if len(master.applied) != 3 {
@@ -109,7 +108,7 @@ func TestRunnerReturnsFailedRecordForInitFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("Run returned nil error, want init failure")
 	}
-	if record.Status != string(game.StatusFailed) {
+	if record.Status != game.StatusFailed {
 		t.Fatalf("record.Status = %q, want failed", record.Status)
 	}
 	if !hasEventKind(record.EventLog, "runtime_exited") {
@@ -134,7 +133,7 @@ func TestRunnerReturnsCanceledRecordForInitCancellation(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Run error = %v, want context.Canceled", err)
 	}
-	if record.Status != string(game.StatusCanceled) {
+	if record.Status != game.StatusCanceled {
 		t.Fatalf("record.Status = %q, want canceled", record.Status)
 	}
 	if !hasEventKind(record.EventLog, "match_canceled") {
@@ -156,7 +155,7 @@ func TestRunnerReturnsCanceledRecordWhenContextCanceled(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Run error = %v, want context.Canceled", err)
 	}
-	if record.Status != string(game.StatusCanceled) {
+	if record.Status != game.StatusCanceled {
 		t.Fatalf("record.Status = %q, want canceled", record.Status)
 	}
 	if !hasEventKind(record.EventLog, "match_canceled") {
@@ -243,7 +242,7 @@ func (f *fakeMaster) VisibleState(string) json.RawMessage {
 func (f *fakeMaster) Snapshot() game.Snapshot {
 	return game.Snapshot{
 		Turn:      2,
-		Status:    "running",
+		Status:    game.StatusRunning,
 		GameState: raw(`{"phase":"done"}`),
 	}
 }
@@ -251,7 +250,7 @@ func (f *fakeMaster) Snapshot() game.Snapshot {
 func (f *fakeMaster) ExportedSnapshot() game.ExportedSnapshot {
 	return game.ExportedSnapshot{
 		Turn:        2,
-		Status:      "running",
+		Status:      game.StatusRunning,
 		PublicState: raw(`{"public":"done"}`),
 	}
 }
@@ -322,6 +321,5 @@ func baseMetadata() catalog.GameMetadata {
 		GameID:         "echo-count",
 		GameVersion:    "2.0.0",
 		RulesetVersion: "phase2",
-		TurnMode:       "simultaneous",
 	}
 }

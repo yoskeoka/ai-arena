@@ -241,7 +241,7 @@ func run(args []string) error {
 	if exportedOutput != "" && resumeSnapshot != nil {
 		exported := master.ExportedSnapshot()
 		exported.MatchID = matchID
-		exported.Status = string(game.StatusRunning)
+		exported.Status = game.StatusRunning
 		if err := writeJSONToTarget(exportedOutput, exported, os.Stdout, "exported snapshot"); err != nil {
 			return err
 		}
@@ -558,7 +558,6 @@ func loadEntry(matchMeta catalog.GameMetadata, spec playerSpec) (loadedEntry, er
 			GameID:         manifest.Protocol.GameID,
 			GameVersion:    manifest.Protocol.GameVersion,
 			RulesetVersion: manifest.Protocol.RulesetVersion,
-			TurnMode:       matchMeta.TurnMode,
 		}
 		if err := catalog.Compatible(matchMeta, aiMeta); err != nil {
 			return loadedEntry{}, fmt.Errorf("%s metadata incompatible: %w", spec.PlayerID, err)

@@ -4,6 +4,9 @@
 
 このドキュメントは、AI Arena の本命ゲームとなるダンジョンゲームについて、Phase 1 時点の構想を整理するものである。設計の方向性と、それによってプラットフォームへ要求される性質を定義するが、Phase 3 で扱う実装レベル詳細までは踏み込まない。
 
+platform 共通契約の正本は `docs/specs/platform-common-contract.md` とし、この文書では
+ダンジョンゲーム固有の payload / validation / state progression を後続フェーズで定義する前提を置く。
+
 ## 設計目標
 
 - プロンプト投入だけではなく、高速なアルゴリズム判断を報いること
@@ -131,6 +134,22 @@ Phase 3 の詳細仕様では、少なくとも以下のようなアクション
 - 単純な勝敗ではなく複合スコアによる順位付け
 
 これらが、Phase 1 のプラットフォーム仕様を、じゃんけんだけで必要な最小要件より広くしている理由である。
+
+## 共通契約との境界
+
+ダンジョンゲームが platform 共通契約に依存する部分:
+
+- `init` / `turn` / `game_over` の共通メソッド境界
+- `DecisionStep` による同時行動解決
+- `accepted` / `no_action` と failure 分類
+- record / snapshot / exported snapshot の game 非依存コア
+
+ダンジョンゲーム側で後続定義する部分:
+
+- `state` / `visible_state` / `legal_action_hint` / `summary` の payload shape
+- アクション schema と validation 規則
+- 衝突、戦闘、採点、順位計算
+- `public_state` / `full_state` に含める具体フィールド
 
 ## Phase 3 へ先送りする項目
 

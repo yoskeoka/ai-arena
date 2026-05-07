@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
@@ -162,7 +163,6 @@ func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, in
 			GameID:         GameID,
 			GameVersion:    gameVersion,
 			RulesetVersion: RulesetRegular,
-			TurnMode:       string(game.Simultaneous),
 		}, RegularRounds, defaultTurnDeadline, nil
 	default:
 		return catalog.GameMetadata{}, 0, 0, fmt.Errorf("janken: unsupported ruleset %q", ruleset)
@@ -213,7 +213,7 @@ func (m *Master) NormalizeAction(req game.DecisionRequest, actionStatus game.Act
 		return game.ActionStatus{
 			PlayerID:      req.PlayerID,
 			ActionStatus:  session.StatusNoAction,
-			FailureReason: "invalid-illegal-action",
+			FailureReason: contract.ReasonIllegalAction,
 		}
 	}
 
@@ -253,7 +253,7 @@ func (m *Master) ApplyStep(_ context.Context, step game.DecisionStep, actionStat
 		switch status.FailureReason {
 		case session.ReasonTimeout:
 			current.Timeouts++
-		case "invalid-illegal-action":
+		case contract.ReasonIllegalAction:
 			current.InvalidActions++
 		}
 		m.scores[status.PlayerID] = current
@@ -306,7 +306,7 @@ func (m *Master) Snapshot() game.Snapshot {
 		GameVersion:    m.meta.GameVersion,
 		RulesetVersion: m.meta.RulesetVersion,
 		Turn:           m.resolved,
-		Status:         "running",
+		Status:         game.StatusRunning,
 		GameState: mustRaw(snapshotState{
 			Rounds:         m.rounds,
 			ResolvedRounds: m.resolved,
@@ -323,7 +323,7 @@ func (m *Master) ExportedSnapshot() game.ExportedSnapshot {
 		GameVersion:    m.meta.GameVersion,
 		RulesetVersion: m.meta.RulesetVersion,
 		Turn:           m.resolved,
-		Status:         "running",
+		Status:         game.StatusRunning,
 		PublicState: mustRaw(publicState{
 			Rounds:         m.rounds,
 			ResolvedRounds: m.resolved,
