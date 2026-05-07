@@ -97,13 +97,18 @@ descriptor の build 入口へ渡して game 固有 validation を受ける。
   - `game_id + game_version major` で registry lookup を行う
   - 必要なら game master 接続方式を明示し、lookup 済み descriptor に `ruleset_version` と player list を渡して fresh run / snapshot resume / history replay を起動する
 - game registry の責務:
-  - registered game を descriptor 単位で保持する
-  - `game_id + game_version major` lookup を提供する
-  - game master 接続形態と build/replay 入口をまとめて返す
+  - persisted `DescriptorRecord` を store から読む
+  - record を runtime `GameDescriptor` へ解決する
+  - runner / replay へ `game_id + game_version major` lookup を提供する
+  - 永続化 backend の種類を runner / replay に漏らさない
 - game 固有 build 入口の責務:
   - `ruleset_version` の妥当性判定
   - fresh run / snapshot resume / history replay で使う metadata の確定
   - game 固有 snapshot/history 解釈
+
+registry 内部の流れは `lookup persisted record -> resolve runtime descriptor -> build -> catalog compatibility`
+の順とする。runner / replay は runtime `GameDescriptor` を受け取るだけで、in-memory store /
+DB-backed store の違いを意識しない。
 
 ### 必須 metadata
 

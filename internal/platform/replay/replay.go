@@ -1,6 +1,7 @@
 package replay
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -51,7 +52,11 @@ func LoadHistory(path string) ([]match.Event, error) {
 }
 
 func SnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
-	descriptor, err := registry.Lookup(meta.GameID, meta.GameVersion)
+	return SnapshotFromHistoryWithRegistry(registry.Default(), meta, players, events, targetTurn)
+}
+
+func SnapshotFromHistoryWithRegistry(reg *registry.Registry, meta catalog.GameMetadata, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
+	descriptor, err := reg.LookupVersion(context.Background(), meta.GameID, meta.GameVersion)
 	if err != nil {
 		return game.Snapshot{}, err
 	}

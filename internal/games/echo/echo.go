@@ -17,6 +17,8 @@ import (
 const (
 	GameID                   = "echo-count"
 	SubprocessGameID         = "echo-count-subprocess"
+	BuilderIDInProcess       = "echo-count/in-process"
+	BuilderIDLocalSubprocess = "echo-count-subprocess/local-subprocess"
 	GameVersion              = "2.0.0"
 	RulesetSimultaneous3Turn = "phase2-simultaneous-3turn"
 	RulesetSequential3Turn   = "phase2-sequential-3turn"
@@ -215,6 +217,14 @@ func SnapshotFromHistoryWithGameID(gameID, gameVersion, ruleset string, players 
 
 func MetadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
 	return MetadataForSelectionWithGameID(GameID, gameVersion, ruleset)
+}
+
+func SupportedRulesets() []string {
+	return []string{
+		RulesetSimultaneous3Turn,
+		RulesetSequential3Turn,
+		RulesetSimultaneous2Turn,
+	}
 }
 
 func MetadataForSelectionWithGameID(gameID, gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
