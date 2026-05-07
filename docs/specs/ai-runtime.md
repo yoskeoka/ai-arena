@@ -1,0 +1,143 @@
+# AI Runtime 仕様
+
+## 目的
+
+このドキュメントは、AI player runtime の公式 contract を定義する。platform / runner / AI sample は
+この spec を正本として、runtime kind、manifest schema、標準 stream 契約、sandbox と resource limit
+の境界を共有する。
+
+## この spec の責務範囲
+
+この spec が定義するもの:
+
+- AI sidecar manifest の runtime schema
+- `local-subprocess` / `wasm-wasi` runtime kind
+- runtime kind ごとの entrypoint 解決
+- `stdin` / `stdout` / `stderr` の使い方
+- sandbox と host capability の最小契約
+- deadline / memory limit / shutdown の責務分離
+- runtime failure の監査観点
+
+この spec が定義しないもの:
+
+- game 固有 payload schema
+- game metadata 互換性判定の詳細
+- `arena-runner` の artifact layout
+- 提出 API や online service への upload 手順
+
+## Sidecar Manifest
+
+AI 実行物の横に `<entry>.arena.json` を置く。
+
+最小 schema:
+
+```json
+{
+  "ai_id": "sample-janken-bot",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "janken",
+    "game_version": "2.1.0",
+    "ruleset_version": "regular"
+  },
+  "runtime": {
+    "kind": "wasm-wasi",
+    "module": "./bot.wasm",
+    "args": ["./bot.wasm"],
+    "memory_limit_pages": 64
+  }
+}
+```
+
+### 共通項目
+
+- `ai_id`: AI の識別子。省略時は runner が entrypoint basename などの local fallback を使ってよい
+- `protocol.transport`: 現時点では `stdio-jsonrpc-ndjson` のみを許可する
+- `protocol.game_id`
+- `protocol.game_version`
+- `protocol.ruleset_version`
+- `runtime.kind`: 起動方式の識別子
+
+### `local-subprocess`
+
+`local-subprocess` は開発用・比較用の runtime kind として維持する。
+
+必須項目:
+
+- `runtime.command`: shell 展開しない tokenized command array
+
+任意項目:
+
+- `runtime.args`: 将来拡張予約とし、現時点では使わない
+- `runtime.memory_limit_pages`: 使用しない
+
+### `wasm-wasi`
+
+`wasm-wasi` は正式な WASM/WASI 実行経路である。
+
+必須項目:
+
+- `runtime.module`: `.wasm` module への path
+
+任意項目:
+
+- `runtime.args`: module に渡す argv。省略時は `[runtime.module]` とみなしてよい
+- `runtime.memory_limit_pages`: linear memory max pages。未指定時は platform 既定値を使ってよい
+
+制約:
+
+- module は command-style WASI program として起動できなければならない
+- module path は sidecar path 基準または runner cwd 基準のローカル file path とする
+- network や repo/workspace への暗黙 access を前提にしてはならない
+
+## 標準 Stream 契約
+
+- `stdin`: platform から AI への JSON-RPC request / notification を NDJSON で送る唯一の公式入力
+- `stdout`: AI から platform への JSON-RPC response を NDJSON で返す唯一の公式出力
+- `stderr`: AI の自由ログ出力。platform は capture するが protocol channel として解釈しない
+
+不変条件:
+
+- runtime kind が subprocess でも WASM でも `stdout` へ JSON 以外を混在させてはならない
+- runtime kind が subprocess でも WASM でも `stderr` は debug / audit 用の自由ログとして扱う
+- transport 継続不能は runtime kind を問わず `runtime-stopped` として監査する
+
+## Sandbox と Host Capability
+
+deny-by-default を基本方針とする。
+
+- network access は与えない
+- repo/workspace への暗黙 file access は与えない
+- `wasm-wasi` では最小限の stdio と clock/time 相当だけを前提にしてよい
+- 任意 host function や環境依存 capability を AI contract に含めてはならない
+
+`local-subprocess` は OS process で動いても、platform contract 上は上記制約を満たす運用前提とする。
+
+## Resource Limit と Deadline
+
+- request deadline は session/request 側の責務であり、各 `init` / `turn` / `game_over` request の締切として扱う
+- runtime 側は memory 上限と host capability 制限を担う
+- runtime shutdown は platform が主導し、cooperative shutdown を試みた後に必要なら強制停止してよい
+
+`wasm-wasi` では少なくとも以下を platform が管理する。
+
+- module instantiation 成否
+- memory limit の適用
+- cooperative shutdown 後の forced shutdown
+
+## 監査対象
+
+platform は少なくとも以下を distinguish して記録できなければならない。
+
+- runtime 起動失敗
+- malformed response
+- timeout
+- forced shutdown
+- transport 継続不能
+
+失敗分類との対応:
+
+- deadline まで response が来なければ `invalid-timeout`
+- deadline 前に stdout close / module exit / stdin write failure など transport 継続不能が起きたら `runtime-stopped`
+- JSON 破損、JSON-RPC envelope 不正、error response は `invalid-protocol-malformed`
+- shutdown 猶予後に platform が停止を強制した場合は audit 上 forced shutdown として残してよい

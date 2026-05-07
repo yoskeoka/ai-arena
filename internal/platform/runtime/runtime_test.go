@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -77,6 +79,66 @@ func TestCloseReturnsCrashExitWhenProcessAlreadyFailed(t *testing.T) {
 	}
 }
 
+func TestStartWASMWASIStreamsAndCapturesStderr(t *testing.T) {
+	modulePath := buildWASMTestBot(t)
+
+	adapter, err := Start(context.Background(), Config{
+		Kind:             KindWASMWASI,
+		ModulePath:       modulePath,
+		Env:              []string{"BOT_MODE=boot-response"},
+		StderrLimitBytes: 1024,
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = adapter.Close(closeCtx)
+	}()
+
+	msg := <-adapter.Incoming()
+	if msg.Err != nil {
+		t.Fatalf("incoming err: %v", msg.Err)
+	}
+	if msg.Response == nil || msg.Response.ID != "boot" {
+		t.Fatalf("unexpected boot response: %+v", msg.Response)
+	}
+
+	deadline := time.Now().Add(time.Second)
+	snapshot := adapter.StderrSnapshot()
+	for !strings.Contains(snapshot.Output, "runtime stderr") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		snapshot = adapter.StderrSnapshot()
+	}
+	if !strings.Contains(snapshot.Output, "runtime stderr") {
+		t.Fatalf("stderr output = %q, want runtime stderr", snapshot.Output)
+	}
+}
+
+func TestStartWASMWASIReturnsMalformedOutput(t *testing.T) {
+	modulePath := buildWASMTestBot(t)
+
+	adapter, err := Start(context.Background(), Config{
+		Kind:       KindWASMWASI,
+		ModulePath: modulePath,
+		Env:        []string{"BOT_MODE=bad-json"},
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = adapter.Close(closeCtx)
+	}()
+
+	msg := <-adapter.Incoming()
+	if msg.Err == nil {
+		t.Fatal("incoming err = nil, want malformed output error")
+	}
+}
+
 func TestHelperProcess(t *testing.T) {
 	mode := os.Getenv("GO_WANT_HELPER_PROCESS")
 	if mode == "" {
@@ -123,4 +185,22 @@ func runSessionBot() {
 
 func helperCommand(_ string) []string {
 	return []string{os.Args[0], "-test.run=TestHelperProcess"}
+}
+
+func buildWASMTestBot(t *testing.T) string {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test-bot.wasm")
+	cmd := exec.Command("go", "build", "-o", outputPath, "./internal/platform/runtime/testdata/wasmtestbot")
+	cmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
+	projectRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("abs project root: %v", err)
+	}
+	cmd.Dir = projectRoot
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build wasm test bot: %v\n%s", err, output)
+	}
+	return outputPath
 }

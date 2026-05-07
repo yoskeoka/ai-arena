@@ -511,11 +511,10 @@ func loadPlayersAndSessions(meta catalog.GameMetadata, args []string, stderrLimi
 			PlayerID: spec.PlayerID,
 			AIID:     loaded.AIID,
 		})
-		adapter, err := runtime.Start(context.Background(), runtime.Config{
-			Command:          loaded.Command,
-			Dir:              repoRoot(),
-			StderrLimitBytes: stderrLimitBytes,
-		})
+		cfg := loaded.Runtime
+		cfg.Dir = repoRoot()
+		cfg.StderrLimitBytes = stderrLimitBytes
+		adapter, err := runtime.Start(context.Background(), cfg)
 		if err != nil {
 			closeSessions(sessions)
 			return nil, nil, err
@@ -526,7 +525,7 @@ func loadPlayersAndSessions(meta catalog.GameMetadata, args []string, stderrLimi
 }
 
 type loadedEntry struct {
-	Command []string
+	Runtime runtime.Config
 	AIID    string
 }
 
@@ -548,10 +547,11 @@ func loadEntry(matchMeta catalog.GameMetadata, spec playerSpec) (loadedEntry, er
 		if manifest.Protocol.Transport != "" && manifest.Protocol.Transport != "stdio-jsonrpc-ndjson" {
 			return loadedEntry{}, fmt.Errorf("%s transport %q is unsupported", spec.PlayerID, manifest.Protocol.Transport)
 		}
-		if len(manifest.Runtime.Command) == 0 {
-			return loadedEntry{}, fmt.Errorf("%s runtime.command is required", spec.PlayerID)
+		runtimeCfg, err := catalog.ResolveRuntime(spec.Entry, manifest.Runtime)
+		if err != nil {
+			return loadedEntry{}, fmt.Errorf("%s runtime invalid: %w", spec.PlayerID, err)
 		}
-		return loadedEntry{Command: manifest.Runtime.Command, AIID: manifest.AIID}, nil
+		return loadedEntry{Runtime: runtimeCfg, AIID: manifest.AIID}, nil
 	} else if err != nil && !os.IsNotExist(err) {
 		return loadedEntry{}, err
 	}
@@ -559,7 +559,7 @@ func loadEntry(matchMeta catalog.GameMetadata, spec playerSpec) (loadedEntry, er
 	if err := catalog.ValidateMetadata(matchMeta); err != nil {
 		return loadedEntry{}, err
 	}
-	return loadedEntry{Command: []string{spec.Entry}, AIID: filepath.Base(spec.Entry)}, nil
+	return loadedEntry{Runtime: catalog.FallbackRuntime(spec.Entry), AIID: filepath.Base(spec.Entry)}, nil
 }
 
 func parsePlayerSpec(raw string) (playerSpec, error) {

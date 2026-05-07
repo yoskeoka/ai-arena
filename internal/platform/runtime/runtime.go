@@ -3,21 +3,30 @@ package runtime
 import (
 	"context"
 	"errors"
-	"io"
-	"os"
-	"os/exec"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/protocol"
 )
 
+type Kind string
+
+const (
+	KindLocalSubprocess Kind = "local-subprocess"
+	KindWASMWASI        Kind = "wasm-wasi"
+
+	DefaultWASMMemoryLimitPages uint32 = 64
+)
+
 type Config struct {
+	Kind             Kind
 	Command          []string
+	ModulePath       string
+	Args             []string
 	Dir              string
 	Env              []string
 	StderrLimitBytes int
+	MemoryLimitPages uint32
 }
 
 type Message struct {
@@ -31,152 +40,52 @@ type StderrSnapshot struct {
 	Truncated bool
 }
 
+type adapterImpl interface {
+	Send(protocol.Request) error
+	Incoming() <-chan Message
+	StderrSnapshot() StderrSnapshot
+	Close(context.Context) error
+}
+
 type Adapter struct {
-	cmd      *exec.Cmd
-	stdin    io.WriteCloser
-	incoming chan Message
-	done     chan error
-	stderr   *captureBuffer
+	impl adapterImpl
 }
 
 const stdinCloseGracePeriod = 50 * time.Millisecond
 
 func Start(ctx context.Context, cfg Config) (*Adapter, error) {
-	if len(cfg.Command) == 0 {
-		return nil, errors.New("runtime: command is required")
+	switch cfg.Kind {
+	case "", KindLocalSubprocess:
+		impl, err := startLocalSubprocess(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return &Adapter{impl: impl}, nil
+	case KindWASMWASI:
+		impl, err := startWASMWASI(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return &Adapter{impl: impl}, nil
+	default:
+		return nil, errors.New("runtime: unsupported kind")
 	}
-
-	// #nosec G204 -- the platform executes a pre-tokenized command array, not a shell string.
-	cmd := exec.CommandContext(ctx, cfg.Command[0], cfg.Command[1:]...)
-	cmd.Dir = cfg.Dir
-	cmd.Env = append(os.Environ(), cfg.Env...)
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	stderr := newCaptureBuffer(cfg.StderrLimitBytes)
-	adapter := &Adapter{
-		cmd:      cmd,
-		stdin:    stdin,
-		incoming: make(chan Message, 16),
-		done:     make(chan error, 1),
-		stderr:   stderr,
-	}
-
-	go func() {
-		_, _ = io.Copy(stderr, stderrPipe)
-	}()
-
-	stdoutDone := make(chan struct{})
-	go adapter.readStdout(stdout, stdoutDone)
-	go func() {
-		err := cmd.Wait()
-		<-stdoutDone
-		adapter.done <- err
-		close(adapter.done)
-		close(adapter.incoming)
-	}()
-
-	return adapter, nil
 }
 
 func (a *Adapter) Send(req protocol.Request) error {
-	return protocol.NewEncoder(a.stdin).Encode(req)
+	return a.impl.Send(req)
 }
 
 func (a *Adapter) Incoming() <-chan Message {
-	return a.incoming
+	return a.impl.Incoming()
 }
 
 func (a *Adapter) StderrSnapshot() StderrSnapshot {
-	return a.stderr.snapshot()
+	return a.impl.StderrSnapshot()
 }
 
 func (a *Adapter) Close(ctx context.Context) error {
-	if a.cmd.Process == nil {
-		return nil
-	}
-
-	select {
-	case err := <-a.done:
-		return err
-	default:
-	}
-
-	_ = a.stdin.Close()
-
-	// Give cooperative bots a brief chance to exit on stdin EOF before escalating
-	// to an interrupt signal. This avoids misclassifying normal post-game shutdown
-	// as a forced shutdown when the process would have exited on its own.
-	select {
-	case err := <-a.done:
-		return err
-	case <-time.After(stdinCloseGracePeriod):
-	}
-
-	_ = a.cmd.Process.Signal(os.Interrupt)
-
-	select {
-	case err := <-a.done:
-		return suppressExpectedShutdownExit(err, os.Interrupt)
-	case <-ctx.Done():
-		_ = a.cmd.Process.Signal(syscall.SIGKILL)
-		err := <-a.done
-		if err == nil {
-			return ctx.Err()
-		}
-		return errors.Join(ctx.Err(), suppressExpectedShutdownExit(err, syscall.SIGKILL))
-	}
-}
-
-func (a *Adapter) readStdout(stdout io.Reader, done chan<- struct{}) {
-	defer close(done)
-
-	dec := protocol.NewDecoder(stdout)
-	for {
-		resp, err := dec.DecodeResponse()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return
-			}
-			// Report one terminal decode failure, then stop draining so Close/Wait cannot deadlock.
-			a.incoming <- Message{Err: err}
-			return
-		}
-		respCopy := resp
-		a.incoming <- Message{Response: &respCopy}
-	}
-}
-
-func suppressExpectedShutdownExit(err error, expectedSignal os.Signal) error {
-	if err == nil {
-		return nil
-	}
-
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ProcessState != nil && exitErr.ProcessState.Sys() != nil {
-		if status, ok := exitErr.ProcessState.Sys().(syscall.WaitStatus); ok && status.Signaled() && status.Signal() == expectedSignal {
-			return nil
-		}
-	}
-	if errors.Is(err, os.ErrProcessDone) {
-		return nil
-	}
-	return err
+	return a.impl.Close(ctx)
 }
 
 type captureBuffer struct {
