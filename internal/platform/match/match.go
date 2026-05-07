@@ -13,6 +13,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
+	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/runtime"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
@@ -52,18 +53,21 @@ type Observer interface {
 type RunnerOption func(*Runner)
 
 type Runner struct {
-	matchID     string
-	players     []game.Player
-	master      game.Master
-	sessions    map[string]PlayerSession
-	observer    Observer
-	events      []Event
-	nextSeq     int
-	lastSeen    map[string]json.RawMessage
-	lastResult  map[string]game.ActionStatus
-	phase       game.MatchStatus
-	status      game.MatchStatus
-	terminalErr error
+	matchID       string
+	players       []game.Player
+	master        gamemaster.Session
+	sessions      map[string]PlayerSession
+	observer      Observer
+	events        []Event
+	nextSeq       int
+	lastSeen      map[string]json.RawMessage
+	lastResult    map[string]game.ActionStatus
+	phase         game.MatchStatus
+	status        game.MatchStatus
+	terminalErr   error
+	finalResult   game.MatchResult
+	finalSnapshot game.Snapshot
+	finalExported game.ExportedSnapshot
 }
 
 const (
@@ -80,11 +84,11 @@ type turnExecution struct {
 	err          error
 }
 
-func NewRunner(matchID string, players []game.Player, master game.Master, sessions map[string]PlayerSession) *Runner {
+func NewRunner(matchID string, players []game.Player, master gamemaster.Session, sessions map[string]PlayerSession) *Runner {
 	return NewRunnerWithOptions(matchID, players, master, sessions)
 }
 
-func NewRunnerWithOptions(matchID string, players []game.Player, master game.Master, sessions map[string]PlayerSession, opts ...RunnerOption) *Runner {
+func NewRunnerWithOptions(matchID string, players []game.Player, master gamemaster.Session, sessions map[string]PlayerSession, opts ...RunnerOption) *Runner {
 	runner := &Runner{
 		matchID:    matchID,
 		players:    players,
@@ -136,7 +140,15 @@ func (r *Runner) Run(ctx context.Context) (record Record, runErr error) {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownDeadline)
 		defer cancel()
 
+		if err := r.captureFinalState(shutdownCtx); err != nil && r.terminalErr == nil {
+			r.terminalErr = err
+			if r.status == game.StatusCompleted {
+				r.phase = game.StatusFailed
+				r.status = game.StatusFailed
+			}
+		}
 		r.shutdownSessions(shutdownCtx)
+		r.shutdownGameMaster(shutdownCtx)
 		r.emitTerminalEvent()
 		record = r.buildRecord(meta)
 		if r.observer != nil {
@@ -170,10 +182,12 @@ func (r *Runner) Run(ctx context.Context) (record Record, runErr error) {
 func (r *Runner) initializeSessions(ctx context.Context, meta catalog.GameMetadata) error {
 	r.phase = game.StatusInitializing
 
-	initState, err := r.master.Init(ctx)
+	initState, err := r.master.InitializeMatch(ctx)
 	if err != nil {
+		r.appendEvent("game_master_initialization_failed", 0, "", map[string]any{"error": err.Error()})
 		return err
 	}
+	r.appendEvent("game_master_initialized", 0, "", map[string]any{"game": meta})
 
 	for _, player := range r.players {
 		state := initState.PerPlayer[player.PlayerID]
@@ -215,7 +229,7 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 			return err
 		}
 
-		step, err := r.master.NextStep(ctx)
+		step, err := r.master.NextDecisionStep(ctx)
 		if err != nil {
 			return err
 		}
@@ -229,7 +243,7 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			if err := r.master.ApplyStep(ctx, *step, outcomes); err != nil {
+			if err := r.master.ApplyDecisionResults(ctx, *step, outcomes); err != nil {
 				return err
 			}
 		case game.Sequential:
@@ -242,9 +256,12 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 			if exec.err != nil {
 				return exec.err
 			}
-			exec.actionStatus = r.master.NormalizeAction(req, exec.actionStatus)
+			exec.actionStatus, err = r.master.NormalizeAction(ctx, req, exec.actionStatus)
+			if err != nil {
+				return err
+			}
 			actionStatus := r.recordTurn(step.Turn, exec)
-			if err := r.master.ApplyStep(ctx, *step, []game.ActionStatus{actionStatus}); err != nil {
+			if err := r.master.ApplyDecisionResults(ctx, *step, []game.ActionStatus{actionStatus}); err != nil {
 				return err
 			}
 		default:
@@ -277,7 +294,11 @@ func (r *Runner) runSimultaneousStep(ctx context.Context, step game.DecisionStep
 		if exec.err != nil {
 			return nil, exec.err
 		}
-		exec.actionStatus = r.master.NormalizeAction(exec.request, exec.actionStatus)
+		var err error
+		exec.actionStatus, err = r.master.NormalizeAction(ctx, exec.request, exec.actionStatus)
+		if err != nil {
+			return nil, err
+		}
 		outcomes[i] = r.recordTurn(step.Turn, exec)
 	}
 	return outcomes, nil
@@ -289,14 +310,15 @@ func (r *Runner) shutdownSessions(ctx context.Context) {
 		playerID := player.PlayerID
 
 		if r.status == game.StatusCompleted {
+			finalVisibleState := json.RawMessage(r.visibleStateForPlayer(playerID))
 			result := r.sessions[playerID].GameOver(ctx, session.Request{
 				ID:       "game-over",
 				Method:   "game_over",
 				Deadline: gameOverDeadline,
 				Params: contract.GameOverParams{
 					MatchID:           r.matchID,
-					FinalVisibleState: json.RawMessage(r.visibleStateForPlayer(playerID)),
-					Summary:           r.master.Result(),
+					FinalVisibleState: finalVisibleState,
+					Summary:           r.finalResult,
 					ShutdownAfterMS:   gameOverDeadline.Milliseconds(),
 				},
 			})
@@ -329,8 +351,17 @@ func (r *Runner) shutdownSessions(ctx context.Context) {
 	}
 }
 
+func (r *Runner) shutdownGameMaster(ctx context.Context) {
+	r.appendEvent("game_master_shutdown_started", 0, "", map[string]any{"phase": r.phase})
+	if err := r.master.Shutdown(ctx); err != nil {
+		r.appendEvent("game_master_shutdown_failed", 0, "", map[string]any{"error": err.Error()})
+		return
+	}
+	r.appendEvent("game_master_shutdown_completed", 0, "", map[string]any{"phase": r.phase})
+}
+
 func (r *Runner) buildRecord(meta catalog.GameMetadata) Record {
-	snapshot := r.master.Snapshot()
+	snapshot := r.finalSnapshot
 	snapshot.MatchID = r.matchID
 	snapshot.Status = r.status
 	if snapshot.PerPlayer == nil {
@@ -348,7 +379,7 @@ func (r *Runner) buildRecord(meta catalog.GameMetadata) Record {
 		}
 	}
 
-	exported := r.master.ExportedSnapshot()
+	exported := r.finalExported
 	exported.MatchID = r.matchID
 	exported.Status = r.status
 	if len(exported.Players) == 0 {
@@ -368,7 +399,7 @@ func (r *Runner) buildRecord(meta catalog.GameMetadata) Record {
 		Game:             meta,
 		Players:          r.players,
 		Status:           r.status,
-		Result:           r.master.Result(),
+		Result:           r.finalResult,
 		EventLog:         append([]Event(nil), r.events...),
 		Snapshot:         snapshot,
 		ExportedSnapshot: exported,
@@ -390,12 +421,12 @@ func (r *Runner) cancel(err error) error {
 }
 
 func (r *Runner) emitTerminalEvent() {
-	turn := r.master.Snapshot().Turn
+	turn := r.finalSnapshot.Turn
 
 	switch r.status {
 	case game.StatusCompleted:
 		r.phase = game.StatusCompleted
-		r.appendEvent("match_completed", turn, "", r.master.Result())
+		r.appendEvent("match_completed", turn, "", r.finalResult)
 	case game.StatusCanceled:
 		r.appendEvent("match_canceled", turn, "", map[string]any{"error": errString(r.terminalErr)})
 	case game.StatusFailed:
@@ -465,10 +496,29 @@ func (r *Runner) appendRuntimeExited(turn int, playerID string, payload any) {
 }
 
 func (r *Runner) visibleStateForPlayer(playerID string) json.RawMessage {
-	if visibleState := r.master.VisibleState(playerID); len(visibleState) > 0 {
+	if visibleState := r.finalSnapshot.PerPlayer[playerID].VisibleState; len(visibleState) > 0 {
 		return append(json.RawMessage(nil), visibleState...)
 	}
 	return append(json.RawMessage(nil), r.lastSeen[playerID]...)
+}
+
+func (r *Runner) captureFinalState(ctx context.Context) error {
+	snapshot, err := r.master.CurrentSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	exported, err := r.master.CurrentExportedSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	result, err := r.master.CurrentResult(ctx)
+	if err != nil {
+		return err
+	}
+	r.finalSnapshot = snapshot
+	r.finalExported = exported
+	r.finalResult = result
+	return nil
 }
 
 func (r *Runner) appendEvent(kind string, turn int, playerID string, payload any) {

@@ -16,6 +16,7 @@ import (
 
 const (
 	GameID                   = "echo-count"
+	SubprocessGameID         = "echo-count-subprocess"
 	GameVersion              = "2.0.0"
 	RulesetSimultaneous3Turn = "phase2-simultaneous-3turn"
 	RulesetSequential3Turn   = "phase2-sequential-3turn"
@@ -24,6 +25,7 @@ const (
 )
 
 type Config struct {
+	GameID      string
 	GameVersion string
 	Ruleset     string
 	Players     []game.Player
@@ -79,7 +81,7 @@ func New(cfg Config) (*Master, error) {
 		return nil, fmt.Errorf("echo: game version is required")
 	}
 
-	meta, mode, turns, deadline, err := metadataForSelection(cfg.GameVersion, cfg.Ruleset)
+	meta, mode, turns, deadline, err := metadataForSelection(cfg.GameID, cfg.GameVersion, cfg.Ruleset)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +123,11 @@ func (m *Master) Metadata() catalog.GameMetadata {
 }
 
 func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
-	meta, mode, maxTurns, _, err := metadataForSelection(gameVersion, ruleset)
+	return SnapshotFromHistoryWithGameID(GameID, gameVersion, ruleset, players, events, targetTurn)
+}
+
+func SnapshotFromHistoryWithGameID(gameID, gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
+	meta, mode, maxTurns, _, err := metadataForSelection(gameID, gameVersion, ruleset)
 	if err != nil {
 		return game.Snapshot{}, err
 	}
@@ -207,33 +213,44 @@ func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, eve
 	}, nil
 }
 
-func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
+func MetadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
+	return MetadataForSelectionWithGameID(GameID, gameVersion, ruleset)
+}
+
+func MetadataForSelectionWithGameID(gameID, gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
 	if gameVersion != GameVersion {
 		return catalog.GameMetadata{}, "", 0, 0, fmt.Errorf("echo: unsupported game version %q", gameVersion)
+	}
+	if gameID == "" {
+		gameID = GameID
 	}
 
 	switch ruleset {
 	case RulesetSimultaneous3Turn:
 		return catalog.GameMetadata{
-			GameID:         GameID,
+			GameID:         gameID,
 			GameVersion:    gameVersion,
 			RulesetVersion: RulesetSimultaneous3Turn,
 		}, game.Simultaneous, 3, defaultTurnDeadline, nil
 	case RulesetSequential3Turn:
 		return catalog.GameMetadata{
-			GameID:         GameID,
+			GameID:         gameID,
 			GameVersion:    gameVersion,
 			RulesetVersion: RulesetSequential3Turn,
 		}, game.Sequential, 3, defaultTurnDeadline, nil
 	case RulesetSimultaneous2Turn:
 		return catalog.GameMetadata{
-			GameID:         GameID,
+			GameID:         gameID,
 			GameVersion:    gameVersion,
 			RulesetVersion: RulesetSimultaneous2Turn,
 		}, game.Simultaneous, 2, defaultTurnDeadline, nil
 	default:
 		return catalog.GameMetadata{}, "", 0, 0, fmt.Errorf("echo: unsupported ruleset %q", ruleset)
 	}
+}
+
+func metadataForSelection(gameID, gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
+	return MetadataForSelectionWithGameID(gameID, gameVersion, ruleset)
 }
 
 func (m *Master) Init(context.Context) (game.InitState, error) {

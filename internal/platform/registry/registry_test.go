@@ -7,6 +7,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
+	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
 
@@ -44,18 +45,18 @@ func TestLookupRejectsUnsupportedMajorForKnownGame(t *testing.T) {
 	}
 }
 
-func TestDescriptorBuildFreshReturnsRulesetError(t *testing.T) {
+func TestDescriptorBuildSessionReturnsRulesetError(t *testing.T) {
 	descriptor, err := Lookup(echo.GameID, echo.GameVersion)
 	if err != nil {
 		t.Fatalf("Lookup: %v", err)
 	}
-	_, err = descriptor.BuildFresh(BuildSpec{
+	_, err = descriptor.BuildSession(BuildSpec{
 		GameVersion: echo.GameVersion,
 		Ruleset:     "missing-ruleset",
 		Players:     []game.Player{{PlayerID: "p1"}},
 	})
 	if err == nil || !strings.Contains(err.Error(), `unsupported ruleset "missing-ruleset"`) {
-		t.Fatalf("BuildFresh error = %v, want unsupported ruleset", err)
+		t.Fatalf("BuildSession error = %v, want unsupported ruleset", err)
 	}
 }
 
@@ -67,10 +68,10 @@ func TestRegisterRejectsMissingBuildMode(t *testing.T) {
 	err = r.Register(GameDescriptor{
 		RegistryKey: RegistryKey{GameID: "test", GameVersionMajor: 1},
 		GameID:      "test",
-		BuildFresh: func(BuildSpec) (game.Master, error) {
+		BuildSession: func(BuildSpec) (gamemaster.Session, error) {
 			return nil, nil
 		},
-		BuildFromSnapshot: func(BuildSpec, game.Snapshot) (game.Master, error) {
+		BuildSessionFromSnapshot: func(BuildSpec, game.Snapshot) (gamemaster.Session, error) {
 			return nil, nil
 		},
 		SnapshotFromHistory: func(BuildSpec, []match.Event, int) (game.Snapshot, error) {
@@ -79,5 +80,52 @@ func TestRegisterRejectsMissingBuildMode(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "registry: BuildMode is required") {
 		t.Fatalf("Register error = %v, want BuildMode required", err)
+	}
+}
+
+func TestLookupEchoSubprocessRegistersAsSeparateGame(t *testing.T) {
+	descriptor, err := Lookup(echo.SubprocessGameID, echo.GameVersion)
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if descriptor.GameID != echo.SubprocessGameID {
+		t.Fatalf("descriptor.GameID = %q, want %q", descriptor.GameID, echo.SubprocessGameID)
+	}
+	if descriptor.BuildMode != BuildModeLocalSubprocess {
+		t.Fatalf("descriptor.BuildMode = %q, want %q", descriptor.BuildMode, BuildModeLocalSubprocess)
+	}
+}
+
+func TestEchoSubprocessSnapshotUsesSubprocessGameID(t *testing.T) {
+	descriptor, err := Lookup(echo.GameID, echo.GameVersion)
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	snapshot, err := descriptor.SnapshotFromHistory(BuildSpec{
+		GameVersion: echo.GameVersion,
+		Ruleset:     echo.RulesetSimultaneous2Turn,
+		Players:     []game.Player{{PlayerID: "p1"}},
+	}, nil, 0)
+	if err != nil {
+		t.Fatalf("SnapshotFromHistory: %v", err)
+	}
+	if snapshot.GameID != echo.GameID {
+		t.Fatalf("snapshot.GameID = %q, want %q", snapshot.GameID, echo.GameID)
+	}
+
+	descriptor, err = Lookup(echo.SubprocessGameID, echo.GameVersion)
+	if err != nil {
+		t.Fatalf("Lookup subprocess: %v", err)
+	}
+	snapshot, err = descriptor.SnapshotFromHistory(BuildSpec{
+		GameVersion: echo.GameVersion,
+		Ruleset:     echo.RulesetSimultaneous2Turn,
+		Players:     []game.Player{{PlayerID: "p1"}},
+	}, nil, 0)
+	if err != nil {
+		t.Fatalf("SnapshotFromHistory subprocess: %v", err)
+	}
+	if snapshot.GameID != echo.SubprocessGameID {
+		t.Fatalf("snapshot.GameID = %q, want %q", snapshot.GameID, echo.SubprocessGameID)
 	}
 }

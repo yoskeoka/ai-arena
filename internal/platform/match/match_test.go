@@ -9,6 +9,7 @@ import (
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
+	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/runtime"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
@@ -200,7 +201,7 @@ func (f *fakeMaster) Metadata() catalog.GameMetadata {
 	return f.metadata
 }
 
-func (f *fakeMaster) Init(context.Context) (game.InitState, error) {
+func (f *fakeMaster) InitializeMatch(context.Context) (game.InitState, error) {
 	if f.initErr != nil {
 		return game.InitState{}, f.initErr
 	}
@@ -212,7 +213,7 @@ func (f *fakeMaster) Init(context.Context) (game.InitState, error) {
 	}, nil
 }
 
-func (f *fakeMaster) NextStep(context.Context) (*game.DecisionStep, error) {
+func (f *fakeMaster) NextDecisionStep(context.Context) (*game.DecisionStep, error) {
 	if f.cancelOnNextStep {
 		return nil, context.Canceled
 	}
@@ -224,44 +225,48 @@ func (f *fakeMaster) NextStep(context.Context) (*game.DecisionStep, error) {
 	return step, nil
 }
 
-func (f *fakeMaster) NormalizeAction(_ game.DecisionRequest, actionStatus game.ActionStatus) game.ActionStatus {
-	return actionStatus
+func (f *fakeMaster) NormalizeAction(_ context.Context, _ game.DecisionRequest, actionStatus game.ActionStatus) (game.ActionStatus, error) {
+	return actionStatus, nil
 }
 
-func (f *fakeMaster) ApplyStep(_ context.Context, _ game.DecisionStep, actionStatuses []game.ActionStatus) error {
+func (f *fakeMaster) ApplyDecisionResults(_ context.Context, _ game.DecisionStep, actionStatuses []game.ActionStatus) error {
 	copied := make([]game.ActionStatus, len(actionStatuses))
 	copy(copied, actionStatuses)
 	f.applied = append(f.applied, copied)
 	return nil
 }
 
-func (f *fakeMaster) VisibleState(string) json.RawMessage {
-	return raw(`{"visible":"current"}`)
-}
-
-func (f *fakeMaster) Snapshot() game.Snapshot {
+func (f *fakeMaster) CurrentSnapshot(context.Context) (game.Snapshot, error) {
 	return game.Snapshot{
 		Turn:      2,
 		Status:    game.StatusRunning,
 		GameState: raw(`{"phase":"done"}`),
-	}
+		PerPlayer: map[string]game.PlayerSnapshot{
+			"p1": {VisibleState: raw(`{"visible":"current"}`)},
+			"p2": {VisibleState: raw(`{"visible":"current"}`)},
+		},
+	}, nil
 }
 
-func (f *fakeMaster) ExportedSnapshot() game.ExportedSnapshot {
+func (f *fakeMaster) CurrentExportedSnapshot(context.Context) (game.ExportedSnapshot, error) {
 	return game.ExportedSnapshot{
 		Turn:        2,
 		Status:      game.StatusRunning,
 		PublicState: raw(`{"public":"done"}`),
-	}
+	}, nil
 }
 
-func (f *fakeMaster) Result() game.MatchResult {
+func (f *fakeMaster) CurrentResult(context.Context) (game.MatchResult, error) {
 	return game.MatchResult{
 		Placements: []game.Placement{
 			{PlayerID: "p1", Place: 1},
 			{PlayerID: "p2", Place: 2},
 		},
-	}
+	}, nil
+}
+
+func (f *fakeMaster) Shutdown(context.Context) error {
+	return nil
 }
 
 type fakeSession struct {
@@ -323,3 +328,5 @@ func baseMetadata() catalog.GameMetadata {
 		RulesetVersion: "phase2",
 	}
 }
+
+var _ gamemaster.Session = (*fakeMaster)(nil)

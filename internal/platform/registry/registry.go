@@ -8,15 +8,16 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
+	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
 
-type BuildMode string
+type BuildMode = gamemaster.Mode
 
 const (
-	BuildModeInProcess             BuildMode = "in-process"
-	BuildModeLocalSubprocess       BuildMode = "local-subprocess"
-	BuildModeFutureExternalAdapter BuildMode = "future-external-adapter"
+	BuildModeInProcess             BuildMode = gamemaster.ModeInProcess
+	BuildModeLocalSubprocess       BuildMode = gamemaster.ModeLocalSubprocess
+	BuildModeFutureExternalAdapter BuildMode = gamemaster.ModeFutureExternalAdapter
 )
 
 type RegistryKey struct {
@@ -31,12 +32,12 @@ type BuildSpec struct {
 }
 
 type GameDescriptor struct {
-	RegistryKey         RegistryKey
-	GameID              string
-	BuildMode           BuildMode
-	BuildFresh          func(BuildSpec) (game.Master, error)
-	BuildFromSnapshot   func(BuildSpec, game.Snapshot) (game.Master, error)
-	SnapshotFromHistory func(BuildSpec, []match.Event, int) (game.Snapshot, error)
+	RegistryKey              RegistryKey
+	GameID                   string
+	BuildMode                BuildMode
+	BuildSession             func(BuildSpec) (gamemaster.Session, error)
+	BuildSessionFromSnapshot func(BuildSpec, game.Snapshot) (gamemaster.Session, error)
+	SnapshotFromHistory      func(BuildSpec, []match.Event, int) (game.Snapshot, error)
 }
 
 type Registry struct {
@@ -74,11 +75,11 @@ func (r *Registry) Register(descriptor GameDescriptor) error {
 		}
 		return fmt.Errorf("registry: unsupported BuildMode %q", descriptor.BuildMode)
 	}
-	if descriptor.BuildFresh == nil {
-		return fmt.Errorf("registry: BuildFresh is required")
+	if descriptor.BuildSession == nil {
+		return fmt.Errorf("registry: BuildSession is required")
 	}
-	if descriptor.BuildFromSnapshot == nil {
-		return fmt.Errorf("registry: BuildFromSnapshot is required")
+	if descriptor.BuildSessionFromSnapshot == nil {
+		return fmt.Errorf("registry: BuildSessionFromSnapshot is required")
 	}
 	if descriptor.SnapshotFromHistory == nil {
 		return fmt.Errorf("registry: SnapshotFromHistory is required")
@@ -125,41 +126,55 @@ func mustDefaultRegistry() *Registry {
 			RegistryKey: RegistryKey{GameID: echo.GameID, GameVersionMajor: 2},
 			GameID:      echo.GameID,
 			BuildMode:   BuildModeInProcess,
-			BuildFresh: func(spec BuildSpec) (game.Master, error) {
-				return echo.New(echo.Config{
-					GameVersion: spec.GameVersion,
-					Ruleset:     spec.Ruleset,
-					Players:     append([]game.Player(nil), spec.Players...),
-				})
+			BuildSession: func(spec BuildSpec) (gamemaster.Session, error) {
+				return buildEchoInProcessSession(spec, nil)
 			},
-			BuildFromSnapshot: func(spec BuildSpec, snapshot game.Snapshot) (game.Master, error) {
-				return echo.NewFromSnapshot(echo.Config{
-					GameVersion: spec.GameVersion,
-					Ruleset:     spec.Ruleset,
-					Players:     append([]game.Player(nil), spec.Players...),
-				}, snapshot)
+			BuildSessionFromSnapshot: func(spec BuildSpec, snapshot game.Snapshot) (gamemaster.Session, error) {
+				return buildEchoInProcessSession(spec, &snapshot)
 			},
 			SnapshotFromHistory: func(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
 				return echo.SnapshotFromHistory(spec.GameVersion, spec.Ruleset, append([]game.Player(nil), spec.Players...), events, targetTurn)
 			},
 		},
 		{
+			RegistryKey: RegistryKey{GameID: echo.SubprocessGameID, GameVersionMajor: 2},
+			GameID:      echo.SubprocessGameID,
+			BuildMode:   BuildModeLocalSubprocess,
+			BuildSession: func(spec BuildSpec) (gamemaster.Session, error) {
+				return buildEchoLocalSubprocessSession(spec, nil)
+			},
+			BuildSessionFromSnapshot: func(spec BuildSpec, snapshot game.Snapshot) (gamemaster.Session, error) {
+				return buildEchoLocalSubprocessSession(spec, &snapshot)
+			},
+			SnapshotFromHistory: func(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
+				return echo.SnapshotFromHistoryWithGameID(echo.SubprocessGameID, spec.GameVersion, spec.Ruleset, append([]game.Player(nil), spec.Players...), events, targetTurn)
+			},
+		},
+		{
 			RegistryKey: RegistryKey{GameID: janken.GameID, GameVersionMajor: 2},
 			GameID:      janken.GameID,
 			BuildMode:   BuildModeInProcess,
-			BuildFresh: func(spec BuildSpec) (game.Master, error) {
-				return janken.New(janken.Config{
+			BuildSession: func(spec BuildSpec) (gamemaster.Session, error) {
+				master, err := janken.New(janken.Config{
 					GameVersion: spec.GameVersion,
 					Ruleset:     spec.Ruleset,
 					Players:     append([]game.Player(nil), spec.Players...),
 				})
+				if err != nil {
+					return nil, err
+				}
+				return gamemaster.NewInProcessSession(master), nil
 			},
-			BuildFromSnapshot: func(spec BuildSpec, snapshot game.Snapshot) (game.Master, error) {
-				return janken.NewFromSnapshot(janken.Config{
+			BuildSessionFromSnapshot: func(spec BuildSpec, snapshot game.Snapshot) (gamemaster.Session, error) {
+				master, err := janken.NewFromSnapshot(janken.Config{
 					GameVersion: spec.GameVersion,
 					Ruleset:     spec.Ruleset,
 					Players:     append([]game.Player(nil), spec.Players...),
 				}, snapshot)
+				if err != nil {
+					return nil, err
+				}
+				return gamemaster.NewInProcessSession(master), nil
 			},
 			SnapshotFromHistory: func(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
 				return janken.SnapshotFromHistory(spec.GameVersion, spec.Ruleset, append([]game.Player(nil), spec.Players...), events, targetTurn)
@@ -175,3 +190,44 @@ func mustDefaultRegistry() *Registry {
 }
 
 var defaultRegistry = mustDefaultRegistry()
+
+func buildEchoInProcessSession(spec BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
+	cfg := echo.Config{
+		GameVersion: spec.GameVersion,
+		Ruleset:     spec.Ruleset,
+		Players:     append([]game.Player(nil), spec.Players...),
+	}
+	var (
+		master game.Master
+		err    error
+	)
+	if snapshot == nil {
+		master, err = echo.New(cfg)
+	} else {
+		master, err = echo.NewFromSnapshot(cfg, *snapshot)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return gamemaster.NewInProcessSession(master), nil
+}
+
+func buildEchoLocalSubprocessSession(spec BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
+	meta, _, _, _, err := echo.MetadataForSelectionWithGameID(echo.SubprocessGameID, spec.GameVersion, spec.Ruleset)
+	if err != nil {
+		return nil, err
+	}
+	command := []string{
+		"go", "run", "./cmd/echo-count-gamemaster",
+		"--game-id", echo.SubprocessGameID,
+		"--game-version", spec.GameVersion,
+		"--ruleset", spec.Ruleset,
+	}
+	return gamemaster.StartLocalSubprocess(gamemaster.LocalSubprocessConfig{
+		ExpectedMetadata: meta,
+		Command:          command,
+		Players:          append([]game.Player(nil), spec.Players...),
+		ResumeSnapshot:   snapshot,
+		StderrLimitBytes: 4096,
+	})
+}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
+	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
 	"github.com/yoskeoka/ai-arena/internal/platform/replay"
@@ -212,11 +213,12 @@ func run(args []string) error {
 			Ruleset:     ruleset,
 			Players:     append([]game.Player(nil), playersForGame...),
 		}
-		master, err := descriptor.BuildFresh(buildSpec)
+		master, err := descriptor.BuildSession(buildSpec)
 		if err != nil {
 			return err
 		}
 		metaOverride = ptr(master.Metadata())
+		_ = master.Shutdown(context.Background())
 		snapshot, err := descriptor.SnapshotFromHistory(buildSpec, history, targetTurn)
 		if err != nil {
 			return err
@@ -231,7 +233,7 @@ func run(args []string) error {
 		metaOverride = &recordSource.Game
 	}
 
-	master, err := newMasterForMode(descriptor, registry.BuildSpec{
+	master, err := newGameMasterSession(descriptor, registry.BuildSpec{
 		GameVersion: gameVersion,
 		Ruleset:     ruleset,
 		Players:     append([]game.Player(nil), playersForGame...),
@@ -239,6 +241,12 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	masterOwnedByRunner := false
+	defer func() {
+		if !masterOwnedByRunner {
+			_ = master.Shutdown(context.Background())
+		}
+	}()
 	if meta := master.Metadata(); meta.GameVersion != gameVersion {
 		return fmt.Errorf("selected game version %q does not match implementation version %q", gameVersion, meta.GameVersion)
 	}
@@ -248,7 +256,10 @@ func run(args []string) error {
 		}
 	}
 	if exportedOutput != "" && resumeSnapshot != nil {
-		exported := master.ExportedSnapshot()
+		exported, err := master.CurrentExportedSnapshot(context.Background())
+		if err != nil {
+			return err
+		}
 		exported.MatchID = matchID
 		exported.Status = game.StatusRunning
 		if err := writeJSONToTarget(exportedOutput, exported, os.Stdout, "exported snapshot"); err != nil {
@@ -284,6 +295,7 @@ func run(args []string) error {
 	if resumeSnapshot != nil {
 		opts = append(opts, match.WithResumeState(*resumeSnapshot))
 	}
+	masterOwnedByRunner = true
 
 	record, runErr := match.NewRunnerWithOptions(
 		matchID,
@@ -449,11 +461,11 @@ func mustMarshal(v any) json.RawMessage {
 	return raw
 }
 
-func newMasterForMode(descriptor registry.GameDescriptor, spec registry.BuildSpec, snapshot *game.Snapshot) (game.Master, error) {
+func newGameMasterSession(descriptor registry.GameDescriptor, spec registry.BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
 	if snapshot != nil {
-		return descriptor.BuildFromSnapshot(spec, *snapshot)
+		return descriptor.BuildSessionFromSnapshot(spec, *snapshot)
 	}
-	return descriptor.BuildFresh(spec)
+	return descriptor.BuildSession(spec)
 }
 
 func parsePlayersForGame(args []string) ([]game.Player, error) {
