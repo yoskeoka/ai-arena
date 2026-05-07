@@ -8,6 +8,6 @@
   },
   "runtime": {
     "kind": "local-subprocess",
-    "command": ["go", "run", "./testdata/ai/janken/janken-rock-ai"]
+    "command": ["go", "run", "./testdata/ai/janken/janken-rock-ai-wasm"]
   }
 }

@@ -22,7 +22,7 @@
 
 `janken` 側では、fixture では薄いゲーム固有の visible state と勝敗解決を担保する。
 
-Phase 4 では `janken` を Go 製 WASM/WASI AI runtime の最初の公式検証ゲームとして使う。
+Phase 4 では `janken` ruleset を共有する `janken-wasm` を、Go 製 WASM/WASI AI runtime の最初の公式検証ゲームとして使う。
 この役割では、game ルール自体の検証に加えて、Go で書いた AI を WASM/WASI へ build し、
 `arena-runner` が sidecar manifest 経由でその module を正式経路として完走できることも確認対象に含める。
 

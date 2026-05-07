@@ -61,7 +61,7 @@
 
 ## Dedicated WASM Verification Helpers
 
-Go 製 WASM sample build と `arena-runner` の `janken` verification は、Phase 4 初回導入では default quality gate へは入れず、
+Go 製 WASM sample build と `arena-runner` の `janken-wasm` verification は、Phase 4 初回導入では default quality gate へは入れず、
 dedicated helper / targeted test として維持する。
 
 - `make build-janken-go-wasm`
