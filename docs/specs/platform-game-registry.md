@@ -147,8 +147,8 @@ target turn を受け取る。
 
 ## build と compatibility の責務分離
 
-1. runner / replay-debug entrypoint は `game_id + game_version major` で persisted record lookup する
-2. resolver が record を runtime `GameDescriptor` へ解決する
+1. runner / replay-debug entrypoint は `game_id + game_version major` を指定して registry lookup を要求する
+2. registry は対応する persisted record を選び、runtime `GameDescriptor` へ解決する
 3. 解決した descriptor に `BuildSpec` を渡す
 4. 各 game の build 入口が `ruleset_version` 妥当性を検証し、登録済み `BuildMode` で起動可能な game master session または snapshot を返す
 5. platform は build 後に確定した metadata を AI sidecar manifest や record metadata と照合する
