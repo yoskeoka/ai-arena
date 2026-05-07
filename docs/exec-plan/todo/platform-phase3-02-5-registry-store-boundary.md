@@ -33,12 +33,12 @@ depends on:
 
 - registry contract を「runtime で直接 `GameDescriptor` を保持する層」から、「store された descriptor record を runtime resolver で解決する層」へ整理する
 - persisted な registered game の最小 record を定義する
-  - `registry_key`
   - `game_id`
-  - `game_version major`
+  - `game_version_major`
   - `build_mode`
   - `builder_id` または同等の resolver key
   - ruleset/build 制約を表す metadata
+- canonical な一意キーは `game_id + game_version_major` の composite key とし、`registry_key` という論理名を残す場合も derived / denormalized field として扱うことを明記する
 - runtime 側の `GameDescriptor` は DB に保存する shape ではなく、resolver が構築する process-local object であることを明記する
 - registry lookup の責務を 3 段に分けて明記する
   - `RegistryStore`: key から persisted record を読む
@@ -71,12 +71,13 @@ depends on:
 
 この plan で固定したい最小境界は以下。
 
-- `RegistryStore.Lookup(ctx, key) -> DescriptorRecord`
-- `DescriptorResolver.Resolve(record) -> GameDescriptor`
-- `Registry.Lookup(ctx, key) -> GameDescriptor`
+- `RegistryStore.Lookup(ctx, key) -> (DescriptorRecord, error)`
+- `DescriptorResolver.Resolve(ctx, record) -> (GameDescriptor, error)`
+- `Registry.Lookup(ctx, key) -> (GameDescriptor, error)`
 
 `DescriptorRecord` は DB に保存できる plain data に限定し、function pointer や closure を含めない。
 `GameDescriptor` は runtime でのみ存在する object とし、fresh run / snapshot resume / history replay の build 入口を持つ。
+初期の resolver が pure transform に見える場合でも、将来 DB / remote metadata / cancellation / deadline を扱う拡張で public contract を変えないため、`ctx` と `error` を最初から含める。
 
 ## Verification
 
