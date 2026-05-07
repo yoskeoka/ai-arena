@@ -97,6 +97,7 @@
 - [ ] Phase 6: match state・artifact・公開用 game state を扱える永続化基盤と service skeleton を整える
 - [ ] Phase 7: AI 提出、game 提出、matchmaking、ranking、早期 deploy pipeline を含むオンライン運営基盤を整える
 - [ ] Phase 8: public な external game state を読み取る観戦用ビジュアライザを整える
+- [ ] Phase 9: Go 製 WASM AI 開発フローの外部向け導線を整え、Rust を複数言語評価 lane として取り込みつつ、多言語サポート拡張の準備を進める
 
 ### Phase の意図
 
@@ -104,6 +105,7 @@
 - Phase 4 は、project-plan の最終要件である WASM 提出を開発用の暫定経路ではなく正式な実行経路へ寄せる phase である
 - Phase 5 のダンジョンゲーム開発は、Phase 3 の契約固定後に着手し、以後の platform 改善と並行で進める
 - Phase 6 で公開向け state の永続化と供給基盤を整えた後は、Phase 8 のビジュアライザを段階的に前倒しで進めてよい
+- Phase 9 では、動作保証する AI 開発言語はいったん Go に限定し、外部向け guide / sample / verification assets もまず Go 向けに整える。Rust は platform の multi-language evaluation 用 reference candidate として扱い、TypeScript や Python など開発者層を広げやすい言語は Go 向け資産の横展開先として将来サポート候補に残す
 
 ### 将来構想（優先度未定）
 - ダンジョン探索ゲームの段階的拡張:
