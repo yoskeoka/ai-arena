@@ -229,7 +229,9 @@ func buildWASMTestBot(t *testing.T) string {
 
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "test-bot.wasm")
-	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", outputPath, "./internal/platform/runtime/testdata/wasmtestbot")
+	buildCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	cmd := exec.CommandContext(buildCtx, "go", "build", "-o", outputPath, "./internal/platform/runtime/testdata/wasmtestbot")
 	cmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
 	projectRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {

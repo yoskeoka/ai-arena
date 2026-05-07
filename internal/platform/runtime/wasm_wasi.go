@@ -11,6 +11,7 @@ import (
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+	wazerosys "github.com/tetratelabs/wazero/sys"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/protocol"
 )
@@ -41,9 +42,7 @@ func startWASMWASI(parent context.Context, cfg Config) (*wasmWASIAdapter, error)
 
 	ctx, cancel := context.WithCancel(parent)
 	runtimeCfg := wazero.NewRuntimeConfig().WithCloseOnContextDone(true)
-	if cfg.MemoryLimitPages > 0 {
-		runtimeCfg = runtimeCfg.WithMemoryLimitPages(cfg.MemoryLimitPages)
-	}
+	runtimeCfg = runtimeCfg.WithMemoryLimitPages(effectiveWASMMemoryLimitPages(cfg))
 
 	rt := wazero.NewRuntimeWithConfig(ctx, runtimeCfg)
 	if _, err := wasi_snapshot_preview1.Instantiate(ctx, rt); err != nil {
@@ -153,13 +152,30 @@ func (a *wasmWASIAdapter) normalizeExit(err error) error {
 		return nil
 	}
 
+	var exitErr *wazerosys.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 0 {
+		return nil
+	}
+
 	a.mu.Lock()
 	shutdownExpected := a.shutdownExpected
 	a.mu.Unlock()
-	if shutdownExpected && errors.Is(err, context.Canceled) {
-		return nil
+	if shutdownExpected {
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == wazerosys.ExitCodeContextCanceled {
+			return nil
+		}
 	}
 	return err
+}
+
+func effectiveWASMMemoryLimitPages(cfg Config) uint32 {
+	if cfg.MemoryLimitPages > 0 {
+		return cfg.MemoryLimitPages
+	}
+	return DefaultWASMMemoryLimitPages
 }
 
 func defaultWASMArgs(cfg Config) []string {

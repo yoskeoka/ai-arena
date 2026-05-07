@@ -3,6 +3,7 @@ package runtime
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	wazerosys "github.com/tetratelabs/wazero/sys"
 )
 
 func TestStartStreamsAndCapturesStderr(t *testing.T) {
@@ -139,6 +142,40 @@ func TestStartWASMWASIReturnsMalformedOutput(t *testing.T) {
 	}
 }
 
+func TestEffectiveWASMMemoryLimitPagesDefaultsWhenUnset(t *testing.T) {
+	if got := effectiveWASMMemoryLimitPages(Config{}); got != DefaultWASMMemoryLimitPages {
+		t.Fatalf("effectiveWASMMemoryLimitPages() = %d, want %d", got, DefaultWASMMemoryLimitPages)
+	}
+	if got := effectiveWASMMemoryLimitPages(Config{MemoryLimitPages: 12}); got != 12 {
+		t.Fatalf("effectiveWASMMemoryLimitPages() = %d, want 12", got)
+	}
+}
+
+func TestWASMWASINormalizeExitSuppressesCleanExit(t *testing.T) {
+	adapter := &wasmWASIAdapter{}
+	if err := adapter.normalizeExit(wazerosys.NewExitError(0)); err != nil {
+		t.Fatalf("normalizeExit(clean) = %v, want nil", err)
+	}
+}
+
+func TestWASMWASINormalizeExitSuppressesExpectedShutdownCancellation(t *testing.T) {
+	adapter := &wasmWASIAdapter{shutdownExpected: true}
+	if err := adapter.normalizeExit(context.Canceled); err != nil {
+		t.Fatalf("normalizeExit(context.Canceled) = %v, want nil", err)
+	}
+	if err := adapter.normalizeExit(wazerosys.NewExitError(wazerosys.ExitCodeContextCanceled)); err != nil {
+		t.Fatalf("normalizeExit(exit canceled) = %v, want nil", err)
+	}
+}
+
+func TestWASMWASINormalizeExitKeepsUnexpectedExit(t *testing.T) {
+	adapter := &wasmWASIAdapter{}
+	err := adapter.normalizeExit(wazerosys.NewExitError(2))
+	if !errors.Is(err, wazerosys.NewExitError(2)) {
+		t.Fatalf("normalizeExit(unexpected) = %v, want exit error", err)
+	}
+}
+
 func TestHelperProcess(t *testing.T) {
 	mode := os.Getenv("GO_WANT_HELPER_PROCESS")
 	if mode == "" {
@@ -192,7 +229,9 @@ func buildWASMTestBot(t *testing.T) string {
 
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "test-bot.wasm")
-	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", outputPath, "./internal/platform/runtime/testdata/wasmtestbot")
+	buildCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	cmd := exec.CommandContext(buildCtx, "go", "build", "-o", outputPath, "./internal/platform/runtime/testdata/wasmtestbot")
 	cmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
 	projectRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
