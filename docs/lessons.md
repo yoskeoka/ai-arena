@@ -34,3 +34,10 @@
 - **Pattern**: 保存責務と公開タイミング、再起動フックと発火条件を同じ層で定義してしまう
 - **Rule**: platform spec では「保存する」「差し替え前処理フックを持つ」までを定義し、公開タイミングや差し替え条件はゲーム仕様へ委ねる
 - **Applied**: `docs/specs/platform.md` の `stderr` 取得タイミングと `turn` 前差し替え前処理の記述
+
+## [2026-05-07] fixture 検証都合を product 向け切替機能へ一般化しない
+
+- **Mistake**: `echo-count` の subprocess 検証 needs を、そのまま `arena-runner` の `--game-master-mode` と registry の複数 mode 切替へ一般化した
+- **Pattern**: e2e fixture の都合で必要な分岐を、通常経路の user-facing 設定や汎用 registry contract に昇格させてしまう
+- **Rule**: ある分岐が fixture/e2e の等価性確認にしか必要ないなら、まず別 fixture game か test-only registration で閉じる。通常利用者が選ばない切替を product path に足さない
+- **Applied**: `echo-count` / `echo-count-subprocess` の分離、`arena-runner` の game-master mode 削除、Phase 3 runtime boundary 設計

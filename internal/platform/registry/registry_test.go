@@ -22,11 +22,8 @@ func TestLookupFindsDescriptorByGameIDAndMajorVersion(t *testing.T) {
 	if descriptor.RegistryKey.GameVersionMajor != 2 {
 		t.Fatalf("descriptor.RegistryKey.GameVersionMajor = %d, want 2", descriptor.RegistryKey.GameVersionMajor)
 	}
-	if descriptor.DefaultMode != BuildModeInProcess {
-		t.Fatalf("descriptor.DefaultMode = %q, want %q", descriptor.DefaultMode, BuildModeInProcess)
-	}
-	if len(descriptor.SupportedModes) != 1 || descriptor.SupportedModes[0] != BuildModeInProcess {
-		t.Fatalf("descriptor.SupportedModes = %+v, want only in-process", descriptor.SupportedModes)
+	if descriptor.BuildMode != BuildModeInProcess {
+		t.Fatalf("descriptor.BuildMode = %q, want %q", descriptor.BuildMode, BuildModeInProcess)
 	}
 }
 
@@ -53,7 +50,7 @@ func TestDescriptorBuildSessionReturnsRulesetError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Lookup: %v", err)
 	}
-	_, err = descriptor.BuildSession(BuildModeInProcess, BuildSpec{
+	_, err = descriptor.BuildSession(BuildSpec{
 		GameVersion: echo.GameVersion,
 		Ruleset:     "missing-ruleset",
 		Players:     []game.Player{{PlayerID: "p1"}},
@@ -63,7 +60,7 @@ func TestDescriptorBuildSessionReturnsRulesetError(t *testing.T) {
 	}
 }
 
-func TestRegisterRejectsMissingDefaultMode(t *testing.T) {
+func TestRegisterRejectsMissingBuildMode(t *testing.T) {
 	r, err := New()
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -71,27 +68,64 @@ func TestRegisterRejectsMissingDefaultMode(t *testing.T) {
 	err = r.Register(GameDescriptor{
 		RegistryKey: RegistryKey{GameID: "test", GameVersionMajor: 1},
 		GameID:      "test",
-		BuildSession: func(BuildMode, BuildSpec) (gamemaster.Session, error) {
+		BuildSession: func(BuildSpec) (gamemaster.Session, error) {
 			return nil, nil
 		},
-		BuildSessionFromSnapshot: func(BuildMode, BuildSpec, game.Snapshot) (gamemaster.Session, error) {
+		BuildSessionFromSnapshot: func(BuildSpec, game.Snapshot) (gamemaster.Session, error) {
 			return nil, nil
 		},
 		SnapshotFromHistory: func(BuildSpec, []match.Event, int) (game.Snapshot, error) {
 			return game.Snapshot{}, nil
 		},
 	})
-	if err == nil || !strings.Contains(err.Error(), "registry: DefaultMode is required") {
-		t.Fatalf("Register error = %v, want DefaultMode required", err)
+	if err == nil || !strings.Contains(err.Error(), "registry: BuildMode is required") {
+		t.Fatalf("Register error = %v, want BuildMode required", err)
 	}
 }
 
-func TestLookupEchoSupportsDualModes(t *testing.T) {
+func TestLookupEchoSubprocessRegistersAsSeparateGame(t *testing.T) {
+	descriptor, err := Lookup(echo.SubprocessGameID, echo.GameVersion)
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if descriptor.GameID != echo.SubprocessGameID {
+		t.Fatalf("descriptor.GameID = %q, want %q", descriptor.GameID, echo.SubprocessGameID)
+	}
+	if descriptor.BuildMode != BuildModeLocalSubprocess {
+		t.Fatalf("descriptor.BuildMode = %q, want %q", descriptor.BuildMode, BuildModeLocalSubprocess)
+	}
+}
+
+func TestEchoSubprocessSnapshotUsesSubprocessGameID(t *testing.T) {
 	descriptor, err := Lookup(echo.GameID, echo.GameVersion)
 	if err != nil {
 		t.Fatalf("Lookup: %v", err)
 	}
-	if len(descriptor.SupportedModes) != 2 {
-		t.Fatalf("len(SupportedModes) = %d, want 2", len(descriptor.SupportedModes))
+	snapshot, err := descriptor.SnapshotFromHistory(BuildSpec{
+		GameVersion: echo.GameVersion,
+		Ruleset:     echo.RulesetSimultaneous2Turn,
+		Players:     []game.Player{{PlayerID: "p1"}},
+	}, nil, 0)
+	if err != nil {
+		t.Fatalf("SnapshotFromHistory: %v", err)
+	}
+	if snapshot.GameID != echo.GameID {
+		t.Fatalf("snapshot.GameID = %q, want %q", snapshot.GameID, echo.GameID)
+	}
+
+	descriptor, err = Lookup(echo.SubprocessGameID, echo.GameVersion)
+	if err != nil {
+		t.Fatalf("Lookup subprocess: %v", err)
+	}
+	snapshot, err = descriptor.SnapshotFromHistory(BuildSpec{
+		GameVersion: echo.GameVersion,
+		Ruleset:     echo.RulesetSimultaneous2Turn,
+		Players:     []game.Player{{PlayerID: "p1"}},
+	}, nil, 0)
+	if err != nil {
+		t.Fatalf("SnapshotFromHistory subprocess: %v", err)
+	}
+	if snapshot.GameID != echo.SubprocessGameID {
+		t.Fatalf("snapshot.GameID = %q, want %q", snapshot.GameID, echo.SubprocessGameID)
 	}
 }

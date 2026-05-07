@@ -21,17 +21,19 @@ func main() {
 }
 
 func run() error {
+	var gameID string
 	var gameVersion string
 	var ruleset string
 
 	fs := flag.NewFlagSet("echo-count-gamemaster", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	fs.StringVar(&gameID, "game-id", "", "game id")
 	fs.StringVar(&gameVersion, "game-version", "", "game version")
 	fs.StringVar(&ruleset, "ruleset", "", "ruleset")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return err
 	}
-	selectedMeta, _, _, _, err := echo.MetadataForSelection(gameVersion, ruleset)
+	selectedMeta, _, _, _, err := echo.MetadataForSelectionWithGameID(gameID, gameVersion, ruleset)
 	if err != nil {
 		return err
 	}
@@ -86,6 +88,7 @@ func handleRequest(ctx context.Context, meta gameMetadata, state *serverState, r
 			return protocol.Response{}, false, err
 		}
 		cfg := echo.Config{
+			GameID:      meta.GameID,
 			GameVersion: meta.GameVersion,
 			Ruleset:     meta.RulesetVersion,
 			Players:     append([]game.Player(nil), params.Players...),

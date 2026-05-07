@@ -83,13 +83,12 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 
 	t.Run("local-subprocess-gamemaster", func(t *testing.T) {
 		result := runArena(t,
-			"--game", "echo-count",
-			"--game-master-mode", "local-subprocess",
+			"--game", "echo-count-subprocess",
 			"--game-version", "2.0.0",
 			"--ruleset", "phase2-simultaneous-3turn",
 			"--match-id", "subprocess-gm-happy",
-			"--player", "p1=./testdata/ai/echo/echo-ai",
-			"--player", "p2=./testdata/ai/echo/echo-ai",
+			"--player", "p1=./testdata/ai/echo/echo-ai-subprocess",
+			"--player", "p2=./testdata/ai/echo/echo-ai-subprocess",
 		)
 		if result.Record.Status != contract.StatusCompleted {
 			t.Fatalf("status = %q, want completed", result.Record.Status)

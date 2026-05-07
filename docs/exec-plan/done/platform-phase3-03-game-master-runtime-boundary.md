@@ -92,16 +92,17 @@ depends on:
   - metadata / handshake / state exchange types
   - 最小論理 API 面に対応する request/response DTO
 - `cmd/arena-runner/main.go`
-  - registry から game master 接続方式を引けるようにする
+  - registry に登録された game master session を起動できるようにする
 - existing games
-  - `echo-count` は in-process adapter と local subprocess adapter の両方を用意し、同じ game を 2 経路で検証する
+  - `echo-count` は in-process game として残す
+  - `echo-count-subprocess` を local subprocess game master fixture として追加し、e2e で境界を検証する
   - `janken` は既存経路を維持したまま新境界へ適応させ、local subprocess への全面移行はこの plan では求めない
 
 ## Verification
 
 - `go test ./...` が通る
 - platform が local subprocess として起動した game master と 1 match を完走できる
-- `echo-count` が in-process adapter と local subprocess adapter の両方で完走できる
+- `echo-count` と `echo-count-subprocess` がそれぞれ完走できる
 - game master metadata / compatibility / lifecycle error が一貫して記録される
 - game master 開発仕様書だけを読めば、platform に載せるための最低要件が分かる状態になる
 - game master が request 対象 player を明示し、1 player 逐次 / 複数 player 同時 の両方を同じ論理 API で表現できる
@@ -120,9 +121,9 @@ depends on:
 - [ ] Implement a local subprocess game master adapter
 - [ ] [parallel] Preserve an in-process adapter for existing games during migration
 - [ ] [parallel] Keep `janken` on the existing path while adapting it to the new boundary
-- [ ] Add dual-path verification for `echo-count` (in-process and local subprocess)
+- [ ] Add fixture verification for both `echo-count` and `echo-count-subprocess`
 - [ ] [parallel] Add a fixture or minimal sample game master executable for black-box verification
-- [ ] Update runner/registry integration to select the game master connection mode
+- [ ] Update runner/registry integration without adding generic game master mode selection
 - [ ] Add verification for lifecycle, metadata compatibility, and state exchange
 
 ## Parallelism
@@ -155,6 +156,6 @@ depends on:
 - `DecisionMode` は metadata ではなく runtime step contract に残し、`DecisionStep.requests` と矛盾しないよう validation する
 - sequential game の自動 skip は request 非送信で表現できる
 - game master 実装者が毎 turn の public state 更新や観測都合を優先したい場合は、強制 pass request を送る実装も許可する
-- `echo-count` は in-process adapter と local subprocess adapter の両方を実装して検証する
+- `echo-count` と `echo-count-subprocess` は同挙動の別 fixture game として登録し、通常経路に mode 切替を持ち込まない
 - `janken` は既存経路を保ったまま新境界へ適応させる
 - `turn_mode` は当面残さず、この phase で compatibility metadata から外す

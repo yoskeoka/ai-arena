@@ -68,7 +68,6 @@ func run(args []string) error {
 	var (
 		gameName         string
 		gameVersion      string
-		gameMasterMode   string
 		ruleset          string
 		matchID          string
 		outputDir        string
@@ -88,7 +87,6 @@ func run(args []string) error {
 	fs.SetOutput(os.Stderr)
 	fs.StringVar(&gameName, "game", "", "game id")
 	fs.StringVar(&gameVersion, "game-version", "", "game version")
-	fs.StringVar(&gameMasterMode, "game-master-mode", "", "game master connection mode")
 	fs.StringVar(&ruleset, "ruleset", "", "game ruleset")
 	fs.StringVar(&matchID, "match-id", "", "match id")
 	fs.StringVar(&outputDir, "output-dir", defaultOutputDir, "base directory for standard runner artifacts")
@@ -203,10 +201,6 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	selectedMode, err := resolveGameMasterMode(descriptor, gameMasterMode)
-	if err != nil {
-		return err
-	}
 
 	var metaOverride *catalog.GameMetadata
 	if historyInput != "" {
@@ -219,7 +213,7 @@ func run(args []string) error {
 			Ruleset:     ruleset,
 			Players:     append([]game.Player(nil), playersForGame...),
 		}
-		master, err := descriptor.BuildSession(selectedMode, buildSpec)
+		master, err := descriptor.BuildSession(buildSpec)
 		if err != nil {
 			return err
 		}
@@ -239,7 +233,7 @@ func run(args []string) error {
 		metaOverride = &recordSource.Game
 	}
 
-	master, err := newGameMasterSession(descriptor, selectedMode, registry.BuildSpec{
+	master, err := newGameMasterSession(descriptor, registry.BuildSpec{
 		GameVersion: gameVersion,
 		Ruleset:     ruleset,
 		Players:     append([]game.Player(nil), playersForGame...),
@@ -467,24 +461,11 @@ func mustMarshal(v any) json.RawMessage {
 	return raw
 }
 
-func newGameMasterSession(descriptor registry.GameDescriptor, mode registry.BuildMode, spec registry.BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
+func newGameMasterSession(descriptor registry.GameDescriptor, spec registry.BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
 	if snapshot != nil {
-		return descriptor.BuildSessionFromSnapshot(mode, spec, *snapshot)
+		return descriptor.BuildSessionFromSnapshot(spec, *snapshot)
 	}
-	return descriptor.BuildSession(mode, spec)
-}
-
-func resolveGameMasterMode(descriptor registry.GameDescriptor, raw string) (registry.BuildMode, error) {
-	if raw == "" {
-		return descriptor.DefaultMode, nil
-	}
-	mode := registry.BuildMode(raw)
-	for _, supported := range descriptor.SupportedModes {
-		if supported == mode {
-			return mode, nil
-		}
-	}
-	return "", fmt.Errorf("game master mode %q is unsupported for game %q", raw, descriptor.GameID)
+	return descriptor.BuildSession(spec)
 }
 
 func parsePlayersForGame(args []string) ([]game.Player, error) {
