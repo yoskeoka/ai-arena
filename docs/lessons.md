@@ -55,3 +55,10 @@
 - **Pattern**: 現在のコード構造をそのまま spec に写してしまい、責務は同じでも小さなリファクタリングで spec 修正が必要な書き方になる
 - **Rule**: spec では concrete な関数名・メソッド名・型名をむやみに持ち込まず、まず責務・入出力・境界を書く。実装で使っている型や interface を書く場合も、それが安定した抽象概念として spec の主語になっているときだけに限る
 - **Applied**: `docs/specs/platform-game-registry.md` の lookup 流れ、今後の platform / registry / runner 系 spec 全般
+
+## [2026-05-08] runtime 差分を長く残すなら game id も分ける
+
+- **Mistake**: Phase 4 の Go-WASM 検証を既存 `janken` game id にそのまま重ね、subprocess 系の `janken` と runtime 差分を spec / fixture / registry 上で分離しない前提で進めた
+- **Pattern**: 同じルールセットでも、長期的に別 verification line として残す runtime 差分を「player artifact だけの違い」とみなして game identity へ反映しない
+- **Rule**: 同一ルールを共有しても subprocess 系と WASM 系のように別 verification line を併存させるなら、`echo-count` と同様に game id を分けて registry / fixture / spec で並立させる
+- **Applied**: `janken` と `janken-wasm` の分離、今後の runtime-specific fixture game 設計

@@ -59,6 +59,22 @@
 - CI は module/build/tool cache を持ってよいが、品質判定の入口は Makefile targets に揃える
 - formatter drift は test failure ではなく lint failure として扱う
 
+## Dedicated WASM Verification Helpers
+
+Go 製 WASM sample build と `arena-runner` の `janken` verification は、Phase 4 初回導入では default quality gate へは入れず、
+dedicated helper / targeted test として維持する。
+
+- `make build-janken-go-wasm`
+  - `testdata/ai/janken/janken-go-wasm-ai` を `GOOS=wasip1 GOARCH=wasm` で build し、repo-local fixture path に `.wasm` を生成する
+- `make run-janken-go-wasm`
+  - 上記 build の後、`arena-runner` で `janken` match を起動し、artifact path を表示する
+
+方針:
+
+- 常設 gate は引き続き `make test` / `make lint`
+- Go-WASM path の継続的検証は targeted automated tests と manual helper の両輪で担保する
+- default gate へ昇格させるのは、runtime matrix と CI cost を別途評価してからとする
+
 ## Codex Hook Integration
 
 - Codex の `PostToolUse` hook は `.go` edit の直後に `make fmt` を呼び出してよい

@@ -1,0 +1,15 @@
+{
+  "ai_id": "janken-go-wasm-ai",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "janken-wasm",
+    "game_version": "2.1.0",
+    "ruleset_version": "regular"
+  },
+  "runtime": {
+    "kind": "wasm-wasi",
+    "module": "./janken-go-wasm-ai.wasm",
+    "args": ["./janken-go-wasm-ai.wasm"],
+    "memory_limit_pages": 64
+  }
+}

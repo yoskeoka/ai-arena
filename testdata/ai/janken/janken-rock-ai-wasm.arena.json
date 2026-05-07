@@ -1,0 +1,13 @@
+{
+  "ai_id": "janken-rock-ai-wasm",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "janken-wasm",
+    "game_version": "2.1.0",
+    "ruleset_version": "regular"
+  },
+  "runtime": {
+    "kind": "local-subprocess",
+    "command": ["go", "run", "./testdata/ai/janken/janken-rock-ai"]
+  }
+}

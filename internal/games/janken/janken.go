@@ -15,12 +15,14 @@ import (
 )
 
 const (
-	GameID              = "janken"
-	BuilderIDInProcess  = "janken/in-process"
-	GameVersion         = "2.1.0"
-	RulesetRegular      = "regular"
-	RegularRounds       = 5
-	defaultTurnDeadline = 100 * time.Millisecond
+	GameID                 = "janken"
+	WASMGameID             = "janken-wasm"
+	BuilderIDInProcess     = "janken/in-process"
+	BuilderIDWASMInProcess = "janken-wasm/in-process"
+	GameVersion            = "2.1.0"
+	RulesetRegular         = "regular"
+	RegularRounds          = 5
+	defaultTurnDeadline    = 100 * time.Millisecond
 )
 
 var legalActionHint = mustRaw(map[string]any{
@@ -35,6 +37,7 @@ var legalActionHint = mustRaw(map[string]any{
 })
 
 type Config struct {
+	GameID      string
 	GameVersion string
 	Ruleset     string
 	Players     []game.Player
@@ -112,7 +115,7 @@ func New(cfg Config) (*Master, error) {
 		return nil, fmt.Errorf("janken: game version is required")
 	}
 
-	meta, rounds, deadline, err := metadataForSelection(cfg.GameVersion, cfg.Ruleset)
+	meta, rounds, deadline, err := metadataForSelection(cfg.GameID, cfg.GameVersion, cfg.Ruleset)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +163,12 @@ func SupportedRulesets() []string {
 }
 
 func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
+	return SnapshotFromHistoryWithGameID(GameID, gameVersion, ruleset, players, events, targetTurn)
+}
+
+func SnapshotFromHistoryWithGameID(gameID, gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
 	master, err := New(Config{
+		GameID:      gameID,
 		GameVersion: gameVersion,
 		Ruleset:     ruleset,
 		Players:     players,
@@ -240,14 +248,30 @@ func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, eve
 	return snapshot, nil
 }
 
-func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, int, time.Duration, error) {
+func MetadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, int, time.Duration, error) {
+	return MetadataForSelectionWithGameID(GameID, gameVersion, ruleset)
+}
+
+func MetadataForSelectionWithGameID(gameID, gameVersion, ruleset string) (catalog.GameMetadata, int, time.Duration, error) {
+	return metadataForSelection(gameID, gameVersion, ruleset)
+}
+
+func metadataForSelection(gameID, gameVersion, ruleset string) (catalog.GameMetadata, int, time.Duration, error) {
+	if gameID == "" {
+		gameID = GameID
+	}
+	switch gameID {
+	case GameID, WASMGameID:
+	default:
+		return catalog.GameMetadata{}, 0, 0, fmt.Errorf("janken: unsupported game id %q", gameID)
+	}
 	if gameVersion != GameVersion {
 		return catalog.GameMetadata{}, 0, 0, fmt.Errorf("janken: unsupported game version %q", gameVersion)
 	}
 	switch ruleset {
 	case RulesetRegular:
 		return catalog.GameMetadata{
-			GameID:         GameID,
+			GameID:         gameID,
 			GameVersion:    gameVersion,
 			RulesetVersion: RulesetRegular,
 		}, RegularRounds, defaultTurnDeadline, nil

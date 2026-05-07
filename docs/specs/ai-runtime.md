@@ -125,6 +125,52 @@ deny-by-default を基本方針とする。
 - memory limit の適用
 - cooperative shutdown 後の forced shutdown
 
+## Go 参照フロー
+
+Phase 4 の first supported reference path は Go source から `GOOS=wasip1 GOARCH=wasm` で build した
+WASM/WASI module とする。`janken` sample AI はこの参照フローを固定するための正本 fixture であり、
+binary artifact ではなく source + reproducible build step を正本として扱う。
+
+参照 build 例:
+
+```sh
+GOOS=wasip1 GOARCH=wasm go build \
+  -o ./testdata/ai/janken/janken-go-wasm-ai.wasm \
+  ./testdata/ai/janken/janken-go-wasm-ai
+```
+
+対応する sidecar manifest 例:
+
+```json
+{
+  "ai_id": "janken-go-wasm-ai",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "janken-wasm",
+    "game_version": "2.1.0",
+    "ruleset_version": "regular"
+  },
+  "runtime": {
+    "kind": "wasm-wasi",
+    "module": "./janken-go-wasm-ai.wasm",
+    "args": ["./janken-go-wasm-ai.wasm"],
+    "memory_limit_pages": 64
+  }
+}
+```
+
+運用ルール:
+
+- checked-in fixture の正本は `.go` source と `.arena.json` manifest であり、`.wasm` binary は commit しない
+- local helper / targeted verification / CI は必要に応じて `.wasm` を都度 build して使う
+- sidecar manifest は build output と同じ directory に置き、`runtime.module` は sidecar 基準で解決できる相対 path を使う
+
+Go sample で期待する runtime 振る舞い:
+
+- `stdout`: `init` / `turn` / `game_over` への JSON-RPC response だけを NDJSON で返す
+- `stderr`: `janken-go-wasm-ai init`, `turn <n>`, `game_over` のような debug/audit 用ログを出してよい
+- exit/shutdown: `game_over` に ACK 後は clean exit してよく、platform が `stdin` close 後に cooperative shutdown を完了できること
+
 ## 監査対象
 
 platform は少なくとも以下を distinguish して記録できなければならない。
