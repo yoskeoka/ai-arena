@@ -422,7 +422,7 @@ func TestArenaRunnerJankenGoWASMMixedRuntimePath(t *testing.T) {
 	buildJankenGoWASMFixture(t)
 
 	result := runArena(t,
-		"--game", janken.WASMGameID,
+		"--game", janken.GameID,
 		"--game-version", janken.GameVersion,
 		"--ruleset", janken.RulesetRegular,
 		"--match-id", "janken-go-wasm-happy",
@@ -517,7 +517,7 @@ func TestArenaRunnerJankenGoWASMMissingModuleFails(t *testing.T) {
   "ai_id": "missing-go-wasm-ai",
   "protocol": {
     "transport": "stdio-jsonrpc-ndjson",
-    "game_id": "janken-wasm",
+    "game_id": "janken",
     "game_version": "2.1.0",
     "ruleset_version": "regular"
   },
@@ -531,7 +531,7 @@ func TestArenaRunnerJankenGoWASMMissingModuleFails(t *testing.T) {
 	}
 
 	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
-		"--game", janken.WASMGameID,
+		"--game", janken.GameID,
 		"--game-version", janken.GameVersion,
 		"--ruleset", janken.RulesetRegular,
 		"--match-id", "janken-go-wasm-missing-module",

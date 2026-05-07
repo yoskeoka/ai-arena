@@ -31,22 +31,6 @@ func TestLookupFindsDescriptorByGameIDAndMajorVersion(t *testing.T) {
 	}
 }
 
-func TestLookupJankenWASMRegistersAsSeparateGame(t *testing.T) {
-	descriptor, err := Lookup(janken.WASMGameID, janken.GameVersion)
-	if err != nil {
-		t.Fatalf("Lookup: %v", err)
-	}
-	if descriptor.GameID != janken.WASMGameID {
-		t.Fatalf("descriptor.GameID = %q, want %q", descriptor.GameID, janken.WASMGameID)
-	}
-	if descriptor.BuildMode != BuildModeInProcess {
-		t.Fatalf("descriptor.BuildMode = %q, want %q", descriptor.BuildMode, BuildModeInProcess)
-	}
-	if descriptor.BuilderID != janken.BuilderIDWASMInProcess {
-		t.Fatalf("descriptor.BuilderID = %q, want %q", descriptor.BuilderID, janken.BuilderIDWASMInProcess)
-	}
-}
-
 func TestLookupRejectsUnknownGame(t *testing.T) {
 	if _, err := Lookup("unknown-game", "1.0.0"); err == nil || !strings.Contains(err.Error(), `registry: unsupported game "unknown-game"`) {
 		t.Fatalf("Lookup error = %v, want unsupported game", err)
@@ -183,40 +167,6 @@ func TestEchoSubprocessSnapshotUsesSubprocessGameID(t *testing.T) {
 	}
 	if snapshot.GameID != echo.SubprocessGameID {
 		t.Fatalf("snapshot.GameID = %q, want %q", snapshot.GameID, echo.SubprocessGameID)
-	}
-}
-
-func TestJankenWASMSnapshotUsesWASMGameID(t *testing.T) {
-	descriptor, err := Lookup(janken.GameID, janken.GameVersion)
-	if err != nil {
-		t.Fatalf("Lookup: %v", err)
-	}
-	snapshot, err := descriptor.SnapshotFromHistory(BuildSpec{
-		GameVersion: janken.GameVersion,
-		Ruleset:     janken.RulesetRegular,
-		Players:     []game.Player{{PlayerID: "p1"}, {PlayerID: "p2"}},
-	}, nil, 0)
-	if err != nil {
-		t.Fatalf("SnapshotFromHistory: %v", err)
-	}
-	if snapshot.GameID != janken.GameID {
-		t.Fatalf("snapshot.GameID = %q, want %q", snapshot.GameID, janken.GameID)
-	}
-
-	descriptor, err = Lookup(janken.WASMGameID, janken.GameVersion)
-	if err != nil {
-		t.Fatalf("Lookup wasm: %v", err)
-	}
-	snapshot, err = descriptor.SnapshotFromHistory(BuildSpec{
-		GameVersion: janken.GameVersion,
-		Ruleset:     janken.RulesetRegular,
-		Players:     []game.Player{{PlayerID: "p1"}, {PlayerID: "p2"}},
-	}, nil, 0)
-	if err != nil {
-		t.Fatalf("SnapshotFromHistory wasm: %v", err)
-	}
-	if snapshot.GameID != janken.WASMGameID {
-		t.Fatalf("snapshot.GameID = %q, want %q", snapshot.GameID, janken.WASMGameID)
 	}
 }
 

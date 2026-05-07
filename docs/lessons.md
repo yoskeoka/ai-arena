@@ -56,9 +56,9 @@
 - **Rule**: spec では concrete な関数名・メソッド名・型名をむやみに持ち込まず、まず責務・入出力・境界を書く。実装で使っている型や interface を書く場合も、それが安定した抽象概念として spec の主語になっているときだけに限る
 - **Applied**: `docs/specs/platform-game-registry.md` の lookup 流れ、今後の platform / registry / runner 系 spec 全般
 
-## [2026-05-08] runtime 差分を長く残すなら game id も分ける
+## [2026-05-08] AI runtime 差分と game id を混同しない
 
-- **Mistake**: Phase 4 の Go-WASM 検証を既存 `janken` game id にそのまま重ね、subprocess 系の `janken` と runtime 差分を spec / fixture / registry 上で分離しない前提で進めた
-- **Pattern**: 同じルールセットでも、長期的に別 verification line として残す runtime 差分を「player artifact だけの違い」とみなして game identity へ反映しない
-- **Rule**: 同一ルールを共有しても subprocess 系と WASM 系のように別 verification line を併存させるなら、`echo-count` と同様に game id を分けて registry / fixture / spec で並立させる
-- **Applied**: `janken` と `janken-wasm` の分離、今後の runtime-specific fixture game 設計
+- **Mistake**: Go-WASM AI player の検証線を追加するとき、AI player runtime の差分をそのまま game id 差分へ持ち込み、`janken-wasm` を別 game として切り出した
+- **Pattern**: `runner` が受ける AI player runtime の違いと、game master / game ruleset identity の違いを同じ層で扱ってしまう
+- **Rule**: game master 実装と ruleset が同一なら game id は分けない。`local-subprocess` と `wasm-wasi` のような AI player runtime 差分は、まず同一 game id の sidecar/runtime 設定差分として表現する
+- **Applied**: `janken` の Go-WASM verification path、今後の AI runtime fixture 設計

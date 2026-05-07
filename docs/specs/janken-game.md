@@ -22,14 +22,13 @@
 
 `janken` 側では、fixture では薄いゲーム固有の visible state と勝敗解決を担保する。
 
-Phase 4 では `janken` ruleset を共有する `janken-wasm` を、Go 製 WASM/WASI AI runtime の最初の公式検証ゲームとして使う。
+Phase 4 では `janken` を、Go 製 WASM/WASI AI runtime の最初の公式検証ゲームとして使う。
 この役割では、game ルール自体の検証に加えて、Go で書いた AI を WASM/WASI へ build し、
-`arena-runner` が sidecar manifest 経由でその module を正式経路として完走できることも確認対象に含める。
+`arena-runner` が同じ `janken` game id のまま subprocess AI と WASM AI の両方を正式経路として完走できることも確認対象に含める。
 
 ## Metadata
 
-- subprocess verification game_id: `janken`
-- WASM verification game_id: `janken-wasm`
+- `game_id`: `janken`
 - `game_version`: `2.1.0`
 - `ruleset_version`: `regular`
 
@@ -231,7 +230,7 @@ response:
 
 Go 製 WASM/WASI sample AI verification では、少なくとも以下を満たす構成を基準とする。
 
-- game: `janken-wasm`
+- game: `janken`
 - game_version: `2.1.0`
 - ruleset_version: `regular`
 - players:

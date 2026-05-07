@@ -40,15 +40,6 @@ func mustDefaultRegistry() *Registry {
 				SupportedRulesets: janken.SupportedRulesets(),
 			},
 		},
-		DescriptorRecord{
-			RegistryKey: RegistryKey{GameID: janken.WASMGameID, GameVersionMajor: 2},
-			GameID:      janken.WASMGameID,
-			BuildMode:   BuildModeInProcess,
-			BuilderID:   janken.BuilderIDWASMInProcess,
-			BuildConstraints: BuildConstraints{
-				SupportedRulesets: janken.SupportedRulesets(),
-			},
-		},
 	)
 	if err != nil {
 		panicDefaultRegistry(err)
@@ -91,28 +82,13 @@ func mustDefaultRegistry() *Registry {
 				SupportedRulesets: janken.SupportedRulesets(),
 			},
 			BuildSession: func(spec BuildSpec) (gamemaster.Session, error) {
-				return buildJankenInProcessSession(janken.GameID, spec, nil)
+				return buildJankenInProcessSession(spec, nil)
 			},
 			BuildSessionFromSnapshot: func(spec BuildSpec, snapshot game.Snapshot) (gamemaster.Session, error) {
-				return buildJankenInProcessSession(janken.GameID, spec, &snapshot)
+				return buildJankenInProcessSession(spec, &snapshot)
 			},
 			SnapshotFromHistory: func(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
 				return janken.SnapshotFromHistory(spec.GameVersion, spec.Ruleset, append([]game.Player(nil), spec.Players...), events, targetTurn)
-			},
-		},
-		janken.BuilderIDWASMInProcess: {
-			BuildMode: BuildModeInProcess,
-			BuildConstraints: BuildConstraints{
-				SupportedRulesets: janken.SupportedRulesets(),
-			},
-			BuildSession: func(spec BuildSpec) (gamemaster.Session, error) {
-				return buildJankenInProcessSession(janken.WASMGameID, spec, nil)
-			},
-			BuildSessionFromSnapshot: func(spec BuildSpec, snapshot game.Snapshot) (gamemaster.Session, error) {
-				return buildJankenInProcessSession(janken.WASMGameID, spec, &snapshot)
-			},
-			SnapshotFromHistory: func(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
-				return janken.SnapshotFromHistoryWithGameID(janken.WASMGameID, spec.GameVersion, spec.Ruleset, append([]game.Player(nil), spec.Players...), events, targetTurn)
 			},
 		},
 	})
@@ -175,9 +151,8 @@ func buildEchoLocalSubprocessSession(spec BuildSpec, snapshot *game.Snapshot) (g
 	})
 }
 
-func buildJankenInProcessSession(gameID string, spec BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
+func buildJankenInProcessSession(spec BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
 	cfg := janken.Config{
-		GameID:      gameID,
 		GameVersion: spec.GameVersion,
 		Ruleset:     spec.Ruleset,
 		Players:     append([]game.Player(nil), spec.Players...),

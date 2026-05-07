@@ -146,7 +146,7 @@ GOOS=wasip1 GOARCH=wasm go build \
   "ai_id": "janken-go-wasm-ai",
   "protocol": {
     "transport": "stdio-jsonrpc-ndjson",
-    "game_id": "janken-wasm",
+    "game_id": "janken",
     "game_version": "2.1.0",
     "ruleset_version": "regular"
   },

@@ -61,13 +61,13 @@
 
 ## Dedicated WASM Verification Helpers
 
-Go 製 WASM sample build と `arena-runner` の `janken-wasm` verification は、Phase 4 初回導入では default quality gate へは入れず、
+Go 製 WASM sample build と `arena-runner` の `janken` verification は、Phase 4 初回導入では default quality gate へは入れず、
 dedicated helper / targeted test として維持する。
 
 - `make build-janken-go-wasm`
   - `testdata/ai/janken/janken-go-wasm-ai` を `GOOS=wasip1 GOARCH=wasm` で build し、repo-local fixture path に `.wasm` を生成する
 - `make run-janken-go-wasm`
-  - 上記 build の後、`arena-runner` で `janken` match を起動し、artifact path を表示する
+  - 上記 build の後、`arena-runner` で `janken` match を起動し、subprocess bot と WASM bot が同じ game id で完走することを確認できる
 
 方針:
 

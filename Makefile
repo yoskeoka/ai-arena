@@ -54,7 +54,7 @@ run-janken-go-wasm: build-janken-go-wasm
 	output_dir="$$(mktemp -d /tmp/ai-arena-janken-wasm-XXXXXX)"; \
 	echo "artifact dir: $$output_dir/janken-go-wasm"; \
 	$(GO_ENV) $(GO) run ./cmd/arena-runner \
-		--game janken-wasm \
+		--game janken \
 		--game-version 2.1.0 \
 		--ruleset regular \
 		--match-id janken-go-wasm \
