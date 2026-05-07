@@ -72,10 +72,30 @@ protocol と game logic は分離する。runtime adapter と session / match lo
 ## 参照関係
 
 - `docs/specs/platform-common-contract.md`: metadata / action status / failure 分類 / record core schema の正本
+- `docs/specs/platform-game-registry.md`: registered game の lookup key / descriptor / build/replay 入口
 - `docs/specs/janken-game.md`: `janken` 固有 payload / validation / ranking
 - `docs/specs/dungeon-game.md`: 本命 game が要求する platform 性質
 
 ## ゲーム metadata と ruleset の扱い
+
+platform は game を直接 `switch` で選ばず、game registry へ lookup して起動する。
+lookup key は `game_id + game_version major` とし、`ruleset_version` は lookup 後に
+descriptor の build 入口へ渡して game 固有 validation を受ける。
+
+### runner と registry の責務分離
+
+- runner の責務:
+  - CLI / artifact / replay-debug entrypoint から `game_id` と `game_version` を集める
+  - `game_id + game_version major` で registry lookup を行う
+  - lookup 済み descriptor に `ruleset_version` と player list を渡して fresh run / snapshot resume / history replay を起動する
+- game registry の責務:
+  - registered game を descriptor 単位で保持する
+  - `game_id + game_version major` lookup を提供する
+  - game master 接続形態と build/replay 入口をまとめて返す
+- game 固有 build 入口の責務:
+  - `ruleset_version` の妥当性判定
+  - fresh run / snapshot resume / history replay で使う metadata の確定
+  - game 固有 snapshot/history 解釈
 
 ### 必須 metadata
 
@@ -109,9 +129,8 @@ protocol と game logic は分離する。runtime adapter と session / match lo
 
 ### 互換性判定
 
-- platform は `game_id` 完全一致を要求する
-- platform は `game_version` の major 一致を要求する
-- `ruleset_version` は完全一致を要求する
+- registry lookup は `game_id` 完全一致と `game_version` major 一致を要求する
+- lookup 後の metadata 確定フェーズでは `ruleset_version` 完全一致を要求する
 
 したがって、以下は非互換とみなす。
 
@@ -120,6 +139,9 @@ protocol と game logic は分離する。runtime adapter と session / match lo
 - `ruleset_version` 不一致
 
 minor / patch 差分は同一 major の範囲で互換とみなす。
+
+`ruleset_version` の一致判定は registry key ではなく、各 game の build 入口が返す
+metadata を runner / catalog が検証する段階で行う。
 
 ### `turn_mode` の再分類
 
@@ -518,8 +540,9 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--target-turn <n>` は `--history-input` または `--record-input` と組み合わせて使う replay / resume の turn 境界を指定する
 
 `echo-count` は platform fixture 用の最小 game であり、`janken` は richer integration 用の game として同じ runner contract に乗る。
-runner が担保するのはゲーム非依存の起動・artifact・replay/debug entrypoint までであり、
-hidden action reveal、simultaneous resolution、game-specific action schema、ranking / tie-break の正しさは `janken` 側 spec と verification で担保する。
+runner が担保するのはゲーム非依存の起動・artifact・replay/debug entrypoint と registry lookup までであり、
+hidden action reveal、simultaneous resolution、game-specific action schema、ranking / tie-break の正しさと
+game 固有 snapshot/history 解釈は descriptor 配下の build/replay 入口と `janken` 側 spec / verification で担保する。
 
 artifact hierarchy:
 
@@ -571,9 +594,9 @@ AI metadata 読み取り:
 
 起動前 compatibility:
 
-- runner は game master metadata と各 AI metadata の `game_id` 完全一致を要求する
-- runner は `game_version` major 一致を要求する
-- runner は `ruleset_version` 完全一致を要求する
+- runner は registry lookup で解決した game master metadata と各 AI metadata の `game_id` 完全一致を要求する
+- runner は registry lookup で解決した game master metadata と各 AI metadata の `game_version` major 一致を要求する
+- runner は build 後に確定した `ruleset_version` 完全一致を要求する
 - どれか 1 つでも不一致なら match loop を開始しない
 
 runner の非責務:
@@ -582,7 +605,9 @@ runner の非責務:
 - decision mode を metadata から注入すること
 - per-turn deadline を決めること
 
-これらは game 側の ruleset / decision step contract に属する。runner は `game_id` と `ruleset_version` を指定して対象 game を起動するだけで、match の進行条件そのものは game master が定義する。
+これらは game 側の ruleset / decision step contract に属する。runner は `game_id` と
+`game_version` で registry lookup した descriptor に `ruleset_version` を渡して対象 game を起動するだけで、
+match の進行条件そのものは game master が定義する。
 
 replay/debug で読むべき source of truth は structured log stream ではなく persisted final `record.json` である。
 必要に応じて `snapshot.json` / `history.json` をその artifact から抽出して使う。

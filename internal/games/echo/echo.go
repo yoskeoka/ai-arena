@@ -10,6 +10,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
+	"github.com/yoskeoka/ai-arena/internal/platform/match"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
 
@@ -117,6 +118,93 @@ func NewFromSnapshot(cfg Config, snapshot game.Snapshot) (*Master, error) {
 
 func (m *Master) Metadata() catalog.GameMetadata {
 	return m.meta
+}
+
+func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
+	meta, mode, maxTurns, _, err := metadataForSelection(gameVersion, ruleset)
+	if err != nil {
+		return game.Snapshot{}, err
+	}
+	if targetTurn < 0 || targetTurn > maxTurns {
+		return game.Snapshot{}, fmt.Errorf("target turn %d out of range 0..%d", targetTurn, maxTurns)
+	}
+
+	score := make(map[string]int, len(players))
+	perPlayer := make(map[string]game.PlayerSnapshot, len(players))
+	for _, player := range players {
+		score[player.PlayerID] = 0
+		perPlayer[player.PlayerID] = game.PlayerSnapshot{
+			LastActionStatus: game.ActionStatus{
+				PlayerID:     player.PlayerID,
+				ActionStatus: session.StatusNoAction,
+			},
+		}
+	}
+
+	for _, event := range events {
+		if event.Turn == 0 || event.Turn > targetTurn {
+			continue
+		}
+		switch event.Kind {
+		case "turn_result", "turn_timeout", "protocol_error", "runtime_exited":
+			var actionStatus game.ActionStatus
+			if err := json.Unmarshal(event.Payload, &actionStatus); err != nil {
+				return game.Snapshot{}, fmt.Errorf(
+					"decode history event payload seq=%d kind=%q turn=%d player_id=%q: %w",
+					event.Seq,
+					event.Kind,
+					event.Turn,
+					event.PlayerID,
+					err,
+				)
+			}
+			if _, ok := perPlayer[event.PlayerID]; !ok {
+				return game.Snapshot{}, fmt.Errorf("history has unknown player %q", event.PlayerID)
+			}
+			if actionStatus.PlayerID == "" {
+				actionStatus.PlayerID = event.PlayerID
+			}
+			playerState := perPlayer[event.PlayerID]
+			playerState.LastActionStatus = actionStatus
+			perPlayer[event.PlayerID] = playerState
+			if actionStatus.ActionStatus == session.StatusAccepted {
+				score[event.PlayerID]++
+			}
+		}
+	}
+
+	expected := targetTurn + 1
+	if targetTurn >= maxTurns {
+		expected = maxTurns
+	}
+	for _, player := range players {
+		playerState := perPlayer[player.PlayerID]
+		playerState.VisibleState = mustRaw(visibleState{
+			Turn:     expected,
+			Expected: expected,
+			Score:    score,
+		})
+		perPlayer[player.PlayerID] = playerState
+	}
+	gameState, err := json.Marshal(snapshotState{
+		Mode:     mode,
+		Turn:     targetTurn,
+		Expected: expected,
+		Score:    score,
+	})
+	if err != nil {
+		return game.Snapshot{}, fmt.Errorf("encode replay snapshot: %w", err)
+	}
+
+	return game.Snapshot{
+		GameID:         meta.GameID,
+		GameVersion:    meta.GameVersion,
+		RulesetVersion: meta.RulesetVersion,
+		Turn:           targetTurn,
+		Status:         game.StatusRunning,
+		GameState:      gameState,
+		PerPlayer:      perPlayer,
+	}, nil
 }
 
 func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
