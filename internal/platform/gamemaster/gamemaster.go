@@ -287,6 +287,9 @@ func (s *localSubprocessSession) call(ctx context.Context, method string, params
 
 func decodeResult(raw json.RawMessage, dest any) error {
 	if len(raw) == 0 {
+		if dest != nil {
+			return fmt.Errorf("decode result: empty result")
+		}
 		return nil
 	}
 	if err := json.Unmarshal(raw, dest); err != nil {

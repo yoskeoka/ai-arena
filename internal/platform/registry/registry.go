@@ -3,8 +3,6 @@ package registry
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
-	stdruntime "runtime"
 
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
@@ -251,7 +249,6 @@ func buildEchoSession(mode BuildMode, spec BuildSpec, snapshot *game.Snapshot) (
 		return gamemaster.StartLocalSubprocess(gamemaster.LocalSubprocessConfig{
 			ExpectedMetadata: meta,
 			Command:          command,
-			Dir:              repoRoot(),
 			Players:          append([]game.Player(nil), spec.Players...),
 			ResumeSnapshot:   snapshot,
 			StderrLimitBytes: 4096,
@@ -259,12 +256,4 @@ func buildEchoSession(mode BuildMode, spec BuildSpec, snapshot *game.Snapshot) (
 	default:
 		return nil, fmt.Errorf("registry: mode %q is unsupported for game %q", mode, echo.GameID)
 	}
-}
-
-func repoRoot() string {
-	_, file, _, ok := stdruntime.Caller(0)
-	if !ok {
-		return "."
-	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", ".."))
 }

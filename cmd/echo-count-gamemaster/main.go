@@ -31,9 +31,14 @@ func run() error {
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return err
 	}
-	meta, _, _, _, err := echo.MetadataForSelection(gameVersion, ruleset)
+	selectedMeta, _, _, _, err := echo.MetadataForSelection(gameVersion, ruleset)
 	if err != nil {
 		return err
+	}
+	meta := gameMetadata{
+		GameID:         selectedMeta.GameID,
+		GameVersion:    selectedMeta.GameVersion,
+		RulesetVersion: selectedMeta.RulesetVersion,
 	}
 
 	dec := protocol.NewDecoder(os.Stdin)
@@ -70,7 +75,7 @@ type serverState struct {
 	players []game.Player
 }
 
-func handleRequest(ctx context.Context, meta any, state *serverState, req protocol.Request) (protocol.Response, bool, error) {
+func handleRequest(ctx context.Context, meta gameMetadata, state *serverState, req protocol.Request) (protocol.Response, bool, error) {
 	switch req.Method {
 	case "metadata":
 		resp, err := protocol.NewResponse(req.ID, meta)
@@ -81,8 +86,8 @@ func handleRequest(ctx context.Context, meta any, state *serverState, req protoc
 			return protocol.Response{}, false, err
 		}
 		cfg := echo.Config{
-			GameVersion: reqMetadataVersion(meta),
-			Ruleset:     reqMetadataRuleset(meta),
+			GameVersion: meta.GameVersion,
+			Ruleset:     meta.RulesetVersion,
 			Players:     append([]game.Player(nil), params.Players...),
 		}
 		var impl game.Master
@@ -177,20 +182,8 @@ func handleRequest(ctx context.Context, meta any, state *serverState, req protoc
 	}
 }
 
-func reqMetadataVersion(meta any) string {
-	raw, _ := json.Marshal(meta)
-	var decoded struct {
-		GameVersion string `json:"game_version"`
-	}
-	_ = json.Unmarshal(raw, &decoded)
-	return decoded.GameVersion
-}
-
-func reqMetadataRuleset(meta any) string {
-	raw, _ := json.Marshal(meta)
-	var decoded struct {
-		RulesetVersion string `json:"ruleset_version"`
-	}
-	_ = json.Unmarshal(raw, &decoded)
-	return decoded.RulesetVersion
+type gameMetadata struct {
+	GameID         string `json:"game_id"`
+	GameVersion    string `json:"game_version"`
+	RulesetVersion string `json:"ruleset_version"`
 }

@@ -247,6 +247,12 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	masterOwnedByRunner := false
+	defer func() {
+		if !masterOwnedByRunner {
+			_ = master.Shutdown(context.Background())
+		}
+	}()
 	if meta := master.Metadata(); meta.GameVersion != gameVersion {
 		return fmt.Errorf("selected game version %q does not match implementation version %q", gameVersion, meta.GameVersion)
 	}
@@ -258,20 +264,17 @@ func run(args []string) error {
 	if exportedOutput != "" && resumeSnapshot != nil {
 		exported, err := master.CurrentExportedSnapshot(context.Background())
 		if err != nil {
-			_ = master.Shutdown(context.Background())
 			return err
 		}
 		exported.MatchID = matchID
 		exported.Status = game.StatusRunning
 		if err := writeJSONToTarget(exportedOutput, exported, os.Stdout, "exported snapshot"); err != nil {
-			_ = master.Shutdown(context.Background())
 			return err
 		}
 	}
 
 	players, sessions, err := loadPlayersAndSessions(master.Metadata(), playerArgs, stderrLimitBytes)
 	if err != nil {
-		_ = master.Shutdown(context.Background())
 		return err
 	}
 
@@ -298,6 +301,7 @@ func run(args []string) error {
 	if resumeSnapshot != nil {
 		opts = append(opts, match.WithResumeState(*resumeSnapshot))
 	}
+	masterOwnedByRunner = true
 
 	record, runErr := match.NewRunnerWithOptions(
 		matchID,
