@@ -48,9 +48,9 @@ type visibleState struct {
 }
 
 type initState struct {
-	Mode        string   `json:"mode"`
-	Turns       int      `json:"turns"`
-	PlayerOrder []string `json:"player_order"`
+	Mode        game.DecisionMode `json:"mode"`
+	Turns       int               `json:"turns"`
+	PlayerOrder []string          `json:"player_order"`
 }
 
 type action struct {
@@ -58,16 +58,16 @@ type action struct {
 }
 
 type publicState struct {
-	Mode          string         `json:"mode"`
-	ResolvedTurns int            `json:"resolved_turns"`
-	Score         map[string]int `json:"score"`
+	Mode          game.DecisionMode `json:"mode"`
+	ResolvedTurns int               `json:"resolved_turns"`
+	Score         map[string]int    `json:"score"`
 }
 
 type snapshotState struct {
-	Mode     string         `json:"mode"`
-	Turn     int            `json:"turn"`
-	Expected int            `json:"expected"`
-	Score    map[string]int `json:"score"`
+	Mode     game.DecisionMode `json:"mode"`
+	Turn     int               `json:"turn"`
+	Expected int               `json:"expected"`
+	Score    map[string]int    `json:"score"`
 }
 
 func New(cfg Config) (*Master, error) {
@@ -150,7 +150,7 @@ func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, ga
 
 func (m *Master) Init(context.Context) (game.InitState, error) {
 	state := mustRaw(initState{
-		Mode:        string(m.mode),
+		Mode:        m.mode,
 		Turns:       m.turns,
 		PlayerOrder: append([]string(nil), m.playerIDs...),
 	})
@@ -271,7 +271,7 @@ func (m *Master) ExportedSnapshot() game.ExportedSnapshot {
 		RulesetVersion: m.meta.RulesetVersion,
 		Turn:           m.resolved,
 		Status:         game.StatusRunning,
-		PublicState:    mustRaw(publicState{Mode: string(m.mode), ResolvedTurns: m.resolved, Score: cloneScore(m.score)}),
+		PublicState:    mustRaw(publicState{Mode: m.mode, ResolvedTurns: m.resolved, Score: cloneScore(m.score)}),
 	}
 	for _, playerID := range m.playerIDs {
 		exported.Players = append(exported.Players, game.ExportedPlayerSnapshot{
@@ -351,7 +351,7 @@ func (m *Master) applySnapshot(snapshot game.Snapshot) error {
 	if err := json.Unmarshal(snapshot.GameState, &state); err != nil {
 		return fmt.Errorf("echo: decode snapshot game_state: %w", err)
 	}
-	if state.Mode != "" && state.Mode != string(m.mode) {
+	if state.Mode != "" && state.Mode != m.mode {
 		return fmt.Errorf("echo: snapshot mode %q does not match %q", state.Mode, m.mode)
 	}
 	if snapshot.Turn < 0 || snapshot.Turn > m.turns {

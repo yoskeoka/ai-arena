@@ -43,7 +43,7 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 			"--player", "p2=./testdata/ai/echo/echo-ai",
 		)
 		record := result.Record
-		if string(record.Status) != "completed" {
+		if record.Status != contract.StatusCompleted {
 			t.Fatalf("status = %q, want completed", record.Status)
 		}
 		if got := record.Result.Placements[0].Place; got != 1 {
@@ -73,7 +73,7 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 			"--player", "p2=./testdata/ai/echo/echo-ai-sequential",
 		)
 		record := result.Record
-		if string(record.Status) != "completed" {
+		if record.Status != contract.StatusCompleted {
 			t.Fatalf("status = %q, want completed", record.Status)
 		}
 		if record.Snapshot.Turn != 3 {
@@ -122,18 +122,18 @@ func TestArenaRunnerFailurePaths(t *testing.T) {
 	cases := []struct {
 		name      string
 		player2   string
-		status    string
+		status    contract.MatchStatus
 		eventKind string
-		reason    string
+		reason    contract.FailureReason
 	}{
-		{name: "timeout", player2: "./testdata/ai/echo/timeout-ai", status: "completed", eventKind: "turn_timeout", reason: "invalid-timeout"},
-		{name: "invalid-action", player2: "./testdata/ai/echo/invalid-action-ai", status: "completed", eventKind: "turn_result", reason: "invalid-illegal-action"},
-		{name: "bad-json", player2: "./testdata/ai/echo/bad-json-ai", status: "completed", eventKind: "protocol_error", reason: "invalid-protocol-malformed"},
-		{name: "mismatched-id", player2: "./testdata/ai/echo/mismatched-id-ai", status: "completed", eventKind: "protocol_error", reason: "invalid-protocol-mismatched-id"},
-		{name: "late-response", player2: "./testdata/ai/echo/late-response-ai", status: "completed", eventKind: "late_response_ignored", reason: "invalid-timeout"},
-		{name: "init-timeout", player2: "./testdata/ai/echo/init-timeout-ai", status: "failed", eventKind: "match_failed", reason: "invalid-timeout"},
-		{name: "shutdown-failure", player2: "./testdata/ai/echo/hung-after-game-over-ai", status: "completed", eventKind: "session_shutdown_failed", reason: ""},
-		{name: "exit-after-init", player2: "./testdata/ai/echo/exit-after-init-ai", status: "completed", eventKind: "runtime_exited", reason: "runtime-stopped"},
+		{name: "timeout", player2: "./testdata/ai/echo/timeout-ai", status: contract.StatusCompleted, eventKind: "turn_timeout", reason: contract.ReasonTimeout},
+		{name: "invalid-action", player2: "./testdata/ai/echo/invalid-action-ai", status: contract.StatusCompleted, eventKind: "turn_result", reason: contract.ReasonIllegalAction},
+		{name: "bad-json", player2: "./testdata/ai/echo/bad-json-ai", status: contract.StatusCompleted, eventKind: "protocol_error", reason: contract.ReasonMalformed},
+		{name: "mismatched-id", player2: "./testdata/ai/echo/mismatched-id-ai", status: contract.StatusCompleted, eventKind: "protocol_error", reason: contract.ReasonMismatchedID},
+		{name: "late-response", player2: "./testdata/ai/echo/late-response-ai", status: contract.StatusCompleted, eventKind: "late_response_ignored", reason: contract.ReasonTimeout},
+		{name: "init-timeout", player2: "./testdata/ai/echo/init-timeout-ai", status: contract.StatusFailed, eventKind: "match_failed", reason: contract.ReasonTimeout},
+		{name: "shutdown-failure", player2: "./testdata/ai/echo/hung-after-game-over-ai", status: contract.StatusCompleted, eventKind: "session_shutdown_failed", reason: ""},
+		{name: "exit-after-init", player2: "./testdata/ai/echo/exit-after-init-ai", status: contract.StatusCompleted, eventKind: "runtime_exited", reason: contract.ReasonRuntimeStop},
 	}
 
 	for _, tc := range cases {
@@ -147,13 +147,13 @@ func TestArenaRunnerFailurePaths(t *testing.T) {
 				"--player", "p2="+tc.player2,
 			)
 			record := result.Record
-			if string(record.Status) != tc.status {
+			if record.Status != tc.status {
 				t.Fatalf("status = %q, want %q", record.Status, tc.status)
 			}
 			if !hasEvent(record.EventLog, tc.eventKind) {
 				t.Fatalf("event log missing %q", tc.eventKind)
 			}
-			if tc.reason != "" && !hasFailureReason(record.EventLog, tc.reason) && string(record.Snapshot.PerPlayer["p2"].LastActionStatus.FailureReason) != tc.reason {
+			if tc.reason != "" && !hasFailureReason(record.EventLog, tc.reason) && record.Snapshot.PerPlayer["p2"].LastActionStatus.FailureReason != tc.reason {
 				t.Fatalf("missing failure reason %q", tc.reason)
 			}
 			if !hasLogKind(result.Logs, "terminal_summary") {
@@ -174,7 +174,7 @@ func TestArenaRunnerCanceledPath(t *testing.T) {
 		"--player", "p2=./testdata/ai/echo/timeout-ai",
 	)
 
-	if result.Record.Status != "canceled" {
+	if result.Record.Status != contract.StatusCanceled {
 		t.Fatalf("status = %q, want canceled", result.Record.Status)
 	}
 	if !hasEvent(result.Record.EventLog, "match_canceled") {
@@ -455,10 +455,10 @@ func TestArenaRunnerJankenTimeoutAndInvalidAffectPlacement(t *testing.T) {
 	if got := result.Record.Snapshot.PerPlayer["p2"].LastActionStatus.FailureReason; got != "" {
 		t.Fatalf("final p2 failure reason = %q, want empty after later accepted turns", got)
 	}
-	if !hasFailureReason(result.Record.EventLog, string(session.ReasonTimeout)) {
+	if !hasFailureReason(result.Record.EventLog, session.ReasonTimeout) {
 		t.Fatalf("event log missing timeout failure: %+v", result.Record.EventLog)
 	}
-	if !hasFailureReason(result.Record.EventLog, string(contract.ReasonIllegalAction)) {
+	if !hasFailureReason(result.Record.EventLog, contract.ReasonIllegalAction) {
 		t.Fatalf("event log missing invalid action failure: %+v", result.Record.EventLog)
 	}
 }
@@ -746,9 +746,9 @@ func hasEvent(events []match.Event, kind string) bool {
 	return false
 }
 
-func hasFailureReason(events []match.Event, reason string) bool {
+func hasFailureReason(events []match.Event, reason contract.FailureReason) bool {
 	for _, event := range events {
-		if strings.Contains(string(event.Payload), reason) {
+		if strings.Contains(string(event.Payload), string(reason)) {
 			return true
 		}
 	}
