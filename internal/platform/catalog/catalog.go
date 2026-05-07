@@ -3,10 +3,12 @@ package catalog
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
+	"github.com/yoskeoka/ai-arena/internal/platform/runtime"
 )
 
 var (
@@ -30,8 +32,11 @@ type ProtocolManifest struct {
 }
 
 type RuntimeManifest struct {
-	Kind    string   `json:"kind"`
-	Command []string `json:"command"`
+	Kind             runtime.Kind `json:"kind"`
+	Command          []string     `json:"command"`
+	Module           string       `json:"module"`
+	Args             []string     `json:"args,omitempty"`
+	MemoryLimitPages uint32       `json:"memory_limit_pages,omitempty"`
 }
 
 func ValidateMetadata(meta GameMetadata) error {
@@ -85,4 +90,43 @@ func majorVersion(version string) (int, error) {
 		return 0, errors.New("invalid semver")
 	}
 	return major, nil
+}
+
+func ResolveRuntime(entryPath string, manifest RuntimeManifest) (runtime.Config, error) {
+	switch manifest.Kind {
+	case "", runtime.KindLocalSubprocess:
+		if len(manifest.Command) == 0 {
+			return runtime.Config{}, fmt.Errorf("%w: runtime.command is required", ErrInvalidMetadata)
+		}
+		return runtime.Config{
+			Kind:    runtime.KindLocalSubprocess,
+			Command: append([]string(nil), manifest.Command...),
+		}, nil
+	case runtime.KindWASMWASI:
+		if manifest.Module == "" {
+			return runtime.Config{}, fmt.Errorf("%w: runtime.module is required", ErrInvalidMetadata)
+		}
+		return runtime.Config{
+			Kind:             runtime.KindWASMWASI,
+			ModulePath:       resolveEntryRelative(entryPath, manifest.Module),
+			Args:             append([]string(nil), manifest.Args...),
+			MemoryLimitPages: manifest.MemoryLimitPages,
+		}, nil
+	default:
+		return runtime.Config{}, fmt.Errorf("%w: unsupported runtime kind %q", ErrInvalidMetadata, manifest.Kind)
+	}
+}
+
+func FallbackRuntime(entryPath string) runtime.Config {
+	return runtime.Config{
+		Kind:    runtime.KindLocalSubprocess,
+		Command: []string{entryPath},
+	}
+}
+
+func resolveEntryRelative(entryPath, runtimePath string) string {
+	if filepath.IsAbs(runtimePath) {
+		return runtimePath
+	}
+	return filepath.Join(filepath.Dir(entryPath), runtimePath)
 }

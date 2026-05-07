@@ -77,6 +77,8 @@ minor / patch 差分は同一 major の範囲で互換とみなす。
 - AI との公式通信は request / response / notification モデルを前提にする
 - platform は 1 試合中に同一 AI process を継続利用できる session モデルを前提にしてよい
 - transport 実装が subprocess か WASM かはこの spec の責務外とする
+- `stdout` は JSON-RPC response 専用であり、runtime kind に依らず JSON 以外を混在させてはならない
+- `stderr` は AI の自由ログであり、platform が capture する
 - `stdout` が閉じる、`stdin` に書けない、process が終了するなど transport 継続不能な事象は `runtime-stopped` に分類する
 
 ## 共通メソッド契約

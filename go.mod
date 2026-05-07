@@ -9,7 +9,10 @@ tool (
 	honnef.co/go/tools/cmd/staticcheck
 )
 
-require github.com/google/uuid v1.6.0
+require (
+	github.com/google/uuid v1.6.0
+	github.com/tetratelabs/wazero v1.11.0
+)
 
 require (
 	cloud.google.com/go v0.121.2 // indirect
