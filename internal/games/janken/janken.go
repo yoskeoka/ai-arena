@@ -16,6 +16,7 @@ import (
 
 const (
 	GameID              = "janken"
+	BuilderIDInProcess  = "janken/in-process"
 	GameVersion         = "2.1.0"
 	RulesetRegular      = "regular"
 	RegularRounds       = 5
@@ -152,6 +153,10 @@ func NewFromSnapshot(cfg Config, snapshot game.Snapshot) (*Master, error) {
 
 func (m *Master) Metadata() catalog.GameMetadata {
 	return m.meta
+}
+
+func SupportedRulesets() []string {
+	return []string{RulesetRegular}
 }
 
 func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {

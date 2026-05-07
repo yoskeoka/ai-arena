@@ -197,7 +197,7 @@ func run(args []string) error {
 	if ruleset == "" {
 		return fmt.Errorf("--ruleset is required")
 	}
-	descriptor, err := registry.Lookup(gameName, gameVersion)
+	descriptor, err := registry.Default().LookupVersion(context.Background(), gameName, gameVersion)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -24,6 +25,9 @@ func TestLookupFindsDescriptorByGameIDAndMajorVersion(t *testing.T) {
 	}
 	if descriptor.BuildMode != BuildModeInProcess {
 		t.Fatalf("descriptor.BuildMode = %q, want %q", descriptor.BuildMode, BuildModeInProcess)
+	}
+	if descriptor.BuilderID != janken.BuilderIDInProcess {
+		t.Fatalf("descriptor.BuilderID = %q, want %q", descriptor.BuilderID, janken.BuilderIDInProcess)
 	}
 }
 
@@ -60,26 +64,59 @@ func TestDescriptorBuildSessionReturnsRulesetError(t *testing.T) {
 	}
 }
 
-func TestRegisterRejectsMissingBuildMode(t *testing.T) {
-	r, err := New()
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	err = r.Register(GameDescriptor{
+func TestInMemoryStoreRejectsMissingBuildMode(t *testing.T) {
+	_, err := NewInMemoryStore(DescriptorRecord{
 		RegistryKey: RegistryKey{GameID: "test", GameVersionMajor: 1},
 		GameID:      "test",
-		BuildSession: func(BuildSpec) (gamemaster.Session, error) {
-			return nil, nil
-		},
-		BuildSessionFromSnapshot: func(BuildSpec, game.Snapshot) (gamemaster.Session, error) {
-			return nil, nil
-		},
-		SnapshotFromHistory: func(BuildSpec, []match.Event, int) (game.Snapshot, error) {
-			return game.Snapshot{}, nil
+		BuilderID:   "test/in-process",
+		BuildConstraints: BuildConstraints{
+			SupportedRulesets: []string{"regular"},
 		},
 	})
 	if err == nil || !strings.Contains(err.Error(), "registry: BuildMode is required") {
-		t.Fatalf("Register error = %v, want BuildMode required", err)
+		t.Fatalf("NewInMemoryStore error = %v, want BuildMode required", err)
+	}
+}
+
+func TestLookupRejectsUnknownBuilderID(t *testing.T) {
+	registry := newTestRegistry(t,
+		[]DescriptorRecord{{
+			RegistryKey: RegistryKey{GameID: "test", GameVersionMajor: 1},
+			GameID:      "test",
+			BuildMode:   BuildModeInProcess,
+			BuilderID:   "missing-builder",
+			BuildConstraints: BuildConstraints{
+				SupportedRulesets: []string{"regular"},
+			},
+		}},
+		map[string]DescriptorBuilder{},
+	)
+
+	_, err := registry.Lookup(context.Background(), RegistryKey{GameID: "test", GameVersionMajor: 1})
+	if err == nil || !strings.Contains(err.Error(), `registry: unknown builder_id "missing-builder"`) {
+		t.Fatalf("Lookup error = %v, want unknown builder_id", err)
+	}
+}
+
+func TestLookupRejectsIncompatibleBuildMetadata(t *testing.T) {
+	registry := newTestRegistry(t,
+		[]DescriptorRecord{{
+			RegistryKey: RegistryKey{GameID: "test", GameVersionMajor: 1},
+			GameID:      "test",
+			BuildMode:   BuildModeLocalSubprocess,
+			BuilderID:   "test/in-process",
+			BuildConstraints: BuildConstraints{
+				SupportedRulesets: []string{"regular"},
+			},
+		}},
+		map[string]DescriptorBuilder{
+			"test/in-process": stubDescriptorBuilder(BuildModeInProcess, []string{"regular"}),
+		},
+	)
+
+	_, err := registry.Lookup(context.Background(), RegistryKey{GameID: "test", GameVersionMajor: 1})
+	if err == nil || !strings.Contains(err.Error(), `registry: incompatible build metadata for builder_id "test/in-process"`) {
+		t.Fatalf("Lookup error = %v, want incompatible build metadata", err)
 	}
 }
 
@@ -93,6 +130,9 @@ func TestLookupEchoSubprocessRegistersAsSeparateGame(t *testing.T) {
 	}
 	if descriptor.BuildMode != BuildModeLocalSubprocess {
 		t.Fatalf("descriptor.BuildMode = %q, want %q", descriptor.BuildMode, BuildModeLocalSubprocess)
+	}
+	if descriptor.BuilderID != echo.BuilderIDLocalSubprocess {
+		t.Fatalf("descriptor.BuilderID = %q, want %q", descriptor.BuilderID, echo.BuilderIDLocalSubprocess)
 	}
 }
 
@@ -127,5 +167,41 @@ func TestEchoSubprocessSnapshotUsesSubprocessGameID(t *testing.T) {
 	}
 	if snapshot.GameID != echo.SubprocessGameID {
 		t.Fatalf("snapshot.GameID = %q, want %q", snapshot.GameID, echo.SubprocessGameID)
+	}
+}
+
+func newTestRegistry(t *testing.T, records []DescriptorRecord, builders map[string]DescriptorBuilder) *Registry {
+	t.Helper()
+
+	store, err := NewInMemoryStore(records...)
+	if err != nil {
+		t.Fatalf("NewInMemoryStore: %v", err)
+	}
+	resolver, err := NewStaticResolver(builders)
+	if err != nil {
+		t.Fatalf("NewStaticResolver: %v", err)
+	}
+	registry, err := New(store, resolver)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return registry
+}
+
+func stubDescriptorBuilder(mode BuildMode, rulesets []string) DescriptorBuilder {
+	return DescriptorBuilder{
+		BuildMode: mode,
+		BuildConstraints: BuildConstraints{
+			SupportedRulesets: append([]string(nil), rulesets...),
+		},
+		BuildSession: func(BuildSpec) (gamemaster.Session, error) {
+			return nil, nil
+		},
+		BuildSessionFromSnapshot: func(BuildSpec, game.Snapshot) (gamemaster.Session, error) {
+			return nil, nil
+		},
+		SnapshotFromHistory: func(BuildSpec, []match.Event, int) (game.Snapshot, error) {
+			return game.Snapshot{}, nil
+		},
 	}
 }

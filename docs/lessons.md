@@ -41,3 +41,17 @@
 - **Pattern**: e2e fixture の都合で必要な分岐を、通常経路の user-facing 設定や汎用 registry contract に昇格させてしまう
 - **Rule**: ある分岐が fixture/e2e の等価性確認にしか必要ないなら、まず別 fixture game か test-only registration で閉じる。通常利用者が選ばない切替を product path に足さない
 - **Applied**: `echo-count` / `echo-count-subprocess` の分離、`arena-runner` の game-master mode 削除、Phase 3 runtime boundary 設計
+
+## [2026-05-07] execution 系依頼は PR 初回 follow-up まで止めない
+
+- **Mistake**: 実装完了時点で区切ってしまい、user が期待している `commit -> push -> PR 作成 -> CI/初回 follow-up` まで進めずに止まった
+- **Pattern**: `execute-task` の完了条件をローカル実装とテスト成功に寄せすぎて、repo workflow 上の landing steps を会話上の「次の依頼待ち」と誤認する
+- **Rule**: user が `commit` や `PR作成まで` を含む execution 完了を求めたら、完了報告は少なくとも `commit -> push -> PR 作成 -> 30秒待機後の CI/check 確認` を終えてから行う。途中経過は commentary で出し、final は workflow の停止条件を満たした後に限る
+- **Applied**: `execute-task` 後の `review-task` 運用、`ai-arena` / `ww` の実装ブランチ handoff、今後の PR 作成依頼全般
+
+## [2026-05-08] spec では実装シンボル名より責務境界を書く
+
+- **Mistake**: spec の説明を補強するつもりで、`registry.Registry.Lookup*` のような実装コード名に寄せた表現を許容しかけた
+- **Pattern**: 現在のコード構造をそのまま spec に写してしまい、責務は同じでも小さなリファクタリングで spec 修正が必要な書き方になる
+- **Rule**: spec では concrete な関数名・メソッド名・型名をむやみに持ち込まず、まず責務・入出力・境界を書く。実装で使っている型や interface を書く場合も、それが安定した抽象概念として spec の主語になっているときだけに限る
+- **Applied**: `docs/specs/platform-game-registry.md` の lookup 流れ、今後の platform / registry / runner 系 spec 全般
