@@ -3,11 +3,10 @@ package registry
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
+	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
@@ -67,6 +66,14 @@ func (r *Registry) Register(descriptor GameDescriptor) error {
 	if descriptor.RegistryKey.GameVersionMajor <= 0 {
 		return fmt.Errorf("registry: registry key game_version major must be positive")
 	}
+	switch descriptor.BuildMode {
+	case BuildModeInProcess, BuildModeLocalSubprocess, BuildModeFutureExternalAdapter:
+	default:
+		if descriptor.BuildMode == "" {
+			return fmt.Errorf("registry: BuildMode is required")
+		}
+		return fmt.Errorf("registry: unsupported BuildMode %q", descriptor.BuildMode)
+	}
 	if descriptor.BuildFresh == nil {
 		return fmt.Errorf("registry: BuildFresh is required")
 	}
@@ -84,14 +91,17 @@ func (r *Registry) Register(descriptor GameDescriptor) error {
 }
 
 func (r *Registry) Lookup(gameID, gameVersion string) (GameDescriptor, error) {
-	major, err := majorVersion(gameVersion)
+	major, err := catalog.MajorVersion(gameVersion)
 	if err != nil {
-		return GameDescriptor{}, fmt.Errorf("registry: invalid game version %q", gameVersion)
+		return GameDescriptor{}, fmt.Errorf("registry: invalid game version %q: %w", gameVersion, err)
 	}
 	key := RegistryKey{GameID: gameID, GameVersionMajor: major}
 	descriptor, ok := r.descriptors[key]
 	if !ok {
-		return GameDescriptor{}, fmt.Errorf("unsupported game %q", gameID)
+		if r.hasGameID(gameID) {
+			return GameDescriptor{}, fmt.Errorf("registry: unsupported game version major %d for game %q", major, gameID)
+		}
+		return GameDescriptor{}, fmt.Errorf("registry: unsupported game %q", gameID)
 	}
 	return descriptor, nil
 }
@@ -100,16 +110,13 @@ func Lookup(gameID, gameVersion string) (GameDescriptor, error) {
 	return defaultRegistry.Lookup(gameID, gameVersion)
 }
 
-func majorVersion(version string) (int, error) {
-	parts := strings.Split(version, ".")
-	if len(parts) == 0 || parts[0] == "" {
-		return 0, fmt.Errorf("invalid semver")
+func (r *Registry) hasGameID(gameID string) bool {
+	for key := range r.descriptors {
+		if key.GameID == gameID {
+			return true
+		}
 	}
-	major, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, fmt.Errorf("invalid semver")
-	}
-	return major, nil
+	return false
 }
 
 func mustDefaultRegistry() *Registry {
