@@ -10,6 +10,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
+	"github.com/yoskeoka/ai-arena/internal/platform/match"
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
 
@@ -151,6 +152,87 @@ func NewFromSnapshot(cfg Config, snapshot game.Snapshot) (*Master, error) {
 
 func (m *Master) Metadata() catalog.GameMetadata {
 	return m.meta
+}
+
+func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
+	master, err := New(Config{
+		GameVersion: gameVersion,
+		Ruleset:     ruleset,
+		Players:     players,
+	})
+	if err != nil {
+		return game.Snapshot{}, err
+	}
+	if targetTurn < 0 || targetTurn > RegularRounds {
+		return game.Snapshot{}, fmt.Errorf("target turn %d out of range 0..%d", targetTurn, RegularRounds)
+	}
+
+	statusesByTurn := make(map[int]map[string]game.ActionStatus)
+	for _, event := range events {
+		if event.Turn == 0 || event.Turn > targetTurn {
+			continue
+		}
+		switch event.Kind {
+		case "turn_result", "turn_timeout", "protocol_error", "runtime_exited":
+			var actionStatus game.ActionStatus
+			if err := json.Unmarshal(event.Payload, &actionStatus); err != nil {
+				return game.Snapshot{}, fmt.Errorf(
+					"decode history event payload seq=%d kind=%q turn=%d player_id=%q: %w",
+					event.Seq,
+					event.Kind,
+					event.Turn,
+					event.PlayerID,
+					err,
+				)
+			}
+			if _, ok := statusesByTurn[event.Turn]; !ok {
+				statusesByTurn[event.Turn] = make(map[string]game.ActionStatus)
+			}
+			if actionStatus.PlayerID == "" {
+				actionStatus.PlayerID = event.PlayerID
+			}
+			statusesByTurn[event.Turn][event.PlayerID] = actionStatus
+		}
+	}
+
+	for turn := 1; turn <= targetTurn; turn++ {
+		step, err := master.NextStep(context.Background())
+		if err != nil {
+			return game.Snapshot{}, err
+		}
+		if step == nil {
+			return game.Snapshot{}, fmt.Errorf("history ended before target turn %d", targetTurn)
+		}
+
+		resolved := make([]game.ActionStatus, 0, len(step.Requests))
+		for _, req := range step.Requests {
+			status := game.ActionStatus{PlayerID: req.PlayerID, ActionStatus: session.StatusNoAction}
+			if perTurn, ok := statusesByTurn[turn]; ok {
+				if replayed, ok := perTurn[req.PlayerID]; ok {
+					status = replayed
+				}
+			}
+			resolved = append(resolved, master.NormalizeAction(req, status))
+		}
+		if err := master.ApplyStep(context.Background(), *step, resolved); err != nil {
+			return game.Snapshot{}, err
+		}
+	}
+
+	snapshot := master.Snapshot()
+	snapshot.PerPlayer = make(map[string]game.PlayerSnapshot, len(players))
+	exported := master.ExportedSnapshot()
+	lastAction := make(map[string]game.ActionStatus, len(exported.Players))
+	for _, player := range exported.Players {
+		lastAction[player.PlayerID] = player.LastActionStatus
+	}
+	for _, player := range players {
+		snapshot.PerPlayer[player.PlayerID] = game.PlayerSnapshot{
+			VisibleState:     master.VisibleState(player.PlayerID),
+			LastActionStatus: lastAction[player.PlayerID],
+		}
+	}
+	return snapshot, nil
 }
 
 func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, int, time.Duration, error) {

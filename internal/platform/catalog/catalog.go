@@ -50,6 +50,10 @@ func ValidateMetadata(meta GameMetadata) error {
 	return nil
 }
 
+func MajorVersion(version string) (int, error) {
+	return majorVersion(version)
+}
+
 func Compatible(expected, actual GameMetadata) error {
 	if err := ValidateMetadata(expected); err != nil {
 		return err
