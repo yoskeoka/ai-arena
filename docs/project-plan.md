@@ -90,10 +90,10 @@
 
 以下の phase は厳密な直列ではなく、先に固定すべき interface 契約を gate としつつ、依存関係を守りながら並行で進める。
 
-- [ ] Phase 1: プラットフォーム設計・ゲームコンセプト策定（ドキュメントのみ）
-- [ ] Phase 2: プラットフォームコア実装 + `janken` によるローカル実行での実証
-- [ ] Phase 3: AI player / platform / game master の共通 interface 契約を固定し、複数ゲーム対応と trusted external game backend 対応の土台を整える
-- [ ] Phase 4: WASM/WASI 実行を正式な AI 実行経路として成立させ、Go 製 AI を基準に `janken` で検証する
+- [x] Phase 1: プラットフォーム設計・ゲームコンセプト策定（ドキュメントのみ）
+- [x] Phase 2: プラットフォームコア実装 + `janken` によるローカル実行での実証
+- [x] Phase 3: AI player / platform / game master の共通 interface 契約を固定し、複数ゲーム対応と trusted external game backend 対応の土台を整える
+- [x] Phase 4: WASM/WASI 実行を正式な AI 実行経路として成立させ、Go 製 AI を基準に `janken` で検証する
 - [ ] Phase 5: ダンジョンゲーム MVP を、プラットフォーム改善と並行で進める
 - [ ] Phase 6: match state・artifact・公開用 game state を扱える永続化基盤と service skeleton を整える
 - [ ] Phase 7: AI 提出、game 提出、matchmaking、ranking、早期 deploy pipeline を含むオンライン運営基盤を整える
@@ -105,6 +105,9 @@
 - Phase 3 は、ダンジョンゲーム開発で無駄な手戻りを避けるために、先に共通 interface 契約を固める phase である
 - Phase 4 は、project-plan の最終要件である WASM 提出を開発用の暫定経路ではなく正式な実行経路へ寄せる phase である
 - Phase 5 のダンジョンゲーム開発は、Phase 3 の契約固定後に着手し、以後の platform 改善と並行で進める
+  - 最初の到達点は、固定 1 ステージでゴール到達と宝箱回収を競う MVP とする
+  - 実装は別 repo へ移動できる境界を保つため、ダンジョン固有コードは `internal` package に依存させない
+  - 開発中のフィードバックサイクルは Go subprocess bot で高速化しつつ、同じ判断ロジックを WASM 版 reference AI へ流用できる形を目指す
 - Phase 6 で公開向け state の永続化と供給基盤を整えた後は、Phase 8 のビジュアライザを段階的に前倒しで進めてよい
 - Phase 9 では、WASM/WASI の実装仕様に沿う module は提出可能としたまま、公式の guide・sample・verification assets を整備して動作保証する AI 開発言語はいったん Go に限定する。Rust は platform の複数言語評価の先行候補として扱い、TypeScript や Python など開発者層を広げやすい言語は Go 向け資産の横展開先として将来サポート候補に残す
 
