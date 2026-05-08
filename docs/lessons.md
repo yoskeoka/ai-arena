@@ -97,3 +97,10 @@
 - **Pattern**: replay 用の保存・再投入責務と、game 固有 encoding に従った fresh seed 生成責務を同じ層で扱ってしまう
 - **Rule**: platform は `rng_seed` を opaque string として保存・再投入するだけに留める。fresh run で seed 未指定時の初期 seed 生成は game master の責務とし、encoding や RNG 選択を platform に教えない
 - **Applied**: `cmd/arena-runner` の `--rng-seed` 取扱い、`internal/platform/registry` の dungeon builder、`docs/specs/platform.md` / `docs/specs/game-master.md` / `docs/specs/dungeon-game.md`
+
+## [2026-05-09] replay source に seed があるなら CLI override を許さない
+
+- **Mistake**: `record.json` / `snapshot.json` から `rng_seed` を復元できる場合でも、`--rng-seed` を併用したときに「優先してよい」と曖昧な契約にしてしまった
+- **Pattern**: source-of-truth file に含まれる deterministic input と、CLI override を同時に許して優先順位問題を残してしまう
+- **Rule**: replay/resume source がすでに `rng_seed` を持つなら、その値を source of truth とする。`--rng-seed` の同時指定は、同値比較で黙認せず明確に reject する
+- **Applied**: `cmd/arena-runner` の `--record-input` / `--snapshot-input` と `--rng-seed` の組み合わせ、`docs/specs/platform.md` の replay/debug 契約

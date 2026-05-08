@@ -173,10 +173,11 @@ func run(args []string) error {
 			snapshot := record.Snapshot
 			resumeSnapshot = &snapshot
 		}
-		if rngSeed == "" {
-			if extracted, ok := extractRNGSeedFromSnapshot(record.Snapshot); ok {
-				rngSeed = extracted
+		if extracted, ok := extractRNGSeedFromSnapshot(record.Snapshot); ok {
+			if strings.TrimSpace(rngSeed) != "" {
+				return fmt.Errorf("--rng-seed cannot be combined with --record-input when the record snapshot already contains rng_seed")
 			}
+			rngSeed = extracted
 		}
 	}
 	if snapshotInput != "" {
@@ -194,10 +195,11 @@ func run(args []string) error {
 		if ruleset == "" {
 			ruleset = snapshot.RulesetVersion
 		}
-		if rngSeed == "" {
-			if extracted, ok := extractRNGSeedFromSnapshot(snapshot); ok {
-				rngSeed = extracted
+		if extracted, ok := extractRNGSeedFromSnapshot(snapshot); ok {
+			if strings.TrimSpace(rngSeed) != "" {
+				return fmt.Errorf("--rng-seed cannot be combined with --snapshot-input when the snapshot already contains rng_seed")
 			}
+			rngSeed = extracted
 		}
 	}
 	if gameName == "" {
