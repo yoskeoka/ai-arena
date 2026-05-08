@@ -1,0 +1,13 @@
+{
+  "ai_id": "dungeon-bot-local",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "dungeon",
+    "game_version": "1.0.0",
+    "ruleset_version": "fixed-map-v1"
+  },
+  "runtime": {
+    "kind": "local-subprocess",
+    "command": ["go", "run", "./cmd/dungeon-bot-local"]
+  }
+}

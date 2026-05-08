@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yoskeoka/ai-arena/games/dungeon"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
@@ -98,6 +99,29 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 		}
 		if !hasEvent(result.Record.EventLog, "game_master_shutdown_completed") {
 			t.Fatalf("event log missing game_master_shutdown_completed: %+v", result.Record.EventLog)
+		}
+	})
+
+	t.Run("dungeon-local-subprocess", func(t *testing.T) {
+		result := runArena(t,
+			"--game", dungeon.GameID,
+			"--game-version", dungeon.GameVersion,
+			"--ruleset", dungeon.RulesetFixedMapV1,
+			"--match-id", "dungeon-happy",
+			"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
+			"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
+		)
+		if result.Record.Status != contract.StatusCompleted {
+			t.Fatalf("status = %q, want completed", result.Record.Status)
+		}
+		if !hasEvent(result.Record.EventLog, "game_master_initialized") {
+			t.Fatalf("event log missing game_master_initialized: %+v", result.Record.EventLog)
+		}
+		if result.Record.Game.GameID != dungeon.GameID {
+			t.Fatalf("game id = %q, want %q", result.Record.Game.GameID, dungeon.GameID)
+		}
+		if !hasLogKind(result.Logs, "terminal_summary") {
+			t.Fatalf("logs missing terminal_summary: %+v", result.Logs)
 		}
 	})
 }

@@ -33,6 +33,7 @@ type Session interface {
 
 type InitializeMatchParams struct {
 	Players        []game.Player  `json:"players"`
+	RNGSeed        int64          `json:"rng_seed,omitempty"`
 	ResumeSnapshot *game.Snapshot `json:"resume_snapshot,omitempty"`
 }
 
@@ -109,6 +110,7 @@ type LocalSubprocessConfig struct {
 	Command          []string
 	Dir              string
 	Players          []game.Player
+	RNGSeed          int64
 	ResumeSnapshot   *game.Snapshot
 	StderrLimitBytes int
 }
@@ -116,6 +118,7 @@ type LocalSubprocessConfig struct {
 type localSubprocessSession struct {
 	meta           catalog.GameMetadata
 	players        []game.Player
+	rngSeed        int64
 	resumeSnapshot *game.Snapshot
 	adapter        *runtime.Adapter
 	nextID         int
@@ -135,6 +138,7 @@ func StartLocalSubprocess(cfg LocalSubprocessConfig) (Session, error) {
 	return &localSubprocessSession{
 		meta:           cfg.ExpectedMetadata,
 		players:        append([]game.Player(nil), cfg.Players...),
+		rngSeed:        cfg.RNGSeed,
 		resumeSnapshot: cloneSnapshotPtr(cfg.ResumeSnapshot),
 		adapter:        adapter,
 	}, nil
@@ -160,6 +164,7 @@ func (s *localSubprocessSession) InitializeMatch(ctx context.Context) (game.Init
 	var result InitializeMatchResult
 	if err := s.call(ctx, "initialize_match", InitializeMatchParams{
 		Players:        append([]game.Player(nil), s.players...),
+		RNGSeed:        s.rngSeed,
 		ResumeSnapshot: cloneSnapshotPtr(s.resumeSnapshot),
 	}, &result); err != nil {
 		return game.InitState{}, fmt.Errorf("game master initialize_match: %w", err)
