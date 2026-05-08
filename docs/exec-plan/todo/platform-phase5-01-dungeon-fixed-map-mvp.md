@@ -42,7 +42,7 @@ depends on:
   - 視界半径は定数または ruleset 設定として調整可能にし、少なくとも 1 マス先 / 2 マス先の切替を想定できる形にする
 - game master 向け `full_state` / `exported_snapshot` の最小 shape を定義する
   - マップ識別子
-  - 初期 seed 保持欄
+  - `rng_seed`
   - プレイヤー位置
   - 未取得宝箱
   - 現在スコア
