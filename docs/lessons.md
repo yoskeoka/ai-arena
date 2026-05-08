@@ -62,3 +62,17 @@
 - **Pattern**: `runner` が受ける AI player runtime の違いと、game master / game ruleset identity の違いを同じ層で扱ってしまう
 - **Rule**: game master 実装と ruleset が同一なら game id は分けない。`local-subprocess` と `wasm-wasi` のような AI player runtime 差分は、まず同一 game id の sidecar/runtime 設定差分として表現する
 - **Applied**: `janken` の Go-WASM verification path、今後の AI runtime fixture 設計
+
+## [2026-05-08] dungeon 系コードは別 repo 移設前提をコメントと依存境界で明示する
+
+- **Mistake**: `dungeon` の local sidecar / helper command を mono repo 内 command として追加したとき、`internal` 依存を避ける意図と「将来別 repo へ移せる」前提をコード上で十分に明示しなかった
+- **Pattern**: 設計意図は plan/spec にはあるが、コード冒頭の comment や command 依存境界に反映されず、mono repo 専用の実装に見えてしまう
+- **Rule**: `dungeon` の game code、sidecar、debug/verification CLI は、mono repo に置いているだけで将来別 repo へ引っ越せる前提で作る。`internal` 依存を持ち込まないだけでなく、その意図を package / file comment 冒頭にも短く書く
+- **Applied**: `games/dungeon/*`、`cmd/dungeon-bot-local`、`cmd/dungeon-gamemaster`、`cmd/dungeon-map-helper`、今後の game-side helper/sidecar 設計
+
+## [2026-05-08] Go の exported API comment は慣習ではなく lint で守る
+
+- **Mistake**: exported symbol に comment が不足しているのに、Go では標準で強制されているはずだと曖昧に扱い、repo 側の lint 設定を先に確認しなかった
+- **Pattern**: 言語慣習と repo の quality gate を同一視し、何が CI で保証されているかを設定ファイルで確かめる前に前提化してしまう
+- **Rule**: Go の doc comment 品質を語るときは、「言語仕様」「一般的慣習」「この repo の lint 設定」を分けて確認する。comment を必須運用にしたいなら、慣習に期待せず lint rule と issue で明示する
+- **Applied**: `ai-arena/Makefile` の lint policy、`games/dungeon/*` の exported comment 追加、今後の Go package 公開 API 全般

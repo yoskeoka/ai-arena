@@ -10,7 +10,7 @@ RUST_WASM_TARGET ?= wasm32-wasip1
 GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
 GOFILES = $(shell git ls-files -- '*.go')
 
-.PHONY: test test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: test test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential run-dungeon-local inspect-dungeon-map
 
 test:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
@@ -124,3 +124,20 @@ run-echo-sequential:
 		--output-dir "$$output_dir" \
 		--player p1=./testdata/ai/echo/echo-ai-sequential \
 		--player p2=./testdata/ai/echo/echo-ai-sequential
+
+run-dungeon-local:
+	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
+	output_dir="$$(mktemp -d /tmp/ai-arena-dungeon-XXXXXX)"; \
+	echo "artifact dir: $$output_dir/dungeon-local"; \
+	$(GO_ENV) $(GO) run ./cmd/arena-runner \
+		--game dungeon \
+		--game-version 1.0.0 \
+		--ruleset fixed-map-v1 \
+		--match-id dungeon-local \
+		--output-dir "$$output_dir" \
+		--player p1=./testdata/ai/dungeon/dungeon-bot-local \
+		--player p2=./testdata/ai/dungeon/dungeon-bot-local
+
+inspect-dungeon-map:
+	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
+	$(GO_ENV) $(GO) run ./cmd/dungeon-map-helper

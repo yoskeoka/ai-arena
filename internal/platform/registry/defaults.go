@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/yoskeoka/ai-arena/games/dungeon"
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
+	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
@@ -38,6 +41,15 @@ func mustDefaultRegistry() *Registry {
 			BuilderID:   janken.BuilderIDInProcess,
 			BuildConstraints: BuildConstraints{
 				SupportedRulesets: janken.SupportedRulesets(),
+			},
+		},
+		DescriptorRecord{
+			RegistryKey: RegistryKey{GameID: dungeon.GameID, GameVersionMajor: 1},
+			GameID:      dungeon.GameID,
+			BuildMode:   BuildModeLocalSubprocess,
+			BuilderID:   dungeon.BuilderIDSubprocess,
+			BuildConstraints: BuildConstraints{
+				SupportedRulesets: dungeon.SupportedRulesets(),
 			},
 		},
 	)
@@ -89,6 +101,21 @@ func mustDefaultRegistry() *Registry {
 			},
 			SnapshotFromHistory: func(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
 				return janken.SnapshotFromHistory(spec.GameVersion, spec.Ruleset, append([]game.Player(nil), spec.Players...), events, targetTurn)
+			},
+		},
+		dungeon.BuilderIDSubprocess: {
+			BuildMode: BuildModeLocalSubprocess,
+			BuildConstraints: BuildConstraints{
+				SupportedRulesets: dungeon.SupportedRulesets(),
+			},
+			BuildSession: func(spec BuildSpec) (gamemaster.Session, error) {
+				return buildDungeonLocalSubprocessSession(spec, nil)
+			},
+			BuildSessionFromSnapshot: func(spec BuildSpec, snapshot game.Snapshot) (gamemaster.Session, error) {
+				return buildDungeonLocalSubprocessSession(spec, &snapshot)
+			},
+			SnapshotFromHistory: func(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
+				return dungeonSnapshotFromHistory(spec, events, targetTurn)
 			},
 		},
 	})
@@ -170,4 +197,135 @@ func buildJankenInProcessSession(spec BuildSpec, snapshot *game.Snapshot) (gamem
 		return nil, err
 	}
 	return gamemaster.NewInProcessSession(master), nil
+}
+
+func buildDungeonLocalSubprocessSession(spec BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
+	meta, _, err := dungeon.MetadataForSelection(spec.GameVersion, spec.Ruleset)
+	if err != nil {
+		return nil, err
+	}
+	command := []string{
+		"go", "run", "./cmd/dungeon-gamemaster",
+		"--game-version", spec.GameVersion,
+		"--ruleset", spec.Ruleset,
+	}
+	return gamemaster.StartLocalSubprocess(gamemaster.LocalSubprocessConfig{
+		ExpectedMetadata: catalog.GameMetadata{
+			GameID:         meta.GameID,
+			GameVersion:    meta.GameVersion,
+			RulesetVersion: meta.RulesetVersion,
+		},
+		Command:          command,
+		Players:          append([]game.Player(nil), spec.Players...),
+		RNGSeed:          dungeon.DefaultRNGSeed,
+		ResumeSnapshot:   snapshot,
+		StderrLimitBytes: 4096,
+	})
+}
+
+func dungeonSnapshotFromHistory(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
+	playerIDs := make([]string, 0, len(spec.Players))
+	for _, player := range spec.Players {
+		playerIDs = append(playerIDs, player.PlayerID)
+	}
+	world, err := dungeon.New(dungeon.Config{
+		GameVersion: spec.GameVersion,
+		Ruleset:     spec.Ruleset,
+		PlayerIDs:   playerIDs,
+		RNGSeed:     dungeon.DefaultRNGSeed,
+	})
+	if err != nil {
+		return game.Snapshot{}, err
+	}
+	if targetTurn < 0 || targetTurn > world.Ruleset().MaxTurns {
+		return game.Snapshot{}, fmt.Errorf("target turn %d out of range 0..%d", targetTurn, world.Ruleset().MaxTurns)
+	}
+
+	statusesByTurn := make(map[int]map[string]game.ActionStatus)
+	for _, event := range events {
+		if event.Turn == 0 || event.Turn > targetTurn {
+			continue
+		}
+		switch event.Kind {
+		case "turn_result", "turn_timeout", "protocol_error", "runtime_exited":
+			var actionStatus game.ActionStatus
+			if err := json.Unmarshal(event.Payload, &actionStatus); err != nil {
+				return game.Snapshot{}, fmt.Errorf("decode history event payload seq=%d: %w", event.Seq, err)
+			}
+			if _, ok := statusesByTurn[event.Turn]; !ok {
+				statusesByTurn[event.Turn] = make(map[string]game.ActionStatus)
+			}
+			if actionStatus.PlayerID == "" {
+				actionStatus.PlayerID = event.PlayerID
+			}
+			statusesByTurn[event.Turn][event.PlayerID] = actionStatus
+		}
+	}
+
+	lastAction := make(map[string]game.ActionStatus, len(spec.Players))
+	for turn := 1; turn <= targetTurn && !world.Terminal(); turn++ {
+		actions := make(map[string]dungeon.Action)
+		for _, playerID := range world.PendingPlayerIDs() {
+			status := game.ActionStatus{PlayerID: playerID, ActionStatus: contract.ActionNoAction}
+			if perTurn, ok := statusesByTurn[turn]; ok {
+				if replayed, ok := perTurn[playerID]; ok {
+					status = replayed
+				}
+			}
+			lastAction[playerID] = status
+			if status.ActionStatus != contract.ActionAccepted {
+				actions[playerID] = dungeon.Action{Action: "wait"}
+				continue
+			}
+			action, err := dungeon.ParseAction(status.Action)
+			if err != nil {
+				return game.Snapshot{}, err
+			}
+			actions[playerID] = action
+		}
+		if err := world.Apply(actions); err != nil {
+			return game.Snapshot{}, err
+		}
+	}
+
+	full := world.FullState()
+	perPlayer := make(map[string]game.PlayerSnapshot, len(spec.Players))
+	for _, player := range spec.Players {
+		visible, err := world.CurrentVisibleState(player.PlayerID)
+		if err != nil {
+			return game.Snapshot{}, err
+		}
+		status := lastAction[player.PlayerID]
+		if status.PlayerID == "" {
+			status = game.ActionStatus{PlayerID: player.PlayerID, ActionStatus: contract.ActionNoAction}
+		}
+		perPlayer[player.PlayerID] = game.PlayerSnapshot{
+			VisibleState:     mustRawJSON(visible),
+			LastActionStatus: status,
+		}
+	}
+	return game.Snapshot{
+		GameID:         dungeon.GameID,
+		GameVersion:    spec.GameVersion,
+		RulesetVersion: spec.Ruleset,
+		Turn:           world.Turn(),
+		Status:         snapshotStatusForDungeon(world),
+		GameState:      mustRawJSON(full),
+		PerPlayer:      perPlayer,
+	}, nil
+}
+
+func snapshotStatusForDungeon(world *dungeon.Match) game.MatchStatus {
+	if world.Terminal() {
+		return game.StatusCompleted
+	}
+	return game.StatusRunning
+}
+
+func mustRawJSON(v any) json.RawMessage {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

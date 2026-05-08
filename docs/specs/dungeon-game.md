@@ -1,170 +1,310 @@
-# ダンジョンゲーム構想仕様
+# ダンジョンゲーム MVP 仕様
 
 ## 目的
 
-このドキュメントは、AI Arena の本命ゲームとなるダンジョンゲームについて、Phase 1 時点の構想を整理するものである。設計の方向性と、それによってプラットフォームへ要求される性質を定義するが、Phase 3 で扱う実装レベル詳細までは踏み込まない。
+このドキュメントは、Phase 5 の最初の実装単位として導入する固定マップ dungeon MVP の
+ゲーム固有仕様を定義する。platform 共通契約の正本は
+`docs/specs/platform-common-contract.md`、game master 開発境界の正本は
+`docs/specs/game-master.md` とし、この文書では dungeon game 固有の
+payload / validation / state progression / scoring を固定する。
 
-platform 共通契約の正本は `docs/specs/platform-common-contract.md` とし、この文書では
-ダンジョンゲーム固有の payload / validation / state progression を後続フェーズで定義する前提を置く。
-また、game master 開発境界の正本は `docs/specs/game-master.md` とし、dungeon game はその契約を満たす
-別実装として platform に載せ替え可能でなければならない。
+この MVP は以下を成立させるための最小単位である。
 
-## 設計目標
+- top-level non-internal package tree に閉じた dungeon domain
+- local subprocess game master での deterministic match loop
+- local subprocess reference bot による高速検証
+- 後続の seed 付き map 生成や WASM reference AI へ拡張できる payload 境界
 
-- プロンプト投入だけではなく、高速なアルゴリズム判断を報いること
-- 視界制限により情報の非対称性を作ること
-- グリッド上の状態変化が観戦しやすいこと
-- 間接競争だけでなくプレイヤー間相互作用を持てること
-- 後続フェーズで段階的に複雑さを増やせること
+## ゲーム ID とルールセット
 
-## 試合の大枠
+- `game_id`: `dungeon`
+- `game_version`: `1.0.0`
+- `ruleset_version`: `fixed-map-v1`
 
-- マップ: タイルベースのダンジョングリッド
-- プレイヤー: 同時参加する複数探索者
-- ターンモデル: 基本は同時行動
-- 試合長: 固定ターン数、またはダンジョン目標達成による早期終了
-- 勝敗: 最終スコア順で順位決定
+`game_version` は payload schema と game master 実装の互換性を表す。`ruleset_version` は
+固定マップ、採点、視界半径、制限ターン数をまとめた運営ルール識別子である。
 
-プレイヤー数、マップサイズ、総ターン数の正確な値は Phase 3 で定める。
+## MVP の範囲
 
-## コアループ
+- 1 ステージ固定マップ
+- 2 から 4 プレイヤー
+- 同時行動
+- アクションは `move` と `wait` のみ
+- スコア源はゴール到達順位ボーナスと宝箱のみ
+- プレイヤー同士の同居は許可
+- 宝箱の同時取得は等分
+- 視界制限は半径ベースの局所視界
 
-各ターンで以下を行う。
+この MVP では以下を扱わない。
 
-1. ゲームマスターが各プレイヤーの可視領域を計算する
-2. プラットフォームがその可視状態を各 AI に送る
-3. 各プレイヤーが締切前に1アクション提出する
-4. ゲームマスターが移動、衝突、戦闘、取得などを解決する
-5. 更新後の全体状態スナップショットを公開する
+- 自動マップ生成
+- モンスター、戦闘、直接妨害
+- 複数フロア進行
+- inventory、item use、trap
+- 正式 WASM reference AI
 
-これにより、じゃんけんと同じ transport モデルのまま、より複雑な状態と不完全情報を扱える。
-将来 dungeon game を別 repo で開発する場合でも、platform 側からは同じ game master 論理 API で
-起動・再開・検証できることを前提にする。
+## 固定マップ
 
-## 情報モデル
+`fixed-map-v1` は以下の 9x9 マップを使う。`#` は壁、`.` は床、`A` と `B` は初期配置例、
+`C` は宝箱、`G` はゴールを表す。
 
-### 視界制限
+```text
+#########
+#A..#..B#
+#...#...#
+#.C...C.#
+#.#.#.#.#
+#...#...#
+#.C...G.#
+#.......#
+#########
+```
 
-各プレイヤーは、自分の現在位置の周囲にある限定された領域だけを観測できる。
+- 実装上の正本 map id は `fixed-map-v1`
+- 初期配置は ruleset が持つ spawn list の先頭から player 順に割り当てる
+- 余った spawn は未使用でよい
+- 観戦用 exported snapshot では全体マップを公開してよい
+- player 向け `visible_state` では現在視界内タイルだけを渡す
 
-Phase 1 時点の前提:
+## ターン進行
 
-- 可視領域は半径 `N` を持つ局所近傍とする
-- その範囲外のタイルは `visible_state` から省く
-- 過去に見た情報を記憶する責任はプラットフォームではなく AI 側に置く
+- 1 match の最大ターン数は 16
+- 各ターンで未ゴール player 全員に同時 request を送る
+- 各 player は 1 アクションだけ返す
+- game master は全 player の action status を集約後に一括で解決する
+- ゴール済み player は後続ターンの request 対象から外す
 
-これは、AI プロセス内部で持続的な状態記憶を使わせるための意図的な設計である。
+試合終了条件:
 
-### 全体状態エクスポート
+- 全 player がゴール到達した
+- または 16 ターンを消化した
 
-プラットフォームは、運営者や観戦者向けに完全な隠し情報付き全体状態も必要とする。そのため、ダンジョンゲームは2種類の状態表現を持つ必要がある。
+これにより、全員ゴールで早期終了できる一方、最初の到達者だけで即終了して
+順位ボーナス情報が潰れることは避ける。
 
-- `visible_state`: AI の意思決定用にプレイヤーごとにフィルタされた状態
-- `full_state`: リプレイ・観戦用の権威的な全体状態
+## アクション schema
 
-## 想定ゲーム要素
+### `move`
 
-### 移動
+```json
+{
+  "action": "move",
+  "direction": "up"
+}
+```
 
-- 隣接する歩行可能タイルへの移動
-- 経路選択に影響する壁や障害物
-- 有限ターン数による探索圧力
+- `direction` は `up` / `down` / `left` / `right`
+- 移動先が壁またはマップ外なら invalid action とし、`no_action` と同じ扱いでその場に留まる
 
-### 資源
+### `wait`
 
-- スコア価値を持つ収集アイテム
-- プレイヤー間で競合する希少目標
-- 奪い合いが起きるボス報酬や宝物庫報酬
+```json
+{
+  "action": "wait"
+}
+```
 
-### プレイヤー間相互作用
+- その場に留まる
 
-- 同じ目的地タイルへの衝突
-- 同一アイテムの競合取得
-- 直接攻撃や妨害アクション
-- 後続フェーズでの一時協力や裏切り
+## 同時行動の解決規則
 
-Phase 1 では戦闘や干渉の詳細ルールは未確定のままにするが、単なる個別レースではなく、プレイヤー同士が意味のある影響を与えられるゲームであることは維持する。
+1. 各 player の `move` / `wait` を同時に解釈する
+2. 全 player の移動先を確定する
+3. player 位置を一括更新する
+4. 宝箱取得を解決する
+5. ゴール到達 turn を記録する
 
-## アクションカテゴリ
+この MVP の競合解決は以下とする。
 
-Phase 3 の詳細仕様では、少なくとも以下のようなアクション群から具体形を定義する想定である。
+- player 同士は同じ tile に同時存在できる
+- すれ違いも許可する
+- body block は導入しない
+- 宝箱 tile に同じ turn で複数 player が到達した場合、その宝箱点を等分する
+- 宝箱はその turn の解決完了後に消滅する
 
-- `move`
-- `wait`
-- `pickup`
-- `use`
-- `attack`
-- `interact`
+## 視界制限
 
-正確なスキーマは Phase 3 に委ねるが、プラットフォームは、じゃんけんの単純な文字列アクションよりも複雑なゲーム固有オブジェクトを扱える必要がある。
+- 視界半径は `2`
+- 視界形状は Manhattan distance ベース
+- 半径外の tile は `visible_state.visible_tiles` に含めない
+- 過去に見た通常床や壁の保持は AI 側責務とする
+- ただし、ゴールと未取得宝箱の発見状況は `known_goal` / `known_chests` として
+  game master 側でも保持してよい
 
-## スコア設計の方向
+この設計により、AI は完全マップを直接受け取らず、それでも landmark の再認識に
+毎回の全探索を強いられない。
 
-最終順位は、生存可否だけでなくスコアに基づいて決める。
+## スコア設計
 
-想定される加点源:
+MVP の採点は「主目的が常に強いが、寄り道最適化にも意味がある」ことを優先する。
+一般的な race design の原則として、主目的の達成は副目的の総量より強くし、
+副目的は最短経路の微修正や競合判断を生む重みへ抑える。
 
-- 宝物の取得
-- 希少目標の獲得
-- 戦闘報酬
-- 脱出ボーナス
+この ruleset では以下を採用する。
 
-想定される減点または不利益:
+- ゴール順位ボーナス:
+  - 1 位: 100
+  - 2 位: 50
+  - 3 位: 25
+  - 4 位: 10
+- 宝箱点:
+  - 1 個あたり 12
+  - 同時取得時は到達 player で等分
 
-- 敗北や行動不能
-- 危険地帯での無駄ターン
+この配点により:
 
-これにより、単なる生存ゲームや殲滅戦ではなく、探索効率と対人圧力の両方を競わせられる。
+- 全宝箱合計は 36 点で、2 位が宝箱を独占しても 1 位単独到達を上回らない
+- ただし 2 位同士や未ゴール同士では宝箱が十分に順位差を作る
+- ルート上の寄り道判断が残り、単純最短経路固定にはなりにくい
 
-## 観戦価値
+## ゴール順位ボーナス規則
 
-ダンジョン構想を本命ゲームに据える理由の一つは、観戦時の視覚的な分かりやすさである。
+- ゴール順位は `finished_turn` の昇順で決める
+- 同じ turn に到達した player は同順位
+- 同順位は competition ranking とする
+- 例: 2 人が同率 1 位なら両者に 100 点を与え、次の到達者は 3 位点 25 を得る
+- ゴール未到達 player は順位ボーナス 0 点
 
-- 時間とともに進むマップ開示
-- プレイヤーの進路分岐と合流
-- 争奪対象をめぐる競合
-- 視界制限が生む不意の遭遇
+最終順位は `goal_bonus + chest_points` の合計スコア降順で決め、こちらも
+competition ranking を使う。
 
-抽象的な隠し情報ゲームよりも、空間表現のあるダンジョンの方が旗艦ゲームとして観戦価値を作りやすい。
+## `visible_state`
 
-## プラットフォームへの要求
+各 `turn` request の `visible_state` は少なくとも以下を持つ。
 
-ダンジョンゲームを成立させるため、プラットフォームは以下をサポートする必要がある。
+```json
+{
+  "turn": 4,
+  "remaining_turns": 12,
+  "view_radius": 2,
+  "self": {
+    "player_id": "p1",
+    "x": 2,
+    "y": 3,
+    "score": 12,
+    "goal_bonus": 0,
+    "chest_points": 12,
+    "finished_turn": null
+  },
+  "visible_tiles": [
+    { "x": 1, "y": 3, "tile": "floor" },
+    { "x": 2, "y": 3, "tile": "chest" }
+  ],
+  "known_goal": { "x": 6, "y": 6 },
+  "known_chests": [
+    { "x": 2, "y": 3 }
+  ],
+  "scores": [
+    { "player_id": "p1", "score": 12, "goal_bonus": 0, "chest_points": 12, "finished_turn": null },
+    { "player_id": "p2", "score": 0, "goal_bonus": 0, "chest_points": 0, "finished_turn": null }
+  ]
+}
+```
 
-- プレイヤーごとにフィルタされた `visible_state`
-- 多ターンにわたる AI の長期記憶
-- 衝突や競合を含む同時行動解決
-- リプレイ可能な全体状態スナップショット
-- 単純な勝敗ではなく複合スコアによる順位付け
+フィールド要件:
 
-これらが、Phase 1 のプラットフォーム仕様を、じゃんけんだけで必要な最小要件より広くしている理由である。
+- `turn`: 次に解決する turn 番号
+- `remaining_turns`: `max_turns - turn + 1`
+- `self`: 自 player の位置と累積得点
+- `visible_tiles`: 現在視界内だけの tile list
+- `known_goal`: この player が一度でも視認したゴール位置。未発見なら `null`
+- `known_chests`: この player が把握している未取得宝箱位置
+- `scores`: 全 player の公開スコア状況
+
+`legal_action_hint` は `move` / `wait` の object schema を返す。
+
+## `full_state`
+
+`snapshot.game_state` に入る `full_state` は少なくとも以下を持つ。
+
+```json
+{
+  "map_id": "fixed-map-v1",
+  "rng_seed": 0,
+  "turn": 4,
+  "max_turns": 16,
+  "goal": { "x": 6, "y": 6 },
+  "players": [
+    { "player_id": "p1", "x": 2, "y": 3, "score": 12, "goal_bonus": 0, "chest_points": 12, "finished_turn": null }
+  ],
+  "uncollected_chests": [
+    { "x": 6, "y": 3 }
+  ],
+  "discovery": {
+    "p1": {
+      "known_goal": { "x": 6, "y": 6 },
+      "known_chests": [{ "x": 6, "y": 3 }]
+    }
+  }
+}
+```
+
+`full_state` は resume source of truth なので、少なくとも以下を復元できなければならない。
+
+- マップ識別子
+- `rng_seed`
+- 現在 turn
+- 各 player の位置、得点、ゴール到達 turn
+- 未取得宝箱
+- player ごとの発見済み landmark 情報
+
+## `exported_snapshot`
+
+`exported_snapshot.public_state` は観戦・デバッグ向けに、少なくとも以下を持つ。
+
+```json
+{
+  "map_id": "fixed-map-v1",
+  "rng_seed": 0,
+  "turn": 4,
+  "max_turns": 16,
+  "tiles": [
+    "#########",
+    "#...#...#"
+  ],
+  "goal": { "x": 6, "y": 6 },
+  "players": [
+    { "player_id": "p1", "x": 2, "y": 3, "score": 12, "goal_bonus": 0, "chest_points": 12, "finished_turn": null }
+  ],
+  "uncollected_chests": [
+    { "x": 6, "y": 3 }
+  ]
+}
+```
+
+`exported_snapshot` は hidden information を残さず、観戦に必要な全体状態を含める。
+この MVP では fixed map 自体は秘匿対象ではないため、全体 tile layout を含めてよい。
+
+## 初期化と deterministic 性
+
+- `rng_seed` は match 初期化時に受け取り、`full_state` と `exported_snapshot` に保持する
+- `fixed-map-v1` では map 生成に乱数を使わないため、同じ action 列なら常に同じ結果になる
+- 後続 phase で seed 付き map 生成へ拡張しても、snapshot shape は変えない
+
+## local reference bot
+
+Phase 5 MVP の reference bot は Go subprocess で動かす。
+
+- 現在見えている tile を基に walkable area を記憶する
+- 未取得宝箱が見えていれば近いものを優先する
+- そうでなければ既知ゴールへ向かう
+- どちらも未発見なら frontier 探索を行う
+
+これは開発用の最速検証経路であり、正式提出経路は引き続き WASM を正本とする。
 
 ## 共通契約との境界
 
-ダンジョンゲームが platform 共通契約に依存する部分:
+この game が platform 共通契約に依存する部分:
 
 - `init` / `turn` / `game_over` の共通メソッド境界
 - `DecisionStep` による同時行動解決
 - `accepted` / `no_action` と failure 分類
-- record / snapshot / exported snapshot の game 非依存コア
+- record / snapshot / exported snapshot の共通 envelope
 - `docs/specs/game-master.md` が定める game master session と runtime boundary
 
-ダンジョンゲーム側で後続定義する部分:
+この game 側で固定する部分:
 
-- `state` / `visible_state` / `legal_action_hint` / `summary` の payload shape
-- アクション schema と validation 規則
-- 衝突、戦闘、採点、順位計算
-- `public_state` / `full_state` に含める具体フィールド
-
-## Phase 3 へ先送りする項目
-
-Phase 3 では少なくとも以下を定義する必要がある。
-
-- 具体的なタイル種別とマップ生成ルール
-- 視界形状と視界半径の厳密定義
-- アクションスキーマとバリデーション規則
-- 戦闘/干渉ルール
-- アイテム種別
-- 試合終了条件
-- スコア計算式とタイブレーク規則
-- 正式な JSON-RPC ペイロード例
+- `visible_state` / `full_state` / `exported_snapshot` の payload shape
+- `move` / `wait` action schema
+- 視界半径
+- 宝箱競合、ゴール順位、最終順位の規則
