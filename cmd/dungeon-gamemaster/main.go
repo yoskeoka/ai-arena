@@ -207,7 +207,11 @@ func (s *serverState) handleRequest(ctx context.Context, req protocol.Request) (
 		if s.world == nil {
 			return protocol.Response{}, false, fmt.Errorf("match is not initialized")
 		}
-		resp, err := protocol.NewResponse(req.ID, s.currentSnapshot())
+		snapshot, err := s.currentSnapshot()
+		if err != nil {
+			return protocol.Response{}, false, err
+		}
+		resp, err := protocol.NewResponse(req.ID, snapshot)
 		return resp, false, err
 	case "current_exported_snapshot":
 		if s.world == nil {
@@ -229,11 +233,14 @@ func (s *serverState) handleRequest(ctx context.Context, req protocol.Request) (
 	}
 }
 
-func (s *serverState) currentSnapshot() game.Snapshot {
+func (s *serverState) currentSnapshot() (game.Snapshot, error) {
 	full := s.world.FullState()
 	perPlayer := make(map[string]game.PlayerSnapshot, len(s.players))
 	for _, player := range s.players {
-		visible, _ := s.world.CurrentVisibleState(player.PlayerID)
+		visible, err := s.world.CurrentVisibleState(player.PlayerID)
+		if err != nil {
+			return game.Snapshot{}, err
+		}
 		status := s.lastAction[player.PlayerID]
 		if status.PlayerID == "" {
 			status = game.ActionStatus{PlayerID: player.PlayerID, ActionStatus: session.StatusNoAction}
@@ -251,7 +258,7 @@ func (s *serverState) currentSnapshot() game.Snapshot {
 		Status:         statusForWorld(s.world),
 		GameState:      mustJSON(full),
 		PerPlayer:      perPlayer,
-	}
+	}, nil
 }
 
 func (s *serverState) currentExportedSnapshot() game.ExportedSnapshot {

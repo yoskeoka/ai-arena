@@ -38,16 +38,19 @@ func TestChestSplitAndGoalBonuses(t *testing.T) {
 		t.Fatalf("combined chest points = %d, want 24", got)
 	}
 
-	for i := 0; i < 4; i++ {
+	for !match.Terminal() {
 		if err := match.Apply(map[string]Action{
-			"p1": {Action: "move", Direction: "down"},
-			"p2": {Action: "move", Direction: "down"},
+			"p1": {Action: "wait"},
+			"p2": {Action: "wait"},
 		}); err != nil {
-			t.Fatalf("extra turn %d: %v", i, err)
+			t.Fatalf("advance to terminal: %v", err)
 		}
 	}
-	if !match.Terminal() && match.Turn() >= match.Ruleset().MaxTurns {
+	if !match.Terminal() {
 		t.Fatal("expected terminal after max turns")
+	}
+	if match.Turn() != match.Ruleset().MaxTurns {
+		t.Fatalf("turn = %d, want %d", match.Turn(), match.Ruleset().MaxTurns)
 	}
 }
 
@@ -112,5 +115,71 @@ func TestCompetitionRankingGoalBonus(t *testing.T) {
 				t.Fatalf("p3 goal bonus = %d, want 25", player.GoalBonus)
 			}
 		}
+	}
+}
+
+func TestCurrentVisibleStateClampsTerminalTurn(t *testing.T) {
+	match, err := New(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetFixedMapV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     DefaultRNGSeed,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	for !match.Terminal() {
+		if err := match.Apply(map[string]Action{
+			"p1": {Action: "wait"},
+			"p2": {Action: "wait"},
+		}); err != nil {
+			t.Fatalf("Apply: %v", err)
+		}
+	}
+
+	visible, err := match.CurrentVisibleState("p1")
+	if err != nil {
+		t.Fatalf("CurrentVisibleState: %v", err)
+	}
+	if visible.Turn != match.Turn() {
+		t.Fatalf("visible turn = %d, want %d", visible.Turn, match.Turn())
+	}
+	if visible.RemainingTurns != 0 {
+		t.Fatalf("remaining turns = %d, want 0", visible.RemainingTurns)
+	}
+}
+
+func TestNewFromFullStateValidatesResumeMetadata(t *testing.T) {
+	match, err := New(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetFixedMapV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     DefaultRNGSeed,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	state := match.FullState()
+	state.RNGSeed = 99
+	if _, err := NewFromFullState(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetFixedMapV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     DefaultRNGSeed,
+	}, state); err == nil {
+		t.Fatal("expected rng seed mismatch")
+	}
+
+	state = match.FullState()
+	state.MaxTurns++
+	if _, err := NewFromFullState(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetFixedMapV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     DefaultRNGSeed,
+	}, state); err == nil {
+		t.Fatal("expected max_turns mismatch")
 	}
 }

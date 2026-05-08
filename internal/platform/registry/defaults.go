@@ -263,7 +263,7 @@ func dungeonSnapshotFromHistory(spec BuildSpec, events []match.Event, targetTurn
 	}
 
 	lastAction := make(map[string]game.ActionStatus, len(spec.Players))
-	for turn := 1; turn <= targetTurn; turn++ {
+	for turn := 1; turn <= targetTurn && !world.Terminal(); turn++ {
 		actions := make(map[string]dungeon.Action)
 		for _, playerID := range world.PendingPlayerIDs() {
 			status := game.ActionStatus{PlayerID: playerID, ActionStatus: contract.ActionNoAction}
@@ -309,10 +309,17 @@ func dungeonSnapshotFromHistory(spec BuildSpec, events []match.Event, targetTurn
 		GameVersion:    spec.GameVersion,
 		RulesetVersion: spec.Ruleset,
 		Turn:           world.Turn(),
-		Status:         game.StatusRunning,
+		Status:         snapshotStatusForDungeon(world),
 		GameState:      mustRawJSON(full),
 		PerPlayer:      perPlayer,
 	}, nil
+}
+
+func snapshotStatusForDungeon(world *dungeon.Match) game.MatchStatus {
+	if world.Terminal() {
+		return game.StatusCompleted
+	}
+	return game.StatusRunning
 }
 
 func mustRawJSON(v any) json.RawMessage {

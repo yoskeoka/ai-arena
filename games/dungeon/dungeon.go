@@ -204,8 +204,14 @@ func NewFromFullState(cfg Config, state FullState) (*Match, error) {
 	if state.MapID != match.ruleset.MapID {
 		return nil, fmt.Errorf("dungeon: snapshot map_id %q does not match %q", state.MapID, match.ruleset.MapID)
 	}
+	if state.MaxTurns != match.ruleset.MaxTurns {
+		return nil, fmt.Errorf("dungeon: snapshot max_turns %d does not match ruleset %d", state.MaxTurns, match.ruleset.MaxTurns)
+	}
 	if state.Turn < 0 || state.Turn > match.ruleset.MaxTurns {
 		return nil, fmt.Errorf("dungeon: snapshot turn %d out of range", state.Turn)
+	}
+	if state.RNGSeed != cfg.RNGSeed {
+		return nil, fmt.Errorf("dungeon: snapshot rng_seed %d does not match config %d", state.RNGSeed, cfg.RNGSeed)
 	}
 	match.turn = state.Turn
 	match.rngSeed = state.RNGSeed
@@ -286,9 +292,15 @@ func (m *Match) CurrentVisibleState(playerID string) (VisibleState, error) {
 	if !ok {
 		return VisibleState{}, fmt.Errorf("dungeon: unknown player %q", playerID)
 	}
+	turn := m.turn + 1
+	remainingTurns := m.ruleset.MaxTurns - m.turn
+	if m.Terminal() {
+		turn = m.turn
+		remainingTurns = 0
+	}
 	return VisibleState{
-		Turn:           m.turn + 1,
-		RemainingTurns: m.ruleset.MaxTurns - m.turn,
+		Turn:           turn,
+		RemainingTurns: remainingTurns,
 		ViewRadius:     m.ruleset.ViewRadius,
 		Self:           clonePlayerState(player),
 		VisibleTiles:   m.visibleTiles(player.position(), m.ruleset.ViewRadius),
