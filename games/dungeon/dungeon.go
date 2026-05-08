@@ -2,7 +2,6 @@ package dungeon
 
 import (
 	cryptorand "crypto/rand"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -25,7 +24,7 @@ const (
 	// BuilderIDSubprocess identifies the local subprocess bot builder.
 	BuilderIDSubprocess = "dungeon/local-subprocess"
 	// DefaultRNGSeed is the default deterministic seed used by local helpers.
-	DefaultRNGSeed = "00000000000000000000000000000000"
+	DefaultRNGSeed = "0000000000000000000000000000000000000000000000000000000000000000"
 )
 
 const (
@@ -824,10 +823,12 @@ func newSeededRand(seed string) (*deterministicRand, error) {
 	if err != nil {
 		return nil, err
 	}
-	seed1 := binary.LittleEndian.Uint64(material[0:8])
-	seed2 := binary.LittleEndian.Uint64(material[8:16])
-	// #nosec G404 -- deterministic gameplay generation requires a reproducible PRNG, not a cryptographic one.
-	return &deterministicRand{rng: randv2.New(randv2.NewPCG(seed1, seed2))}, nil
+	var seed32 [32]byte
+	copy(seed32[:], material)
+	// #nosec G404 -- deterministic gameplay generation requires a reproducible PRNG, and ChaCha8 gives a stable stream
+	// while being less trivially guessable than simpler generators. This source is wrapped so multi-site callers can
+	// serialize access without introducing additional independent RNG state.
+	return &deterministicRand{rng: randv2.New(randv2.NewChaCha8(seed32))}, nil
 }
 
 func (r *deterministicRand) IntN(n int) int {
@@ -859,21 +860,21 @@ func decodeSeedMaterial(seed string) ([]byte, error) {
 	if seed == "" {
 		return nil, fmt.Errorf("rng_seed is required")
 	}
-	if len(seed) != 32 {
-		return nil, fmt.Errorf("rng_seed must be 32 hex characters")
+	if len(seed) != 64 {
+		return nil, fmt.Errorf("rng_seed must be 64 hex characters")
 	}
 	decoded, err := hex.DecodeString(seed)
 	if err != nil {
 		return nil, fmt.Errorf("rng_seed must be lowercase/uppercase hex: %w", err)
 	}
-	if len(decoded) != 16 {
-		return nil, fmt.Errorf("rng_seed must decode to 16 bytes")
+	if len(decoded) != 32 {
+		return nil, fmt.Errorf("rng_seed must decode to 32 bytes")
 	}
 	return decoded, nil
 }
 
 func GenerateSeedHex() (string, error) {
-	buf := make([]byte, 16)
+	buf := make([]byte, 32)
 	if _, err := cryptorand.Read(buf); err != nil {
 		return "", fmt.Errorf("generate rng_seed: %w", err)
 	}

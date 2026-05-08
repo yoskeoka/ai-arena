@@ -533,7 +533,7 @@ func extractRNGSeedFromSnapshot(snapshot game.Snapshot) (string, bool) {
 }
 
 func generateRNGSeed() (string, error) {
-	buf := make([]byte, 16)
+	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("generate rng seed: %w", err)
 	}

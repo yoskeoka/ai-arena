@@ -3,8 +3,8 @@ package dungeon
 import "testing"
 
 const (
-	testSeedAlpha = "00112233445566778899aabbccddeeff"
-	testSeedBeta  = "ffeeddccbbaa99887766554433221100"
+	testSeedAlpha = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	testSeedBeta  = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"
 )
 
 func TestSeededMazeGenerationIsDeterministic(t *testing.T) {
