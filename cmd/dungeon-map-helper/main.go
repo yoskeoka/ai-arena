@@ -1,3 +1,8 @@
+// Command dungeon-map-helper prints fixed-map layout and shortest-path helpers.
+//
+// This debug and verification CLI is allowed to live in the monorepo, but it
+// should remain movable with the dungeon game to a separate repository. Keep
+// the helper on public dungeon APIs and avoid ai-arena internal dependencies.
 package main
 
 import (

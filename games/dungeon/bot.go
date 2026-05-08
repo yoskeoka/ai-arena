@@ -5,6 +5,7 @@ import (
 	"sort"
 )
 
+// Bot is a deterministic exploration bot for the dungeon visible-state API.
 type Bot struct {
 	knownTiles    map[string]string
 	knownGoal     *Position
@@ -12,6 +13,7 @@ type Bot struct {
 	exploreTarget *Position
 }
 
+// NewBot creates a bot that only depends on the public dungeon package API.
 func NewBot() *Bot {
 	return &Bot{
 		knownTiles:  make(map[string]string),
@@ -19,6 +21,7 @@ func NewBot() *Bot {
 	}
 }
 
+// Decide chooses the next action from the player's visible state.
 func (b *Bot) Decide(state VisibleState) Action {
 	b.observe(state)
 	start := state.Self.position()

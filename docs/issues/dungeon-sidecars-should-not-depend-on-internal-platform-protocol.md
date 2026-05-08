@@ -15,6 +15,7 @@ Phase 5 plan の意図は「mono repo 上に置いているだけで、dungeon g
 
 - `cmd/dungeon-gamemaster/main.go`
 - 必要なら `cmd/dungeon-bot-local/main.go` と合わせた sidecar 共通 I/O 層
+- `cmd/dungeon-map-helper/main.go` のような game-design / debug / verification 用 CLI
 - `games/dungeon/` と platform 側 adapter の責務分離
 
 ## Why It Matters
@@ -35,6 +36,14 @@ Phase 5 plan の意図は「mono repo 上に置いているだけで、dungeon g
 
 どちらの形でも、`cmd/dungeon-bot-local` と同様に
 「mono repo に置いてあるが、別 repo 実装として成立する」ことを機械的に確認できる構造へ寄せたい。
+
+補足:
+
+- `cmd/dungeon-map-helper` のような game-design / game-debug / verification 用 CLI 自体は許容する
+- ただしそれらも dungeon game 本体と同様に、将来別 repo へそのまま引っ越せる依存境界で作る
+- `games/dungeon/*` や sidecar / helper command の冒頭には、
+  「mono repo に置いているだけで、将来別 repo へ移せる前提のコードである」ことを
+  明示する短い package / file comment を入れる方針も検討対象とする
 
 ## Scope Boundary
 

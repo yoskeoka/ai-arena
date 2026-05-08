@@ -9,26 +9,37 @@ import (
 )
 
 const (
-	GameID                    = "dungeon"
-	GameVersion               = "1.0.0"
-	RulesetFixedMapV1         = "fixed-map-v1"
-	BuilderIDSubprocess       = "dungeon/local-subprocess"
-	DefaultRNGSeed      int64 = 0
+	// GameID is the stable identifier for the dungeon game.
+	GameID = "dungeon"
+	// GameVersion is the current dungeon game contract version.
+	GameVersion = "1.0.0"
+	// RulesetFixedMapV1 is the fixed-map ruleset used by this MVP.
+	RulesetFixedMapV1 = "fixed-map-v1"
+	// BuilderIDSubprocess identifies the local subprocess bot builder.
+	BuilderIDSubprocess = "dungeon/local-subprocess"
+	// DefaultRNGSeed is the default deterministic seed used by local helpers.
+	DefaultRNGSeed int64 = 0
 )
 
 const (
-	TileWall  = "wall"
+	// TileWall marks an impassable wall tile.
+	TileWall = "wall"
+	// TileFloor marks a traversable floor tile.
 	TileFloor = "floor"
+	// TileChest marks a chest tile.
 	TileChest = "chest"
-	TileGoal  = "goal"
+	// TileGoal marks the goal tile.
+	TileGoal = "goal"
 )
 
+// Metadata identifies a concrete dungeon game/ruleset selection.
 type Metadata struct {
 	GameID         string
 	GameVersion    string
 	RulesetVersion string
 }
 
+// Config configures a new or resumed dungeon match.
 type Config struct {
 	GameVersion string
 	Ruleset     string
@@ -36,6 +47,7 @@ type Config struct {
 	RNGSeed     int64
 }
 
+// Ruleset describes the fixed map, scoring, and turn limits for a match.
 type Ruleset struct {
 	MapID          string
 	MaxTurns       int
@@ -49,16 +61,19 @@ type Ruleset struct {
 	ChestPositions []Position
 }
 
+// Position is a tile coordinate in the dungeon grid.
 type Position struct {
 	X int `json:"x"`
 	Y int `json:"y"`
 }
 
+// Action is a player command for the current turn.
 type Action struct {
 	Action    string `json:"action"`
 	Direction string `json:"direction,omitempty"`
 }
 
+// PlayerState is the score and position state tracked for one player.
 type PlayerState struct {
 	PlayerID     string `json:"player_id"`
 	X            int    `json:"x"`
@@ -69,12 +84,14 @@ type PlayerState struct {
 	FinishedTurn *int   `json:"finished_turn"`
 }
 
+// VisibleTile is one tile in a player's visible viewport.
 type VisibleTile struct {
 	X    int    `json:"x"`
 	Y    int    `json:"y"`
 	Tile string `json:"tile"`
 }
 
+// VisibleState is the per-player state sent to a bot on its turn.
 type VisibleState struct {
 	Turn           int           `json:"turn"`
 	RemainingTurns int           `json:"remaining_turns"`
@@ -86,11 +103,13 @@ type VisibleState struct {
 	Scores         []PlayerState `json:"scores"`
 }
 
+// DiscoveryState stores the persistent discoveries known to one player.
 type DiscoveryState struct {
 	KnownGoal   *Position  `json:"known_goal"`
 	KnownChests []Position `json:"known_chests"`
 }
 
+// FullState is the resumable full dungeon game state snapshot.
 type FullState struct {
 	MapID             string                    `json:"map_id"`
 	RNGSeed           int64                     `json:"rng_seed"`
@@ -102,6 +121,7 @@ type FullState struct {
 	Discovery         map[string]DiscoveryState `json:"discovery"`
 }
 
+// PublicState is the spectator-safe state shared outside per-player fog.
 type PublicState struct {
 	MapID             string        `json:"map_id"`
 	RNGSeed           int64         `json:"rng_seed"`
@@ -113,11 +133,13 @@ type PublicState struct {
 	UncollectedChests []Position    `json:"uncollected_chests"`
 }
 
+// Placement records the final ranking for one player.
 type Placement struct {
 	PlayerID string
 	Place    int
 }
 
+// Match owns one running dungeon match instance.
 type Match struct {
 	meta              Metadata
 	ruleset           Ruleset
@@ -130,10 +152,12 @@ type Match struct {
 	rngSeed           int64
 }
 
+// SupportedRulesets returns the rulesets exposed by this package.
 func SupportedRulesets() []string {
 	return []string{RulesetFixedMapV1}
 }
 
+// MetadataForSelection validates a game/ruleset selection and returns its metadata.
 func MetadataForSelection(gameVersion, ruleset string) (Metadata, Ruleset, error) {
 	if gameVersion != GameVersion {
 		return Metadata{}, Ruleset{}, fmt.Errorf("dungeon: unsupported game version %q", gameVersion)
@@ -149,6 +173,7 @@ func MetadataForSelection(gameVersion, ruleset string) (Metadata, Ruleset, error
 	}, rs, nil
 }
 
+// New creates a new dungeon match from the provided config.
 func New(cfg Config) (*Match, error) {
 	meta, ruleset, err := MetadataForSelection(cfg.GameVersion, cfg.Ruleset)
 	if err != nil {
@@ -196,6 +221,7 @@ func New(cfg Config) (*Match, error) {
 	return match, nil
 }
 
+// NewFromFullState restores a dungeon match from a previously saved full state.
 func NewFromFullState(cfg Config, state FullState) (*Match, error) {
 	match, err := New(cfg)
 	if err != nil {
@@ -258,22 +284,27 @@ func NewFromFullState(cfg Config, state FullState) (*Match, error) {
 	return match, nil
 }
 
+// Metadata returns the match metadata.
 func (m *Match) Metadata() Metadata {
 	return m.meta
 }
 
+// Ruleset returns a defensive copy of the match ruleset.
 func (m *Match) Ruleset() Ruleset {
 	return cloneRuleset(m.ruleset)
 }
 
+// Terminal reports whether the match has ended.
 func (m *Match) Terminal() bool {
 	return m.turn >= m.ruleset.MaxTurns || m.allPlayersFinished()
 }
 
+// Turn returns the zero-based number of completed turns.
 func (m *Match) Turn() int {
 	return m.turn
 }
 
+// PendingPlayerIDs returns the players expected to submit actions this turn.
 func (m *Match) PendingPlayerIDs() []string {
 	if m.Terminal() {
 		return nil
@@ -287,6 +318,7 @@ func (m *Match) PendingPlayerIDs() []string {
 	return playerIDs
 }
 
+// CurrentVisibleState returns the visible state for the requested player.
 func (m *Match) CurrentVisibleState(playerID string) (VisibleState, error) {
 	player, ok := m.playerStates[playerID]
 	if !ok {
@@ -310,6 +342,7 @@ func (m *Match) CurrentVisibleState(playerID string) (VisibleState, error) {
 	}, nil
 }
 
+// FullState returns a resumable snapshot of the full match state.
 func (m *Match) FullState() FullState {
 	discovery := make(map[string]DiscoveryState, len(m.playerOrder))
 	for _, playerID := range m.playerOrder {
@@ -330,6 +363,7 @@ func (m *Match) FullState() FullState {
 	}
 }
 
+// PublicState returns the spectator-safe public match state.
 func (m *Match) PublicState() PublicState {
 	return PublicState{
 		MapID:             m.ruleset.MapID,
@@ -343,6 +377,7 @@ func (m *Match) PublicState() PublicState {
 	}
 }
 
+// LegalActionHint returns a machine-readable hint describing valid actions.
 func (m *Match) LegalActionHint() json.RawMessage {
 	return mustJSON(map[string]any{
 		"type": "object",
@@ -375,6 +410,7 @@ func (m *Match) LegalActionHint() json.RawMessage {
 	})
 }
 
+// Apply applies one turn of actions to the match state.
 func (m *Match) Apply(actions map[string]Action) error {
 	if m.Terminal() {
 		return fmt.Errorf("dungeon: match is already terminal")
@@ -441,6 +477,7 @@ func (m *Match) Apply(actions map[string]Action) error {
 	return nil
 }
 
+// CanApply reports whether the given action is legal for the player.
 func (m *Match) CanApply(playerID string, action Action) bool {
 	player, ok := m.playerStates[playerID]
 	if !ok {
@@ -460,6 +497,7 @@ func (m *Match) CanApply(playerID string, action Action) bool {
 	}
 }
 
+// ParseAction decodes and validates an action payload.
 func ParseAction(raw json.RawMessage) (Action, error) {
 	var action Action
 	if err := json.Unmarshal(raw, &action); err != nil {
@@ -482,6 +520,7 @@ func ParseAction(raw json.RawMessage) (Action, error) {
 	return action, nil
 }
 
+// Placements returns the final match ranking in ascending place order.
 func (m *Match) Placements() []Placement {
 	scores := m.scoreboard()
 	placements := make([]Placement, 0, len(scores))
@@ -500,14 +539,17 @@ func (m *Match) Placements() []Placement {
 	return placements
 }
 
+// ShortestPath returns the shortest traversable path on the fixed map.
 func (m *Match) ShortestPath(from, to Position) ([]Position, bool) {
 	return shortestPath(m.ruleset.Tiles, from, to)
 }
 
+// SpawnPoints returns the configured spawn points in player order.
 func (m *Match) SpawnPoints() []Position {
 	return append([]Position(nil), m.ruleset.SpawnPoints...)
 }
 
+// UncollectedChests returns the remaining chest positions.
 func (m *Match) UncollectedChests() []Position {
 	return positionsFromMap(m.uncollectedChests)
 }
