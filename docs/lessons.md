@@ -90,3 +90,10 @@
 - **Pattern**: 個別ゲームの設計で得た知見を platform 契約へ一般化するときに、「共通で守る責務」と「その game だけの具体表現」を分離しきれない
 - **Rule**: platform / game-master / runner の共通 spec では、共通で必要な受け渡し責務と保存責務だけを書く。seed の encoding、PRNG 種別、payload shape など game ごとの具体表現は各 game spec に閉じ込める
 - **Applied**: `docs/specs/game-master.md` の `rng_seed` 契約、今後の platform 共通 spec と game spec の責務分離
+
+## [2026-05-09] fresh seed 生成責務を platform に持ち込まない
+
+- **Mistake**: `rng_seed` を opaque string として扱う方針にした後も、fresh run の seed 自動生成を runner / registry 側へ残してしまった
+- **Pattern**: replay 用の保存・再投入責務と、game 固有 encoding に従った fresh seed 生成責務を同じ層で扱ってしまう
+- **Rule**: platform は `rng_seed` を opaque string として保存・再投入するだけに留める。fresh run で seed 未指定時の初期 seed 生成は game master の責務とし、encoding や RNG 選択を platform に教えない
+- **Applied**: `cmd/arena-runner` の `--rng-seed` 取扱い、`internal/platform/registry` の dungeon builder、`docs/specs/platform.md` / `docs/specs/game-master.md` / `docs/specs/dungeon-game.md`

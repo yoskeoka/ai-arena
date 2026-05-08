@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -210,12 +208,6 @@ func run(args []string) error {
 	}
 	if ruleset == "" {
 		return fmt.Errorf("--ruleset is required")
-	}
-	if resumeSnapshot == nil && recordSource == nil && historyInput == "" && strings.TrimSpace(rngSeed) == "" {
-		rngSeed, err = generateRNGSeed()
-		if err != nil {
-			return err
-		}
 	}
 	descriptor, err := registry.Default().LookupVersion(context.Background(), gameName, gameVersion)
 	if err != nil {
@@ -530,14 +522,6 @@ func extractRNGSeedFromSnapshot(snapshot game.Snapshot) (string, bool) {
 		return "", false
 	}
 	return state.RNGSeed, true
-}
-
-func generateRNGSeed() (string, error) {
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
-		return "", fmt.Errorf("generate rng seed: %w", err)
-	}
-	return hex.EncodeToString(buf), nil
 }
 
 func loadPlayersAndSessions(meta catalog.GameMetadata, args []string, stderrLimitBytes int) ([]game.Player, map[string]match.PlayerSession, error) {

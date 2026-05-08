@@ -92,6 +92,20 @@ func TestSeededMazeUsesFixedChestScoreSet(t *testing.T) {
 	}
 }
 
+func TestNewGeneratesSeedWhenOmitted(t *testing.T) {
+	match, err := New(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetSeededMazeV1,
+		PlayerIDs:   []string{"p1", "p2"},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if len(match.FullState().RNGSeed) != 64 {
+		t.Fatalf("generated rng seed length = %d, want 64", len(match.FullState().RNGSeed))
+	}
+}
+
 func TestFixedMapRulesetRemainsResumable(t *testing.T) {
 	match, err := New(Config{
 		GameVersion: GameVersion,
@@ -139,6 +153,30 @@ func TestNewFromFullStateValidatesGeneratedSeed(t *testing.T) {
 		RNGSeed:     testSeedAlpha,
 	}, state); err == nil {
 		t.Fatal("expected rng seed mismatch")
+	}
+}
+
+func TestNewFromFullStateUsesSnapshotSeedWhenConfigOmitted(t *testing.T) {
+	match, err := New(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetSeededMazeV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     testSeedAlpha,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	state := match.FullState()
+	restored, err := NewFromFullState(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetSeededMazeV1,
+		PlayerIDs:   []string{"p1", "p2"},
+	}, state)
+	if err != nil {
+		t.Fatalf("NewFromFullState: %v", err)
+	}
+	if restored.FullState().RNGSeed != state.RNGSeed {
+		t.Fatalf("restored rng seed = %q, want %q", restored.FullState().RNGSeed, state.RNGSeed)
 	}
 }
 

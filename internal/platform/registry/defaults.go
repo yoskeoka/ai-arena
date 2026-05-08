@@ -212,12 +212,6 @@ func buildDungeonLocalSubprocessSession(spec BuildSpec, snapshot *game.Snapshot)
 			return nil, err
 		}
 	}
-	if strings.TrimSpace(rngSeed) == "" {
-		rngSeed, err = dungeon.GenerateSeedHex()
-		if err != nil {
-			return nil, err
-		}
-	}
 	command := []string{
 		"go", "run", "./cmd/dungeon-gamemaster",
 		"--game-version", spec.GameVersion,

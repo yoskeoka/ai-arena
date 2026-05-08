@@ -174,7 +174,7 @@ func New(cfg Config) (*Match, error) {
 	if err != nil {
 		return nil, err
 	}
-	rngSeed, err := normalizeSeed(cfg.RNGSeed)
+	rngSeed, err := normalizeSeedOrGenerate(cfg.RNGSeed)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,16 @@ func New(cfg Config) (*Match, error) {
 }
 
 func NewFromFullState(cfg Config, state FullState) (*Match, error) {
-	match, err := New(cfg)
+	resumeSeed := cfg.RNGSeed
+	if strings.TrimSpace(resumeSeed) == "" {
+		resumeSeed = state.RNGSeed
+	}
+	match, err := New(Config{
+		GameVersion: cfg.GameVersion,
+		Ruleset:     cfg.Ruleset,
+		PlayerIDs:   append([]string(nil), cfg.PlayerIDs...),
+		RNGSeed:     resumeSeed,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -853,6 +862,14 @@ func normalizeSeed(seed string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(decoded), nil
+}
+
+func normalizeSeedOrGenerate(seed string) (string, error) {
+	seed = strings.TrimSpace(seed)
+	if seed == "" {
+		return GenerateSeedHex()
+	}
+	return normalizeSeed(seed)
 }
 
 func decodeSeedMaterial(seed string) ([]byte, error) {
