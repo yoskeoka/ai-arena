@@ -5,11 +5,15 @@
 ## Command Surface
 
 - `make test`
-  - `go test ./...` を実行する
+  - fast default gate として `go test ./...` を実行する
 - `make fmt`
   - tracked `.go` files に `goimports` を適用し、formatting と import ordering を auto fix する
 - `make lint`
   - formatter check と、最小限の Go lint suite を実行する
+- `make test-wasm-go`
+  - dedicated Go-WASM verification lane として、Go-WASM `janken` e2e / helper tests を実行する
+- `make test-wasm-rust`
+  - dedicated Rust-WASM evaluation lane として、Rust-WASM `janken` e2e を実行する
 
 ## Formatter
 
@@ -58,11 +62,21 @@
 - `make test` と `make lint` は独立 job として並行に実行してよい
 - CI は module/build/tool cache を持ってよいが、品質判定の入口は Makefile targets に揃える
 - formatter drift は test failure ではなく lint failure として扱う
+- default Go CI は Rust toolchain setup や WASM fixture build/e2e cost を持ち込まない
+- WASM verification は dedicated workflow から `make test-wasm-go` / `make test-wasm-rust` を呼ぶ
+- dedicated WASM workflow は `runtime` / `runner` / `e2e` / `testdata/ai/janken` / `Makefile` / workflow file など、WASM verification に影響する path 変更時だけ自動実行してよい
 
-## Dedicated WASM Verification Helpers
+## Dedicated WASM Verification Lanes
 
-Go 製 WASM sample build と `arena-runner` の `janken` verification は、Phase 4 初回導入では default quality gate へは入れず、
-dedicated helper / targeted test として維持する。
+Go 製 WASM sample build と `arena-runner` の `janken` verification は、default quality gate から分離し、
+dedicated CI lane と manual helper に分けて維持する。
+
+- `make test` には Go-WASM / Rust-WASM `janken` verification を含めない
+- Go-WASM verification は supported path の targeted automated check として `make test-wasm-go` から継続実行する
+- Rust-WASM verification は experiment / evaluation lane として `make test-wasm-rust` から CI 再現可能にするが、default Go gate には混ぜない
+- WASM 専用 tests は default `go test ./...` から外れた dedicated selection mechanism で管理する。現行実装では dedicated env guard または build tag を使って分離してよい
+
+### Manual Helpers
 
 - `make build-janken-go-wasm`
   - `testdata/ai/janken/janken-go-wasm-ai` を `GOOS=wasip1 GOARCH=wasm` で build し、repo-local fixture path に `.wasm` を生成する
@@ -76,8 +90,8 @@ dedicated helper / targeted test として維持する。
 方針:
 
 - 常設 gate は引き続き `make test` / `make lint`
-- Go-WASM path の継続的検証は targeted automated tests と manual helper の両輪で担保する
-- Rust-WASM path は `experiment-only` lane として dedicated helper / opt-in verification に留める
+- Go-WASM path の継続的検証は dedicated CI lane と manual helper の両輪で担保する
+- Rust-WASM path は `experiment-only` lane として dedicated CI lane / helper に留める
 - default gate へ昇格させるのは、runtime matrix と CI cost を別途評価してからとする
 
 ## Codex Hook Integration
