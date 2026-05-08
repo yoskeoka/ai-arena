@@ -302,6 +302,8 @@ competition ranking を使う。
 ### `exported_snapshot`
 
 `exported_snapshot.public_state` は観戦・デバッグ向けに、少なくとも以下を持つ。
+`rng_seed` を含めてよいのは terminal exported snapshot のうち最終 status が `completed` の場合だけとする。
+途中実行中はもちろん、terminal でも `failed` / `canceled` の external/public exported snapshot では `rng_seed` を含めない。
 
 ```json
 {
@@ -333,7 +335,8 @@ competition ranking を使う。
 ```
 
 `exported_snapshot` は hidden information を残さず、観戦に必要な全体状態を含める。
-この phase では generated layout と chest score assignment は debug / replay のため公開してよい。
+この phase では generated layout と chest score assignment は debug / replay のため公開してよいが、
+`rng_seed` 自体の公開は terminal かつ `completed` の場合に限る。
 
 ## deterministic 再現条件
 
@@ -347,7 +350,8 @@ competition ranking を使う。
 
 また、以下の運用条件を満たす。
 
-- `full_state` / `exported_snapshot` には `rng_seed` と generated layout の両方を保持する
+- `full_state` には常に `rng_seed` と generated layout の両方を保持する
+- `exported_snapshot` は generated layout を保持してよく、`rng_seed` は terminal かつ `completed` の公開時にだけ含める
 - generated layout は「seed から再生成した結果と保存状態が一致しているか」を resume / debug で検証できる形で残す
 - replay / exported snapshot の利用者は `rng_seed` だけで初期局面を再構成できる
 

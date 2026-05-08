@@ -559,9 +559,11 @@ foundation では最小で以下を持つ。
 - `public_state`: 観戦や debug に出してよい公開状態
 - `players`: プレイヤーごとの公開向け状態一覧
 
-seed 付き生成を行う game では、`public_state` に `rng_seed` を含めてよい。これは hidden information を
-漏らすためではなく、観測できた exported snapshot から同じ初期局面を replay / debug できるようにするための
-再現性 metadata である。
+seed 付き生成を行う game では、`public_state` に `rng_seed` を含めてよいのは
+match が terminal に到達した場合のうち、最終 status が `completed` のときに限る。
+これは hidden information を漏らすためではなく、観測できた terminal exported snapshot から同じ初期局面を
+replay / debug できるようにするための再現性 metadata である。`running` はもちろん、
+terminal でも `failed` / `canceled` の exported snapshot には、再シミュレーションに使える seed を含めてはならない。
 
 ## `arena-runner` CLI
 

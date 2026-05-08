@@ -270,6 +270,9 @@ func (s *serverState) currentSnapshot() (game.Snapshot, error) {
 
 func (s *serverState) currentExportedSnapshot() game.ExportedSnapshot {
 	public := s.world.PublicState()
+	if statusForWorld(s.world) != game.StatusCompleted {
+		public.RNGSeed = ""
+	}
 	players := make([]game.ExportedPlayerSnapshot, 0, len(s.players))
 	for _, player := range s.players {
 		status := s.lastAction[player.PlayerID]

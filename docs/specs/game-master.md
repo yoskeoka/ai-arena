@@ -134,6 +134,7 @@ game master はここで状態遷移を進める。
 ### `CurrentExportedSnapshot`
 
 - 観戦・公開向けの exported snapshot を返す
+- seed-aware な game では、再シミュレーションに使える seed を external/public exported snapshot に含めてよいのは terminal かつ `completed` の場合だけとする
 - hidden information を含めるかどうかは game 固有 spec が決める
 
 ### `CurrentResult`

@@ -123,7 +123,7 @@ type FullState struct {
 
 type PublicState struct {
 	MapID             string        `json:"map_id"`
-	RNGSeed           string        `json:"rng_seed"`
+	RNGSeed           string        `json:"rng_seed,omitempty"`
 	Turn              int           `json:"turn"`
 	MaxTurns          int           `json:"max_turns"`
 	Tiles             []string      `json:"tiles"`
