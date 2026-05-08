@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,7 +15,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/yoskeoka/ai-arena/games/dungeon"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
@@ -209,6 +210,12 @@ func run(args []string) error {
 	}
 	if ruleset == "" {
 		return fmt.Errorf("--ruleset is required")
+	}
+	if resumeSnapshot == nil && recordSource == nil && historyInput == "" && strings.TrimSpace(rngSeed) == "" {
+		rngSeed, err = generateRNGSeed()
+		if err != nil {
+			return err
+		}
 	}
 	descriptor, err := registry.Default().LookupVersion(context.Background(), gameName, gameVersion)
 	if err != nil {
@@ -510,7 +517,7 @@ func parsePlayersForGame(args []string) ([]game.Player, error) {
 }
 
 func extractRNGSeedFromSnapshot(snapshot game.Snapshot) (string, bool) {
-	if snapshot.GameID != dungeon.GameID || len(snapshot.GameState) == 0 {
+	if len(snapshot.GameState) == 0 {
 		return "", false
 	}
 	var state struct {
@@ -523,6 +530,14 @@ func extractRNGSeedFromSnapshot(snapshot game.Snapshot) (string, bool) {
 		return "", false
 	}
 	return state.RNGSeed, true
+}
+
+func generateRNGSeed() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate rng seed: %w", err)
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 func loadPlayersAndSessions(meta catalog.GameMetadata, args []string, stderrLimitBytes int) ([]game.Player, map[string]match.PlayerSession, error) {

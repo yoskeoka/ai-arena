@@ -80,6 +80,6 @@
 ## [2026-05-08] seed 入力契約と乱数源の内部表現を分ける
 
 - **Mistake**: `rng_seed` をそのまま `int64` 契約で持ち続ける前提で実装を進めると、human-friendly な replay/debug seed と `rand/v2` の内部 seed material を同じ層で固定してしまう
-- **Pattern**: CLI / snapshot / exported snapshot で扱う外部 seed と、実装が乱数源へ渡す正規化済み seed を分離せずに設計してしまう
-- **Rule**: seed-aware game を実装するときは、外部契約では再利用しやすい string seed を持ち、内部では stable hash で `rand/v2` 向け seed material に正規化する。snapshot / exported snapshot には外部 seed を保持し、内部変換結果は漏らさない
+- **Pattern**: CLI / snapshot / exported snapshot で扱う外部 seed と、実装が乱数源へ渡す seed material を分離せずに設計してしまう
+- **Rule**: seed-aware game を実装するときは、外部契約では replay/debug しやすい string seed を持ち、binary seed material をそのまま hex string で保持する。内部ではその hex を decode して `rand/v2` へ渡し、hash で別の seed material へ写像しない
 - **Applied**: `docs/specs/dungeon-game.md` の `rng_seed` 契約、`cmd/arena-runner` の `--rng-seed`、`games/dungeon` の generated layout 実装、今後の seed-aware game / replay path

@@ -213,7 +213,10 @@ func buildDungeonLocalSubprocessSession(spec BuildSpec, snapshot *game.Snapshot)
 		}
 	}
 	if strings.TrimSpace(rngSeed) == "" {
-		rngSeed = dungeon.DefaultRNGSeed
+		rngSeed, err = dungeon.GenerateSeedHex()
+		if err != nil {
+			return nil, err
+		}
 	}
 	command := []string{
 		"go", "run", "./cmd/dungeon-gamemaster",
@@ -243,7 +246,7 @@ func dungeonSnapshotFromHistory(spec BuildSpec, events []match.Event, targetTurn
 		GameVersion: spec.GameVersion,
 		Ruleset:     spec.Ruleset,
 		PlayerIDs:   playerIDs,
-		RNGSeed:     seedOrDefault(spec.RNGSeed),
+		RNGSeed:     requiredSeed(spec.RNGSeed),
 	})
 	if err != nil {
 		return game.Snapshot{}, err
@@ -334,11 +337,8 @@ func dungeonSeedFromSnapshot(snapshot game.Snapshot) (string, error) {
 	return state.RNGSeed, nil
 }
 
-func seedOrDefault(seed string) string {
-	if strings.TrimSpace(seed) == "" {
-		return dungeon.DefaultRNGSeed
-	}
-	return seed
+func requiredSeed(seed string) string {
+	return strings.TrimSpace(seed)
 }
 
 func snapshotStatusForDungeon(world *dungeon.Match) game.MatchStatus {

@@ -573,7 +573,7 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--game <game-id>`
 - `--game-version <game-version>`
 - `--ruleset <ruleset-version>`
-- `--rng-seed <seed>` は省略可能で、省略時は game ごとの default deterministic seed を使う
+- `--rng-seed <seed>` は省略可能で、fresh run では省略時に runner が新しい seed を生成して使う
 - `--player player_id=entry-path`
 - `--match-id <id>` は省略可能
 - `--output-dir <dir>` は標準 artifact layout の base directory を指定する。省略時は `arena-runner-output` を使う
@@ -589,6 +589,7 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 
 `--rng-seed` は fresh run の初期生成入力であり、seed-aware な game では replay / history resume 時にも同じ seed が
 必要になる。`record.json` や `snapshot.json` から seed を復元できる場合、runner はそれを優先してよい。
+`history.json` だけを単独入力にする場合は、再現対象の seed を別途与えなければならない。
 
 `echo-count` は platform fixture 用の最小 game であり、`janken` は richer integration 用の game として同じ runner contract に乗る。
 runner が担保するのはゲーム非依存の起動・artifact・replay/debug entrypoint と registry lookup までであり、

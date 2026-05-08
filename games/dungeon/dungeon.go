@@ -1,13 +1,15 @@
 package dungeon
 
 import (
-	"crypto/sha256"
+	cryptorand "crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/rand/v2"
+	randv2 "math/rand/v2"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,7 +25,7 @@ const (
 	// BuilderIDSubprocess identifies the local subprocess bot builder.
 	BuilderIDSubprocess = "dungeon/local-subprocess"
 	// DefaultRNGSeed is the default deterministic seed used by local helpers.
-	DefaultRNGSeed = "default"
+	DefaultRNGSeed = "00000000000000000000000000000000"
 )
 
 const (
@@ -173,7 +175,10 @@ func New(cfg Config) (*Match, error) {
 	if err != nil {
 		return nil, err
 	}
-	rngSeed := normalizeSeed(cfg.RNGSeed)
+	rngSeed, err := normalizeSeed(cfg.RNGSeed)
+	if err != nil {
+		return nil, err
+	}
 	ruleset, err := buildRuleset(cfg.Ruleset, rngSeed)
 	if err != nil {
 		return nil, err
@@ -221,7 +226,6 @@ func New(cfg Config) (*Match, error) {
 }
 
 func NewFromFullState(cfg Config, state FullState) (*Match, error) {
-	cfg.RNGSeed = normalizeSeed(cfg.RNGSeed)
 	match, err := New(cfg)
 	if err != nil {
 		return nil, err
@@ -235,7 +239,11 @@ func NewFromFullState(cfg Config, state FullState) (*Match, error) {
 	if state.Turn < 0 || state.Turn > match.ruleset.MaxTurns {
 		return nil, fmt.Errorf("dungeon: snapshot turn %d out of range", state.Turn)
 	}
-	if normalizeSeed(state.RNGSeed) != match.rngSeed {
+	stateSeed, err := normalizeSeed(state.RNGSeed)
+	if err != nil {
+		return nil, fmt.Errorf("dungeon: invalid snapshot rng_seed: %w", err)
+	}
+	if stateSeed != match.rngSeed {
 		return nil, fmt.Errorf("dungeon: snapshot rng_seed %q does not match config %q", state.RNGSeed, match.rngSeed)
 	}
 	if !equalStringSlices(state.Tiles, match.ruleset.Tiles) {
@@ -603,7 +611,10 @@ func seededMazeRuleset(seed string) (Ruleset, error) {
 	if len(walkable) < 8 {
 		return Ruleset{}, fmt.Errorf("dungeon: generated maze has insufficient walkable tiles")
 	}
-	rng := newSeededRand(seed)
+	rng, err := newSeededRand(seed)
+	if err != nil {
+		return Ruleset{}, err
+	}
 	goal := walkable[rng.IntN(len(walkable))]
 	start := farthestPosition(tiles, goal)
 	spawns, err := nearestUniquePositions(tiles, start, 4, map[string]struct{}{posKey(goal): {}})
@@ -645,7 +656,10 @@ func generatePerfectMaze9x9(seed string) []string {
 			cells = append(cells, cell{x: x, y: y})
 		}
 	}
-	rng := newSeededRand(seed)
+	rng, err := newSeededRand(seed)
+	if err != nil {
+		panic(err)
+	}
 	start := cells[rng.IntN(len(cells))]
 	stack := []cell{start}
 	visited := map[cell]struct{}{start: {}}
@@ -707,7 +721,7 @@ func nearestUniquePositions(layout []string, from Position, count int, exclude m
 	return out, nil
 }
 
-func selectChestPositions(layout []string, walkable []Position, start, goal Position, spawns []Position, count int, rng *rand.Rand) ([]Position, error) {
+func selectChestPositions(layout []string, walkable []Position, start, goal Position, spawns []Position, count int, rng *deterministicRand) ([]Position, error) {
 	excluded := make(map[string]struct{}, len(spawns)+1)
 	excluded[posKey(goal)] = struct{}{}
 	for _, spawn := range spawns {
@@ -800,19 +814,70 @@ func walkablePositions(layout []string) []Position {
 	return positions
 }
 
-func newSeededRand(seed string) *rand.Rand {
-	sum := sha256.Sum256([]byte(seed))
-	seed1 := binary.LittleEndian.Uint64(sum[0:8])
-	seed2 := binary.LittleEndian.Uint64(sum[8:16])
-	// #nosec G404 -- deterministic gameplay generation requires a reproducible PRNG, not a cryptographic one.
-	return rand.New(rand.NewPCG(seed1, seed2))
+type deterministicRand struct {
+	mu  sync.Mutex
+	rng *randv2.Rand
 }
 
-func normalizeSeed(seed string) string {
-	if strings.TrimSpace(seed) == "" {
-		return DefaultRNGSeed
+func newSeededRand(seed string) (*deterministicRand, error) {
+	material, err := decodeSeedMaterial(seed)
+	if err != nil {
+		return nil, err
 	}
-	return seed
+	seed1 := binary.LittleEndian.Uint64(material[0:8])
+	seed2 := binary.LittleEndian.Uint64(material[8:16])
+	// #nosec G404 -- deterministic gameplay generation requires a reproducible PRNG, not a cryptographic one.
+	return &deterministicRand{rng: randv2.New(randv2.NewPCG(seed1, seed2))}, nil
+}
+
+func (r *deterministicRand) IntN(n int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.rng.IntN(n)
+}
+
+func (r *deterministicRand) Shuffle(n int, swap func(i, j int)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.rng.Shuffle(n, swap)
+}
+
+func normalizeSeed(seed string) (string, error) {
+	seed = strings.TrimSpace(seed)
+	if seed == "" {
+		return "", fmt.Errorf("rng_seed is required")
+	}
+	decoded, err := decodeSeedMaterial(seed)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(decoded), nil
+}
+
+func decodeSeedMaterial(seed string) ([]byte, error) {
+	seed = strings.TrimSpace(seed)
+	if seed == "" {
+		return nil, fmt.Errorf("rng_seed is required")
+	}
+	if len(seed) != 32 {
+		return nil, fmt.Errorf("rng_seed must be 32 hex characters")
+	}
+	decoded, err := hex.DecodeString(seed)
+	if err != nil {
+		return nil, fmt.Errorf("rng_seed must be lowercase/uppercase hex: %w", err)
+	}
+	if len(decoded) != 16 {
+		return nil, fmt.Errorf("rng_seed must decode to 16 bytes")
+	}
+	return decoded, nil
+}
+
+func GenerateSeedHex() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := cryptorand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate rng_seed: %w", err)
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 func cloneRuleset(r Ruleset) Ruleset {
