@@ -1,12 +1,16 @@
 GO ?= go
+CARGO ?= cargo
+RUSTUP ?= rustup
 CACHE_ROOT ?= /tmp/ai-arena-go-quality-gates
 GOPATH = $(CACHE_ROOT)/go
 GOMODCACHE = $(GOPATH)/pkg/mod
 GOCACHE = $(CACHE_ROOT)/go-build
+CARGO_TARGET_DIR ?= $(CACHE_ROOT)/cargo-target
+RUST_WASM_TARGET ?= wasm32-wasip1
 GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
 GOFILES = $(shell git ls-files -- '*.go')
 
-.PHONY: test fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec build-janken-go-wasm run-janken-go-wasm run-echo-simultaneous run-echo-sequential
+.PHONY: test fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 test:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
@@ -60,6 +64,31 @@ run-janken-go-wasm: build-janken-go-wasm
 		--match-id janken-go-wasm \
 		--output-dir "$$output_dir" \
 		--player p1=./testdata/ai/janken/janken-go-wasm-ai \
+		--player p2=./testdata/ai/janken/janken-rock-ai-wasm
+
+build-janken-rust-wasm:
+	mkdir -p "$(CARGO_TARGET_DIR)"
+	@if ! $(RUSTUP) target list --installed | grep -qx "$(RUST_WASM_TARGET)"; then \
+		echo "missing Rust target $(RUST_WASM_TARGET); run: $(RUSTUP) target add $(RUST_WASM_TARGET)"; \
+		exit 1; \
+	fi
+	CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" $(CARGO) build \
+		--manifest-path ./testdata/ai/janken/janken-rust-wasm-ai/Cargo.toml \
+		--target $(RUST_WASM_TARGET) \
+		--release
+	cp "$(CARGO_TARGET_DIR)/$(RUST_WASM_TARGET)/release/janken-rust-wasm-ai.wasm" ./testdata/ai/janken/janken-rust-wasm-ai.wasm
+
+run-janken-rust-wasm-eval: build-janken-rust-wasm
+	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
+	output_dir="$$(mktemp -d /tmp/ai-arena-janken-rust-wasm-XXXXXX)"; \
+	echo "artifact dir: $$output_dir/janken-rust-wasm-eval"; \
+	$(GO_ENV) $(GO) run ./cmd/arena-runner \
+		--game janken \
+		--game-version 2.1.0 \
+		--ruleset regular \
+		--match-id janken-rust-wasm-eval \
+		--output-dir "$$output_dir" \
+		--player p1=./testdata/ai/janken/janken-rust-wasm-ai \
 		--player p2=./testdata/ai/janken/janken-rock-ai-wasm
 
 run-echo-simultaneous:

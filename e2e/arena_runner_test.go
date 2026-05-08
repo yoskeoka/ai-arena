@@ -444,6 +444,36 @@ func TestArenaRunnerJankenGoWASMMixedRuntimePath(t *testing.T) {
 	}
 }
 
+func TestArenaRunnerJankenRustWASMEvaluationPath(t *testing.T) {
+	if os.Getenv("AI_ARENA_EXPERIMENT_RUST_WASM") != "1" {
+		t.Skip("set AI_ARENA_EXPERIMENT_RUST_WASM=1 to enable Rust-WASM evaluation")
+	}
+
+	buildJankenRustWASMFixture(t)
+
+	result := runArena(t,
+		"--game", janken.GameID,
+		"--game-version", janken.GameVersion,
+		"--ruleset", janken.RulesetRegular,
+		"--match-id", "janken-rust-wasm-eval",
+		"--player", "p1=./testdata/ai/janken/janken-rust-wasm-ai",
+		"--player", "p2=./testdata/ai/janken/janken-rock-ai-wasm",
+	)
+
+	if result.Record.Status != contract.StatusCompleted {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
+	}
+	if result.Record.Result.Placements[0].PlayerID != "p1" {
+		t.Fatalf("winner = %q, want p1", result.Record.Result.Placements[0].PlayerID)
+	}
+	if result.Record.Snapshot.PerPlayer["p1"].StderrBytes == 0 {
+		t.Fatal("expected stderr bytes for Rust-WASM player")
+	}
+	if _, err := os.Stat(filepath.Join(result.MatchDir, "history.json")); err != nil {
+		t.Fatalf("history.json missing: %v", err)
+	}
+}
+
 func TestArenaRunnerJankenResumeFromHistoryAndContinue(t *testing.T) {
 	base := runArena(t,
 		"--game", "janken",
@@ -873,6 +903,19 @@ func buildJankenGoWASMFixture(t *testing.T) {
 	})
 }
 
+func buildJankenRustWASMFixture(t *testing.T) {
+	t.Helper()
+
+	outputPath := filepath.Join(repoRoot(t), "testdata/ai/janken/janken-rust-wasm-ai.wasm")
+	manifestPath := filepath.Join(repoRoot(t), "testdata/ai/janken/janken-rust-wasm-ai/Cargo.toml")
+	if err := buildRustWASM(newTestContext(t), repoRoot(t), manifestPath, outputPath); err != nil {
+		t.Fatalf("build Rust-WASM fixture: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(outputPath)
+	})
+}
+
 func buildGoWASM(ctx context.Context, dir, pkg, outputPath string) error {
 	cmd := exec.CommandContext(ctx, "go", "build", "-o", outputPath, pkg)
 	cmd.Dir = dir
@@ -880,6 +923,51 @@ func buildGoWASM(ctx context.Context, dir, pkg, outputPath string) error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("build wasm %s: %w\n%s", pkg, err, output)
+	}
+	return nil
+}
+
+func buildRustWASM(ctx context.Context, dir, manifestPath, outputPath string) error {
+	if _, err := exec.LookPath("cargo"); err != nil {
+		return fmt.Errorf("cargo not found: %w", err)
+	}
+	if _, err := exec.LookPath("rustup"); err != nil {
+		return fmt.Errorf("rustup not found: %w", err)
+	}
+
+	targetCheck := exec.CommandContext(ctx, "rustup", "target", "list", "--installed")
+	targetCheck.Dir = dir
+	installedTargets, err := targetCheck.Output()
+	if err != nil {
+		return fmt.Errorf("list installed rust targets: %w", err)
+	}
+	if !strings.Contains(string(installedTargets), "wasm32-wasip1") {
+		return fmt.Errorf("missing rust target wasm32-wasip1; run `rustup target add wasm32-wasip1`")
+	}
+
+	targetDir := filepath.Join(filepath.Dir(outputPath), ".rust-target")
+	cmd := exec.CommandContext(ctx, "cargo", "build",
+		"--manifest-path", manifestPath,
+		"--target", "wasm32-wasip1",
+		"--release",
+		"--target-dir", targetDir,
+	)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("build rust wasm %s: %w\n%s", manifestPath, err, output)
+	}
+
+	builtArtifact := filepath.Join(targetDir, "wasm32-wasip1", "release", "janken-rust-wasm-ai.wasm")
+	wasmBytes, err := os.ReadFile(builtArtifact)
+	if err != nil {
+		return fmt.Errorf("read built rust wasm artifact: %w", err)
+	}
+	if err := os.WriteFile(outputPath, wasmBytes, 0o644); err != nil {
+		return fmt.Errorf("write rust wasm fixture: %w", err)
+	}
+	if err := os.RemoveAll(targetDir); err != nil {
+		return fmt.Errorf("cleanup rust wasm target dir: %w", err)
 	}
 	return nil
 }

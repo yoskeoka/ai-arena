@@ -68,11 +68,16 @@ dedicated helper / targeted test として維持する。
   - `testdata/ai/janken/janken-go-wasm-ai` を `GOOS=wasip1 GOARCH=wasm` で build し、repo-local fixture path に `.wasm` を生成する
 - `make run-janken-go-wasm`
   - 上記 build の後、`arena-runner` で `janken` match を起動し、subprocess bot と WASM bot が同じ game id で完走することを確認できる
+- `make build-janken-rust-wasm`
+  - `testdata/ai/janken/janken-rust-wasm-ai` を `wasm32-wasip1` target で build し、repo-local fixture path に `.wasm` を生成する
+- `make run-janken-rust-wasm-eval`
+  - 上記 build の後、`arena-runner` で `janken` match を起動し、Rust-WASM bot の evaluation lane を再現できる
 
 方針:
 
 - 常設 gate は引き続き `make test` / `make lint`
 - Go-WASM path の継続的検証は targeted automated tests と manual helper の両輪で担保する
+- Rust-WASM path は `experiment-only` lane として dedicated helper / opt-in verification に留める
 - default gate へ昇格させるのは、runtime matrix と CI cost を別途評価してからとする
 
 ## Codex Hook Integration
