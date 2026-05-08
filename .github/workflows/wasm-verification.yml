@@ -1,0 +1,93 @@
+name: wasm-verification
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/go-ci.yml"
+      - ".github/workflows/wasm-verification.yml"
+      - "Makefile"
+      - "go.mod"
+      - "go.sum"
+      - "cmd/**/*.go"
+      - "e2e/**/*.go"
+      - "internal/**/*.go"
+      - "testdata/ai/janken/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/go-ci.yml"
+      - ".github/workflows/wasm-verification.yml"
+      - "Makefile"
+      - "go.mod"
+      - "go.sum"
+      - "cmd/**/*.go"
+      - "e2e/**/*.go"
+      - "internal/**/*.go"
+      - "testdata/ai/janken/**"
+  workflow_dispatch:
+
+jobs:
+  go-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Cache Go module and build state
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            /home/runner/go/pkg/mod
+            /home/runner/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum', 'Makefile', 'e2e/**/*.go', 'testdata/ai/janken/**') }}-wasm-go
+          restore-keys: |
+            ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum', 'Makefile', 'e2e/**/*.go', 'testdata/ai/janken/**') }}-
+            ${{ runner.os }}-go-
+
+      - name: Run Go-WASM verification
+        run: make GOPATH=/home/runner/go GOMODCACHE=/home/runner/go/pkg/mod GOCACHE=/home/runner/.cache/go-build test-wasm-go
+
+  rust-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Cache Go module and build state
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            /home/runner/go/pkg/mod
+            /home/runner/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum', 'Makefile', 'e2e/**/*.go', 'testdata/ai/janken/**') }}-wasm-rust-go
+          restore-keys: |
+            ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum', 'Makefile', 'e2e/**/*.go', 'testdata/ai/janken/**') }}-
+            ${{ runner.os }}-go-
+
+      - name: Cache Rust artifacts
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            /home/runner/.cargo/registry
+            /home/runner/.cargo/git
+            /home/runner/.cargo-target
+          key: ${{ runner.os }}-rust-wasm32-wasip1-${{ hashFiles('testdata/ai/janken/janken-rust-wasm-ai/**', 'Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-wasm32-wasip1-
+
+      - name: Install Rust WASM target
+        run: rustup target add wasm32-wasip1
+
+      - name: Run Rust-WASM verification
+        run: make GOPATH=/home/runner/go GOMODCACHE=/home/runner/go/pkg/mod GOCACHE=/home/runner/.cache/go-build CARGO_TARGET_DIR=/home/runner/.cargo-target test-wasm-rust
