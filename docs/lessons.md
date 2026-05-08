@@ -83,3 +83,10 @@
 - **Pattern**: CLI / snapshot / exported snapshot で扱う外部 seed と、実装が乱数源へ渡す seed material を分離せずに設計してしまう
 - **Rule**: seed-aware game を実装するときは、外部契約では replay/debug しやすい string seed を持ち、binary seed material をそのまま hex string で保持する。内部ではその hex を decode して `rand/v2` へ渡し、hash で別の seed material へ写像しない
 - **Applied**: `docs/specs/dungeon-game.md` の `rng_seed` 契約、`cmd/arena-runner` の `--rng-seed`、`games/dungeon` の generated layout 実装、今後の seed-aware game / replay path
+
+## [2026-05-09] platform spec に game 固有 encoding を漏らさない
+
+- **Mistake**: `game-master` の共通契約に、dungeon の `64` 桁 hex seed のような game 固有 encoding をそのまま書き込んだ
+- **Pattern**: 個別ゲームの設計で得た知見を platform 契約へ一般化するときに、「共通で守る責務」と「その game だけの具体表現」を分離しきれない
+- **Rule**: platform / game-master / runner の共通 spec では、共通で必要な受け渡し責務と保存責務だけを書く。seed の encoding、PRNG 種別、payload shape など game ごとの具体表現は各 game spec に閉じ込める
+- **Applied**: `docs/specs/game-master.md` の `rng_seed` 契約、今後の platform 共通 spec と game spec の責務分離
