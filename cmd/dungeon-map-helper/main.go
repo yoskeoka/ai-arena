@@ -21,27 +21,33 @@ func main() {
 }
 
 func run(args []string) error {
+	var (
+		ruleset = dungeon.RulesetSeededMazeV1
+		rngSeed = dungeon.DefaultRNGSeed
+	)
 	fs := flag.NewFlagSet("dungeon-map-helper", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	fs.StringVar(&ruleset, "ruleset", ruleset, "dungeon ruleset")
+	fs.StringVar(&rngSeed, "rng-seed", rngSeed, "deterministic seed")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
 	world, err := dungeon.New(dungeon.Config{
 		GameVersion: dungeon.GameVersion,
-		Ruleset:     dungeon.RulesetFixedMapV1,
+		Ruleset:     ruleset,
 		PlayerIDs:   []string{"p1", "p2"},
-		RNGSeed:     dungeon.DefaultRNGSeed,
+		RNGSeed:     rngSeed,
 	})
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("map_id=%s max_turns=%d view_radius=%d chest_points=%d goal_bonuses=%v\n",
+	fmt.Printf("map_id=%s rng_seed=%s max_turns=%d view_radius=%d goal_bonuses=%v\n",
 		world.Ruleset().MapID,
+		world.PublicState().RNGSeed,
 		world.Ruleset().MaxTurns,
 		world.Ruleset().ViewRadius,
-		world.Ruleset().ChestPoints,
 		world.Ruleset().GoalBonuses,
 	)
 	for _, row := range world.PublicState().Tiles {
@@ -54,12 +60,12 @@ func run(args []string) error {
 		}
 		fmt.Printf("spawn_%d_to_goal steps=%d route=%v\n", i+1, len(path)-1, path)
 	}
-	for i, chest := range world.Ruleset().ChestPositions {
-		path, ok := world.ShortestPath(world.SpawnPoints()[0], chest)
+	for i, chest := range world.Ruleset().InitialChests {
+		path, ok := world.ShortestPath(world.SpawnPoints()[0], dungeon.Position{X: chest.X, Y: chest.Y})
 		if !ok {
 			return fmt.Errorf("no path from spawn 1 to chest %d", i+1)
 		}
-		fmt.Printf("spawn_1_to_chest_%d steps=%d route=%v\n", i+1, len(path)-1, path)
+		fmt.Printf("spawn_1_to_chest_%d points=%d steps=%d route=%v\n", i+1, chest.Points, len(path)-1, path)
 	}
 	return nil
 }

@@ -559,6 +559,10 @@ foundation では最小で以下を持つ。
 - `public_state`: 観戦や debug に出してよい公開状態
 - `players`: プレイヤーごとの公開向け状態一覧
 
+seed 付き生成を行う game では、`public_state` に `rng_seed` を含めてよい。これは hidden information を
+漏らすためではなく、観測できた exported snapshot から同じ初期局面を replay / debug できるようにするための
+再現性 metadata である。
+
 ## `arena-runner` CLI
 
 Phase 2a の black-box verification は `arena-runner` を入口にする。
@@ -569,6 +573,7 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--game <game-id>`
 - `--game-version <game-version>`
 - `--ruleset <ruleset-version>`
+- `--rng-seed <seed>` は省略可能で、省略時は game ごとの default deterministic seed を使う
 - `--player player_id=entry-path`
 - `--match-id <id>` は省略可能
 - `--output-dir <dir>` は標準 artifact layout の base directory を指定する。省略時は `arena-runner-output` を使う
@@ -581,6 +586,9 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--history-input <path>` は persisted final record の `event_log` を抽出した `history.json` を受け付ける
 - `--record-input <path>` は source-of-truth persisted final match-record artifact を受け付ける
 - `--target-turn <n>` は `--history-input` または `--record-input` と組み合わせて使う replay / resume の turn 境界を指定する
+
+`--rng-seed` は fresh run の初期生成入力であり、seed-aware な game では replay / history resume 時にも同じ seed が
+必要になる。`record.json` や `snapshot.json` から seed を復元できる場合、runner はそれを優先してよい。
 
 `echo-count` は platform fixture 用の最小 game であり、`janken` は richer integration 用の game として同じ runner contract に乗る。
 runner が担保するのはゲーム非依存の起動・artifact・replay/debug entrypoint と registry lookup までであり、

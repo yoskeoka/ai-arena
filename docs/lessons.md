@@ -76,3 +76,10 @@
 - **Pattern**: 言語慣習と repo の quality gate を同一視し、何が CI で保証されているかを設定ファイルで確かめる前に前提化してしまう
 - **Rule**: Go の doc comment 品質を語るときは、「言語仕様」「一般的慣習」「この repo の lint 設定」を分けて確認する。comment を必須運用にしたいなら、慣習に期待せず lint rule と issue で明示する
 - **Applied**: `ai-arena/Makefile` の lint policy、`games/dungeon/*` の exported comment 追加、今後の Go package 公開 API 全般
+
+## [2026-05-08] seed 入力契約と乱数源の内部表現を分ける
+
+- **Mistake**: `rng_seed` をそのまま `int64` 契約で持ち続ける前提で実装を進めると、human-friendly な replay/debug seed と `rand/v2` の内部 seed material を同じ層で固定してしまう
+- **Pattern**: CLI / snapshot / exported snapshot で扱う外部 seed と、実装が乱数源へ渡す正規化済み seed を分離せずに設計してしまう
+- **Rule**: seed-aware game を実装するときは、外部契約では再利用しやすい string seed を持ち、内部では stable hash で `rand/v2` 向け seed material に正規化する。snapshot / exported snapshot には外部 seed を保持し、内部変換結果は漏らさない
+- **Applied**: `docs/specs/dungeon-game.md` の `rng_seed` 契約、`cmd/arena-runner` の `--rng-seed`、`games/dungeon` の generated layout 実装、今後の seed-aware game / replay path

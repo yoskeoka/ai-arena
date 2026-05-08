@@ -3,6 +3,7 @@ package registry
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/yoskeoka/ai-arena/games/dungeon"
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
@@ -204,6 +205,16 @@ func buildDungeonLocalSubprocessSession(spec BuildSpec, snapshot *game.Snapshot)
 	if err != nil {
 		return nil, err
 	}
+	rngSeed := spec.RNGSeed
+	if snapshot != nil && strings.TrimSpace(rngSeed) == "" {
+		rngSeed, err = dungeonSeedFromSnapshot(*snapshot)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if strings.TrimSpace(rngSeed) == "" {
+		rngSeed = dungeon.DefaultRNGSeed
+	}
 	command := []string{
 		"go", "run", "./cmd/dungeon-gamemaster",
 		"--game-version", spec.GameVersion,
@@ -217,7 +228,7 @@ func buildDungeonLocalSubprocessSession(spec BuildSpec, snapshot *game.Snapshot)
 		},
 		Command:          command,
 		Players:          append([]game.Player(nil), spec.Players...),
-		RNGSeed:          dungeon.DefaultRNGSeed,
+		RNGSeed:          rngSeed,
 		ResumeSnapshot:   snapshot,
 		StderrLimitBytes: 4096,
 	})
@@ -232,7 +243,7 @@ func dungeonSnapshotFromHistory(spec BuildSpec, events []match.Event, targetTurn
 		GameVersion: spec.GameVersion,
 		Ruleset:     spec.Ruleset,
 		PlayerIDs:   playerIDs,
-		RNGSeed:     dungeon.DefaultRNGSeed,
+		RNGSeed:     seedOrDefault(spec.RNGSeed),
 	})
 	if err != nil {
 		return game.Snapshot{}, err
@@ -313,6 +324,21 @@ func dungeonSnapshotFromHistory(spec BuildSpec, events []match.Event, targetTurn
 		GameState:      mustRawJSON(full),
 		PerPlayer:      perPlayer,
 	}, nil
+}
+
+func dungeonSeedFromSnapshot(snapshot game.Snapshot) (string, error) {
+	var state dungeon.FullState
+	if err := json.Unmarshal(snapshot.GameState, &state); err != nil {
+		return "", fmt.Errorf("decode dungeon snapshot game_state: %w", err)
+	}
+	return state.RNGSeed, nil
+}
+
+func seedOrDefault(seed string) string {
+	if strings.TrimSpace(seed) == "" {
+		return dungeon.DefaultRNGSeed
+	}
+	return seed
 }
 
 func snapshotStatusForDungeon(world *dungeon.Match) game.MatchStatus {

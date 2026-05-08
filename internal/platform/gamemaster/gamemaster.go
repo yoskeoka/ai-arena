@@ -33,7 +33,7 @@ type Session interface {
 
 type InitializeMatchParams struct {
 	Players        []game.Player  `json:"players"`
-	RNGSeed        int64          `json:"rng_seed,omitempty"`
+	RNGSeed        string         `json:"rng_seed,omitempty"`
 	ResumeSnapshot *game.Snapshot `json:"resume_snapshot,omitempty"`
 }
 
@@ -110,7 +110,7 @@ type LocalSubprocessConfig struct {
 	Command          []string
 	Dir              string
 	Players          []game.Player
-	RNGSeed          int64
+	RNGSeed          string
 	ResumeSnapshot   *game.Snapshot
 	StderrLimitBytes int
 }
@@ -118,7 +118,7 @@ type LocalSubprocessConfig struct {
 type localSubprocessSession struct {
 	meta           catalog.GameMetadata
 	players        []game.Player
-	rngSeed        int64
+	rngSeed        string
 	resumeSnapshot *game.Snapshot
 	adapter        *runtime.Adapter
 	nextID         int

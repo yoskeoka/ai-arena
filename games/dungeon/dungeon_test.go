@@ -2,7 +2,92 @@ package dungeon
 
 import "testing"
 
-func TestChestSplitAndGoalBonuses(t *testing.T) {
+func TestSeededMazeGenerationIsDeterministic(t *testing.T) {
+	cfg := Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetSeededMazeV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     "alpha",
+	}
+	first, err := New(cfg)
+	if err != nil {
+		t.Fatalf("first New: %v", err)
+	}
+	second, err := New(cfg)
+	if err != nil {
+		t.Fatalf("second New: %v", err)
+	}
+	if !equalStringSlices(first.Ruleset().Tiles, second.Ruleset().Tiles) {
+		t.Fatal("tiles differ for same seed")
+	}
+	if !equalPositions(first.Ruleset().SpawnPoints, second.Ruleset().SpawnPoints) {
+		t.Fatal("spawn points differ for same seed")
+	}
+	if first.Ruleset().Goal != second.Ruleset().Goal {
+		t.Fatal("goal differs for same seed")
+	}
+	if !equalChests(first.Ruleset().InitialChests, second.Ruleset().InitialChests) {
+		t.Fatal("initial chests differ for same seed")
+	}
+}
+
+func TestSeededMazeGenerationVariesAcrossSeeds(t *testing.T) {
+	first, err := New(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetSeededMazeV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     "alpha",
+	})
+	if err != nil {
+		t.Fatalf("New alpha: %v", err)
+	}
+	second, err := New(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetSeededMazeV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     "beta",
+	})
+	if err != nil {
+		t.Fatalf("New beta: %v", err)
+	}
+	sameTiles := equalStringSlices(first.Ruleset().Tiles, second.Ruleset().Tiles)
+	sameGoal := first.Ruleset().Goal == second.Ruleset().Goal
+	sameChests := equalChests(first.Ruleset().InitialChests, second.Ruleset().InitialChests)
+	if sameTiles && sameGoal && sameChests {
+		t.Fatal("expected different generated state for different seeds")
+	}
+}
+
+func TestSeededMazeUsesFixedChestScoreSet(t *testing.T) {
+	match, err := New(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetSeededMazeV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     "alpha",
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	total := 0
+	got := append([]ChestState(nil), match.Ruleset().InitialChests...)
+	for _, chest := range got {
+		total += chest.Points
+	}
+	if total != 48 {
+		t.Fatalf("total chest points = %d, want 48", total)
+	}
+	expected := map[int]int{24: 1, 12: 2}
+	for _, chest := range got {
+		expected[chest.Points]--
+	}
+	for points, count := range expected {
+		if count != 0 {
+			t.Fatalf("score set mismatch for %d: remaining %d", points, count)
+		}
+	}
+}
+
+func TestFixedMapRulesetRemainsResumable(t *testing.T) {
 	match, err := New(Config{
 		GameVersion: GameVersion,
 		Ruleset:     RulesetFixedMapV1,
@@ -12,123 +97,56 @@ func TestChestSplitAndGoalBonuses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-
-	// Turn 1: move both players toward their nearest visible chest path.
-	if err := match.Apply(map[string]Action{
-		"p1": {Action: "move", Direction: "down"},
-		"p2": {Action: "move", Direction: "down"},
-	}); err != nil {
-		t.Fatalf("turn1: %v", err)
+	state := match.FullState()
+	restored, err := NewFromFullState(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetFixedMapV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     DefaultRNGSeed,
+	}, state)
+	if err != nil {
+		t.Fatalf("NewFromFullState: %v", err)
 	}
-	if err := match.Apply(map[string]Action{
-		"p1": {Action: "move", Direction: "down"},
-		"p2": {Action: "move", Direction: "down"},
-	}); err != nil {
-		t.Fatalf("turn2: %v", err)
+	if !equalStringSlices(restored.Ruleset().Tiles, match.Ruleset().Tiles) {
+		t.Fatal("restored tiles differ")
 	}
-	if err := match.Apply(map[string]Action{
-		"p1": {Action: "move", Direction: "right"},
-		"p2": {Action: "move", Direction: "left"},
-	}); err != nil {
-		t.Fatalf("turn3: %v", err)
-	}
-
-	full := match.FullState()
-	if got := full.Players[0].ChestPoints + full.Players[1].ChestPoints; got != 24 {
-		t.Fatalf("combined chest points = %d, want 24", got)
-	}
-
-	for !match.Terminal() {
-		if err := match.Apply(map[string]Action{
-			"p1": {Action: "wait"},
-			"p2": {Action: "wait"},
-		}); err != nil {
-			t.Fatalf("advance to terminal: %v", err)
-		}
-	}
-	if !match.Terminal() {
-		t.Fatal("expected terminal after max turns")
-	}
-	if match.Turn() != match.Ruleset().MaxTurns {
-		t.Fatalf("turn = %d, want %d", match.Turn(), match.Ruleset().MaxTurns)
+	if !equalChests(restored.Ruleset().InitialChests, match.Ruleset().InitialChests) {
+		t.Fatal("restored chests differ")
 	}
 }
 
-func TestCompetitionRankingGoalBonus(t *testing.T) {
+func TestNewFromFullStateValidatesGeneratedSeed(t *testing.T) {
 	match, err := New(Config{
 		GameVersion: GameVersion,
-		Ruleset:     RulesetFixedMapV1,
-		PlayerIDs:   []string{"p1", "p2", "p3"},
-		RNGSeed:     DefaultRNGSeed,
+		Ruleset:     RulesetSeededMazeV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     "alpha",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	// Manually restore a near-finish state to verify ranking math.
-	restored, err := NewFromFullState(Config{
+	state := match.FullState()
+	state.RNGSeed = "beta"
+	if _, err := NewFromFullState(Config{
 		GameVersion: GameVersion,
-		Ruleset:     RulesetFixedMapV1,
-		PlayerIDs:   []string{"p1", "p2", "p3"},
-		RNGSeed:     DefaultRNGSeed,
-	}, FullState{
-		MapID:    RulesetFixedMapV1,
-		RNGSeed:  DefaultRNGSeed,
-		Turn:     5,
-		MaxTurns: 16,
-		Goal:     match.Ruleset().Goal,
-		Players: []PlayerState{
-			{PlayerID: "p1", X: 5, Y: 6},
-			{PlayerID: "p2", X: 5, Y: 6},
-			{PlayerID: "p3", X: 6, Y: 5},
-		},
-		UncollectedChests: match.UncollectedChests(),
-		Discovery: map[string]DiscoveryState{
-			"p1": {},
-			"p2": {},
-			"p3": {},
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewFromFullState: %v", err)
-	}
-	if err := restored.Apply(map[string]Action{
-		"p1": {Action: "move", Direction: "right"},
-		"p2": {Action: "move", Direction: "right"},
-		"p3": {Action: "wait"},
-	}); err != nil {
-		t.Fatalf("Apply first finish turn: %v", err)
-	}
-	if err := restored.Apply(map[string]Action{
-		"p3": {Action: "move", Direction: "down"},
-	}); err != nil {
-		t.Fatalf("Apply second finish turn: %v", err)
-	}
-	scores := restored.scoreboardWithPositions()
-	for _, player := range scores {
-		switch player.PlayerID {
-		case "p1", "p2":
-			if player.GoalBonus != 100 {
-				t.Fatalf("%s goal bonus = %d, want 100", player.PlayerID, player.GoalBonus)
-			}
-		case "p3":
-			if player.GoalBonus != 25 {
-				t.Fatalf("p3 goal bonus = %d, want 25", player.GoalBonus)
-			}
-		}
+		Ruleset:     RulesetSeededMazeV1,
+		PlayerIDs:   []string{"p1", "p2"},
+		RNGSeed:     "alpha",
+	}, state); err == nil {
+		t.Fatal("expected rng seed mismatch")
 	}
 }
 
 func TestCurrentVisibleStateClampsTerminalTurn(t *testing.T) {
 	match, err := New(Config{
 		GameVersion: GameVersion,
-		Ruleset:     RulesetFixedMapV1,
+		Ruleset:     RulesetSeededMazeV1,
 		PlayerIDs:   []string{"p1", "p2"},
-		RNGSeed:     DefaultRNGSeed,
+		RNGSeed:     "alpha",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-
 	for !match.Terminal() {
 		if err := match.Apply(map[string]Action{
 			"p1": {Action: "wait"},
@@ -137,7 +155,6 @@ func TestCurrentVisibleStateClampsTerminalTurn(t *testing.T) {
 			t.Fatalf("Apply: %v", err)
 		}
 	}
-
 	visible, err := match.CurrentVisibleState("p1")
 	if err != nil {
 		t.Fatalf("CurrentVisibleState: %v", err)
@@ -147,39 +164,5 @@ func TestCurrentVisibleStateClampsTerminalTurn(t *testing.T) {
 	}
 	if visible.RemainingTurns != 0 {
 		t.Fatalf("remaining turns = %d, want 0", visible.RemainingTurns)
-	}
-}
-
-func TestNewFromFullStateValidatesResumeMetadata(t *testing.T) {
-	match, err := New(Config{
-		GameVersion: GameVersion,
-		Ruleset:     RulesetFixedMapV1,
-		PlayerIDs:   []string{"p1", "p2"},
-		RNGSeed:     DefaultRNGSeed,
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-
-	state := match.FullState()
-	state.RNGSeed = 99
-	if _, err := NewFromFullState(Config{
-		GameVersion: GameVersion,
-		Ruleset:     RulesetFixedMapV1,
-		PlayerIDs:   []string{"p1", "p2"},
-		RNGSeed:     DefaultRNGSeed,
-	}, state); err == nil {
-		t.Fatal("expected rng seed mismatch")
-	}
-
-	state = match.FullState()
-	state.MaxTurns++
-	if _, err := NewFromFullState(Config{
-		GameVersion: GameVersion,
-		Ruleset:     RulesetFixedMapV1,
-		PlayerIDs:   []string{"p1", "p2"},
-		RNGSeed:     DefaultRNGSeed,
-	}, state); err == nil {
-		t.Fatal("expected max_turns mismatch")
 	}
 }

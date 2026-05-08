@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/yoskeoka/ai-arena/games/dungeon"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
@@ -69,6 +70,7 @@ func run(args []string) error {
 		gameName         string
 		gameVersion      string
 		ruleset          string
+		rngSeed          string
 		matchID          string
 		outputDir        string
 		logOutput        string
@@ -88,6 +90,7 @@ func run(args []string) error {
 	fs.StringVar(&gameName, "game", "", "game id")
 	fs.StringVar(&gameVersion, "game-version", "", "game version")
 	fs.StringVar(&ruleset, "ruleset", "", "game ruleset")
+	fs.StringVar(&rngSeed, "rng-seed", "", "deterministic seed for seed-aware games")
 	fs.StringVar(&matchID, "match-id", "", "match id")
 	fs.StringVar(&outputDir, "output-dir", defaultOutputDir, "base directory for standard runner artifacts")
 	fs.StringVar(&logOutput, "log-output", "stdout", "structured log output target path or stdout")
@@ -171,6 +174,11 @@ func run(args []string) error {
 			snapshot := record.Snapshot
 			resumeSnapshot = &snapshot
 		}
+		if rngSeed == "" {
+			if extracted, ok := extractRNGSeedFromSnapshot(record.Snapshot); ok {
+				rngSeed = extracted
+			}
+		}
 	}
 	if snapshotInput != "" {
 		snapshot, err := replay.LoadSnapshot(snapshotInput)
@@ -186,6 +194,11 @@ func run(args []string) error {
 		}
 		if ruleset == "" {
 			ruleset = snapshot.RulesetVersion
+		}
+		if rngSeed == "" {
+			if extracted, ok := extractRNGSeedFromSnapshot(snapshot); ok {
+				rngSeed = extracted
+			}
 		}
 	}
 	if gameName == "" {
@@ -211,6 +224,7 @@ func run(args []string) error {
 		buildSpec := registry.BuildSpec{
 			GameVersion: gameVersion,
 			Ruleset:     ruleset,
+			RNGSeed:     rngSeed,
 			Players:     append([]game.Player(nil), playersForGame...),
 		}
 		master, err := descriptor.BuildSession(buildSpec)
@@ -225,7 +239,13 @@ func run(args []string) error {
 		}
 		resumeSnapshot = &snapshot
 	} else if recordSource != nil && targetTurn > 0 {
-		snapshot, err := replay.SnapshotFromHistory(recordSource.Game, recordSource.Players, recordSource.EventLog, targetTurn)
+		spec := registry.BuildSpec{
+			GameVersion: recordSource.Game.GameVersion,
+			Ruleset:     recordSource.Game.RulesetVersion,
+			RNGSeed:     rngSeed,
+			Players:     append([]game.Player(nil), recordSource.Players...),
+		}
+		snapshot, err := replay.SnapshotFromHistoryWithBuildSpec(registry.Default(), recordSource.Game, spec, recordSource.EventLog, targetTurn)
 		if err != nil {
 			return err
 		}
@@ -236,6 +256,7 @@ func run(args []string) error {
 	master, err := newGameMasterSession(descriptor, registry.BuildSpec{
 		GameVersion: gameVersion,
 		Ruleset:     ruleset,
+		RNGSeed:     rngSeed,
 		Players:     append([]game.Player(nil), playersForGame...),
 	}, resumeSnapshot)
 	if err != nil {
@@ -486,6 +507,22 @@ func parsePlayersForGame(args []string) ([]game.Player, error) {
 		})
 	}
 	return players, nil
+}
+
+func extractRNGSeedFromSnapshot(snapshot game.Snapshot) (string, bool) {
+	if snapshot.GameID != dungeon.GameID || len(snapshot.GameState) == 0 {
+		return "", false
+	}
+	var state struct {
+		RNGSeed string `json:"rng_seed"`
+	}
+	if err := json.Unmarshal(snapshot.GameState, &state); err != nil {
+		return "", false
+	}
+	if strings.TrimSpace(state.RNGSeed) == "" {
+		return "", false
+	}
+	return state.RNGSeed, true
 }
 
 func loadPlayersAndSessions(meta catalog.GameMetadata, args []string, stderrLimitBytes int) ([]game.Player, map[string]match.PlayerSession, error) {
