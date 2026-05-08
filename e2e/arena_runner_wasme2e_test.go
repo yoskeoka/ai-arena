@@ -44,19 +44,19 @@ func TestArenaRunnerJankenGoWASMMissingModuleFails(t *testing.T) {
 	requireWASME2E(t)
 	entryPath := filepath.Join(t.TempDir(), "missing-go-wasm-ai")
 	manifestPath := entryPath + ".arena.json"
-	manifest := `{
+	manifest := fmt.Sprintf(`{
   "ai_id": "missing-go-wasm-ai",
   "protocol": {
     "transport": "stdio-jsonrpc-ndjson",
-    "game_id": "janken",
-    "game_version": "2.1.0",
-    "ruleset_version": "regular"
+    "game_id": %q,
+    "game_version": %q,
+    "ruleset_version": %q
   },
   "runtime": {
     "kind": "wasm-wasi",
     "module": "./missing-go-wasm-ai.wasm"
   }
-}`
+}`, janken.GameID, janken.GameVersion, janken.RulesetRegular)
 	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
@@ -185,7 +185,13 @@ func buildRustWASM(ctx context.Context, dir, manifestPath, outputPath string) er
 		return fmt.Errorf("missing rust target wasm32-wasip1; run `rustup target add wasm32-wasip1`")
 	}
 
-	targetDir := filepath.Join(filepath.Dir(outputPath), ".rust-target")
+	targetDir, cleanup, err := rustWASMTargetDir(outputPath)
+	if err != nil {
+		return err
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
 	cmd := exec.CommandContext(ctx, "cargo", "build",
 		"--manifest-path", manifestPath,
 		"--target", "wasm32-wasip1",
@@ -206,8 +212,17 @@ func buildRustWASM(ctx context.Context, dir, manifestPath, outputPath string) er
 	if err := os.WriteFile(outputPath, wasmBytes, 0o644); err != nil {
 		return fmt.Errorf("write rust wasm fixture: %w", err)
 	}
-	if err := os.RemoveAll(targetDir); err != nil {
-		return fmt.Errorf("cleanup rust wasm target dir: %w", err)
-	}
 	return nil
+}
+
+func rustWASMTargetDir(outputPath string) (string, func(), error) {
+	if targetDir := os.Getenv("CARGO_TARGET_DIR"); targetDir != "" {
+		return targetDir, nil, nil
+	}
+
+	targetDir, err := os.MkdirTemp(filepath.Dir(outputPath), "rust-target-")
+	if err != nil {
+		return "", nil, fmt.Errorf("create rust wasm target dir: %w", err)
+	}
+	return targetDir, func() { _ = os.RemoveAll(targetDir) }, nil
 }

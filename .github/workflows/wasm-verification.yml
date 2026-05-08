@@ -8,9 +8,10 @@ on:
       - "Makefile"
       - "go.mod"
       - "go.sum"
-      - "cmd/**/*.go"
+      - "cmd/arena-runner/*.go"
       - "e2e/**/*.go"
-      - "internal/**/*.go"
+      - "internal/games/janken/**/*.go"
+      - "internal/platform/**/*.go"
       - "testdata/ai/janken/**"
   push:
     branches:
@@ -21,9 +22,10 @@ on:
       - "Makefile"
       - "go.mod"
       - "go.sum"
-      - "cmd/**/*.go"
+      - "cmd/arena-runner/*.go"
       - "e2e/**/*.go"
-      - "internal/**/*.go"
+      - "internal/games/janken/**/*.go"
+      - "internal/platform/**/*.go"
       - "testdata/ai/janken/**"
   workflow_dispatch:
 
