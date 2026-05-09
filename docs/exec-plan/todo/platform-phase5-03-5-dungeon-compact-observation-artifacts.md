@@ -16,7 +16,7 @@ depends on:
 
 - `arena-runner` の derived artifact として `result-summary.json` を追加する
 - dungeon manual helper に quiet/summary-first 導線を追加する
-- `ai-arena/AGENTS.md` に artifact 読取順と log trimming rule を追加する
+- `AGENTS.md` に artifact 読取順と log trimming rule を追加する
 - compact artifact を前提にした e2e / unit test を追加する
 
 この plan では以下は扱わない。

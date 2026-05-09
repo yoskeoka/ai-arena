@@ -10,7 +10,7 @@ baseline architecture を作る。
 depends on:
 
 - `docs/exec-plan/done/platform-phase5-03-dungeon-wasm-reference-ai.md`
-- `platform-phase5-04-dungeon-scenario-catalog-and-targeted-fixtures.md`
+- `docs/exec-plan/todo/platform-phase5-04-dungeon-scenario-catalog-and-targeted-fixtures.md`
 - `docs/issues/dungeon-reference-ai-should-separate-memory-and-policy.md`
 
 ## Scope

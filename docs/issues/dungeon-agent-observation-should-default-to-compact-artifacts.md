@@ -3,16 +3,16 @@
 ## Summary
 
 現状の dungeon manual/e2e 確認導線では、human や Codex のような AI Agent 実装者が
-長い event log や large JSON をそのまま読みやすい。
+長い event log や large JSON をそのまま読み込んでしまいがちである。
 
 - `Makefile` の `run-dungeon-local` は `arena-runner` の structured log をそのまま `stdout`
   に流す前提で、quiet/summary 向けの別 target を持たない
-  (`Makefile:130-141`)
+  (`Makefile:134-146`)
 - `cmd/arena-runner/main.go` は `structured-log.ndjson` を開いて `stdout` と同じ系列の
   structured log を流しつつ、同時に `record.json` / `snapshot.json` /
   `exported-snapshot.json` / `history.json` も常に書き出す
   (`cmd/arena-runner/main.go:304-340`)
-- `ai-arena/AGENTS.md` は docs 言語ポリシーのみで、artifact をどの順番で読むか、
+- `AGENTS.md` は docs 言語ポリシーのみで、artifact をどの順番で読むか、
   `event_log` を既定で切り捨てるか、といった observation discipline を持っていない
   (`AGENTS.md:1-19`)
 - e2e でも `terminal_summary` の存在確認はしているが、human/agent 向けに
