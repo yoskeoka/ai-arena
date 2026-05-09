@@ -176,7 +176,7 @@ func (b *Bot) chooseChestAction(
 			continue
 		}
 		dist := len(path) - 1
-		if dist >= state.RemainingTurns {
+		if dist > state.RemainingTurns {
 			continue
 		}
 
@@ -188,7 +188,7 @@ func (b *Bot) chooseChestAction(
 				score -= 18
 			} else {
 				chestGoalDist := len(chestGoalPath) - 1
-				if dist+chestGoalDist >= state.RemainingTurns {
+				if dist+chestGoalDist > state.RemainingTurns {
 					continue
 				}
 				goalDetour = max(0, dist+chestGoalDist-goalDist)

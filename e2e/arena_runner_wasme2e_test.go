@@ -47,9 +47,9 @@ func TestArenaRunnerDungeonGoWASMMixedRuntimePath(t *testing.T) {
 	buildDungeonGoalRushGoWASMFixture(t)
 
 	result := runArena(t,
-		"--game", "dungeon",
-		"--game-version", "1.0.0",
-		"--ruleset", "seeded-maze-v1",
+		"--game", dungeon.GameID,
+		"--game-version", dungeon.GameVersion,
+		"--ruleset", dungeon.RulesetSeededMazeV1,
 		"--rng-seed", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
 		"--match-id", "dungeon-go-wasm-happy",
 		"--player", "p1=./testdata/ai/dungeon/dungeon-goal-rush-ai-wasm",
