@@ -26,6 +26,7 @@ type RegistryKey struct {
 type BuildSpec struct {
 	GameVersion string
 	Ruleset     string
+	RNGSeed     string
 	Players     []game.Player
 }
 

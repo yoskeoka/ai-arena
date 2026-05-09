@@ -76,3 +76,31 @@
 - **Pattern**: 言語慣習と repo の quality gate を同一視し、何が CI で保証されているかを設定ファイルで確かめる前に前提化してしまう
 - **Rule**: Go の doc comment 品質を語るときは、「言語仕様」「一般的慣習」「この repo の lint 設定」を分けて確認する。comment を必須運用にしたいなら、慣習に期待せず lint rule と issue で明示する
 - **Applied**: `ai-arena/Makefile` の lint policy、`games/dungeon/*` の exported comment 追加、今後の Go package 公開 API 全般
+
+## [2026-05-08] seed 入力契約と乱数源の内部表現を分ける
+
+- **Mistake**: `rng_seed` をそのまま `int64` 契約で持ち続ける前提で実装を進めると、human-friendly な replay/debug seed と `rand/v2` の内部 seed material を同じ層で固定してしまう
+- **Pattern**: CLI / snapshot / exported snapshot で扱う外部 seed と、実装が乱数源へ渡す seed material を分離せずに設計してしまう
+- **Rule**: seed-aware game を実装するときは、外部契約では replay/debug しやすい string seed を持ち、binary seed material をそのまま hex string で保持する。内部ではその hex を decode して `rand/v2` へ渡し、hash で別の seed material へ写像しない
+- **Applied**: `docs/specs/dungeon-game.md` の `rng_seed` 契約、`cmd/arena-runner` の `--rng-seed`、`games/dungeon` の generated layout 実装、今後の seed-aware game / replay path
+
+## [2026-05-09] platform spec に game 固有 encoding を漏らさない
+
+- **Mistake**: `game-master` の共通契約に、dungeon の `64` 桁 hex seed のような game 固有 encoding をそのまま書き込んだ
+- **Pattern**: 個別ゲームの設計で得た知見を platform 契約へ一般化するときに、「共通で守る責務」と「その game だけの具体表現」を分離しきれない
+- **Rule**: platform / game-master / runner の共通 spec では、共通で必要な受け渡し責務と保存責務だけを書く。seed の encoding、PRNG 種別、payload shape など game ごとの具体表現は各 game spec に閉じ込める
+- **Applied**: `docs/specs/game-master.md` の `rng_seed` 契約、今後の platform 共通 spec と game spec の責務分離
+
+## [2026-05-09] fresh seed 生成責務を platform に持ち込まない
+
+- **Mistake**: `rng_seed` を opaque string として扱う方針にした後も、fresh run の seed 自動生成を runner / registry 側へ残してしまった
+- **Pattern**: replay 用の保存・再投入責務と、game 固有 encoding に従った fresh seed 生成責務を同じ層で扱ってしまう
+- **Rule**: platform は `rng_seed` を opaque string として保存・再投入するだけに留める。fresh run で seed 未指定時の初期 seed 生成は game master の責務とし、encoding や RNG 選択を platform に教えない
+- **Applied**: `cmd/arena-runner` の `--rng-seed` 取扱い、`internal/platform/registry` の dungeon builder、`docs/specs/platform.md` / `docs/specs/game-master.md` / `docs/specs/dungeon-game.md`
+
+## [2026-05-09] replay source に seed があるなら CLI override を許さない
+
+- **Mistake**: `record.json` / `snapshot.json` から `rng_seed` を復元できる場合でも、`--rng-seed` を併用したときに「優先してよい」と曖昧な契約にしてしまった
+- **Pattern**: source-of-truth file に含まれる deterministic input と、CLI override を同時に許して優先順位問題を残してしまう
+- **Rule**: replay/resume source がすでに `rng_seed` を持つなら、その値を source of truth とする。`--rng-seed` の同時指定は、同値比較で黙認せず明確に reject する
+- **Applied**: `cmd/arena-runner` の `--record-input` / `--snapshot-input` と `--rng-seed` の組み合わせ、`docs/specs/platform.md` の replay/debug 契約

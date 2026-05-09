@@ -9,7 +9,7 @@ import (
 type Bot struct {
 	knownTiles    map[string]string
 	knownGoal     *Position
-	knownChests   map[string]Position
+	knownChests   map[string]ChestState
 	exploreTarget *Position
 }
 
@@ -17,7 +17,7 @@ type Bot struct {
 func NewBot() *Bot {
 	return &Bot{
 		knownTiles:  make(map[string]string),
-		knownChests: make(map[string]Position),
+		knownChests: make(map[string]ChestState),
 	}
 }
 
@@ -26,7 +26,7 @@ func (b *Bot) Decide(state VisibleState) Action {
 	b.observe(state)
 	start := state.Self.position()
 
-	if step, ok := b.stepTowardAny(start, positionsFromMap(b.knownChests)); ok {
+	if step, ok := b.stepTowardAny(start, chestPositionsFromMap(b.knownChests)); ok {
 		b.exploreTarget = nil
 		return step
 	}
@@ -54,7 +54,7 @@ func (b *Bot) observe(state VisibleState) {
 			b.knownGoal = &goal
 		}
 		if tile.Tile == TileChest {
-			b.knownChests[posKey(pos)] = pos
+			b.knownChests[posKey(pos)] = ChestState{X: pos.X, Y: pos.Y}
 		}
 	}
 	if state.KnownGoal != nil {
@@ -63,7 +63,7 @@ func (b *Bot) observe(state VisibleState) {
 	}
 	currentKnown := make(map[string]struct{}, len(state.KnownChests))
 	for _, chest := range state.KnownChests {
-		key := posKey(chest)
+		key := posKey(Position{X: chest.X, Y: chest.Y})
 		currentKnown[key] = struct{}{}
 		b.knownChests[key] = chest
 	}

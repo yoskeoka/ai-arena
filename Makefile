@@ -2,6 +2,8 @@ GO ?= go
 CARGO ?= cargo
 RUSTUP ?= rustup
 CACHE_ROOT ?= /tmp/ai-arena-go-quality-gates
+DUNGEON_RULESET ?= seeded-maze-v1
+DUNGEON_RNG_SEED ?= 0000000000000000000000000000000000000000000000000000000000000000
 GOPATH = $(CACHE_ROOT)/go
 GOMODCACHE = $(GOPATH)/pkg/mod
 GOCACHE = $(CACHE_ROOT)/go-build
@@ -140,4 +142,6 @@ run-dungeon-local:
 
 inspect-dungeon-map:
 	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
-	$(GO_ENV) $(GO) run ./cmd/dungeon-map-helper
+	$(GO_ENV) $(GO) run ./cmd/dungeon-map-helper \
+		--ruleset "$(DUNGEON_RULESET)" \
+		--rng-seed "$(DUNGEON_RNG_SEED)"

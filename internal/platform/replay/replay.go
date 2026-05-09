@@ -56,13 +56,17 @@ func SnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, event
 }
 
 func SnapshotFromHistoryWithRegistry(reg *registry.Registry, meta catalog.GameMetadata, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
-	descriptor, err := reg.LookupVersion(context.Background(), meta.GameID, meta.GameVersion)
-	if err != nil {
-		return game.Snapshot{}, err
-	}
-	return descriptor.SnapshotFromHistory(registry.BuildSpec{
+	return SnapshotFromHistoryWithBuildSpec(reg, meta, registry.BuildSpec{
 		GameVersion: meta.GameVersion,
 		Ruleset:     meta.RulesetVersion,
 		Players:     append([]game.Player(nil), players...),
 	}, events, targetTurn)
+}
+
+func SnapshotFromHistoryWithBuildSpec(reg *registry.Registry, meta catalog.GameMetadata, spec registry.BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
+	descriptor, err := reg.LookupVersion(context.Background(), meta.GameID, meta.GameVersion)
+	if err != nil {
+		return game.Snapshot{}, err
+	}
+	return descriptor.SnapshotFromHistory(spec, events, targetTurn)
 }

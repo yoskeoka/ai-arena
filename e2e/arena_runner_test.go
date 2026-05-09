@@ -404,6 +404,68 @@ func TestArenaRunnerResumeFromHistoryAndContinue(t *testing.T) {
 	}
 }
 
+func TestArenaRunnerRejectsRNGSeedOverrideForSnapshotInput(t *testing.T) {
+	base := runArena(t,
+		"--game", dungeon.GameID,
+		"--game-version", dungeon.GameVersion,
+		"--ruleset", dungeon.RulesetFixedMapV1,
+		"--match-id", "snapshot-seed-source",
+		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
+		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
+	)
+	snapshotPath := filepath.Join(t.TempDir(), "snapshot.json")
+	data, err := json.Marshal(base.Record.Snapshot)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	if err := os.WriteFile(snapshotPath, data, 0o644); err != nil {
+		t.Fatalf("write snapshot input: %v", err)
+	}
+
+	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+		"--snapshot-input", snapshotPath,
+		"--rng-seed", dungeon.DefaultRNGSeed,
+		"--match-id", "snapshot-seed-conflict",
+		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
+		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected snapshot rng_seed conflict error")
+	}
+	if !strings.Contains(string(output), "--rng-seed cannot be combined with --snapshot-input") {
+		t.Fatalf("output = %s, want snapshot rng_seed conflict", output)
+	}
+}
+
+func TestArenaRunnerRejectsRNGSeedOverrideForRecordInput(t *testing.T) {
+	base := runArena(t,
+		"--game", dungeon.GameID,
+		"--game-version", dungeon.GameVersion,
+		"--ruleset", dungeon.RulesetFixedMapV1,
+		"--match-id", "record-seed-source",
+		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
+		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
+	)
+
+	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+		"--record-input", filepath.Join(base.MatchDir, "record.json"),
+		"--rng-seed", dungeon.DefaultRNGSeed,
+		"--match-id", "record-seed-conflict",
+		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
+		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected record rng_seed conflict error")
+	}
+	if !strings.Contains(string(output), "--rng-seed cannot be combined with --record-input") {
+		t.Fatalf("output = %s, want record rng_seed conflict", output)
+	}
+}
+
 func TestArenaRunnerJankenHappyPath(t *testing.T) {
 	result := runArena(t,
 		"--game", "janken",
