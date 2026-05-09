@@ -11,7 +11,7 @@ depends on:
 
 ## Scope
 
-- `seeded-maze-v1` の最大ターン数を、探索と競争が成立する長さへ引き上げる
+- `seeded-maze-v1` の最大ターン数を 50 ターンへ引き上げる
 - ゴール順位ボーナスと宝箱スコア集合の配分を再設計する
 - 「1位ゴールだけでは確定勝ちにならず、宝箱回収で逆転可能」という勝敗条件を ruleset 制約として固定する
 - 新しい score balance に対して local reference bot / manual helper / test の期待値を更新する
@@ -27,12 +27,13 @@ depends on:
 
 ### `docs/specs/dungeon-game.md`
 
-- `seeded-maze-v1` の最大ターン数を 16 から約 50 ターン帯へ更新する
+- `seeded-maze-v1` の最大ターン数を 16 から 50 へ更新する
 - スコア設計の目的を「ゴール最優先」から「ゴールと宝箱の両方が順位に効く競争」へ言い換える
 - ゴール順位ボーナスと宝箱 score set を更新する
 - 少なくとも以下の balance 条件を ruleset contract として明記する
-  - 1 位が宝箱を取らない場合、3 位でも宝箱の過半を確保すれば逆転可能
+  - 1 位が `chest_points = 0` の場合、3 位でも全 `chest_points` 合計の過半を確保すれば総合点で逆転可能
   - 宝箱を無視した最短到達と、遠回りして高得点宝箱を狙う判断の両方に合理性が残る
+  - 宝箱の同時取得で等分が起きる場合も、この判定は chest 個数ではなく `chest_points` の合計値で扱う
 - `remaining_turns` と scoreboard 例を新しい最大ターン数 / score table に合わせて更新する
 
 ### `docs/specs/platform.md`
@@ -57,7 +58,7 @@ depends on:
 
 - `go test ./...`
 - 最大ターン数更新後も deterministic match が完走する
-- 1 位が宝箱なし、3 位が宝箱の過半を確保したケースで逆転できることをテストで確認する
+- 1 位が `chest_points = 0`、3 位が全 `chest_points` 合計の過半を確保したケースで逆転できることをテストで確認する
 - treasure-heavy と shortest-path-heavy の両方で score 差が発生し、宝箱が無価値になっていないことを manual helper で確認する
 
 ## Sub-tasks
@@ -66,7 +67,7 @@ depends on:
 - [ ] 最大ターン数と score table を更新する
 - [ ] score 計算 / 期待順位の unit test を追加する
 - [ ] manual verification 用の確認観点を更新する
-- [ ] `platform-phase5-03-dungeon-wasm-reference-ai` の前提を新ルールに追従させる
+- [ ] `platform-phase5-03-dungeon-wasm-reference-ai` に追加の前提差分が残っていないか確認する
 
 ## Parallelism
 
@@ -78,7 +79,7 @@ depends on:
 - 宝箱点を上げすぎると、ゴール到達の達成感が薄くなる
   - mitigation: 「3 位でも宝箱過半で逆転可能」を下限条件にしつつ、1 位の価値自体は残る配分に留める
 - ターン数を増やしすぎると、match が間延びして manual verification が重くなる
-  - mitigation: まずは 50 前後へ引き上げ、helper と実測で過不足を確認する
+  - mitigation: まずは 50 へ固定し、helper と実測で過不足を確認する
 - score table だけ変えて bot の期待行動が崩れると、後続の WASM baseline 設計がぶれる
   - mitigation: `platform-phase5-03` をこの plan に依存させ、reference AI の成功条件も同時に更新する
 
