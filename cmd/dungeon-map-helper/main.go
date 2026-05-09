@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/yoskeoka/ai-arena/games/dungeon"
 )
@@ -49,6 +50,38 @@ func run(args []string) error {
 		world.Ruleset().MaxTurns,
 		world.Ruleset().ViewRadius,
 		world.Ruleset().GoalBonuses,
+	)
+	chestTotal := 0
+	for _, chest := range world.Ruleset().InitialChests {
+		chestTotal += chest.Points
+	}
+	majorityFloor := chestTotal/2 + 1
+	thirdPlaceBonus := 0
+	if len(world.Ruleset().GoalBonuses) >= 3 {
+		thirdPlaceBonus = world.Ruleset().GoalBonuses[2]
+	}
+	chestValues := make([]int, 0, len(world.Ruleset().InitialChests))
+	for _, chest := range world.Ruleset().InitialChests {
+		chestValues = append(chestValues, chest.Points)
+	}
+	slices.Sort(chestValues)
+	majorityChestMin := chestTotal
+	for mask := 1; mask < 1<<len(chestValues); mask++ {
+		sum := 0
+		for i, points := range chestValues {
+			if mask&(1<<i) != 0 {
+				sum += points
+			}
+		}
+		if sum >= majorityFloor && sum < majorityChestMin {
+			majorityChestMin = sum
+		}
+	}
+	fmt.Printf("balance chest_total=%d majority_threshold=%d first_no_chest=%d third_with_min_majority=%d\n",
+		chestTotal,
+		majorityFloor,
+		world.Ruleset().GoalBonuses[0],
+		thirdPlaceBonus+majorityChestMin,
 	)
 	for _, row := range world.PublicState().Tiles {
 		fmt.Println(row)
