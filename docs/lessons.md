@@ -1,5 +1,12 @@
 # Lessons
 
+## [2026-05-09] heuristic AI の e2e は固定期待値にしない
+
+- **Mistake**: runtime/e2e 確認まで reference AI の思考品質を直接担保しようとして、seed 付きでも heuristic 変更に弱い assertion を足しかけた
+- **Pattern**: 「runtime 経路が正しいか」と「baseline 戦略が妥当か」を同じ e2e で固定しようとして、fixture の安定性より bot 調整自由度を優先してしまう
+- **Rule**: heuristic な reference AI は unit test と manual verification で評価する。e2e では seed 固定の scripted AI を使い、runtime 経路と結果整合だけを確認する
+- **Applied**: `e2e/arena_runner_wasme2e_test.go` の dungeon WASM 確認、今後の dungeon / imperfect-information game の AI verification 設計
+
 ## [2026-04-26] ドキュメント言語方針の適用範囲を先に固定する
 
 - **Mistake**: 「docs を日本語にする」を広く解釈し、コミットメッセージや PR メタデータまで同じ方針で寄せる前提で進めかけた

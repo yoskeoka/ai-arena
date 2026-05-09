@@ -201,6 +201,46 @@ Go sample で期待する runtime 振る舞い:
 - `stderr`: `janken-go-wasm-ai init`, `turn <n>`, `game_over` のような debug/audit 用ログを出してよい
 - exit/shutdown: `game_over` に ACK 後は clean exit してよく、platform が `stdin` close 後に cooperative shutdown を完了できること
 
+## Dungeon Go-WASM Reference Lane
+
+Phase 5 では `dungeon` にも Go source から build する official reference lane を追加してよい。
+この lane は Phase 4 の `janken` lane と同じ runtime contract に従い、違いは game metadata と shared decision
+logic の中身だけに留める。
+
+想定 build 例:
+
+```sh
+GOOS=wasip1 GOARCH=wasm go build \
+  -o ./testdata/ai/dungeon/dungeon-go-wasm-ai.wasm \
+  ./testdata/ai/dungeon/dungeon-go-wasm-ai
+```
+
+対応する sidecar manifest 例:
+
+```json
+{
+  "ai_id": "dungeon-go-wasm-ai",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "dungeon",
+    "game_version": "1.0.0",
+    "ruleset_version": "seeded-maze-v1"
+  },
+  "runtime": {
+    "kind": "wasm-wasi",
+    "module": "./dungeon-go-wasm-ai.wasm",
+    "args": ["./dungeon-go-wasm-ai.wasm"],
+    "memory_limit_pages": 1024
+  }
+}
+```
+
+運用ルール:
+
+- checked-in の正本は `.go` source と `.arena.json` manifest とし、`.wasm` binary は commit しない
+- local subprocess bot と WASM bot が shared decision layer を共有し、transport / runtime 差分だけを entrypoint 側へ閉じ込める
+- `arena-runner` の targeted verification では、seeded dungeon match を local-subprocess path と `wasm-wasi` path の両方で完走できることを確認する
+
 ## Rust Evaluation Lane
 
 Rust は Phase 4 時点では `experiment-only` とする。最初の non-Go candidate として、

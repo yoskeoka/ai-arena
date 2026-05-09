@@ -1,0 +1,15 @@
+{
+  "ai_id": "dungeon-goal-rush-ai-wasm",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "dungeon",
+    "game_version": "1.0.0",
+    "ruleset_version": "seeded-maze-v1"
+  },
+  "runtime": {
+    "kind": "wasm-wasi",
+    "module": "./dungeon-goal-rush-ai-wasm.wasm",
+    "args": ["./dungeon-goal-rush-ai-wasm.wasm"],
+    "memory_limit_pages": 1024
+  }
+}

@@ -1127,14 +1127,6 @@ func chestsFromMap(values map[string]ChestState) []ChestState {
 	return chests
 }
 
-func chestPositionsFromMap(values map[string]ChestState) []Position {
-	positions := make([]Position, 0, len(values))
-	for _, chest := range chestsFromMap(values) {
-		positions = append(positions, Position{X: chest.X, Y: chest.Y})
-	}
-	return positions
-}
-
 func chestsCopy(values map[string]ChestState) map[string]ChestState {
 	cloned := make(map[string]ChestState, len(values))
 	for key, chest := range values {
