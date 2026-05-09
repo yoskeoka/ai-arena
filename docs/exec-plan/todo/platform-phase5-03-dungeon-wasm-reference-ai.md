@@ -9,6 +9,7 @@ depends on:
 
 - `platform-phase5-01-dungeon-fixed-map-mvp.md`
 - `platform-phase5-02-dungeon-seeded-generation.md`
+- `platform-phase5-02-5-dungeon-balance-tuning.md`
 - `platform-phase4-02-go-wasm-janken-verification.md`
 
 ## Scope
@@ -17,6 +18,7 @@ depends on:
 - Go から WASM/WASI へ build する dungeon reference AI の追加
 - `arena-runner` で dungeon game と WASM bot を組み合わせた verification path の追加
 - 「高度な最適戦略ではないが、継続的にクリアまたは加点できる」baseline の成立
+- balance 調整後 ruleset で treasure routing と goal routing の両方を扱える baseline の成立
 
 この plan では以下は扱わない。
 
@@ -36,6 +38,7 @@ depends on:
 - reference AI が前提にしてよい観測情報と、禁止される hidden information を明記する
 - local subprocess bot と WASM bot が同じ判断ロジックを共有する前提を、開発フローとして補足する
 - 視界半径が変わっても同じ判断層が扱える input shape を保つ
+- balance 調整後の turn / score 条件でも baseline bot が成立する前提を補足する
 
 ## Expected Code Changes
 
@@ -92,3 +95,4 @@ depends on:
 - 開発中の高速 feedback は subprocess bot、正式 verification は WASM bot で行う
 - shared bot logic は transport 非依存・runtime 非依存の pure decision layer とする
 - baseline bot の成功条件は「毎回最適」ではなく「継続的に完走または加点できる」とする
+- baseline bot は最短ゴール専用 bot ではなく、treasure-heavy な勝ち筋にも最低限反応できることを目標にする
