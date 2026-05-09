@@ -624,6 +624,7 @@ artifact hierarchy:
     snapshot.json
     exported-snapshot.json
     history.json
+    result-summary.json
 ```
 
 - `--output-dir` が指すのは base path であり、runner はその直下に `match-id` ごとの subdirectory を切る
@@ -632,11 +633,13 @@ artifact hierarchy:
 - `history.json` は `record.json.event_log` をそのまま JSON array として抜き出した file format とし、`--history-input` にそのまま再投入できる
 - `snapshot.json` は `record.json.snapshot` をそのまま抜き出した derived snapshot とする
 - `exported-snapshot.json` は `record.json.exported_snapshot` をそのまま抜き出した derived exported snapshot とする
+- `result-summary.json` は human / AI Agent の既定観察導線向け compact derived artifact とし、少なくとも `status`、placement、artifact path 参照を含める
 - `structured-log.ndjson` は `stdout` に流れる structured log と同じ NDJSON record を保存する
 
 出力:
 
 - structured log の既定出力先は `stdout` とする
+- `--log-output none` の場合、structured log は `stdout` へ出さず、標準 `structured-log.ndjson` だけに保存する
 - `structured-log.ndjson` は `stdout` の置き換えではなく複製であり、標準 artifact layout に常に保存する
 - `--log-output <target>` が file path の場合、structured log はその file にも NDJSON で追加出力する
 - structured log は NDJSON で 1 レコード 1 行とし、少なくとも `match_started` / per-event / `terminal_snapshot` / `terminal_exported_snapshot` / `terminal_summary` を出す
@@ -646,6 +649,11 @@ artifact hierarchy:
 - `--persist-record stdout` の場合だけ、利用者が明示的に mixed `stdout` を選んだものとして structured log と final record の混在を許容する
 - `--exported-snapshot-output <target>` 指定時は、標準 `exported-snapshot.json` に加えて selected debug entrypoint に対応する exported snapshot をその target にも追加出力する。fresh run では terminal exported snapshot、resume 開始時は continuation 前 exported snapshot を使う
 - 起動前 metadata 不整合などで match を開始できない場合も、stderr に説明を出して非 0 終了する
+
+artifact 読取既定順:
+
+- local verification と AI Agent 実装時の既定読取順は `result-summary.json` -> `exported-snapshot.json` / `snapshot.json` -> `structured-log.ndjson` / `record.json` / `history.json` とする
+- `record.json.event_log` と `history.json` は source-of-truth / replay 用に保持するが、通常の結果確認では既定の最初の入口にしない
 
 AI metadata 読み取り:
 

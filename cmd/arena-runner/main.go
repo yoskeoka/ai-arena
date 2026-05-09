@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -55,6 +56,61 @@ type artifactLayout struct {
 	SnapshotPath         string
 	ExportedSnapshotPath string
 	HistoryPath          string
+	ResultSummaryPath    string
+}
+
+type artifactPathRefs struct {
+	Record           string `json:"record"`
+	StructuredLog    string `json:"structured_log"`
+	Snapshot         string `json:"snapshot"`
+	ExportedSnapshot string `json:"exported_snapshot"`
+	History          string `json:"history"`
+}
+
+type resultSummary struct {
+	MatchID        string           `json:"match_id"`
+	GameID         string           `json:"game_id"`
+	GameVersion    string           `json:"game_version"`
+	RulesetVersion string           `json:"ruleset_version"`
+	Status         game.MatchStatus `json:"status"`
+	Turn           int              `json:"turn"`
+	Placements     []game.Placement `json:"placements,omitempty"`
+	ArtifactPaths  artifactPathRefs `json:"artifact_paths"`
+	Error          string           `json:"error,omitempty"`
+	Dungeon        *dungeonSummary  `json:"dungeon,omitempty"`
+}
+
+type dungeonSummary struct {
+	MapID                string                 `json:"map_id"`
+	Turn                 int                    `json:"turn"`
+	MaxTurns             int                    `json:"max_turns"`
+	Goal                 dungeonPosition        `json:"goal"`
+	Players              []dungeonPlayerSummary `json:"players"`
+	RemainingChests      []dungeonChestSummary  `json:"remaining_chests"`
+	RemainingChestCount  int                    `json:"remaining_chest_count"`
+	RemainingChestPoints int                    `json:"remaining_chest_points"`
+}
+
+type dungeonPlayerSummary struct {
+	PlayerID     string `json:"player_id"`
+	Place        int    `json:"place,omitempty"`
+	X            int    `json:"x"`
+	Y            int    `json:"y"`
+	Score        int    `json:"score"`
+	GoalBonus    int    `json:"goal_bonus"`
+	ChestPoints  int    `json:"chest_points"`
+	FinishedTurn *int   `json:"finished_turn"`
+}
+
+type dungeonPosition struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+type dungeonChestSummary struct {
+	X      int `json:"x"`
+	Y      int `json:"y"`
+	Points int `json:"points"`
 }
 
 func main() {
@@ -92,7 +148,7 @@ func run(args []string) error {
 	fs.StringVar(&rngSeed, "rng-seed", "", "deterministic seed for seed-aware games")
 	fs.StringVar(&matchID, "match-id", "", "match id")
 	fs.StringVar(&outputDir, "output-dir", defaultOutputDir, "base directory for standard runner artifacts")
-	fs.StringVar(&logOutput, "log-output", "stdout", "structured log output target path or stdout")
+	fs.StringVar(&logOutput, "log-output", "stdout", "additional structured log destination: stdout (default), file path, or none; standard structured-log.ndjson is always written")
 	fs.StringVar(&persistRecord, "persist-record", "", "additional source-of-truth final match-record output target path or stdout")
 	fs.StringVar(&exportedOutput, "exported-snapshot-output", "", "additional exported snapshot output target path or stdout")
 	fs.StringVar(&recordInput, "record-input", "", "source-of-truth final match-record input path")
@@ -425,6 +481,7 @@ func newArtifactLayout(outputDir, matchID string) artifactLayout {
 		SnapshotPath:         filepath.Join(matchDir, "snapshot.json"),
 		ExportedSnapshotPath: filepath.Join(matchDir, "exported-snapshot.json"),
 		HistoryPath:          filepath.Join(matchDir, "history.json"),
+		ResultSummaryPath:    filepath.Join(matchDir, "result-summary.json"),
 	}
 }
 
@@ -436,8 +493,12 @@ func ensureArtifactLayout(layout artifactLayout) error {
 }
 
 func openLogOutputs(standardPath, extraTarget string, stdout io.Writer) (io.Writer, func() error, error) {
-	writers := []io.Writer{stdout}
+	writers := make([]io.Writer, 0, 3)
 	closers := make([]io.Closer, 0, 2)
+
+	if extraTarget != "none" {
+		writers = append(writers, stdout)
+	}
 
 	standardFile, err := createFileOutput(standardPath)
 	if err != nil {
@@ -446,7 +507,7 @@ func openLogOutputs(standardPath, extraTarget string, stdout io.Writer) (io.Writ
 	writers = append(writers, standardFile)
 	closers = append(closers, standardFile)
 
-	if extraTarget != "" && extraTarget != "stdout" && !sameCleanPath(extraTarget, standardPath) {
+	if extraTarget != "" && extraTarget != "stdout" && extraTarget != "none" && !sameCleanPath(extraTarget, standardPath) {
 		extraFile, err := createFileOutput(extraTarget)
 		if err != nil {
 			_ = closeAll(closers)
@@ -472,7 +533,96 @@ func writeStandardArtifacts(layout artifactLayout, record match.Record) error {
 	if err := writeJSONFile(layout.HistoryPath, record.EventLog, "history"); err != nil {
 		return err
 	}
+	summary, err := buildResultSummary(layout, record)
+	if err != nil {
+		return err
+	}
+	if err := writeJSONFile(layout.ResultSummaryPath, summary, "result summary"); err != nil {
+		return err
+	}
 	return nil
+}
+
+func buildResultSummary(layout artifactLayout, record match.Record) (resultSummary, error) {
+	summary := resultSummary{
+		MatchID:        record.MatchID,
+		GameID:         record.Game.GameID,
+		GameVersion:    record.Game.GameVersion,
+		RulesetVersion: record.Game.RulesetVersion,
+		Status:         record.Status,
+		Turn:           record.Snapshot.Turn,
+		Placements:     append([]game.Placement(nil), record.Result.Placements...),
+		ArtifactPaths: artifactPathRefs{
+			Record:           filepath.Base(layout.RecordPath),
+			StructuredLog:    filepath.Base(layout.StructuredLogPath),
+			Snapshot:         filepath.Base(layout.SnapshotPath),
+			ExportedSnapshot: filepath.Base(layout.ExportedSnapshotPath),
+			History:          filepath.Base(layout.HistoryPath),
+		},
+	}
+	if errMsg := terminalError(record); errMsg != "" {
+		summary.Error = errMsg
+	}
+	if record.Game.GameID == "dungeon" {
+		dungeon, err := buildDungeonSummary(record)
+		if err != nil {
+			return resultSummary{}, fmt.Errorf("build dungeon result summary: %w", err)
+		}
+		summary.Dungeon = dungeon
+	}
+	return summary, nil
+}
+
+func buildDungeonSummary(record match.Record) (*dungeonSummary, error) {
+	var publicState struct {
+		MapID             string                 `json:"map_id"`
+		Turn              int                    `json:"turn"`
+		MaxTurns          int                    `json:"max_turns"`
+		Goal              dungeonPosition        `json:"goal"`
+		Players           []dungeonPlayerSummary `json:"players"`
+		UncollectedChests []dungeonChestSummary  `json:"uncollected_chests"`
+	}
+	if err := json.Unmarshal(record.ExportedSnapshot.PublicState, &publicState); err != nil {
+		return nil, fmt.Errorf("decode exported public_state: %w", err)
+	}
+
+	placements := make(map[string]int, len(record.Result.Placements))
+	for _, placement := range record.Result.Placements {
+		placements[placement.PlayerID] = placement.Place
+	}
+	for i := range publicState.Players {
+		publicState.Players[i].Place = placements[publicState.Players[i].PlayerID]
+	}
+	sort.Slice(publicState.Players, func(i, j int) bool {
+		left := publicState.Players[i]
+		right := publicState.Players[j]
+		if left.Place == right.Place {
+			return left.PlayerID < right.PlayerID
+		}
+		if left.Place == 0 {
+			return false
+		}
+		if right.Place == 0 {
+			return true
+		}
+		return left.Place < right.Place
+	})
+
+	remainingChestPoints := 0
+	for _, chest := range publicState.UncollectedChests {
+		remainingChestPoints += chest.Points
+	}
+
+	return &dungeonSummary{
+		MapID:                publicState.MapID,
+		Turn:                 publicState.Turn,
+		MaxTurns:             publicState.MaxTurns,
+		Goal:                 publicState.Goal,
+		Players:              publicState.Players,
+		RemainingChests:      publicState.UncollectedChests,
+		RemainingChestCount:  len(publicState.UncollectedChests),
+		RemainingChestPoints: remainingChestPoints,
+	}, nil
 }
 
 func mustMarshal(v any) json.RawMessage {

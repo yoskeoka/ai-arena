@@ -17,3 +17,9 @@
 - Do not treat this file as the final authority for public UI, public API, or external documentation language policy.
 - See `docs/design-decisions/adr.md` for the background and decision history behind the internal documentation policy.
 - When editing GitHub Actions workflows or composite actions, use `pinact` to pin or update `uses:` references rather than hand-editing version tags.
+
+## Observation Discipline
+
+- For `arena-runner` artifacts, default reading order is `result-summary.json` -> `exported-snapshot.json` / `snapshot.json` -> `structured-log.ndjson` / `record.json` / `history.json`.
+- Treat `record.json.event_log` and `history.json` as source-of-truth / replay inputs, not the default first artifact for ordinary result inspection.
+- When quoting or summarizing dungeon runs for implementation work, prefer compact artifacts first and avoid pasting long per-turn logs unless causal tracing is required.

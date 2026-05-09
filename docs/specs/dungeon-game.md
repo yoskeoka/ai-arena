@@ -384,6 +384,27 @@ Phase 5 の dungeon reference AI は、毎回最適手を出す solver ではな
 この phase では generated layout と chest score assignment は debug / replay のため公開してよいが、
 `rng_seed` 自体の公開は terminal かつ `completed` の場合に限る。
 
+### `result-summary.json`
+
+`result-summary.json` は dungeon の local verification と AI Agent 実装時に最初に読む compact derived artifact とする。
+少なくとも以下を持つ。
+
+- match / game / ruleset の識別子
+- final `status` と順位
+- player ごとの `score` / `goal_bonus` / `chest_points` / `finished_turn`
+- `public_state` から取り出した `map_id` / `turn` / `max_turns` / `goal`
+- 残宝箱一覧、および count / total points
+- `record.json` / `exported-snapshot.json` / `snapshot.json` / `structured-log.ndjson` / `history.json` への artifact path 参照
+
+この summary は `exported_snapshot.public_state` の縮小コピーではなく、通常の確認導線に必要な field だけを抜き出した compact view とする。
+詳細な因果追跡や full replay が必要になった場合だけ `record.json.event_log` / `history.json` / `structured-log.ndjson` へ降りる。
+
+## local verification の既定導線
+
+- まず `result-summary.json` を見て順位、score breakdown、残宝箱、goal 到達状況を確認する
+- layout や終局 public state をもう少し見たいときだけ `exported-snapshot.json` を開く
+- per-turn causal trace、failure reason 詳細、debug replay が必要なときだけ `structured-log.ndjson` / `record.json` / `history.json` を読む
+
 ## deterministic 再現条件
 
 以下が一致すれば、match 開始時点の generated layout は一致しなければならない。
