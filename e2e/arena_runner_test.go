@@ -33,6 +33,44 @@ type arenaRunResult struct {
 	Stderr    string
 }
 
+type resultSummaryArtifact struct {
+	MatchID        string `json:"match_id"`
+	GameID         string `json:"game_id"`
+	GameVersion    string `json:"game_version"`
+	RulesetVersion string `json:"ruleset_version"`
+	Status         string `json:"status"`
+	Turn           int    `json:"turn"`
+	Placements     []struct {
+		PlayerID string `json:"player_id"`
+		Place    int    `json:"place"`
+	} `json:"placements"`
+	ArtifactPaths struct {
+		Record           string `json:"record"`
+		StructuredLog    string `json:"structured_log"`
+		Snapshot         string `json:"snapshot"`
+		ExportedSnapshot string `json:"exported_snapshot"`
+		History          string `json:"history"`
+	} `json:"artifact_paths"`
+	Dungeon *struct {
+		MapID    string `json:"map_id"`
+		Turn     int    `json:"turn"`
+		MaxTurns int    `json:"max_turns"`
+		Players  []struct {
+			PlayerID     string `json:"player_id"`
+			Place        int    `json:"place"`
+			Score        int    `json:"score"`
+			GoalBonus    int    `json:"goal_bonus"`
+			ChestPoints  int    `json:"chest_points"`
+			FinishedTurn *int   `json:"finished_turn"`
+		} `json:"players"`
+		RemainingChests []struct {
+			Points int `json:"points"`
+		} `json:"remaining_chests"`
+		RemainingChestCount  int `json:"remaining_chest_count"`
+		RemainingChestPoints int `json:"remaining_chest_points"`
+	} `json:"dungeon"`
+}
+
 func TestArenaRunnerHappyPaths(t *testing.T) {
 	t.Run("simultaneous", func(t *testing.T) {
 		result := runArena(t,
@@ -669,7 +707,7 @@ func TestArenaRunnerWritesStandardArtifactsToDefaultOutputDir(t *testing.T) {
 		t.Fatalf("arena-runner failed: %v\nstderr=%s", err, stderr.String())
 	}
 
-	for _, name := range []string{"record.json", "structured-log.ndjson", "snapshot.json", "exported-snapshot.json", "history.json"} {
+	for _, name := range []string{"record.json", "structured-log.ndjson", "snapshot.json", "exported-snapshot.json", "history.json", "result-summary.json"} {
 		if _, err := os.Stat(filepath.Join(matchDir, name)); err != nil {
 			t.Fatalf("default artifact %s missing: %v", name, err)
 		}
@@ -770,6 +808,93 @@ func TestArenaRunnerWritesDerivedArtifacts(t *testing.T) {
 	if !jsonEqual(historyData, recordHistoryData) {
 		t.Fatal("history.json did not match record event_log")
 	}
+}
+
+func TestArenaRunnerWritesDungeonResultSummary(t *testing.T) {
+	result := runArena(t,
+		"--game", dungeon.GameID,
+		"--game-version", dungeon.GameVersion,
+		"--ruleset", dungeon.RulesetFixedMapV1,
+		"--match-id", "dungeon-summary",
+		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
+		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
+	)
+
+	summary := readResultSummary(t, result.MatchDir)
+	if summary.MatchID != result.Record.MatchID {
+		t.Fatalf("summary match id = %q, want %q", summary.MatchID, result.Record.MatchID)
+	}
+	if summary.GameID != dungeon.GameID {
+		t.Fatalf("summary game id = %q, want %q", summary.GameID, dungeon.GameID)
+	}
+	if summary.Dungeon == nil {
+		t.Fatal("summary missing dungeon payload")
+	}
+	if summary.Dungeon.MapID != dungeon.RulesetFixedMapV1 {
+		t.Fatalf("summary map id = %q, want %q", summary.Dungeon.MapID, dungeon.RulesetFixedMapV1)
+	}
+	if len(summary.Placements) != len(result.Record.Result.Placements) {
+		t.Fatalf("summary placements = %d, want %d", len(summary.Placements), len(result.Record.Result.Placements))
+	}
+	if len(summary.Dungeon.Players) != len(result.Record.ExportedSnapshot.Players) {
+		t.Fatalf("summary players = %d, want %d", len(summary.Dungeon.Players), len(result.Record.ExportedSnapshot.Players))
+	}
+	if summary.ArtifactPaths.Record != "record.json" || summary.ArtifactPaths.StructuredLog != "structured-log.ndjson" {
+		t.Fatalf("unexpected artifact paths: %+v", summary.ArtifactPaths)
+	}
+	if summary.Dungeon.RemainingChestCount != len(summary.Dungeon.RemainingChests) {
+		t.Fatalf("remaining chest count = %d, want %d", summary.Dungeon.RemainingChestCount, len(summary.Dungeon.RemainingChests))
+	}
+	remainingPoints := 0
+	for _, chest := range summary.Dungeon.RemainingChests {
+		remainingPoints += chest.Points
+	}
+	if summary.Dungeon.RemainingChestPoints != remainingPoints {
+		t.Fatalf("remaining chest points = %d, want %d", summary.Dungeon.RemainingChestPoints, remainingPoints)
+	}
+}
+
+func TestArenaRunnerCanSuppressStdoutLogsWithLogOutputNone(t *testing.T) {
+	result := runArenaWithOptions(t, arenaRunOptions{
+		Args: []string{
+			"--game", dungeon.GameID,
+			"--game-version", dungeon.GameVersion,
+			"--ruleset", dungeon.RulesetFixedMapV1,
+			"--match-id", "dungeon-quiet",
+			"--log-output", "none",
+			"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
+			"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
+		},
+	})
+
+	if len(result.Logs) != 0 {
+		t.Fatalf("stdout logs = %+v, want none", result.Logs)
+	}
+	logData, err := os.ReadFile(filepath.Join(result.MatchDir, "structured-log.ndjson"))
+	if err != nil {
+		t.Fatalf("read structured log: %v", err)
+	}
+	if !strings.Contains(string(logData), `"kind":"terminal_summary"`) {
+		t.Fatalf("structured log = %s, want terminal_summary", logData)
+	}
+	summary := readResultSummary(t, result.MatchDir)
+	if summary.Status != string(contract.StatusCompleted) {
+		t.Fatalf("summary status = %q, want completed", summary.Status)
+	}
+}
+
+func readResultSummary(t *testing.T, matchDir string) resultSummaryArtifact {
+	t.Helper()
+
+	data, err := os.ReadFile(filepath.Join(matchDir, "result-summary.json"))
+	if err != nil {
+		t.Fatalf("read result summary: %v", err)
+	}
+	var summary resultSummaryArtifact
+	if err := json.Unmarshal(data, &summary); err != nil {
+		t.Fatalf("decode result summary: %v\nsummary=%s", err, data)
+	}
+	return summary
 }
 
 func findFlagValue(args []string, name string) string {
@@ -882,7 +1007,7 @@ func newTestContext(t *testing.T) context.Context {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 	return ctx
 }

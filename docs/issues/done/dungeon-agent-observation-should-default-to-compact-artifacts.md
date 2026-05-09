@@ -50,3 +50,9 @@ AI Agent は不要なログを大量に context に積みやすい。
 - この issue は観察導線と derived artifact の改善を扱う
 - source-of-truth artifact の contract 自体は変えない
 - dungeon 固有 artifact の compact 化を先に扱い、他 game への横展開は別判断にする
+
+## Completion Criteria
+
+- 標準 artifact layout に `result-summary.json` が追加され、順位と score breakdown を compact に確認できる
+- `--log-output none` または同等 helper により、full event stream を `stdout` に流さず local verification できる
+- `AGENTS.md` と spec が summary-first の読取順、および full log を読む条件を明記している
