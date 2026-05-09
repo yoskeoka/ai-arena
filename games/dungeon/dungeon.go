@@ -34,6 +34,12 @@ const (
 	TileGoal  = "goal"
 )
 
+var (
+	seededGoalBonuses  = []int{42, 28, 14, 7}
+	seededChestPoints  = []int{24, 18, 12}
+	seededMazeMaxTurns = 50
+)
+
 type Metadata struct {
 	GameID         string
 	GameVersion    string
@@ -605,9 +611,9 @@ func fixedMapRuleset() Ruleset {
 func seededMazeBaseRuleset() Ruleset {
 	return Ruleset{
 		MapID:        RulesetSeededMazeV1,
-		MaxTurns:     16,
+		MaxTurns:     seededMazeMaxTurns,
 		ViewRadius:   2,
-		GoalBonuses:  []int{100, 50, 25, 10},
+		GoalBonuses:  append([]int(nil), seededGoalBonuses...),
 		TurnDeadline: 100 * time.Millisecond,
 	}
 }
@@ -633,7 +639,7 @@ func seededMazeRuleset(seed string) (Ruleset, error) {
 	if err != nil {
 		return Ruleset{}, err
 	}
-	chestScores := []int{24, 12, 12}
+	chestScores := append([]int(nil), seededChestPoints...)
 	rng.Shuffle(len(chestScores), func(i, j int) {
 		chestScores[i], chestScores[j] = chestScores[j], chestScores[i]
 	})
