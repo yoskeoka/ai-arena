@@ -399,6 +399,16 @@ Phase 5 の dungeon reference AI は、毎回最適手を出す solver ではな
 この summary は `exported_snapshot.public_state` の縮小コピーではなく、通常の確認導線に必要な field だけを抜き出した compact view とする。
 詳細な因果追跡や full replay が必要になった場合だけ `record.json.event_log` / `history.json` / `structured-log.ndjson` へ降りる。
 
+## targeted scenario verification
+
+dungeon の correctness gate は seed replay だけに寄せず、handcrafted scenario catalog を first-class に持つ。
+
+- scenario catalog は 1 scenario 1 intent を守り、同時 chest 取得、goal race、視界再発見、残りターンぎりぎり到達のような mechanic 単位で増やす
+- scenario input は random generation を経由しない hand-crafted `full_state` 相当を基本にし、ruleset 固有の tile / spawn / goal / chest 配置と turn / score / discovery を短く固定できるようにする
+- targeted scenario test では必要 turn だけ進め、中間 turn の `known_goal`、`known_chests`、score breakdown、`finished_turn` など selected field を確認してよい
+- fixed-seed reference AI regression は別レイヤとして残してよいが、correctness の主責務は scenario catalog 側に置く
+- full `record.json` golden や full exported snapshot golden は必須にせず、compact assertion と scenario intent の読みやすさを優先する
+
 ## local verification の既定導線
 
 - まず `result-summary.json` を見て順位、score breakdown、残宝箱、goal 到達状況を確認する

@@ -854,6 +854,47 @@ func TestArenaRunnerWritesDungeonResultSummary(t *testing.T) {
 	}
 }
 
+func TestArenaRunnerDungeonSeededReferenceBotRegressionSummary(t *testing.T) {
+	result := runArena(t,
+		"--game", dungeon.GameID,
+		"--game-version", dungeon.GameVersion,
+		"--ruleset", dungeon.RulesetSeededMazeV1,
+		"--rng-seed", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+		"--match-id", "dungeon-seeded-summary",
+		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local-seeded",
+		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local-seeded",
+	)
+
+	if result.Record.Status != contract.StatusCompleted {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
+	}
+	summary := readResultSummary(t, result.MatchDir)
+	if summary.RulesetVersion != dungeon.RulesetSeededMazeV1 {
+		t.Fatalf("summary ruleset = %q, want %q", summary.RulesetVersion, dungeon.RulesetSeededMazeV1)
+	}
+	if summary.Turn != 27 {
+		t.Fatalf("summary turn = %d, want 27", summary.Turn)
+	}
+	if len(summary.Placements) != 2 || summary.Placements[0].PlayerID != "p2" || summary.Placements[0].Place != 1 {
+		t.Fatalf("placements = %+v, want p2 first", summary.Placements)
+	}
+	if summary.Dungeon == nil {
+		t.Fatal("summary missing dungeon payload")
+	}
+	if summary.Dungeon.RemainingChestCount != 2 || summary.Dungeon.RemainingChestPoints != 36 {
+		t.Fatalf("remaining chests = %d/%d points, want 2/36", summary.Dungeon.RemainingChestCount, summary.Dungeon.RemainingChestPoints)
+	}
+	if len(summary.Dungeon.Players) != 2 {
+		t.Fatalf("summary players = %d, want 2", len(summary.Dungeon.Players))
+	}
+	if got := summary.Dungeon.Players[0]; got.PlayerID != "p2" || got.Score != 46 || got.GoalBonus != 28 || got.ChestPoints != 18 {
+		t.Fatalf("summary first player = %+v, want p2 score=46 goal_bonus=28 chest_points=18", got)
+	}
+	if got := summary.Dungeon.Players[1]; got.PlayerID != "p1" || got.Score != 42 || got.GoalBonus != 42 || got.ChestPoints != 0 {
+		t.Fatalf("summary second player = %+v, want p1 score=42 goal_bonus=42 chest_points=0", got)
+	}
+}
+
 func TestArenaRunnerCanSuppressStdoutLogsWithLogOutputNone(t *testing.T) {
 	result := runArenaWithOptions(t, arenaRunOptions{
 		Args: []string{

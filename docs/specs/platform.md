@@ -593,6 +593,13 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--record-input <path>` は source-of-truth persisted final match-record artifact を受け付ける
 - `--target-turn <n>` は `--history-input` または `--record-input` と組み合わせて使う replay / resume の turn 境界を指定する
 
+targeted verification の想定:
+
+- `--snapshot-input` は full replay を置き換えるものではなく、mechanic ごとの短い targeted scenario を hand-crafted な開始局面から検証する補助 entrypoint として使ってよい
+- `--history-input` は persisted match の途中境界を再現したいときの補助 entrypoint とし、fixture catalog の主入力としては使わない
+- correctness の primary gate を compact assertion 付き targeted scenario で持ち、seed replay は regression / replay/debug 補助として分離してよい
+- targeted scenario では中間 turn の selected field を確認してよく、full `record.json` golden や full exported snapshot golden を必須にしない
+
 `--rng-seed` は fresh run の初期生成入力であり、seed-aware な game では replay / history resume 時にも同じ seed が
 必要になる。runner は seed の encoding や内部 PRNG を知らず、`record.json` や `snapshot.json` から復元した
 string をそのまま再投入できればよい。fresh run で seed 未指定の場合、初期 seed の生成責務は game master 側にある。
