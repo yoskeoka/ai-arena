@@ -35,8 +35,8 @@ const (
 )
 
 var (
-	sharedGoalBonuses  = []int{42, 28, 14, 7}
-	sharedChestPoints  = []int{24, 18, 12}
+	seededGoalBonuses  = []int{42, 28, 14, 7}
+	seededChestPoints  = []int{24, 18, 12}
 	seededMazeMaxTurns = 50
 )
 
@@ -585,7 +585,7 @@ func fixedMapRuleset() Ruleset {
 		MapID:        RulesetFixedMapV1,
 		MaxTurns:     16,
 		ViewRadius:   2,
-		GoalBonuses:  append([]int(nil), sharedGoalBonuses...),
+		GoalBonuses:  []int{100, 50, 25, 10},
 		TurnDeadline: 100 * time.Millisecond,
 		Tiles: []string{
 			"#########",
@@ -601,8 +601,8 @@ func fixedMapRuleset() Ruleset {
 		SpawnPoints: []Position{{X: 1, Y: 1}, {X: 7, Y: 1}, {X: 1, Y: 7}, {X: 7, Y: 7}},
 		Goal:        Position{X: 6, Y: 6},
 		InitialChests: []ChestState{
-			{X: 2, Y: 3, Points: 24},
-			{X: 6, Y: 3, Points: 18},
+			{X: 2, Y: 3, Points: 12},
+			{X: 6, Y: 3, Points: 12},
 			{X: 2, Y: 6, Points: 12},
 		},
 	}
@@ -613,7 +613,7 @@ func seededMazeBaseRuleset() Ruleset {
 		MapID:        RulesetSeededMazeV1,
 		MaxTurns:     seededMazeMaxTurns,
 		ViewRadius:   2,
-		GoalBonuses:  append([]int(nil), sharedGoalBonuses...),
+		GoalBonuses:  append([]int(nil), seededGoalBonuses...),
 		TurnDeadline: 100 * time.Millisecond,
 	}
 }
@@ -639,7 +639,7 @@ func seededMazeRuleset(seed string) (Ruleset, error) {
 	if err != nil {
 		return Ruleset{}, err
 	}
-	chestScores := append([]int(nil), sharedChestPoints...)
+	chestScores := append([]int(nil), seededChestPoints...)
 	rng.Shuffle(len(chestScores), func(i, j int) {
 		chestScores[i], chestScores[j] = chestScores[j], chestScores[i]
 	})

@@ -292,9 +292,9 @@ func TestChestSplitAndGoalBonusesStillApply(t *testing.T) {
 		goal  int
 		score int
 	}{
-		"p1": {chest: 6, goal: 28, score: 34},
-		"p2": {chest: 6, goal: 28, score: 34},
-		"p3": {chest: 0, goal: 42, score: 42},
+		"p1": {chest: 6, goal: 50, score: 56},
+		"p2": {chest: 6, goal: 50, score: 56},
+		"p3": {chest: 0, goal: 100, score: 100},
 	}
 	for _, player := range players {
 		expected := want[player.PlayerID]
@@ -313,21 +313,43 @@ func TestChestSplitAndGoalBonusesStillApply(t *testing.T) {
 func TestThirdPlaceWithMajorityChestPointsBeatsChestlessWinner(t *testing.T) {
 	match, err := New(Config{
 		GameVersion: GameVersion,
-		Ruleset:     RulesetFixedMapV1,
+		Ruleset:     RulesetSeededMazeV1,
 		PlayerIDs:   []string{"p1", "p2", "p3"},
-		RNGSeed:     DefaultRNGSeed,
+		RNGSeed:     testSeedAlpha,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	path, ok := match.ShortestPath(match.Ruleset().SpawnPoints[0], match.Ruleset().Goal)
+	if !ok || len(path) < 4 {
+		t.Fatalf("shortest path length = %d, want >= 4", len(path))
+	}
+	p1Start := path[len(path)-2]
+	p2Start := path[len(path)-3]
+	p3Start := path[len(path)-4]
+	directionTo := func(from, to Position) string {
+		switch {
+		case to.X == from.X && to.Y == from.Y-1:
+			return "up"
+		case to.X == from.X && to.Y == from.Y+1:
+			return "down"
+		case to.X == from.X-1 && to.Y == from.Y:
+			return "left"
+		case to.X == from.X+1 && to.Y == from.Y:
+			return "right"
+		default:
+			t.Fatalf("non-adjacent move from %+v to %+v", from, to)
+			return ""
+		}
+	}
 	restored, err := NewFromFullState(Config{
 		GameVersion: GameVersion,
-		Ruleset:     RulesetFixedMapV1,
+		Ruleset:     RulesetSeededMazeV1,
 		PlayerIDs:   []string{"p1", "p2", "p3"},
-		RNGSeed:     DefaultRNGSeed,
+		RNGSeed:     testSeedAlpha,
 	}, FullState{
-		MapID:         RulesetFixedMapV1,
-		RNGSeed:       DefaultRNGSeed,
+		MapID:         RulesetSeededMazeV1,
+		RNGSeed:       testSeedAlpha,
 		Turn:          5,
 		MaxTurns:      match.Ruleset().MaxTurns,
 		Tiles:         append([]string(nil), match.Ruleset().Tiles...),
@@ -335,9 +357,9 @@ func TestThirdPlaceWithMajorityChestPointsBeatsChestlessWinner(t *testing.T) {
 		Goal:          match.Ruleset().Goal,
 		InitialChests: append([]ChestState(nil), match.Ruleset().InitialChests...),
 		Players: []PlayerState{
-			{PlayerID: "p1", X: 5, Y: 6},
-			{PlayerID: "p2", X: 5, Y: 6},
-			{PlayerID: "p3", X: 4, Y: 6, Score: 30, ChestPoints: 30},
+			{PlayerID: "p1", X: p1Start.X, Y: p1Start.Y},
+			{PlayerID: "p2", X: p2Start.X, Y: p2Start.Y},
+			{PlayerID: "p3", X: p3Start.X, Y: p3Start.Y, Score: 30, ChestPoints: 30},
 		},
 		UncollectedChests: []ChestState{},
 		Discovery: map[string]DiscoveryState{
@@ -350,20 +372,20 @@ func TestThirdPlaceWithMajorityChestPointsBeatsChestlessWinner(t *testing.T) {
 		t.Fatalf("NewFromFullState: %v", err)
 	}
 	if err := restored.Apply(map[string]Action{
-		"p1": {Action: "move", Direction: "right"},
-		"p2": {Action: "wait"},
-		"p3": {Action: "wait"},
+		"p1": {Action: "move", Direction: directionTo(p1Start, match.Ruleset().Goal)},
+		"p2": {Action: "move", Direction: directionTo(p2Start, p1Start)},
+		"p3": {Action: "move", Direction: directionTo(p3Start, p2Start)},
 	}); err != nil {
 		t.Fatalf("Apply first finish turn: %v", err)
 	}
 	if err := restored.Apply(map[string]Action{
-		"p2": {Action: "move", Direction: "right"},
-		"p3": {Action: "move", Direction: "right"},
+		"p2": {Action: "move", Direction: directionTo(p1Start, match.Ruleset().Goal)},
+		"p3": {Action: "move", Direction: directionTo(p2Start, p1Start)},
 	}); err != nil {
 		t.Fatalf("Apply second finish turn: %v", err)
 	}
 	if err := restored.Apply(map[string]Action{
-		"p3": {Action: "move", Direction: "right"},
+		"p3": {Action: "move", Direction: directionTo(p1Start, match.Ruleset().Goal)},
 	}); err != nil {
 		t.Fatalf("Apply third finish turn: %v", err)
 	}
