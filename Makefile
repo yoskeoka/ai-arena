@@ -158,7 +158,7 @@ run-dungeon-local-quiet:
 		--log-output none \
 		--rng-seed "$(DUNGEON_RNG_SEED)" \
 		--player p1=./testdata/ai/dungeon/dungeon-bot-local-seeded \
-		--player p2=./testdata/ai/dungeon/dungeon-bot-local-seeded; \
+		--player p2=./testdata/ai/dungeon/dungeon-bot-local-seeded && \
 	cat "$$output_dir/dungeon-local/result-summary.json"
 
 run-dungeon-go-wasm: build-dungeon-go-wasm

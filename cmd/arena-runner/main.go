@@ -148,7 +148,7 @@ func run(args []string) error {
 	fs.StringVar(&rngSeed, "rng-seed", "", "deterministic seed for seed-aware games")
 	fs.StringVar(&matchID, "match-id", "", "match id")
 	fs.StringVar(&outputDir, "output-dir", defaultOutputDir, "base directory for standard runner artifacts")
-	fs.StringVar(&logOutput, "log-output", "stdout", "structured log output target path, stdout, or none")
+	fs.StringVar(&logOutput, "log-output", "stdout", "additional structured log destination: stdout (default), file path, or none; standard structured-log.ndjson is always written")
 	fs.StringVar(&persistRecord, "persist-record", "", "additional source-of-truth final match-record output target path or stdout")
 	fs.StringVar(&exportedOutput, "exported-snapshot-output", "", "additional exported snapshot output target path or stdout")
 	fs.StringVar(&recordInput, "record-input", "", "source-of-truth final match-record input path")
