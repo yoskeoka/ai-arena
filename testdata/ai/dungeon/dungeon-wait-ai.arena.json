@@ -1,0 +1,13 @@
+{
+  "ai_id": "dungeon-wait-ai",
+  "protocol": {
+    "transport": "stdio-jsonrpc-ndjson",
+    "game_id": "dungeon",
+    "game_version": "1.0.0",
+    "ruleset_version": "seeded-maze-v1"
+  },
+  "runtime": {
+    "kind": "local-subprocess",
+    "command": ["go", "run", "./testdata/ai/dungeon/dungeon-wait-ai"]
+  }
+}
