@@ -599,6 +599,10 @@ targeted verification の想定:
 - `--history-input` は persisted match の途中境界を再現したいときの補助 entrypoint とし、fixture catalog の主入力としては使わない
 - correctness の primary gate を compact assertion 付き targeted scenario で持ち、seed replay は regression / replay/debug 補助として分離してよい
 - targeted scenario では中間 turn の selected field を確認してよく、full `record.json` golden や full exported snapshot golden を必須にしない
+- same `game_id` / `game_version` / `ruleset_version` / deterministic AI 実装 / player 順 / `rng_seed` の組み合わせでは、game 固有 regression test が normalized result shape の再実行一致を確認してよい
+- この same-condition regression で比較する normalized result shape は、順位、score breakdown、selected public-state field、残差分のような deterministic contract に効く field に限定し、`match_id` や artifact path のような run-specific field は比較対象に含めない
+- same-condition regression が壊れた場合は、同一条件下の non-deterministic drift としてまず test failure 扱いにする。golden 更新を許可するのは、`game_version` / `ruleset_version` の意図的更新、deterministic AI 実装の意図的変更、normalized result shape 自体の見直しを PR と spec で明示した場合に限る
+- same-condition regression の必須 coverage は game ごとに primary runtime path を 1 つ以上持てばよく、runtime parity まで同時に要求しない。Phase 5 dungeon では Go local-subprocess reference path を必須とし、WASM path は既存 mixed-runtime verification を別レイヤで維持する
 
 `--rng-seed` は fresh run の初期生成入力であり、seed-aware な game では replay / history resume 時にも同じ seed が
 必要になる。runner は seed の encoding や内部 PRNG を知らず、`record.json` や `snapshot.json` から復元した

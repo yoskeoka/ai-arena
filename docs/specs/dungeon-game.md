@@ -446,6 +446,37 @@ dungeon の correctness gate は seed replay だけに寄せず、handcrafted sc
 - generated layout は「seed から再生成した結果と保存状態が一致しているか」を resume / debug で検証できる形で残す
 - replay / exported snapshot の利用者は `rng_seed` だけで初期局面を再構成できる
 
+同一 `game_id` / `game_version` / `ruleset_version` / deterministic AI 実装 / player 順 / `rng_seed` で
+match を複数回 fresh run した場合、Phase 5 dungeon は generated layout だけでなく final result も
+一致しなければならない。ここでいう deterministic AI 実装には、local subprocess / WASM の実行形態差ではなく、
+同じ decision layer と同じ policy 入力から同じ action 列を返すことを期待する。
+
+### deterministic result regression shape
+
+same-condition regression では full `record.json` をそのまま golden 化せず、`result-summary.json` と
+terminal public state から導ける compact な normalized result shape を比較する。少なくとも以下を含める。
+
+- `placements`
+- player ごとの `score` / `goal_bonus` / `chest_points` / `finished_turn`
+- `map_id` / `turn` / `max_turns` のような selected public-state field
+- `remaining_chests` と、その count / total points
+
+以下のような run-specific field は比較対象に含めない。
+
+- `match_id`
+- artifact path
+- log sequence や timestamp のような harness 依存値
+
+### deterministic result golden の運用
+
+- same-condition regression test は、同一条件で再実行した normalized result が一致しない場合に失敗しなければならない
+- この failure は「勝者が変わった」「score breakdown が変わった」「残宝箱が変わった」などを含む deterministic drift として扱い、まず golden 更新ではなく実装修正対象とみなす
+- golden 更新を許可するのは、`game_version` または `ruleset_version` の意図的更新、deterministic AI 実装の意図的変更、normalized result shape 自体の見直しを行った場合に限る
+- golden 更新時は、何が変わったため更新可能なのかを PR と spec/plan に明示する
+
+Phase 5 時点の必須 coverage は Go local-subprocess reference bot path に置く。WASM path は同じ decision layer を
+使ってよいが、この phase では runtime parity まで同じ regression test へ含めることを必須にしない。
+
 ## local reference bot
 
 Phase 5 の reference bot は Go subprocess で動かす。

@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +71,31 @@ type resultSummaryArtifact struct {
 		RemainingChestCount  int `json:"remaining_chest_count"`
 		RemainingChestPoints int `json:"remaining_chest_points"`
 	} `json:"dungeon"`
+}
+
+type normalizedDungeonResult struct {
+	MapID                string
+	Turn                 int
+	MaxTurns             int
+	Placements           []normalizedPlacement
+	Players              []normalizedDungeonPlayer
+	RemainingChestPoints []int
+	RemainingChestCount  int
+	RemainingChestTotal  int
+}
+
+type normalizedPlacement struct {
+	PlayerID string
+	Place    int
+}
+
+type normalizedDungeonPlayer struct {
+	PlayerID     string
+	Place        int
+	Score        int
+	GoalBonus    int
+	ChestPoints  int
+	FinishedTurn int
 }
 
 func TestArenaRunnerHappyPaths(t *testing.T) {
@@ -854,44 +881,39 @@ func TestArenaRunnerWritesDungeonResultSummary(t *testing.T) {
 	}
 }
 
-func TestArenaRunnerDungeonSeededReferenceBotRegressionSummary(t *testing.T) {
-	result := runArena(t,
-		"--game", dungeon.GameID,
-		"--game-version", dungeon.GameVersion,
-		"--ruleset", dungeon.RulesetSeededMazeV1,
-		"--rng-seed", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-		"--match-id", "dungeon-seeded-summary",
-		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local-seeded",
-		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local-seeded",
-	)
+func TestArenaRunnerDungeonSeededReferenceBotDeterministicResultRegression(t *testing.T) {
+	// This golden is a determinism regression snapshot for the current dungeon ruleset
+	// and deterministic local-subprocess reference bot. Update it only when the
+	// game/ruleset version, deterministic bot behavior, or normalized result shape
+	// intentionally changes and that reason is documented in the PR/spec.
+	want := normalizedDungeonResult{
+		MapID:    dungeon.RulesetSeededMazeV1,
+		Turn:     27,
+		MaxTurns: 50,
+		Placements: []normalizedPlacement{
+			{PlayerID: "p2", Place: 1},
+			{PlayerID: "p1", Place: 2},
+		},
+		Players: []normalizedDungeonPlayer{
+			{PlayerID: "p2", Place: 1, Score: 46, GoalBonus: 28, ChestPoints: 18, FinishedTurn: 27},
+			{PlayerID: "p1", Place: 2, Score: 42, GoalBonus: 42, ChestPoints: 0, FinishedTurn: 26},
+		},
+		RemainingChestPoints: []int{12, 24},
+		RemainingChestCount:  2,
+		RemainingChestTotal:  36,
+	}
 
-	if result.Record.Status != contract.StatusCompleted {
-		t.Fatalf("status = %q, want completed", result.Record.Status)
+	first := runSeededDungeonDeterministicRegression(t, "dungeon-seeded-deterministic-a")
+	second := runSeededDungeonDeterministicRegression(t, "dungeon-seeded-deterministic-b")
+
+	if !reflect.DeepEqual(first, want) {
+		t.Fatalf("first normalized result = %+v, want %+v", first, want)
 	}
-	summary := readResultSummary(t, result.MatchDir)
-	if summary.RulesetVersion != dungeon.RulesetSeededMazeV1 {
-		t.Fatalf("summary ruleset = %q, want %q", summary.RulesetVersion, dungeon.RulesetSeededMazeV1)
+	if !reflect.DeepEqual(second, want) {
+		t.Fatalf("second normalized result = %+v, want %+v", second, want)
 	}
-	if summary.Turn != 27 {
-		t.Fatalf("summary turn = %d, want 27", summary.Turn)
-	}
-	if len(summary.Placements) != 2 || summary.Placements[0].PlayerID != "p2" || summary.Placements[0].Place != 1 {
-		t.Fatalf("placements = %+v, want p2 first", summary.Placements)
-	}
-	if summary.Dungeon == nil {
-		t.Fatal("summary missing dungeon payload")
-	}
-	if summary.Dungeon.RemainingChestCount != 2 || summary.Dungeon.RemainingChestPoints != 36 {
-		t.Fatalf("remaining chests = %d/%d points, want 2/36", summary.Dungeon.RemainingChestCount, summary.Dungeon.RemainingChestPoints)
-	}
-	if len(summary.Dungeon.Players) != 2 {
-		t.Fatalf("summary players = %d, want 2", len(summary.Dungeon.Players))
-	}
-	if got := summary.Dungeon.Players[0]; got.PlayerID != "p2" || got.Score != 46 || got.GoalBonus != 28 || got.ChestPoints != 18 {
-		t.Fatalf("summary first player = %+v, want p2 score=46 goal_bonus=28 chest_points=18", got)
-	}
-	if got := summary.Dungeon.Players[1]; got.PlayerID != "p1" || got.Score != 42 || got.GoalBonus != 42 || got.ChestPoints != 0 {
-		t.Fatalf("summary second player = %+v, want p1 score=42 goal_bonus=42 chest_points=0", got)
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("normalized result mismatch across reruns:\nfirst=%+v\nsecond=%+v", first, second)
 	}
 }
 
@@ -936,6 +958,72 @@ func readResultSummary(t *testing.T, matchDir string) resultSummaryArtifact {
 		t.Fatalf("decode result summary: %v\nsummary=%s", err, data)
 	}
 	return summary
+}
+
+func runSeededDungeonDeterministicRegression(t *testing.T, matchID string) normalizedDungeonResult {
+	t.Helper()
+
+	result := runArena(t,
+		"--game", dungeon.GameID,
+		"--game-version", dungeon.GameVersion,
+		"--ruleset", dungeon.RulesetSeededMazeV1,
+		"--rng-seed", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+		"--match-id", matchID,
+		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local-seeded",
+		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local-seeded",
+	)
+	if result.Record.Status != contract.StatusCompleted {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
+	}
+	summary := readResultSummary(t, result.MatchDir)
+	if summary.RulesetVersion != dungeon.RulesetSeededMazeV1 {
+		t.Fatalf("summary ruleset = %q, want %q", summary.RulesetVersion, dungeon.RulesetSeededMazeV1)
+	}
+	return normalizeDungeonResult(t, summary)
+}
+
+func normalizeDungeonResult(t *testing.T, summary resultSummaryArtifact) normalizedDungeonResult {
+	t.Helper()
+
+	if summary.Dungeon == nil {
+		t.Fatal("summary missing dungeon payload")
+	}
+
+	got := normalizedDungeonResult{
+		MapID:               summary.Dungeon.MapID,
+		Turn:                summary.Turn,
+		MaxTurns:            summary.Dungeon.MaxTurns,
+		RemainingChestCount: summary.Dungeon.RemainingChestCount,
+		RemainingChestTotal: summary.Dungeon.RemainingChestPoints,
+	}
+	for _, placement := range summary.Placements {
+		got.Placements = append(got.Placements, normalizedPlacement{
+			PlayerID: placement.PlayerID,
+			Place:    placement.Place,
+		})
+	}
+	for _, player := range summary.Dungeon.Players {
+		got.Players = append(got.Players, normalizedDungeonPlayer{
+			PlayerID:     player.PlayerID,
+			Place:        player.Place,
+			Score:        player.Score,
+			GoalBonus:    player.GoalBonus,
+			ChestPoints:  player.ChestPoints,
+			FinishedTurn: finishedTurnValue(player.FinishedTurn),
+		})
+	}
+	for _, chest := range summary.Dungeon.RemainingChests {
+		got.RemainingChestPoints = append(got.RemainingChestPoints, chest.Points)
+	}
+	sort.Ints(got.RemainingChestPoints)
+	return got
+}
+
+func finishedTurnValue(v *int) int {
+	if v == nil {
+		return -1
+	}
+	return *v
 }
 
 func findFlagValue(args []string, name string) string {
