@@ -3,8 +3,9 @@
 
 ## Objective
 
-同一 `game master version`、同一 deterministic AI Player、同一 `rng_seed` で dungeon match を
-複数回実行したとき、同一の result が得られることを継続的に確認する。
+同一 `game_id`、同一 `game_version`、同一 `ruleset_version`、同一 deterministic AI Player、
+同一 player 順、同一 `rng_seed` で dungeon match を複数回実行したとき、同一の result が
+得られることを継続的に確認する。
 
 この plan の目的は「その result が強いか/正しいか」を固定することではなく、
 ai-arena の決定性 contract を回帰検証できるようにすることにある。
@@ -18,6 +19,7 @@ depends on:
 - deterministic 条件下で dungeon result が再現することを確認する regression test を追加する
 - 比較対象となる result の正規化 shape を定義する
 - deterministic guarantee の前提条件を spec に明文化する
+- golden failure / update の運用ルールを定義する
 
 この plan では以下は扱わない。
 
@@ -30,10 +32,13 @@ depends on:
 
 ### `docs/specs/platform.md`
 
-- same game master version, same AI artifact/input, same `rng_seed` のときに
-  deterministic result regression を確認する方針を追記する
+- same `game_id`, same `game_version`, same `ruleset_version`, same deterministic
+  AI artifact/input, same player order, same `rng_seed` のときに deterministic
+  result regression を確認する方針を追記する
 - 再現性保証の対象外を明記する
-  - game master version が異なる場合
+  - `game_id` / `game_version` / `ruleset_version` が異なる場合
+  - AI artifact または AI decision logic が異なる場合
+  - player 順が異なる場合
   - AI Player が内部で非決定的乱数を使う場合
   - runtime/transport contract を破る場合
 
@@ -41,22 +46,42 @@ depends on:
 
 - dungeon regression では「同一条件なら同一 result」を first-class に確認することを追記する
 - balance や strategy の評価と、determinism の確認を分けることを明記する
+- deterministic result golden の failure/update rule を追記する
 
 ## Expected Code Changes
 
 ### deterministic fixture setup
 
 - fixed-seed かつ deterministic に行動する dungeon AI Player fixture を選定する
+- AI artifact path または AI decision logic version 相当の識別子を固定し、
+  test が同一 AI を比較していることを明示する
 - local subprocess path と、必要なら WASM path でも同じ contract を確認できるようにする
 
 ### normalized result comparison
 
 - result 全体ではなく、決定性確認に必要な normalized result shape を定義する
 - 例:
-  - `match_id` を除いた placements
+  - `result.placements`
   - per-player `score`, `goal_bonus`, `chest_points`, `finished_turn`
   - remaining chests
   - selected public-state fields
+- `match_id` は test harness 側で固定して比較対象へ含めてもよいが、
+  deterministic contract の本質条件としては扱わない
+
+### golden operation rules
+
+- regression test は、同一条件で再実行した normalized result が一致しないと失敗とする
+- 次の場合は golden 更新ではなく test failure として扱う
+  - 同一 `game_id` / `game_version` / `ruleset_version`
+  - 同一 deterministic AI artifact / logic
+  - 同一 player order
+  - 同一 `rng_seed`
+  - にもかかわらず normalized result が変わった場合
+- 次の場合は、意図された変更として golden 更新を許可する
+  - `game_version` または `ruleset_version` を意図的に更新した場合
+  - deterministic AI artifact / logic を意図的に変更した場合
+  - normalized result shape 自体を意図的に見直した場合
+- golden 更新時は、どの条件が変わったため更新可能なのかを PR と spec/plan で明示する
 
 ### regression tests
 
@@ -66,9 +91,11 @@ depends on:
 ## Verification
 
 - `go test ./e2e/... ./games/dungeon/...`
-- 同一 seed / 同一 deterministic AI Player / 同一 game master version で
+- 同一 `game_id` / `game_version` / `ruleset_version` / 同一 deterministic AI Player /
+  同一 player order / 同一 `rng_seed` で
   複数回実行した result が一致する
-- seed や AI を変えたときは、この test が「一致しないと失敗」にはならない
+- seed、AI logic、player 順、`game_version`、`ruleset_version` を変えたときは、
+  この test が「一致しないと失敗」にはならない
 
 ## Sub-tasks
 
@@ -77,6 +104,7 @@ depends on:
 - [ ] normalized result extractor を追加する
 - [ ] same-condition rerun regression test を追加する
 - [ ] local subprocess と WASM の coverage 境界を決める
+- [ ] golden failure / update rule を spec と test comment に落とし込む
 
 ## Risks and Mitigations
 
@@ -90,5 +118,6 @@ depends on:
 ## Design Decisions
 
 - determinism regression は「expected winner を固定する test」ではない
-- guarantee の軸は same version + same deterministic AI + same seed に限定する
+- guarantee の軸は same `game_id` + same `game_version` + same `ruleset_version` +
+  same deterministic AI + same player order + same seed に限定する
 - outcome comparison は full record ではなく normalized result を基本とする
