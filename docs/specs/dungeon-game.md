@@ -55,6 +55,16 @@ Phase 5 の official reference AI は、local subprocess bot と WASM bot で同
 ただし shared logic が参照してよい情報は、各 turn request の `visible_state` に含まれる public / player-visible
 information だけとする。
 
+shared decision layer は、少なくとも次の 3 責務へ分けて扱う。
+
+- `memory`: `visible_tiles` / `known_goal` / `known_chests` と自分の過去観測から継続保持する状態更新
+- `world-model`: memory に保存された既知 tile 群だけを使う path / frontier / 到達可能性 query
+- `policy`: 現在の `visible_state` と world-model query を比較して `move` / `wait` を返す意思決定
+
+この分割は hidden information を解禁するものではない。`memory` に入れてよいのは、その AI が過去 turn までに
+実際に観測した情報だけである。`world-model` は memory の query layer であり、未観測 tile を補完したり
+layout 全体を前提にしたりしてはならない。
+
 reference AI が前提にしてよいもの:
 
 - `self`
@@ -76,6 +86,10 @@ reference AI が前提にしてはならない hidden information:
 
 視界半径や visibility shape が将来変わっても、reference AI は `visible_tiles` と `known_*` を主入力にすることで
 同じ判断層を保てる形を維持する。
+
+Policy variant を追加しても、memory update と world-model query の contract は共通のまま保つ。
+例えば `balanced` と `goal-rush` が同じ turn request を受けた場合、差分として許されるのは policy の優先順位だけであり、
+観測更新や hidden information の扱いは一致していなければならない。
 
 ## `rng_seed` 契約
 
