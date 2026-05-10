@@ -33,11 +33,11 @@ depends on:
 ### `docs/specs/platform.md`
 
 - same `game_id`, same `game_version`, same `ruleset_version`, same deterministic
-  AI artifact/input, same player order, same `rng_seed` のときに deterministic
+  AI Player, same player order, same `rng_seed` のときに deterministic
   result regression を確認する方針を追記する
 - 再現性保証の対象外を明記する
   - `game_id` / `game_version` / `ruleset_version` が異なる場合
-  - AI artifact または AI decision logic が異なる場合
+  - PR 作成者が deterministic AI Player 実装を変更した場合
   - player 順が異なる場合
   - AI Player が内部で非決定的乱数を使う場合
   - runtime/transport contract を破る場合
@@ -53,8 +53,8 @@ depends on:
 ### deterministic fixture setup
 
 - fixed-seed かつ deterministic に行動する dungeon AI Player fixture を選定する
-- AI artifact path または AI decision logic version 相当の識別子を固定し、
-  test が同一 AI を比較していることを明示する
+- 同一 fixture path と同一 player 順で、同じ deterministic AI Player を比較していることを
+  test comment と spec wording で明示する
 - local subprocess path と、必要なら WASM path でも同じ contract を確認できるようにする
 
 ### normalized result comparison
@@ -73,13 +73,13 @@ depends on:
 - regression test は、同一条件で再実行した normalized result が一致しないと失敗とする
 - 次の場合は golden 更新ではなく test failure として扱う
   - 同一 `game_id` / `game_version` / `ruleset_version`
-  - 同一 deterministic AI artifact / logic
+  - 同一 deterministic AI Player 実装
   - 同一 player order
   - 同一 `rng_seed`
   - にもかかわらず normalized result が変わった場合
 - 次の場合は、意図された変更として golden 更新を許可する
   - `game_version` または `ruleset_version` を意図的に更新した場合
-  - deterministic AI artifact / logic を意図的に変更した場合
+  - PR 作成者が deterministic AI Player 実装を意図的に変更した場合
   - normalized result shape 自体を意図的に見直した場合
 - golden 更新時は、どの条件が変わったため更新可能なのかを PR と spec/plan で明示する
 
