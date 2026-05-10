@@ -239,6 +239,8 @@ GOOS=wasip1 GOARCH=wasm go build \
 
 - checked-in の正本は `.go` source と `.arena.json` manifest とし、`.wasm` binary は commit しない
 - local subprocess bot と WASM bot が shared decision layer を共有し、transport / runtime 差分だけを entrypoint 側へ閉じ込める
+- dungeon reference AI の shared decision layer は、runtime kind を問わず同じ memory update / world-model query / policy contract を使う
+- policy variant を分ける場合も、runtime ごとに別 heuristic を持つのではなく、同じ shared layer 上で `balanced` や `goal-rush` のような差し替えとして扱う
 - `arena-runner` の targeted verification では、seeded dungeon match を local-subprocess path と `wasm-wasi` path の両方で完走できることを確認する
 
 ## Rust Evaluation Lane

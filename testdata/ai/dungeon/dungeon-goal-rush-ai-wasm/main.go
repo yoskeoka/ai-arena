@@ -1,35 +1,16 @@
 package main
 
 import (
-	"log"
+	"fmt"
+	"os"
 
-	"github.com/yoskeoka/ai-arena/games/dungeon"
-	"github.com/yoskeoka/ai-arena/testdata/ai/dungeon/fixturebot"
+	"github.com/yoskeoka/ai-arena/games/dungeon/botlogic"
 )
 
 func main() {
-	if err := fixturebot.Run(fixturebot.Behavior{
-		AIID: "dungeon-goal-rush-ai-wasm",
-		Actions: []dungeon.Action{
-			{Action: "move", Direction: "left"},
-			{Action: "move", Direction: "left"},
-			{Action: "move", Direction: "left"},
-			{Action: "move", Direction: "left"},
-			{Action: "move", Direction: "down"},
-			{Action: "move", Direction: "down"},
-			{Action: "move", Direction: "left"},
-			{Action: "move", Direction: "left"},
-			{Action: "move", Direction: "down"},
-			{Action: "move", Direction: "down"},
-			{Action: "move", Direction: "right"},
-			{Action: "move", Direction: "right"},
-			{Action: "move", Direction: "right"},
-			{Action: "move", Direction: "right"},
-			{Action: "move", Direction: "down"},
-			{Action: "move", Direction: "down"},
-			{Action: "wait"},
-		},
-	}); err != nil {
-		log.Fatal(err)
+	fmt.Fprintln(os.Stderr, "dungeon-goal-rush-ai-wasm policy=goal-rush")
+	if err := botlogic.RunWithPolicy(os.Stdin, os.Stdout, botlogic.GoalRushPolicy()); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
