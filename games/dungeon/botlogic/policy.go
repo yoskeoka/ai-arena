@@ -68,7 +68,7 @@ func (balancedPolicy) Decide(state dungeon.VisibleState, memory *Memory, world *
 		memory.SetExploreTarget(nil)
 		return directionAction(start, goalPath[1])
 	}
-	if step, ok := chooseChestAction(state, world, start, goalPath, hasGoalPath); ok {
+	if step, ok := chooseChestAction(state, memory, world, start, goalPath, hasGoalPath); ok {
 		memory.SetExploreTarget(nil)
 		return step
 	}
@@ -91,8 +91,8 @@ func (goalRushPolicy) Decide(state dungeon.VisibleState, memory *Memory, world *
 	goalPath, hasGoalPath := world.GoalPath(start)
 	if hasGoalPath {
 		memory.SetExploreTarget(nil)
-		if chestStep, ok := chooseChestAction(state, world, start, goalPath, hasGoalPath); ok {
-			if shouldTakeGoalRushDetour(state, world, start, goalPath) {
+		if chestStep, ok := chooseChestAction(state, memory, world, start, goalPath, hasGoalPath); ok {
+			if shouldTakeGoalRushDetour(state, memory, world, start, goalPath) {
 				return chestStep
 			}
 		}
@@ -121,6 +121,7 @@ func mustFinishSoon(state dungeon.VisibleState, goalPath []dungeon.Position) boo
 
 func shouldTakeGoalRushDetour(
 	state dungeon.VisibleState,
+	memory *Memory,
 	world *WorldModel,
 	start dungeon.Position,
 	goalPath []dungeon.Position,
@@ -132,7 +133,7 @@ func shouldTakeGoalRushDetour(
 	if goalDist <= 3 || state.RemainingTurns <= goalDist+2 {
 		return false
 	}
-	for _, chest := range sortedChests(state.KnownChests) {
+	for _, chest := range memory.KnownChests() {
 		target := dungeon.Position{X: chest.X, Y: chest.Y}
 		path, ok := world.ShortestKnownPath(start, target)
 		if !ok || len(path) < 2 {
@@ -169,6 +170,7 @@ func stepTowardExploreTarget(memory *Memory, world *WorldModel, start dungeon.Po
 
 func chooseChestAction(
 	state dungeon.VisibleState,
+	memory *Memory,
 	world *WorldModel,
 	start dungeon.Position,
 	goalPath []dungeon.Position,
@@ -192,7 +194,7 @@ func chooseChestAction(
 
 	leaderGap := scoreGapToLeader(state)
 	var best *chestCandidate
-	for _, chest := range sortedChests(state.KnownChests) {
+	for _, chest := range memory.KnownChests() {
 		target := dungeon.Position{X: chest.X, Y: chest.Y}
 		path, ok := world.ShortestKnownPath(start, target)
 		if !ok || len(path) < 2 {

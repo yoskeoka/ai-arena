@@ -97,17 +97,21 @@ func TestBotExploresWhenNoGoalOrChestKnown(t *testing.T) {
 func TestPolicyVariantsDivergeOnScenarioCatalogLikeState(t *testing.T) {
 	state := dungeon.VisibleState{
 		RemainingTurns: 10,
-		Self:           dungeon.PlayerState{PlayerID: "p1", X: 1, Y: 6},
+		Self:           dungeon.PlayerState{PlayerID: "p1", X: 1, Y: 1},
 		VisibleTiles: visibleTiles(
-			tile(1, 6, dungeon.TileFloor),
-			tile(2, 6, dungeon.TileChest),
-			tile(3, 6, dungeon.TileFloor),
-			tile(4, 6, dungeon.TileFloor),
-			tile(5, 6, dungeon.TileFloor),
-			tile(6, 6, dungeon.TileGoal),
+			tile(1, 1, dungeon.TileFloor),
+			tile(2, 1, dungeon.TileFloor),
+			tile(3, 1, dungeon.TileFloor),
+			tile(4, 1, dungeon.TileFloor),
+			tile(5, 1, dungeon.TileGoal),
+			tile(1, 2, dungeon.TileChest),
+			tile(2, 2, dungeon.TileFloor),
+			tile(3, 2, dungeon.TileFloor),
+			tile(4, 2, dungeon.TileFloor),
+			tile(5, 2, dungeon.TileFloor),
 		),
-		KnownGoal:   &dungeon.Position{X: 6, Y: 6},
-		KnownChests: []dungeon.ChestState{{X: 2, Y: 6, Points: 12}},
+		KnownGoal:   &dungeon.Position{X: 5, Y: 1},
+		KnownChests: []dungeon.ChestState{{X: 1, Y: 2, Points: 24}},
 		Scores: []dungeon.PlayerState{
 			{PlayerID: "p1", Score: 0},
 			{PlayerID: "p2", Score: 40},
@@ -116,11 +120,11 @@ func TestPolicyVariantsDivergeOnScenarioCatalogLikeState(t *testing.T) {
 
 	balanced := NewWithPolicy(BalancedPolicy()).Decide(state)
 	goalRush := NewWithPolicy(GoalRushPolicy()).Decide(state)
-	if balanced.Direction != "right" {
-		t.Fatalf("balanced direction = %q, want right toward chest", balanced.Direction)
+	if balanced.Direction != "down" {
+		t.Fatalf("balanced direction = %q, want down toward chest detour", balanced.Direction)
 	}
 	if goalRush.Direction != "right" {
-		t.Fatalf("goal-rush direction = %q, want right toward goal lane", goalRush.Direction)
+		t.Fatalf("goal-rush direction = %q, want right toward direct goal lane", goalRush.Direction)
 	}
 }
 
