@@ -22,16 +22,16 @@ func TestSeededMazeGenerationIsDeterministic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second New: %v", err)
 	}
-	if !equalStringSlices(first.Ruleset().Tiles, second.Ruleset().Tiles) {
+	if !equalStringSlices(first.Layout().Tiles, second.Layout().Tiles) {
 		t.Fatal("tiles differ for same seed")
 	}
-	if !equalPositions(first.Ruleset().SpawnPoints, second.Ruleset().SpawnPoints) {
+	if !equalPositions(first.Layout().SpawnPoints, second.Layout().SpawnPoints) {
 		t.Fatal("spawn points differ for same seed")
 	}
-	if first.Ruleset().Goal != second.Ruleset().Goal {
+	if first.Layout().Goal != second.Layout().Goal {
 		t.Fatal("goal differs for same seed")
 	}
-	if !equalChests(first.Ruleset().InitialChests, second.Ruleset().InitialChests) {
+	if !equalChests(first.Layout().InitialChests, second.Layout().InitialChests) {
 		t.Fatal("initial chests differ for same seed")
 	}
 }
@@ -55,9 +55,9 @@ func TestSeededMazeGenerationVariesAcrossSeeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New beta: %v", err)
 	}
-	sameTiles := equalStringSlices(first.Ruleset().Tiles, second.Ruleset().Tiles)
-	sameGoal := first.Ruleset().Goal == second.Ruleset().Goal
-	sameChests := equalChests(first.Ruleset().InitialChests, second.Ruleset().InitialChests)
+	sameTiles := equalStringSlices(first.Layout().Tiles, second.Layout().Tiles)
+	sameGoal := first.Layout().Goal == second.Layout().Goal
+	sameChests := equalChests(first.Layout().InitialChests, second.Layout().InitialChests)
 	if sameTiles && sameGoal && sameChests {
 		t.Fatal("expected different generated state for different seeds")
 	}
@@ -74,7 +74,7 @@ func TestSeededMazeUsesFixedChestScoreSet(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	total := 0
-	got := append([]ChestState(nil), match.Ruleset().InitialChests...)
+	got := append([]ChestState(nil), match.Layout().InitialChests...)
 	for _, chest := range got {
 		total += chest.Points
 	}
@@ -148,10 +148,10 @@ func TestFixedMapRulesetRemainsResumable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFromFullState: %v", err)
 	}
-	if !equalStringSlices(restored.Ruleset().Tiles, match.Ruleset().Tiles) {
+	if !equalStringSlices(restored.Layout().Tiles, match.Layout().Tiles) {
 		t.Fatal("restored tiles differ")
 	}
-	if !equalChests(restored.Ruleset().InitialChests, match.Ruleset().InitialChests) {
+	if !equalChests(restored.Layout().InitialChests, match.Layout().InitialChests) {
 		t.Fatal("restored chests differ")
 	}
 }
@@ -223,6 +223,7 @@ func TestChestSplitAndGoalBonusesStillApply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	layout := match.Layout()
 	restored, err := NewFromFullState(Config{
 		GameVersion: GameVersion,
 		Ruleset:     RulesetFixedMapV1,
@@ -233,10 +234,10 @@ func TestChestSplitAndGoalBonusesStillApply(t *testing.T) {
 		RNGSeed:       DefaultRNGSeed,
 		Turn:          5,
 		MaxTurns:      match.Ruleset().MaxTurns,
-		Tiles:         append([]string(nil), match.Ruleset().Tiles...),
-		SpawnPoints:   append([]Position(nil), match.Ruleset().SpawnPoints...),
-		Goal:          match.Ruleset().Goal,
-		InitialChests: append([]ChestState(nil), match.Ruleset().InitialChests...),
+		Tiles:         append([]string(nil), layout.Tiles...),
+		SpawnPoints:   append([]Position(nil), layout.SpawnPoints...),
+		Goal:          layout.Goal,
+		InitialChests: append([]ChestState(nil), layout.InitialChests...),
 		Players: []PlayerState{
 			{PlayerID: "p1", X: 1, Y: 6},
 			{PlayerID: "p2", X: 3, Y: 6},
@@ -320,7 +321,8 @@ func TestThirdPlaceWithMajorityChestPointsBeatsChestlessWinner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	path, ok := match.ShortestPath(match.Ruleset().SpawnPoints[0], match.Ruleset().Goal)
+	layout := match.Layout()
+	path, ok := match.ShortestPath(layout.SpawnPoints[0], layout.Goal)
 	if !ok || len(path) < 4 {
 		t.Fatalf("shortest path length = %d, want >= 4", len(path))
 	}
@@ -352,10 +354,10 @@ func TestThirdPlaceWithMajorityChestPointsBeatsChestlessWinner(t *testing.T) {
 		RNGSeed:       testSeedAlpha,
 		Turn:          5,
 		MaxTurns:      match.Ruleset().MaxTurns,
-		Tiles:         append([]string(nil), match.Ruleset().Tiles...),
-		SpawnPoints:   append([]Position(nil), match.Ruleset().SpawnPoints...),
-		Goal:          match.Ruleset().Goal,
-		InitialChests: append([]ChestState(nil), match.Ruleset().InitialChests...),
+		Tiles:         append([]string(nil), layout.Tiles...),
+		SpawnPoints:   append([]Position(nil), layout.SpawnPoints...),
+		Goal:          layout.Goal,
+		InitialChests: append([]ChestState(nil), layout.InitialChests...),
 		Players: []PlayerState{
 			{PlayerID: "p1", X: p1Start.X, Y: p1Start.Y},
 			{PlayerID: "p2", X: p2Start.X, Y: p2Start.Y},
@@ -371,21 +373,22 @@ func TestThirdPlaceWithMajorityChestPointsBeatsChestlessWinner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFromFullState: %v", err)
 	}
+	layout = match.Layout()
 	if err := restored.Apply(map[string]Action{
-		"p1": {Action: "move", Direction: directionTo(p1Start, match.Ruleset().Goal)},
+		"p1": {Action: "move", Direction: directionTo(p1Start, layout.Goal)},
 		"p2": {Action: "move", Direction: directionTo(p2Start, p1Start)},
 		"p3": {Action: "move", Direction: directionTo(p3Start, p2Start)},
 	}); err != nil {
 		t.Fatalf("Apply first finish turn: %v", err)
 	}
 	if err := restored.Apply(map[string]Action{
-		"p2": {Action: "move", Direction: directionTo(p1Start, match.Ruleset().Goal)},
+		"p2": {Action: "move", Direction: directionTo(p1Start, layout.Goal)},
 		"p3": {Action: "move", Direction: directionTo(p2Start, p1Start)},
 	}); err != nil {
 		t.Fatalf("Apply second finish turn: %v", err)
 	}
 	if err := restored.Apply(map[string]Action{
-		"p3": {Action: "move", Direction: directionTo(p1Start, match.Ruleset().Goal)},
+		"p3": {Action: "move", Direction: directionTo(p1Start, layout.Goal)},
 	}); err != nil {
 		t.Fatalf("Apply third finish turn: %v", err)
 	}

@@ -232,3 +232,36 @@ AI プロトコルを早く実証することにある。WASM ランタイム統
 - 実装中は最終運用形と一時的に差分が出るため、WASM 統合を後回しにしたまま固定化しない運用が必要
 
 ---
+
+## [2026-05-12] Dungeon domain は ruleset/layout/state/payload の subsystem 境界で再編する
+
+### Context
+Phase 5 完了時点の `games/dungeon` では、`Ruleset`、`FullState`、`Match` に static rule、
+generated layout、mutable state、payload assembly が集まっていた。この構成でも fixed-map / seeded-maze
+までは実装できるが、敵、罠、消費アイテム、複数 floor などを追加すると、どの data が seed 由来で、
+どの data が進行中 state で、どの data が外部 contract payload なのかが曖昧になり、変更影響を追いにくい。
+
+### Decision
+Dungeon domain は少なくとも以下の subsystem 境界で再編する。
+
+- `ruleset definition`: static rule
+- `generated layout`: seed から決まる初期配置
+- `match state`: turn ごとに変化する mutable state
+- `contract payload`: AI / platform / spectator 向け view
+
+`Match` は domain façade として残してよいが、state assembly、layout 生成、payload 投影までを
+再び 1 箇所へ集約してはならない。fresh run / resume では static rule 選択、layout 再構築、mutable state 復元を
+分離して扱う。
+
+### Consequences
+
+**利点:**
+- 将来 actor / item / effect / combat を追加するときに、layout 由来か mutable state 由来かを先に固定できる
+- replay / resume で `rng_seed` から再生成した layout と保存済み payload の一致確認を独立責務として保てる
+- `Match.Apply` のような façade API を残しつつ、内部の state assembly と payload projection を差し替えやすい
+
+**制約:**
+- platform から見える external payload shape は互換維持を優先する
+- dungeon package tree は引き続き top-level portable package とし、新しい `internal` 依存を持ち込まない
+
+---

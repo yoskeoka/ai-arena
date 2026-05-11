@@ -1,5 +1,12 @@
 # Lessons
 
+## [2026-05-12] 連続 execution plan にまたがる issue は最後の plan まで閉じない
+
+- **Mistake**: 今回の plan で部分的に refactor が進んだ段階で、連続 refactor line 全体の親 issue を `docs/issues/done/` へ移してしまった
+- **Pattern**: 「今回の差分で issue の方向性に着手したこと」と「issue に書かれた follow-up line 全体を完了したこと」を分離せず、途中 PR で close 判定してしまう
+- **Rule**: issue が後続 plan までまたがる tracking 用の親 issue なら、途中の execution PR では `done/` へ移さない。PR body に `remains open: <closing plan>` を明記し、issue の close は最後の plan を終えた PR にだけ載せる
+- **Applied**: `docs/issues/dungeon-post-phase5-refactor-before-feature-expansion.md` と `platform-phase5-06` 系の連続 refactor plan、今後の multi-plan refactor tracking issue 運用
+
 ## [2026-05-12] 再発調査用 issue には失敗 output を残す
 
 - **Mistake**: unrelated regression を `docs/issues/` へ切り出したとき、失敗テスト名と推測だけを書き、実際の assertion や event log 抜粋を十分に残さなかった
