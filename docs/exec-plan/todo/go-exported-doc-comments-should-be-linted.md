@@ -57,7 +57,7 @@ Addresses:
 - `make lint` に `revive` を追加し、Go comment policy の入口を同 target に揃える
 - `revive` は個別 tool pinning の一部として扱い、`golangci-lint` は引き続き導入しない
 - 常設 rule として `exported` および `package-comments` を有効化する
-- package comment requirement の適用境界と、必要なら `TEST` や `main` package の扱いを明文化する
+- package comment requirement の適用境界と、必要なら `foo_test` のような external test package や `cmd/**` の `package main` の扱いを明文化する
 
 ### Optional adjacent wording sync
 
