@@ -1,6 +1,10 @@
 # platform-phase5-06-dungeon-expansion-foundation-03-expansion-seams-and-deterministic-contract
 **Execution**: Use `/execute-task` to implement this plan.
 
+Addresses:
+
+- `docs/issues/dungeon-post-phase5-refactor-before-feature-expansion.md`
+
 ## Objective
 
 Rogue / NetHack 系の拡張へ入る前提として、dungeon の expansion seam と deterministic contract を
@@ -23,6 +27,7 @@ depends on:
 - deterministic rule を subsystem 単位で明文化する
 - scenario catalog / deterministic regression / replay verification の役割分担を整理する
 - feature expansion 開始前に必要な issue close 条件を定義する
+- この plan の execution 完了時に `docs/issues/dungeon-post-phase5-refactor-before-feature-expansion.md` を `docs/issues/done/` へ移す
 
 この plan では以下は扱わない。
 
@@ -78,6 +83,7 @@ depends on:
 ### issue closure support
 
 - この issue を閉じるための完了条件を plan / spec / tests 上で明確化する
+- execution PR では issue file を `docs/issues/done/` へ移す
 
 ## Verification
 
@@ -85,6 +91,7 @@ depends on:
 - scenario catalog, deterministic result regression, replay/resume verification の 3 層が役割分担どおりに通る
 - future subsystem skeleton が hidden information を bypass しない
 - extension seam の追加で `internal` 依存や runner 直結の逆流が起きていない
+- 実装完了時に `docs/issues/dungeon-post-phase5-refactor-before-feature-expansion.md` が `docs/issues/done/` へ移動している
 
 ## Sub-tasks
 
@@ -93,6 +100,7 @@ depends on:
 - [ ] scenario catalog / regression / replay verification の役割を再整理する
 - [ ] narrow interface or skeleton を追加する
 - [ ] issue close 条件を定義する
+- [ ] execution 完了時に issue file を `docs/issues/done/` へ移す
 
 ## Parallelism
 
