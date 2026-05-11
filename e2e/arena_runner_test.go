@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pmezard/go-difflib/difflib"
 	"github.com/yoskeoka/ai-arena/games/dungeon"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
@@ -1082,7 +1083,7 @@ func assertGoldenJSON(t *testing.T, goldenPath string, got any) {
 	}
 	gotJSON := mustIndentedJSON(got)
 	if string(want) != string(gotJSON) {
-		t.Fatalf("golden mismatch for %s\nwant:\n%s\ngot:\n%s", goldenPath, want, gotJSON)
+		t.Fatalf("golden mismatch for %s\n%s", goldenPath, unifiedJSONDiff(string(want), string(gotJSON), "golden", "got"))
 	}
 }
 
@@ -1092,8 +1093,25 @@ func assertCanonicalJSONEqual(t *testing.T, left, right any, message string) {
 	leftJSON := mustIndentedJSON(left)
 	rightJSON := mustIndentedJSON(right)
 	if string(leftJSON) != string(rightJSON) {
-		t.Fatalf("%s\nleft:\n%s\nright:\n%s", message, leftJSON, rightJSON)
+		t.Fatalf("%s\n%s", message, unifiedJSONDiff(string(leftJSON), string(rightJSON), "left", "right"))
 	}
+}
+
+func unifiedJSONDiff(want, got, fromFile, toFile string) string {
+	diff, err := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+		A:        difflib.SplitLines(want),
+		B:        difflib.SplitLines(got),
+		FromFile: fromFile,
+		ToFile:   toFile,
+		Context:  3,
+	})
+	if err != nil {
+		return "failed to generate unified diff: " + err.Error()
+	}
+	if diff == "" {
+		return "(no textual diff)"
+	}
+	return diff
 }
 
 func parseArenaOutput(stdout string) ([]runnerLogRecord, match.Record, error) {

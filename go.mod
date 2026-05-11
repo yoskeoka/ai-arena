@@ -38,6 +38,7 @@ require (
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/openai/openai-go/v3 v3.32.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/securego/gosec/v2 v2.26.1 // indirect
 	github.com/sonatard/noctx v0.5.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
