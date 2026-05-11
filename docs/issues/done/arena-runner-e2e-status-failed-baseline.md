@@ -29,7 +29,7 @@
 
 ## Resolution
 
-2026-05-12 に `main` で再確認したところ、この failure は再現しなかった。
+2026-05-12 JST（2026-05-11 UTC）に `main` で再確認したところ、この failure は再現しなかった。
 
 - `go test ./e2e -run 'TestArenaRunnerHappyPaths|TestArenaRunnerFailurePaths|TestArenaRunnerStartFromSnapshot|TestArenaRunnerResumeFromHistoryAndContinue' -count=1` は成功した。
 - `make test` も成功し、issue に記載した `e2e/arena_runner_test.go` の `status = "failed", want completed` は出なかった。
