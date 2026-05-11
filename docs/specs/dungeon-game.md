@@ -459,7 +459,8 @@ terminal public state から導ける compact な normalized result shape を比
 - `placements`
 - player ごとの `score` / `goal_bonus` / `chest_points` / `finished_turn`
 - `map_id` / `turn` / `max_turns` のような selected public-state field
-- `remaining_chests` と、その count / total points
+  - `turn` は terminal public state 由来の値を正本とし、summary top-level field と不一致なら test failure とみなしてよい
+- `remaining_chests` の `(x, y, points)` と、その count / total points
 
 以下のような run-specific field は比較対象に含めない。
 
@@ -473,6 +474,7 @@ terminal public state から導ける compact な normalized result shape を比
 - この failure は「勝者が変わった」「score breakdown が変わった」「残宝箱が変わった」などを含む deterministic drift として扱い、まず golden 更新ではなく実装修正対象とみなす
 - golden 更新を許可するのは、`game_version` または `ruleset_version` の意図的更新、deterministic AI 実装の意図的変更、normalized result shape 自体の見直しを行った場合に限る
 - golden 更新時は、何が変わったため更新可能なのかを PR と spec/plan に明示する
+- たとえば `remaining_chests` の座標まで deterministic contract に含めるよう shape を強めた場合や、どの summary field を public-state の正本として比較するかを見直した場合は、その shape review を更新理由として明示してよい
 
 Phase 5 時点の必須 coverage は Go local-subprocess reference bot path に置く。WASM path は同じ decision layer を
 使ってよいが、この phase では runtime parity まで同じ regression test へ含めることを必須にしない。
