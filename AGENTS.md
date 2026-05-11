@@ -18,6 +18,12 @@
 - See `docs/design-decisions/adr.md` for the background and decision history behind the internal documentation policy.
 - When editing GitHub Actions workflows or composite actions, use `pinact` to pin or update `uses:` references rather than hand-editing version tags.
 
+## Spec Writing Discipline
+
+- In `docs/specs/*` and spec-oriented exec plans, write the contract in terms of responsibilities, boundaries, inputs/outputs, and observable behavior before introducing implementation symbols.
+- Keep concrete package, type, interface, function, or method names out of spec prose unless the name itself is a stable abstract concept or a transport/schema contract that readers must share.
+- When a concrete symbol name is unavoidable, explain the contract role it fixes in the same paragraph instead of assuming the current code structure is self-explanatory.
+
 ## Observation Discipline
 
 - For `arena-runner` artifacts, default reading order is `result-summary.json` -> `exported-snapshot.json` / `snapshot.json` -> `structured-log.ndjson` / `record.json` / `history.json`.
