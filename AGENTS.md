@@ -23,3 +23,8 @@
 - For `arena-runner` artifacts, default reading order is `result-summary.json` -> `exported-snapshot.json` / `snapshot.json` -> `structured-log.ndjson` / `record.json` / `history.json`.
 - Treat `record.json.event_log` and `history.json` as source-of-truth / replay inputs, not the default first artifact for ordinary result inspection.
 - When quoting or summarizing dungeon runs for implementation work, prefer compact artifacts first and avoid pasting long per-turn logs unless causal tracing is required.
+
+## Deterministic Golden Discipline
+
+- When an ai-arena PR updates a deterministic regression golden, use the ai-arena local `.github/PULL_REQUEST_TEMPLATE.md` section for that update, check the golden-update box, and explain why the update is allowed.
+- The same PR must also make that update reason explicit in the relevant spec and/or exec-plan, rather than leaving the rationale only in the PR body.

@@ -63,8 +63,9 @@ depends on:
 - 例:
   - `result.placements`
   - per-player `score`, `goal_bonus`, `chest_points`, `finished_turn`
-  - remaining chests
+  - remaining chests の `(x, y, points)`
   - selected public-state fields
+    - `turn` は terminal public-state 由来の値を正本として扱う
 - `match_id` は test harness 側で固定して比較対象へ含めてもよいが、
   deterministic contract の本質条件としては扱わない
 

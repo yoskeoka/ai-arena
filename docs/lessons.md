@@ -111,3 +111,10 @@
 - **Pattern**: source-of-truth file に含まれる deterministic input と、CLI override を同時に許して優先順位問題を残してしまう
 - **Rule**: replay/resume source がすでに `rng_seed` を持つなら、その値を source of truth とする。`--rng-seed` の同時指定は、同値比較で黙認せず明確に reject する
 - **Applied**: `cmd/arena-runner` の `--record-input` / `--snapshot-input` と `--rng-seed` の組み合わせ、`docs/specs/platform.md` の replay/debug 契約
+
+## [2026-05-12] deterministic regression golden は code 内 struct に埋め込まない
+
+- **Mistake**: deterministic regression の expected 値を test code 内の Go struct と `reflect.DeepEqual` に置いた
+- **Pattern**: golden の更新理由と差分確認導線を code 側に閉じると、PR review と AI-assisted 更新時の境界が曖昧になる
+- **Rule**: deterministic regression golden は review しやすい外部 JSON file に置き、test は rerun determinism と golden parity を機械的に比較する
+- **Applied**: `ai-arena/e2e/*` の deterministic regression test、特に dungeon の normalized result golden

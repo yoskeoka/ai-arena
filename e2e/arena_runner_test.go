@@ -6,10 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/yoskeoka/ai-arena/games/dungeon"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
@@ -64,11 +66,44 @@ type resultSummaryArtifact struct {
 			FinishedTurn *int   `json:"finished_turn"`
 		} `json:"players"`
 		RemainingChests []struct {
+			X      int `json:"x"`
+			Y      int `json:"y"`
 			Points int `json:"points"`
 		} `json:"remaining_chests"`
 		RemainingChestCount  int `json:"remaining_chest_count"`
 		RemainingChestPoints int `json:"remaining_chest_points"`
 	} `json:"dungeon"`
+}
+
+type normalizedDungeonResult struct {
+	MapID               string                    `json:"map_id"`
+	Turn                int                       `json:"turn"`
+	MaxTurns            int                       `json:"max_turns"`
+	Placements          []normalizedPlacement     `json:"placements"`
+	Players             []normalizedDungeonPlayer `json:"players"`
+	RemainingChests     []normalizedChest         `json:"remaining_chests"`
+	RemainingChestCount int                       `json:"remaining_chest_count"`
+	RemainingChestTotal int                       `json:"remaining_chest_total"`
+}
+
+type normalizedPlacement struct {
+	PlayerID string `json:"player_id"`
+	Place    int    `json:"place"`
+}
+
+type normalizedDungeonPlayer struct {
+	PlayerID     string `json:"player_id"`
+	Place        int    `json:"place"`
+	Score        int    `json:"score"`
+	GoalBonus    int    `json:"goal_bonus"`
+	ChestPoints  int    `json:"chest_points"`
+	FinishedTurn int    `json:"finished_turn"`
+}
+
+type normalizedChest struct {
+	X      int `json:"x"`
+	Y      int `json:"y"`
+	Points int `json:"points"`
 }
 
 func TestArenaRunnerHappyPaths(t *testing.T) {
@@ -854,44 +889,27 @@ func TestArenaRunnerWritesDungeonResultSummary(t *testing.T) {
 	}
 }
 
-func TestArenaRunnerDungeonSeededReferenceBotRegressionSummary(t *testing.T) {
-	result := runArena(t,
-		"--game", dungeon.GameID,
-		"--game-version", dungeon.GameVersion,
-		"--ruleset", dungeon.RulesetSeededMazeV1,
-		"--rng-seed", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-		"--match-id", "dungeon-seeded-summary",
-		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local-seeded",
-		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local-seeded",
-	)
+func TestArenaRunnerDungeonSeededReferenceBotDeterministicResultRegression(t *testing.T) {
+	first := runSeededDungeonDeterministicRegression(t, "dungeon-seeded-deterministic-a")
+	second := runSeededDungeonDeterministicRegression(t, "dungeon-seeded-deterministic-b")
 
-	if result.Record.Status != contract.StatusCompleted {
-		t.Fatalf("status = %q, want completed", result.Record.Status)
+	// Fail fast on same-condition nondeterminism before comparing to the checked-in golden.
+	assertCanonicalJSONEqual(t, first, second, "normalized result mismatch across reruns")
+	assertGoldenJSON(t, filepath.Join(repoRoot(t), "e2e", "golden", "normalized-dungeon-result.json"), first)
+}
+
+func TestArenaRunnerDungeonDeterministicGoldenIsCanonicalJSON(t *testing.T) {
+	goldenPath := filepath.Join(repoRoot(t), "e2e", "golden", "normalized-dungeon-result.json")
+	data, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
 	}
-	summary := readResultSummary(t, result.MatchDir)
-	if summary.RulesetVersion != dungeon.RulesetSeededMazeV1 {
-		t.Fatalf("summary ruleset = %q, want %q", summary.RulesetVersion, dungeon.RulesetSeededMazeV1)
+	var payload normalizedDungeonResult
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("decode golden: %v", err)
 	}
-	if summary.Turn != 27 {
-		t.Fatalf("summary turn = %d, want 27", summary.Turn)
-	}
-	if len(summary.Placements) != 2 || summary.Placements[0].PlayerID != "p2" || summary.Placements[0].Place != 1 {
-		t.Fatalf("placements = %+v, want p2 first", summary.Placements)
-	}
-	if summary.Dungeon == nil {
-		t.Fatal("summary missing dungeon payload")
-	}
-	if summary.Dungeon.RemainingChestCount != 2 || summary.Dungeon.RemainingChestPoints != 36 {
-		t.Fatalf("remaining chests = %d/%d points, want 2/36", summary.Dungeon.RemainingChestCount, summary.Dungeon.RemainingChestPoints)
-	}
-	if len(summary.Dungeon.Players) != 2 {
-		t.Fatalf("summary players = %d, want 2", len(summary.Dungeon.Players))
-	}
-	if got := summary.Dungeon.Players[0]; got.PlayerID != "p2" || got.Score != 46 || got.GoalBonus != 28 || got.ChestPoints != 18 {
-		t.Fatalf("summary first player = %+v, want p2 score=46 goal_bonus=28 chest_points=18", got)
-	}
-	if got := summary.Dungeon.Players[1]; got.PlayerID != "p1" || got.Score != 42 || got.GoalBonus != 42 || got.ChestPoints != 0 {
-		t.Fatalf("summary second player = %+v, want p1 score=42 goal_bonus=42 chest_points=0", got)
+	if string(data) != string(mustIndentedJSON(payload)) {
+		t.Fatalf("golden %s is not canonical pretty JSON", goldenPath)
 	}
 }
 
@@ -938,6 +956,87 @@ func readResultSummary(t *testing.T, matchDir string) resultSummaryArtifact {
 	return summary
 }
 
+func runSeededDungeonDeterministicRegression(t *testing.T, matchID string) normalizedDungeonResult {
+	t.Helper()
+
+	result := runArena(t,
+		"--game", dungeon.GameID,
+		"--game-version", dungeon.GameVersion,
+		"--ruleset", dungeon.RulesetSeededMazeV1,
+		"--rng-seed", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+		"--match-id", matchID,
+		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local-seeded",
+		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local-seeded",
+	)
+	if result.Record.Status != contract.StatusCompleted {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
+	}
+	summary := readResultSummary(t, result.MatchDir)
+	if summary.RulesetVersion != dungeon.RulesetSeededMazeV1 {
+		t.Fatalf("summary ruleset = %q, want %q", summary.RulesetVersion, dungeon.RulesetSeededMazeV1)
+	}
+	return normalizeDungeonResult(t, summary)
+}
+
+func normalizeDungeonResult(t *testing.T, summary resultSummaryArtifact) normalizedDungeonResult {
+	t.Helper()
+
+	if summary.Dungeon == nil {
+		t.Fatal("summary missing dungeon payload")
+	}
+
+	got := normalizedDungeonResult{
+		MapID:               summary.Dungeon.MapID,
+		Turn:                summary.Dungeon.Turn,
+		MaxTurns:            summary.Dungeon.MaxTurns,
+		RemainingChestCount: summary.Dungeon.RemainingChestCount,
+		RemainingChestTotal: summary.Dungeon.RemainingChestPoints,
+	}
+	if summary.Turn != summary.Dungeon.Turn {
+		t.Fatalf("summary turn mismatch: top-level=%d dungeon=%d", summary.Turn, summary.Dungeon.Turn)
+	}
+	for _, placement := range summary.Placements {
+		got.Placements = append(got.Placements, normalizedPlacement{
+			PlayerID: placement.PlayerID,
+			Place:    placement.Place,
+		})
+	}
+	for _, player := range summary.Dungeon.Players {
+		got.Players = append(got.Players, normalizedDungeonPlayer{
+			PlayerID:     player.PlayerID,
+			Place:        player.Place,
+			Score:        player.Score,
+			GoalBonus:    player.GoalBonus,
+			ChestPoints:  player.ChestPoints,
+			FinishedTurn: finishedTurnValue(player.FinishedTurn),
+		})
+	}
+	for _, chest := range summary.Dungeon.RemainingChests {
+		got.RemainingChests = append(got.RemainingChests, normalizedChest{
+			X:      chest.X,
+			Y:      chest.Y,
+			Points: chest.Points,
+		})
+	}
+	sort.Slice(got.RemainingChests, func(i, j int) bool {
+		if got.RemainingChests[i].X != got.RemainingChests[j].X {
+			return got.RemainingChests[i].X < got.RemainingChests[j].X
+		}
+		if got.RemainingChests[i].Y != got.RemainingChests[j].Y {
+			return got.RemainingChests[i].Y < got.RemainingChests[j].Y
+		}
+		return got.RemainingChests[i].Points < got.RemainingChests[j].Points
+	})
+	return got
+}
+
+func finishedTurnValue(v *int) int {
+	if v == nil {
+		return -1
+	}
+	return *v
+}
+
 func findFlagValue(args []string, name string) string {
 	for i := 0; i < len(args)-1; i++ {
 		if args[i] == name {
@@ -965,6 +1064,38 @@ func mustJSON(v any) []byte {
 		panic(err)
 	}
 	return data
+}
+
+func mustIndentedJSON(v any) []byte {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return append(data, '\n')
+}
+
+func assertGoldenJSON(t *testing.T, goldenPath string, got any) {
+	t.Helper()
+
+	wantData, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("read golden %s: %v", goldenPath, err)
+	}
+	var want normalizedDungeonResult
+	if err := json.Unmarshal(wantData, &want); err != nil {
+		t.Fatalf("decode golden %s: %v", goldenPath, err)
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("golden mismatch for %s (-want +got):\n%s", goldenPath, diff)
+	}
+}
+
+func assertCanonicalJSONEqual(t *testing.T, left, right any, message string) {
+	t.Helper()
+
+	if diff := cmp.Diff(left, right); diff != "" {
+		t.Fatalf("%s (-left +right):\n%s", message, diff)
+	}
 }
 
 func parseArenaOutput(stdout string) ([]runnerLogRecord, match.Record, error) {
