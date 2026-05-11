@@ -187,65 +187,8 @@ func (m *Match) Apply(actions map[string]Action) error {
 	if m.Terminal() {
 		return fmt.Errorf("dungeon: match is already terminal")
 	}
-
-	activePlayers := m.PendingPlayerIDs()
-	nextPositions := make(map[string]Position, len(activePlayers))
-	for _, playerID := range activePlayers {
-		current := m.state.playerStates[playerID].position()
-		action := actions[playerID]
-		if action.Action == "" {
-			action = Action{Action: "wait"}
-		}
-		if !m.CanApply(playerID, action) {
-			action = Action{Action: "wait"}
-		}
-		nextPositions[playerID] = m.resolvePosition(current, action)
-	}
-
-	for _, playerID := range activePlayers {
-		player := m.state.playerStates[playerID]
-		target := nextPositions[playerID]
-		player.X = target.X
-		player.Y = target.Y
-		m.state.playerStates[playerID] = player
-	}
-
-	for chestID, chest := range chestsCopy(m.state.uncollectedChests) {
-		claimants := make([]string, 0, len(activePlayers))
-		for _, playerID := range activePlayers {
-			player := m.state.playerStates[playerID]
-			if player.X == chest.X && player.Y == chest.Y {
-				claimants = append(claimants, playerID)
-			}
-		}
-		if len(claimants) == 0 {
-			continue
-		}
-		share := chest.Points / len(claimants)
-		for _, playerID := range claimants {
-			player := m.state.playerStates[playerID]
-			player.ChestPoints += share
-			player.Score += share
-			m.state.playerStates[playerID] = player
-		}
-		delete(m.state.uncollectedChests, chestID)
-		for _, known := range m.state.discoveredChests {
-			delete(known, chestID)
-		}
-	}
-
-	for _, playerID := range activePlayers {
-		player := m.state.playerStates[playerID]
-		if player.FinishedTurn == nil && player.X == m.layout.Goal.X && player.Y == m.layout.Goal.Y {
-			finishedTurn := m.state.turn + 1
-			player.FinishedTurn = &finishedTurn
-			m.state.playerStates[playerID] = player
-		}
-	}
-
-	m.state.turn++
-	m.state.applyGoalBonuses(m.ruleset, m.playerOrder)
-	m.state.refreshDiscoveries(m.ruleset, m.layout, m.playerOrder)
+	engine := newTurnEngine(m, actions)
+	engine.run()
 	return nil
 }
 
