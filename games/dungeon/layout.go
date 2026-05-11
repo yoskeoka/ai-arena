@@ -322,6 +322,7 @@ func decodeSeedMaterial(seed string) ([]byte, error) {
 	return decoded, nil
 }
 
+// GenerateSeedHex returns a fresh 32-byte seed encoded as 64 lowercase hex characters.
 func GenerateSeedHex() (string, error) {
 	buf := make([]byte, 32)
 	if _, err := cryptorand.Read(buf); err != nil {

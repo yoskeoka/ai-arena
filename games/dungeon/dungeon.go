@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Match owns one in-memory dungeon match lifecycle.
 type Match struct {
 	meta        Metadata
 	ruleset     Ruleset
@@ -15,10 +16,12 @@ type Match struct {
 	rngSeed     string
 }
 
+// SupportedRulesets returns the ruleset identifiers accepted by this package.
 func SupportedRulesets() []string {
 	return []string{RulesetFixedMapV1, RulesetSeededMazeV1}
 }
 
+// MetadataForSelection resolves metadata plus static rules for one game selection.
 func MetadataForSelection(gameVersion, ruleset string) (Metadata, Ruleset, error) {
 	if gameVersion != GameVersion {
 		return Metadata{}, Ruleset{}, fmt.Errorf("dungeon: unsupported game version %q", gameVersion)
@@ -33,6 +36,7 @@ func MetadataForSelection(gameVersion, ruleset string) (Metadata, Ruleset, error
 	}
 }
 
+// New creates a fresh dungeon match from configuration.
 func New(cfg Config) (*Match, error) {
 	meta, ruleset, err := MetadataForSelection(cfg.GameVersion, cfg.Ruleset)
 	if err != nil {
@@ -55,6 +59,7 @@ func New(cfg Config) (*Match, error) {
 	return match, nil
 }
 
+// NewFromFullState restores a dungeon match from a previously captured full state.
 func NewFromFullState(cfg Config, state FullState) (*Match, error) {
 	meta, ruleset, err := MetadataForSelection(cfg.GameVersion, cfg.Ruleset)
 	if err != nil {
@@ -112,26 +117,32 @@ func seededMazeBaseRuleset() Ruleset {
 	}
 }
 
+// Metadata returns the resolved game metadata for this match.
 func (m *Match) Metadata() Metadata {
 	return m.meta
 }
 
+// Ruleset returns a defensive copy of the static rules for this match.
 func (m *Match) Ruleset() Ruleset {
 	return cloneRuleset(m.ruleset)
 }
 
+// Layout returns a defensive copy of the generated layout for this match.
 func (m *Match) Layout() GeneratedLayout {
 	return cloneLayout(m.layout)
 }
 
+// Terminal reports whether the match has already ended.
 func (m *Match) Terminal() bool {
 	return m.state.terminal(m.ruleset, m.playerOrder)
 }
 
+// Turn returns the number of turns already applied.
 func (m *Match) Turn() int {
 	return m.state.turn
 }
 
+// PendingPlayerIDs returns players that still need an action in the current turn.
 func (m *Match) PendingPlayerIDs() []string {
 	if m.Terminal() {
 		return nil
@@ -145,18 +156,22 @@ func (m *Match) PendingPlayerIDs() []string {
 	return playerIDs
 }
 
+// CurrentVisibleState builds the current player-specific observation payload.
 func (m *Match) CurrentVisibleState(playerID string) (VisibleState, error) {
 	return m.state.visibleState(m.ruleset, m.layout, m.playerOrder, playerID)
 }
 
+// FullState returns the full resumable snapshot for this match.
 func (m *Match) FullState() FullState {
 	return m.state.fullState(m.ruleset, m.layout, m.playerOrder, m.rngSeed)
 }
 
+// PublicState returns the spectator-facing snapshot for this match.
 func (m *Match) PublicState() PublicState {
 	return m.state.publicState(m.ruleset, m.layout, m.playerOrder, m.rngSeed)
 }
 
+// LegalActionHint returns a JSON Schema-like hint for supported action payloads.
 func (m *Match) LegalActionHint() json.RawMessage {
 	return mustJSON(map[string]any{
 		"type": "object",
@@ -183,6 +198,7 @@ func (m *Match) LegalActionHint() json.RawMessage {
 	})
 }
 
+// Apply resolves one turn of actions and advances the match state.
 func (m *Match) Apply(actions map[string]Action) error {
 	if m.Terminal() {
 		return fmt.Errorf("dungeon: match is already terminal")
@@ -249,6 +265,7 @@ func (m *Match) Apply(actions map[string]Action) error {
 	return nil
 }
 
+// CanApply reports whether an action is legal for the player's current state.
 func (m *Match) CanApply(playerID string, action Action) bool {
 	player, ok := m.state.playerStates[playerID]
 	if !ok {
@@ -268,6 +285,7 @@ func (m *Match) CanApply(playerID string, action Action) bool {
 	}
 }
 
+// ParseAction decodes and validates one dungeon action payload.
 func ParseAction(raw json.RawMessage) (Action, error) {
 	var action Action
 	if err := json.Unmarshal(raw, &action); err != nil {
@@ -290,6 +308,7 @@ func ParseAction(raw json.RawMessage) (Action, error) {
 	return action, nil
 }
 
+// Placements computes final rank ordering from the current scoreboard.
 func (m *Match) Placements() []Placement {
 	scores := m.state.scoreboard(m.playerOrder)
 	placements := make([]Placement, 0, len(scores))
@@ -308,14 +327,17 @@ func (m *Match) Placements() []Placement {
 	return placements
 }
 
+// ShortestPath returns the layout path between two positions when one exists.
 func (m *Match) ShortestPath(from, to Position) ([]Position, bool) {
 	return shortestPath(m.layout.Tiles, from, to)
 }
 
+// SpawnPoints returns the initial spawn positions for the current layout.
 func (m *Match) SpawnPoints() []Position {
 	return append([]Position(nil), m.layout.SpawnPoints...)
 }
 
+// UncollectedChests returns the remaining chest states in stable order.
 func (m *Match) UncollectedChests() []ChestState {
 	return chestsFromMap(m.state.uncollectedChests)
 }

@@ -1,0 +1,8 @@
+ignoreGeneratedHeader = true
+severity = "warning"
+
+[rule.exported]
+Exclude = ["cmd/**/*.go", "internal/**/*.go", "testdata/**/*.go"]
+
+[rule.package-comments]
+Exclude = ["cmd/**/*.go", "internal/**/*.go", "testdata/**/*.go"]

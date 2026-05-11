@@ -17,6 +17,7 @@ func NewWorldModel(memory *Memory) *WorldModel {
 	return &WorldModel{memory: memory}
 }
 
+// GoalPath returns a known path from start to the discovered goal when available.
 func (w *WorldModel) GoalPath(start dungeon.Position) ([]dungeon.Position, bool) {
 	goal := w.memory.KnownGoal()
 	if goal == nil {
@@ -29,6 +30,7 @@ func (w *WorldModel) GoalPath(start dungeon.Position) ([]dungeon.Position, bool)
 	return path, true
 }
 
+// ShortestKnownPath returns a path that only uses already observed non-wall tiles.
 func (w *WorldModel) ShortestKnownPath(from, to dungeon.Position) ([]dungeon.Position, bool) {
 	if from == to {
 		return []dungeon.Position{from}, true
@@ -68,6 +70,7 @@ func (w *WorldModel) ShortestKnownPath(from, to dungeon.Position) ([]dungeon.Pos
 	return nil, false
 }
 
+// IsFrontier reports whether a known tile touches at least one unknown neighbor.
 func (w *WorldModel) IsFrontier(pos dungeon.Position) bool {
 	directions := []string{"up", "down", "left", "right"}
 	for _, direction := range directions {
@@ -79,6 +82,7 @@ func (w *WorldModel) IsFrontier(pos dungeon.Position) bool {
 	return false
 }
 
+// StepTowardAny chooses the first move toward the best reachable target.
 func (w *WorldModel) StepTowardAny(start dungeon.Position, targets []dungeon.Position) (dungeon.Action, bool) {
 	bestPath := []dungeon.Position(nil)
 	for _, target := range targets {
@@ -96,6 +100,7 @@ func (w *WorldModel) StepTowardAny(start dungeon.Position, targets []dungeon.Pos
 	return directionAction(start, bestPath[1]), true
 }
 
+// ChooseFrontierTarget picks a reachable frontier tile and the first step toward it.
 func (w *WorldModel) ChooseFrontierTarget(start dungeon.Position) (*dungeon.Position, dungeon.Action, bool) {
 	type candidate struct {
 		target dungeon.Position

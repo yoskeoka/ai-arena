@@ -7,6 +7,7 @@ import (
 	"github.com/yoskeoka/ai-arena/games/dungeon"
 )
 
+// Policy name constants for the built-in dungeon bot variants.
 const (
 	PolicyBalanced = "balanced"
 	PolicyGoalRush = "goal-rush"
