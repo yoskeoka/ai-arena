@@ -43,25 +43,27 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	layout := world.Layout()
+	rulesetDef := world.Ruleset()
 
 	fmt.Printf("map_id=%s rng_seed=%s max_turns=%d view_radius=%d goal_bonuses=%v\n",
-		world.Ruleset().MapID,
+		rulesetDef.MapID,
 		world.PublicState().RNGSeed,
-		world.Ruleset().MaxTurns,
-		world.Ruleset().ViewRadius,
-		world.Ruleset().GoalBonuses,
+		rulesetDef.MaxTurns,
+		rulesetDef.ViewRadius,
+		rulesetDef.GoalBonuses,
 	)
 	chestTotal := 0
-	for _, chest := range world.Ruleset().InitialChests {
+	for _, chest := range layout.InitialChests {
 		chestTotal += chest.Points
 	}
 	majorityFloor := chestTotal/2 + 1
 	thirdPlaceBonus := 0
-	if len(world.Ruleset().GoalBonuses) >= 3 {
-		thirdPlaceBonus = world.Ruleset().GoalBonuses[2]
+	if len(rulesetDef.GoalBonuses) >= 3 {
+		thirdPlaceBonus = rulesetDef.GoalBonuses[2]
 	}
-	chestValues := make([]int, 0, len(world.Ruleset().InitialChests))
-	for _, chest := range world.Ruleset().InitialChests {
+	chestValues := make([]int, 0, len(layout.InitialChests))
+	for _, chest := range layout.InitialChests {
 		chestValues = append(chestValues, chest.Points)
 	}
 	slices.Sort(chestValues)
@@ -80,20 +82,20 @@ func run(args []string) error {
 	fmt.Printf("balance chest_total=%d majority_threshold=%d first_no_chest=%d third_with_min_majority=%d\n",
 		chestTotal,
 		majorityFloor,
-		world.Ruleset().GoalBonuses[0],
+		rulesetDef.GoalBonuses[0],
 		thirdPlaceBonus+majorityChestMin,
 	)
 	for _, row := range world.PublicState().Tiles {
 		fmt.Println(row)
 	}
 	for i, spawn := range world.SpawnPoints()[:2] {
-		path, ok := world.ShortestPath(spawn, world.Ruleset().Goal)
+		path, ok := world.ShortestPath(spawn, layout.Goal)
 		if !ok {
 			return fmt.Errorf("no path from spawn %d to goal", i+1)
 		}
 		fmt.Printf("spawn_%d_to_goal steps=%d route=%v\n", i+1, len(path)-1, path)
 	}
-	for i, chest := range world.Ruleset().InitialChests {
+	for i, chest := range layout.InitialChests {
 		path, ok := world.ShortestPath(world.SpawnPoints()[0], dungeon.Position{X: chest.X, Y: chest.Y})
 		if !ok {
 			return fmt.Errorf("no path from spawn 1 to chest %d", i+1)
