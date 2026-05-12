@@ -31,8 +31,19 @@
 3. `go vet -vettool=<noctx> ./...`
 4. `staticcheck ./...`
 5. `gosec ./...`
+6. `revive -config revive.toml ./...`
 
 `golangci-lint` は導入せず、必要な checker を個別 tool として固定して使う。
+
+`revive` は初回導入では comment policy の最小入口として使い、常設 rule は
+`exported` と `package-comments` に限定する。repo-wide style ルールの一括導入は行わない。
+
+`exported` rule は exported const / type / var / func / method の doc comment を要求する。
+初回導入の対象は repo-external API / reusable library surface として扱う `games/**` 配下に絞る。
+
+`package-comments` rule は library package に package comment を要求する。初回導入では
+`games/**` 配下を対象とし、`cmd/**` の `package main` entrypoint、`internal/**` の repo-internal
+package、`testdata/**` の fixture/helper package は対象から除外してよい。
 
 ## Tool Versioning
 
@@ -40,6 +51,7 @@
 - `noctx`
 - `staticcheck`
 - `gosec`
+- `revive`
 
 これらの tool version は module 側で明示的に pin し、CI とローカルで同じ version を使う。
 

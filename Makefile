@@ -12,7 +12,7 @@ RUST_WASM_TARGET ?= wasm32-wasip1
 GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
 GOFILES = $(shell git ls-files -- '*.go')
 
-.PHONY: test test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval build-dungeon-go-wasm run-echo-simultaneous run-echo-sequential run-dungeon-local run-dungeon-local-quiet run-dungeon-go-wasm inspect-dungeon-map
+.PHONY: test test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval build-dungeon-go-wasm run-echo-simultaneous run-echo-sequential run-dungeon-local run-dungeon-local-quiet run-dungeon-go-wasm inspect-dungeon-map
 
 test:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
@@ -30,7 +30,7 @@ fmt:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	if [ -n "$(GOFILES)" ]; then $(GO_ENV) $(GO) tool goimports -w $(GOFILES); fi
 
-lint: lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec
+lint: lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive
 
 lint-goimports:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
@@ -58,6 +58,10 @@ lint-staticcheck:
 lint-gosec:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	$(GO_ENV) $(GO) tool gosec -exclude-dir=.cache ./...
+
+lint-revive:
+	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	$(GO_ENV) $(GO) tool revive -config revive.toml ./...
 
 build-janken-go-wasm:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"

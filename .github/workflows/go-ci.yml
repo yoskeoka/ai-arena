@@ -7,6 +7,7 @@ on:
       - "Makefile"
       - "go.mod"
       - "go.sum"
+      - "revive.toml"
       - "**/*.go"
   push:
     branches:
@@ -16,6 +17,7 @@ on:
       - "Makefile"
       - "go.mod"
       - "go.sum"
+      - "revive.toml"
       - "**/*.go"
 
 jobs:

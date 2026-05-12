@@ -48,6 +48,7 @@ func (m *Memory) Observe(state dungeon.VisibleState) {
 	}
 }
 
+// KnownGoal returns a defensive copy of the currently known goal position.
 func (m *Memory) KnownGoal() *dungeon.Position {
 	if m.knownGoal == nil {
 		return nil
@@ -56,10 +57,12 @@ func (m *Memory) KnownGoal() *dungeon.Position {
 	return &goal
 }
 
+// KnownChests returns the currently known chests in stable order.
 func (m *Memory) KnownChests() []dungeon.ChestState {
 	return sortedChestMap(m.knownChests)
 }
 
+// ExploreTarget returns the currently remembered frontier target.
 func (m *Memory) ExploreTarget() *dungeon.Position {
 	if m.exploreTarget == nil {
 		return nil
@@ -68,6 +71,7 @@ func (m *Memory) ExploreTarget() *dungeon.Position {
 	return &target
 }
 
+// SetExploreTarget updates the remembered frontier target.
 func (m *Memory) SetExploreTarget(target *dungeon.Position) {
 	if target == nil {
 		m.exploreTarget = nil

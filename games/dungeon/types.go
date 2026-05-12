@@ -17,6 +17,7 @@ const (
 	DefaultRNGSeed = "0000000000000000000000000000000000000000000000000000000000000000"
 )
 
+// Tile constants encode the public map surface used in snapshots and visible state.
 const (
 	TileWall  = "wall"
 	TileFloor = "floor"
@@ -30,12 +31,14 @@ var (
 	seededMazeMaxTurns = 50
 )
 
+// Metadata identifies one concrete dungeon game selection.
 type Metadata struct {
 	GameID         string
 	GameVersion    string
 	RulesetVersion string
 }
 
+// Config selects a dungeon ruleset, player roster, and optional deterministic seed.
 type Config struct {
 	GameVersion string
 	Ruleset     string
@@ -60,22 +63,26 @@ type GeneratedLayout struct {
 	InitialChests []ChestState
 }
 
+// Position identifies a tile coordinate in the dungeon grid.
 type Position struct {
 	X int `json:"x"`
 	Y int `json:"y"`
 }
 
+// ChestState describes one chest location and its point value.
 type ChestState struct {
 	X      int `json:"x"`
 	Y      int `json:"y"`
 	Points int `json:"points"`
 }
 
+// Action is one normalized player command for a dungeon turn.
 type Action struct {
 	Action    string `json:"action"`
 	Direction string `json:"direction,omitempty"`
 }
 
+// PlayerState is the per-player state shared in dungeon snapshots.
 type PlayerState struct {
 	PlayerID     string `json:"player_id"`
 	X            int    `json:"x"`
@@ -86,12 +93,14 @@ type PlayerState struct {
 	FinishedTurn *int   `json:"finished_turn"`
 }
 
+// VisibleTile is one tile currently visible to a player.
 type VisibleTile struct {
 	X    int    `json:"x"`
 	Y    int    `json:"y"`
 	Tile string `json:"tile"`
 }
 
+// VisibleState is the player-specific observation payload for one turn.
 type VisibleState struct {
 	Turn           int           `json:"turn"`
 	RemainingTurns int           `json:"remaining_turns"`
@@ -103,11 +112,13 @@ type VisibleState struct {
 	Scores         []PlayerState `json:"scores"`
 }
 
+// DiscoveryState records which goal and chests one player has discovered.
 type DiscoveryState struct {
 	KnownGoal   *Position    `json:"known_goal"`
 	KnownChests []ChestState `json:"known_chests"`
 }
 
+// FullState is the full resumable dungeon snapshot including hidden information.
 type FullState struct {
 	MapID             string                    `json:"map_id"`
 	RNGSeed           string                    `json:"rng_seed"`
@@ -122,6 +133,7 @@ type FullState struct {
 	Discovery         map[string]DiscoveryState `json:"discovery"`
 }
 
+// PublicState is the spectator-facing dungeon snapshot without discovery maps.
 type PublicState struct {
 	MapID             string        `json:"map_id"`
 	RNGSeed           string        `json:"rng_seed,omitempty"`
@@ -135,6 +147,7 @@ type PublicState struct {
 	UncollectedChests []ChestState  `json:"uncollected_chests"`
 }
 
+// Placement reports one player's final rank.
 type Placement struct {
 	PlayerID string
 	Place    int
