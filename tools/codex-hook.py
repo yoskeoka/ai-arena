@@ -19,7 +19,6 @@ RELEVANT_STOP_FILES = {
     "go.mod",
     "go.sum",
     "docs/specs/go-quality-gates.md",
-    "docs/specs/codex-hooks.md",
 }
 
 
