@@ -105,9 +105,3 @@ dedicated CI lane と manual helper に分けて維持する。
 - Go-WASM path の継続的検証は dedicated CI lane と manual helper の両輪で担保する
 - Rust-WASM path は `experiment-only` lane として dedicated CI lane / helper に留める
 - default gate へ昇格させるのは、runtime matrix と CI cost を別途評価してからとする
-
-## Codex Hook Integration
-
-- Codex の `PostToolUse` hook は `.go` edit の直後に `make fmt` を呼び出してよい
-- Codex の `Stop` hook は turn 終了時に `make lint` と `make test` を呼び出してよい
-- hook wiring と dispatch path は `docs/specs/codex-hooks.md` の契約に従う
