@@ -12,16 +12,24 @@ import (
 )
 
 const (
+	// StatusAccepted aliases the accepted action decision.
 	StatusAccepted = contract.ActionAccepted
+	// StatusNoAction aliases the no-action decision.
 	StatusNoAction = contract.ActionNoAction
 
-	ReasonTimeout      = contract.ReasonTimeout
-	ReasonMalformed    = contract.ReasonMalformed
+	// ReasonTimeout aliases the timeout failure reason.
+	ReasonTimeout = contract.ReasonTimeout
+	// ReasonMalformed aliases the malformed protocol failure reason.
+	ReasonMalformed = contract.ReasonMalformed
+	// ReasonMismatchedID aliases the mismatched-id failure reason.
 	ReasonMismatchedID = contract.ReasonMismatchedID
+	// ReasonLateResponse aliases the late-response failure reason.
 	ReasonLateResponse = contract.ReasonLateResponse
-	ReasonRuntimeStop  = contract.ReasonRuntimeStop
+	// ReasonRuntimeStop aliases the runtime-stopped failure reason.
+	ReasonRuntimeStop = contract.ReasonRuntimeStop
 )
 
+// Transport abstracts the runtime transport used by a player session.
 type Transport interface {
 	Send(protocol.Request) error
 	Incoming() <-chan runtime.Message
@@ -29,6 +37,7 @@ type Transport interface {
 	StderrSnapshot() runtime.StderrSnapshot
 }
 
+// Request describes one player-facing protocol call.
 type Request struct {
 	ID       string
 	Method   string
@@ -36,6 +45,7 @@ type Request struct {
 	Deadline time.Duration
 }
 
+// Result is the normalized outcome of a player-facing protocol call.
 type Result struct {
 	Status                 contract.ActionDecision
 	FailureReason          contract.FailureReason
@@ -43,6 +53,7 @@ type Result struct {
 	IgnoredLateResponseIDs []string
 }
 
+// Session manages one player's request/response lifecycle over a Transport.
 type Session struct {
 	transport   Transport
 	lateIDs     map[string]struct{}
@@ -50,6 +61,7 @@ type Session struct {
 	onMalformed func(error)
 }
 
+// New constructs a session over the provided transport.
 func New(transport Transport) *Session {
 	return &Session{
 		transport: transport,
@@ -57,30 +69,37 @@ func New(transport Transport) *Session {
 	}
 }
 
+// SetLateResponseHook registers a callback for ignored late responses.
 func (s *Session) SetLateResponseHook(fn func(string)) {
 	s.onLate = fn
 }
 
+// SetMalformedHook registers a callback for malformed transport messages.
 func (s *Session) SetMalformedHook(fn func(error)) {
 	s.onMalformed = fn
 }
 
+// Init performs the initialization request flow.
 func (s *Session) Init(ctx context.Context, req Request) Result {
 	return s.call(ctx, req)
 }
 
+// Turn performs one turn request flow.
 func (s *Session) Turn(ctx context.Context, req Request) Result {
 	return s.call(ctx, req)
 }
 
+// GameOver performs the final game-over request flow.
 func (s *Session) GameOver(ctx context.Context, req Request) Result {
 	return s.call(ctx, req)
 }
 
+// Close closes the underlying transport.
 func (s *Session) Close(ctx context.Context) error {
 	return s.transport.Close(ctx)
 }
 
+// StderrSnapshot returns the latest captured stderr snapshot.
 func (s *Session) StderrSnapshot() runtime.StderrSnapshot {
 	return s.transport.StderrSnapshot()
 }

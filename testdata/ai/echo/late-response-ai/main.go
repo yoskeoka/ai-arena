@@ -1,3 +1,4 @@
+// Command late-response-ai emits a response after the deadline.
 package main
 
 import (

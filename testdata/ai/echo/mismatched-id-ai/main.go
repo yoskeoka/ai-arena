@@ -1,3 +1,4 @@
+// Command mismatched-id-ai returns responses with the wrong request id.
 package main
 
 import (

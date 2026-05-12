@@ -10,19 +10,25 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
 
+// BuildMode aliases the supported game-master hosting modes.
 type BuildMode = gamemaster.Mode
 
 const (
-	BuildModeInProcess             BuildMode = gamemaster.ModeInProcess
-	BuildModeLocalSubprocess       BuildMode = gamemaster.ModeLocalSubprocess
+	// BuildModeInProcess runs the game master in-process.
+	BuildModeInProcess BuildMode = gamemaster.ModeInProcess
+	// BuildModeLocalSubprocess runs the game master as a child process.
+	BuildModeLocalSubprocess BuildMode = gamemaster.ModeLocalSubprocess
+	// BuildModeFutureExternalAdapter reserves an external adapter mode.
 	BuildModeFutureExternalAdapter BuildMode = gamemaster.ModeFutureExternalAdapter
 )
 
+// RegistryKey identifies one game id and supported semver major.
 type RegistryKey struct {
 	GameID           string
 	GameVersionMajor int
 }
 
+// BuildSpec captures the inputs required to build a game-master session.
 type BuildSpec struct {
 	GameVersion string
 	Ruleset     string
@@ -30,10 +36,12 @@ type BuildSpec struct {
 	Players     []game.Player
 }
 
+// BuildConstraints describes ruleset-level constraints for a descriptor.
 type BuildConstraints struct {
 	SupportedRulesets []string
 }
 
+// DescriptorRecord is the stored metadata for one game descriptor entry.
 type DescriptorRecord struct {
 	RegistryKey      RegistryKey
 	GameID           string
@@ -42,6 +50,7 @@ type DescriptorRecord struct {
 	BuildConstraints BuildConstraints
 }
 
+// GameDescriptor resolves build functions for one registry entry.
 type GameDescriptor struct {
 	RegistryKey              RegistryKey
 	GameID                   string
@@ -53,19 +62,23 @@ type GameDescriptor struct {
 	SnapshotFromHistory      func(BuildSpec, []match.Event, int) (game.Snapshot, error)
 }
 
+// RegistryStore looks up stored descriptor metadata by registry key.
 type RegistryStore interface {
 	Lookup(context.Context, RegistryKey) (DescriptorRecord, error)
 }
 
+// DescriptorResolver materializes a descriptor from stored metadata.
 type DescriptorResolver interface {
 	Resolve(context.Context, DescriptorRecord) (GameDescriptor, error)
 }
 
+// Registry coordinates descriptor lookup and resolution.
 type Registry struct {
 	store    RegistryStore
 	resolver DescriptorResolver
 }
 
+// New constructs a registry from a store and resolver.
 func New(store RegistryStore, resolver DescriptorResolver) (*Registry, error) {
 	if store == nil {
 		return nil, fmt.Errorf("registry: store is required")
@@ -76,6 +89,7 @@ func New(store RegistryStore, resolver DescriptorResolver) (*Registry, error) {
 	return &Registry{store: store, resolver: resolver}, nil
 }
 
+// Lookup resolves a descriptor by registry key.
 func (r *Registry) Lookup(ctx context.Context, key RegistryKey) (GameDescriptor, error) {
 	record, err := r.store.Lookup(ctx, key)
 	if err != nil {
@@ -84,6 +98,7 @@ func (r *Registry) Lookup(ctx context.Context, key RegistryKey) (GameDescriptor,
 	return r.resolver.Resolve(ctx, record)
 }
 
+// LookupVersion resolves a descriptor by game id and semver version string.
 func (r *Registry) LookupVersion(ctx context.Context, gameID, gameVersion string) (GameDescriptor, error) {
 	major, err := catalog.MajorVersion(gameVersion)
 	if err != nil {
@@ -95,10 +110,12 @@ func (r *Registry) LookupVersion(ctx context.Context, gameID, gameVersion string
 	})
 }
 
+// Default returns the process-wide default registry.
 func Default() *Registry {
 	return defaultRegistry
 }
 
+// Lookup resolves a descriptor through the default registry.
 func Lookup(gameID, gameVersion string) (GameDescriptor, error) {
 	return defaultRegistry.LookupVersion(context.Background(), gameID, gameVersion)
 }

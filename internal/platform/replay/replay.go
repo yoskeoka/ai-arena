@@ -12,6 +12,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
 )
 
+// LoadRecord loads a persisted match record from disk.
 func LoadRecord(path string) (match.Record, error) {
 	// #nosec G304 -- the caller explicitly selects the local debug record input path.
 	data, err := os.ReadFile(path)
@@ -25,6 +26,7 @@ func LoadRecord(path string) (match.Record, error) {
 	return record, nil
 }
 
+// LoadSnapshot loads a persisted snapshot from disk.
 func LoadSnapshot(path string) (game.Snapshot, error) {
 	// #nosec G304 -- the caller explicitly selects the local debug snapshot input path.
 	data, err := os.ReadFile(path)
@@ -38,6 +40,7 @@ func LoadSnapshot(path string) (game.Snapshot, error) {
 	return snapshot, nil
 }
 
+// LoadHistory loads a persisted event history from disk.
 func LoadHistory(path string) ([]match.Event, error) {
 	// #nosec G304 -- the caller explicitly selects the local debug history input path.
 	data, err := os.ReadFile(path)
@@ -51,10 +54,12 @@ func LoadHistory(path string) ([]match.Event, error) {
 	return events, nil
 }
 
+// SnapshotFromHistory rebuilds a snapshot with the default registry.
 func SnapshotFromHistory(meta catalog.GameMetadata, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
 	return SnapshotFromHistoryWithRegistry(registry.Default(), meta, players, events, targetTurn)
 }
 
+// SnapshotFromHistoryWithRegistry rebuilds a snapshot with an injected registry.
 func SnapshotFromHistoryWithRegistry(reg *registry.Registry, meta catalog.GameMetadata, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
 	return SnapshotFromHistoryWithBuildSpec(reg, meta, registry.BuildSpec{
 		GameVersion: meta.GameVersion,
@@ -63,6 +68,7 @@ func SnapshotFromHistoryWithRegistry(reg *registry.Registry, meta catalog.GameMe
 	}, events, targetTurn)
 }
 
+// SnapshotFromHistoryWithBuildSpec rebuilds a snapshot from explicit build inputs.
 func SnapshotFromHistoryWithBuildSpec(reg *registry.Registry, meta catalog.GameMetadata, spec registry.BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
 	descriptor, err := reg.LookupVersion(context.Background(), meta.GameID, meta.GameVersion)
 	if err != nil {

@@ -12,18 +12,23 @@ import (
 )
 
 var (
-	ErrInvalidMetadata      = errors.New("catalog: invalid metadata")
+	// ErrInvalidMetadata reports that a manifest is structurally invalid.
+	ErrInvalidMetadata = errors.New("catalog: invalid metadata")
+	// ErrIncompatibleMetadata reports that two manifests cannot interoperate.
 	ErrIncompatibleMetadata = errors.New("catalog: incompatible metadata")
 )
 
+// GameMetadata is the canonical game identity tuple used across the platform.
 type GameMetadata = contract.GameMetadata
 
+// SidecarManifest describes one AI entry and its transport/runtime contract.
 type SidecarManifest struct {
 	AIID     string           `json:"ai_id"`
 	Protocol ProtocolManifest `json:"protocol"`
 	Runtime  RuntimeManifest  `json:"runtime"`
 }
 
+// ProtocolManifest describes the game-facing protocol an AI sidecar speaks.
 type ProtocolManifest struct {
 	Transport      string `json:"transport"`
 	GameID         string `json:"game_id"`
@@ -31,6 +36,7 @@ type ProtocolManifest struct {
 	RulesetVersion string `json:"ruleset_version"`
 }
 
+// RuntimeManifest describes how the platform should start an AI sidecar.
 type RuntimeManifest struct {
 	Kind             runtime.Kind `json:"kind"`
 	Command          []string     `json:"command"`
@@ -39,6 +45,7 @@ type RuntimeManifest struct {
 	MemoryLimitPages uint32       `json:"memory_limit_pages,omitempty"`
 }
 
+// ValidateMetadata checks that the metadata is complete and semver-shaped.
 func ValidateMetadata(meta GameMetadata) error {
 	if meta.GameID == "" {
 		return fmt.Errorf("%w: game_id is required", ErrInvalidMetadata)
@@ -55,10 +62,12 @@ func ValidateMetadata(meta GameMetadata) error {
 	return nil
 }
 
+// MajorVersion returns the semver major component from a game version string.
 func MajorVersion(version string) (int, error) {
 	return majorVersion(version)
 }
 
+// Compatible reports whether the actual metadata can satisfy the expected one.
 func Compatible(expected, actual GameMetadata) error {
 	if err := ValidateMetadata(expected); err != nil {
 		return err
@@ -92,6 +101,7 @@ func majorVersion(version string) (int, error) {
 	return major, nil
 }
 
+// ResolveRuntime converts a manifest runtime section into runtime.Config.
 func ResolveRuntime(entryPath string, manifest RuntimeManifest) (runtime.Config, error) {
 	switch manifest.Kind {
 	case "", runtime.KindLocalSubprocess:
@@ -117,6 +127,7 @@ func ResolveRuntime(entryPath string, manifest RuntimeManifest) (runtime.Config,
 	}
 }
 
+// FallbackRuntime returns a local subprocess runtime for a plain entry path.
 func FallbackRuntime(entryPath string) runtime.Config {
 	return runtime.Config{
 		Kind:    runtime.KindLocalSubprocess,

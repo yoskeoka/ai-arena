@@ -1,3 +1,4 @@
+// Command janken-go-wasm-ai runs the Go WASM janken fixture bot.
 package main
 
 import (

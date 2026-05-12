@@ -9,6 +9,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
 
+// DescriptorBuilder holds the build hooks for one registered descriptor.
 type DescriptorBuilder struct {
 	BuildMode                BuildMode
 	BuildConstraints         BuildConstraints
@@ -17,10 +18,12 @@ type DescriptorBuilder struct {
 	SnapshotFromHistory      func(BuildSpec, []match.Event, int) (game.Snapshot, error)
 }
 
+// StaticResolver resolves descriptors from a fixed builder map.
 type StaticResolver struct {
 	builders map[string]DescriptorBuilder
 }
 
+// NewStaticResolver constructs a resolver from a fixed builder set.
 func NewStaticResolver(builders map[string]DescriptorBuilder) (*StaticResolver, error) {
 	resolver := &StaticResolver{builders: make(map[string]DescriptorBuilder, len(builders))}
 	for builderID, builder := range builders {
@@ -31,6 +34,7 @@ func NewStaticResolver(builders map[string]DescriptorBuilder) (*StaticResolver, 
 	return resolver, nil
 }
 
+// Register adds one builder to the static resolver.
 func (r *StaticResolver) Register(builderID string, builder DescriptorBuilder) error {
 	if builderID == "" {
 		return fmt.Errorf("registry: builder_id is required")
@@ -45,6 +49,7 @@ func (r *StaticResolver) Register(builderID string, builder DescriptorBuilder) e
 	return nil
 }
 
+// Resolve materializes a game descriptor from a stored descriptor record.
 func (r *StaticResolver) Resolve(_ context.Context, record DescriptorRecord) (GameDescriptor, error) {
 	if err := validateDescriptorRecord(record); err != nil {
 		return GameDescriptor{}, err

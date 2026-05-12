@@ -1,3 +1,4 @@
+// Command wasmtestbot acts as a small WASM runtime fixture bot.
 package main
 
 import (

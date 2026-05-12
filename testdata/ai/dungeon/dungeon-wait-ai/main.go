@@ -1,3 +1,4 @@
+// Command dungeon-wait-ai always returns the wait action.
 package main
 
 import (

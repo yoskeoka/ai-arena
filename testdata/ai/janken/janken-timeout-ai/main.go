@@ -1,3 +1,4 @@
+// Command janken-timeout-ai times out on configured rounds.
 package main
 
 import (

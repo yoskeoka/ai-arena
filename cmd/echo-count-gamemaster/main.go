@@ -1,3 +1,4 @@
+// Command echo-count-gamemaster runs the subprocess game-master bridge for echo-count.
 package main
 
 import (

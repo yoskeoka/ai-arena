@@ -1,3 +1,4 @@
+// Command exit-after-init-ai exits after the init handshake.
 package main
 
 import (

@@ -18,6 +18,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
 
+// PlayerSession is the per-player session surface used by the runner.
 type PlayerSession interface {
 	Init(context.Context, session.Request) session.Result
 	Turn(context.Context, session.Request) session.Result
@@ -26,6 +27,7 @@ type PlayerSession interface {
 	StderrSnapshot() runtime.StderrSnapshot
 }
 
+// Record is the persisted final match artifact.
 type Record struct {
 	MatchID          string                `json:"match_id"`
 	Game             catalog.GameMetadata  `json:"game"`
@@ -37,6 +39,7 @@ type Record struct {
 	ExportedSnapshot game.ExportedSnapshot `json:"exported_snapshot"`
 }
 
+// Event is one structured entry in a match event log.
 type Event struct {
 	Seq      int             `json:"seq"`
 	Kind     string          `json:"kind"`
@@ -45,13 +48,16 @@ type Event struct {
 	Payload  json.RawMessage `json:"payload,omitempty"`
 }
 
+// Observer receives runner events and final record notifications.
 type Observer interface {
 	OnEvent(Event)
 	OnRecordBuilt(Record)
 }
 
+// RunnerOption mutates runner configuration during construction.
 type RunnerOption func(*Runner)
 
+// Runner coordinates one complete match across players and a game master.
 type Runner struct {
 	matchID       string
 	players       []game.Player
@@ -84,10 +90,12 @@ type turnExecution struct {
 	err          error
 }
 
+// NewRunner builds a runner with default options.
 func NewRunner(matchID string, players []game.Player, master gamemaster.Session, sessions map[string]PlayerSession) *Runner {
 	return NewRunnerWithOptions(matchID, players, master, sessions)
 }
 
+// NewRunnerWithOptions builds a runner with explicit options.
 func NewRunnerWithOptions(matchID string, players []game.Player, master gamemaster.Session, sessions map[string]PlayerSession, opts ...RunnerOption) *Runner {
 	runner := &Runner{
 		matchID:    matchID,
@@ -105,12 +113,14 @@ func NewRunnerWithOptions(matchID string, players []game.Player, master gamemast
 	return runner
 }
 
+// WithObserver installs an event observer on the runner.
 func WithObserver(observer Observer) RunnerOption {
 	return func(r *Runner) {
 		r.observer = observer
 	}
 }
 
+// WithResumeState seeds runner-visible state from a prior snapshot.
 func WithResumeState(snapshot game.Snapshot) RunnerOption {
 	return func(r *Runner) {
 		for playerID, playerState := range snapshot.PerPlayer {
@@ -128,6 +138,7 @@ func WithResumeState(snapshot game.Snapshot) RunnerOption {
 	}
 }
 
+// Run executes the full match lifecycle and returns the final record.
 func (r *Runner) Run(ctx context.Context) (record Record, runErr error) {
 	meta := r.master.Metadata()
 	r.appendEvent("match_started", 0, "", map[string]any{

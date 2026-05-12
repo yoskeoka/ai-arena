@@ -2,7 +2,6 @@ ignoreGeneratedHeader = true
 severity = "warning"
 
 [rule.exported]
-Exclude = ["cmd/**/*.go", "internal/**/*.go", "testdata/**/*.go"]
+arguments = ["disable-stuttering-check"]
 
 [rule.package-comments]
-Exclude = ["cmd/**/*.go", "internal/**/*.go", "testdata/**/*.go"]

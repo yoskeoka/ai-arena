@@ -12,11 +12,15 @@ import (
 const version = "2.0"
 
 var (
-	ErrMalformedJSON   = errors.New("protocol: malformed json")
+	// ErrMalformedJSON reports invalid JSON input.
+	ErrMalformedJSON = errors.New("protocol: malformed json")
+	// ErrInvalidEnvelope reports syntactically valid but invalid protocol envelopes.
 	ErrInvalidEnvelope = errors.New("protocol: invalid envelope")
-	ErrMismatchedID    = errors.New("protocol: mismatched id")
+	// ErrMismatchedID reports a response whose id does not match the request.
+	ErrMismatchedID = errors.New("protocol: mismatched id")
 )
 
+// Request is a JSON-RPC request envelope.
 type Request struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      string          `json:"id,omitempty"`
@@ -24,6 +28,7 @@ type Request struct {
 	Params  json.RawMessage `json:"params,omitempty"`
 }
 
+// Response is a JSON-RPC response envelope.
 type Response struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      string          `json:"id"`
@@ -31,31 +36,37 @@ type Response struct {
 	Error   *ErrorObject    `json:"error,omitempty"`
 }
 
+// ErrorObject is the JSON-RPC error payload shape.
 type ErrorObject struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
+// Encoder writes NDJSON-framed JSON-RPC messages.
 type Encoder struct {
 	enc *json.Encoder
 }
 
+// Decoder reads NDJSON-framed JSON-RPC messages.
 type Decoder struct {
 	scanner *bufio.Scanner
 }
 
+// NewEncoder builds an encoder that writes one JSON value per line.
 func NewEncoder(w io.Writer) *Encoder {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	return &Encoder{enc: enc}
 }
 
+// NewDecoder builds a decoder with a larger NDJSON line buffer.
 func NewDecoder(r io.Reader) *Decoder {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	return &Decoder{scanner: scanner}
 }
 
+// NewRequest marshals a JSON-RPC request envelope.
 func NewRequest(id, method string, params any) (Request, error) {
 	raw, err := marshalParams(params)
 	if err != nil {
@@ -69,6 +80,7 @@ func NewRequest(id, method string, params any) (Request, error) {
 	}, nil
 }
 
+// NewNotification marshals a JSON-RPC notification envelope.
 func NewNotification(method string, params any) (Request, error) {
 	raw, err := marshalParams(params)
 	if err != nil {
@@ -81,6 +93,7 @@ func NewNotification(method string, params any) (Request, error) {
 	}, nil
 }
 
+// NewResponse marshals a JSON-RPC success response envelope.
 func NewResponse(id string, result any) (Response, error) {
 	raw, err := marshalParams(result)
 	if err != nil {
@@ -93,10 +106,12 @@ func NewResponse(id string, result any) (Response, error) {
 	}, nil
 }
 
+// Encode writes one JSON value followed by a newline.
 func (e *Encoder) Encode(v any) error {
 	return e.enc.Encode(v)
 }
 
+// DecodeRequest reads and validates the next request line.
 func (d *Decoder) DecodeRequest() (Request, error) {
 	if !d.scanner.Scan() {
 		if err := d.scanner.Err(); err != nil {
@@ -107,6 +122,7 @@ func (d *Decoder) DecodeRequest() (Request, error) {
 	return DecodeRequestLine(d.scanner.Bytes())
 }
 
+// DecodeResponse reads and validates the next response line.
 func (d *Decoder) DecodeResponse() (Response, error) {
 	if !d.scanner.Scan() {
 		if err := d.scanner.Err(); err != nil {
@@ -117,6 +133,7 @@ func (d *Decoder) DecodeResponse() (Response, error) {
 	return DecodeResponseLine(d.scanner.Bytes())
 }
 
+// DecodeRequestLine validates one raw request line.
 func DecodeRequestLine(line []byte) (Request, error) {
 	line = bytes.TrimRight(line, "\r\n")
 	var req Request
@@ -129,6 +146,7 @@ func DecodeRequestLine(line []byte) (Request, error) {
 	return req, nil
 }
 
+// DecodeResponseLine validates one raw response line.
 func DecodeResponseLine(line []byte) (Response, error) {
 	line = bytes.TrimRight(line, "\r\n")
 	var resp Response
@@ -141,6 +159,7 @@ func DecodeResponseLine(line []byte) (Response, error) {
 	return resp, nil
 }
 
+// MatchResponseID checks that the response id matches the expected request id.
 func MatchResponseID(expected string, resp Response) error {
 	if expected != resp.ID {
 		return fmt.Errorf("%w: expected %q, got %q", ErrMismatchedID, expected, resp.ID)

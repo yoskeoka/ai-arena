@@ -1,3 +1,4 @@
+// Command echo-ai runs the happy-path echo fixture bot.
 package main
 
 import (

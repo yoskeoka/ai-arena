@@ -1,3 +1,4 @@
+// Command janken-rock-ai-wasm runs the fixed rock WASM fixture bot.
 package main
 
 import (
