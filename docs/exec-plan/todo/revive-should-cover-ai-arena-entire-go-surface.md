@@ -15,13 +15,17 @@
 - `revive.toml` 単独変更時も CI が漏れずに走る
 - `docs/specs/go-quality-gates.md` と実際の lint / workflow 境界が一致する
 
+Addresses:
+
+- `docs/issues/done/go-exported-doc-comments-should-be-linted.md`
+
 ## Context
 
 - `docs/project-plan.md` は platform 実装言語として Go を採用し、platform / game / helper / fixture を継続追加する前提にある
 - `docs/design-decisions/core-beliefs.md` は correctness over speed と spec-first を優先しており、quality gate 拡張も spec を先に揃える
 - `docs/design-decisions/adr.md` の Go 採用判断は、保守性を仕様とテストで補強することを前提にしている
 - `docs/specs/go-quality-gates.md` は `golangci-lint` 非導入、個別 tool pinning、`make lint` を唯一の lint 入口とする契約を固定している
-- `docs/issues/go-exported-doc-comments-should-be-linted.md` は repo 全体へ適用できる comment checker を求めており、前段 plan `go-exported-doc-comments-should-be-linted.md` は最小 2 rule の `revive` 導入と `games/dungeon/**` での初回有効化を定義している
+- `docs/issues/done/go-exported-doc-comments-should-be-linted.md` と前段 plan `go-exported-doc-comments-should-be-linted.md` により、`revive` 自体の導入、tool pinning、`make lint` / CI への組み込み、`games/dungeon/**` での初回有効化は既に main へ入っている
 - 現状の `go-ci.yml` path filter は `.github/workflows/go-ci.yml`、`Makefile`、`go.mod`、`go.sum`、`**/*.go` のみを監視しており、`revive.toml` 単独変更を取りこぼす
 
 ## Scope
@@ -52,6 +56,8 @@
 - `testdata/**` は永続除外しない
   - `fixturebot` のような helper package は通常 package と同じ基準で comment を揃える
   - `package main` fixture は package comment を追加し、exported symbol がある場合だけ exported comment を揃える
+- `testdata/**` を最終対象に含めるため、execution では `revive ./...` のみを前提にしない
+  - `testdata/**` を含む tracked `.go` files または package 群を明示的に列挙できる invocation へ切り替え、verification でも `testdata/**` が実際に検査対象へ入っていることを確認する
 - CI trigger は lint 実行結果に影響する config file を source code と同等に扱い、`revive.toml` 単独変更でも Go CI が走るようにする
 
 ## Spec Changes
@@ -79,6 +85,7 @@
 
 - `make lint` の `revive` 実行対象が repo-wide になっていることを明確にする
 - `revive.toml` を前提にした再現可能な invocation に揃える
+- `testdata/**` が `revive` 対象から漏れないよう、tracked `.go` files または package 群の明示列挙を使う
 
 ### `.github/workflows/go-ci.yml`
 
@@ -96,11 +103,11 @@
 
 - [ ] Update `docs/specs/go-quality-gates.md` to declare repo-wide `revive` coverage and retain only `exported` + `package-comments`
 - [ ] Update `revive.toml` so the final target boundary covers `cmd/**`, `games/**`, `internal/**`, `e2e/**`, and `testdata/**`
-- [ ] Update `Makefile` wiring if needed so `make lint` runs the same repo-wide `revive` invocation locally and in CI
+- [ ] Update `Makefile` wiring so `make lint` runs the same repo-wide `revive` invocation locally and in CI, including `testdata/**`
 - [ ] Update `.github/workflows/go-ci.yml` path filters so `revive.toml` changes trigger Go CI
 - [ ] Add missing package comments and exported comments in `cmd/**`, `internal/**`, and `e2e/**`
 - [ ] [depends on: Add missing package comments and exported comments in `cmd/**`, `internal/**`, and `e2e/**`] Add missing package comments and exported comments in `testdata/**`
-- [ ] Verify repo-wide `revive` passes under `make lint` without adding new rules or persistent exclusions
+- [ ] Verify repo-wide `revive` passes under `make lint` without adding new rules or persistent exclusions, and confirm that `testdata/**` is actually included in the checked target set
 
 ## Parallelism
 
@@ -115,6 +122,8 @@
   - mitigation: package 単位で comment debt を潰し、directory 単位で完了判定する
 - `testdata/**` には fixture `main` package が多く、package comment 追加の量が見積もりより増える可能性がある
   - mitigation: 第2段として切り分け、repo 本体 package の gate 拡張と fixture cleanup を混線させない
+- `revive ./...` のままだと `testdata/**` が実効対象に入らない可能性がある
+  - mitigation: invocation を明示列挙方式へ切り替え、verification に対象列挙確認を含める
 - `revive.toml` と workflow path filter の同期が漏れると、config 変更だけが CI 未検証で流れる
   - mitigation: execution PR で `revive.toml` と `.github/workflows/go-ci.yml` を同時に更新する
 - rule を増やしながら repo-wide 化すると、comment rollout の作業量と policy change の原因切り分けが崩れる
