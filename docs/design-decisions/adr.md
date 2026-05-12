@@ -265,3 +265,37 @@ Dungeon domain は少なくとも以下の subsystem 境界で再編する。
 - dungeon package tree は引き続き top-level portable package とし、新しい `internal` 依存を持ち込まない
 
 ---
+
+## [2026-05-12] Dungeon turn progression は fixed-order phase engine で整理する
+
+### Context
+Phase 5-06-01 で dungeon domain を ruleset / layout / state / payload に分離した後も、
+turn progression 自体は `Match.Apply` の中で movement、chest resolution、goal finish、score refresh、
+discovery refresh を直列に処理していた。現状 mechanic では読めるが、このまま actor interaction、tile effect、
+inventory、combat を足すと `Apply` が条件分岐の集積点へ戻りやすい。
+
+### Decision
+Dungeon turn progression は fixed-order phase engine として扱う。
+
+- `Match.Apply` は public façade と orchestration に寄せる
+- action normalization
+- movement resolution
+- interaction resolution
+- terminal / score update
+- visibility refresh
+
+現在ある move / wait / chest split / goal bonus / discovery refresh はこの phase 順へ載せ替える。
+将来の actor interaction、tile effect、actor effect tick は既存 phase 順の空き slot へ差し込む。
+
+### Consequences
+
+**利点:**
+- turn mechanic の追加時に「どの phase が state を読むか/書くか」を先に固定できる
+- targeted scenario catalog を pipeline parity gate として使い続けられる
+- `Match` façade を保ったまま内部 phase を個別 unit test しやすい
+
+**制約:**
+- 現行 ruleset の public behavior は phase 化だけでは変えない
+- phase 抽象化を広げすぎず、まずは現行 mechanic の移送に留める
+
+---
