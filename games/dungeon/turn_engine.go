@@ -32,7 +32,6 @@ func (e *turnEngine) run() {
 	e.normalizeActions()
 	e.resolveMovement()
 	e.resolveInteractions()
-	e.applyActorEffects()
 	e.updateTerminalAndScores()
 	e.refreshVisibility()
 }
@@ -85,11 +84,9 @@ func (e *turnEngine) resolveInteractions() {
 	}
 }
 
-// applyActorEffects is the future slot for tile effects, actor effects, and other
-// post-interaction turn mechanics that should run before terminal/score updates.
-func (e *turnEngine) applyActorEffects() {}
-
 func (e *turnEngine) updateTerminalAndScores() {
+	// Future effect ticks stay inside this phase until a later plan expands the
+	// deterministic phase contract beyond the current 5-step pipeline.
 	for _, playerID := range e.frame.activePlayers {
 		player := e.match.state.playerStates[playerID]
 		if player.FinishedTurn == nil && player.X == e.match.layout.Goal.X && player.Y == e.match.layout.Goal.Y {
