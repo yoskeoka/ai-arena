@@ -97,6 +97,44 @@ func TestRunnerBuildsCompletedRecordAcrossSimultaneousAndSequentialSteps(t *test
 	}
 }
 
+func TestRunnerUsesConfiguredInitAckDeadline(t *testing.T) {
+	t.Setenv(initAckTimeoutEnv, "2200ms")
+
+	players := []game.Player{{PlayerID: "p1", AIID: "bot-a"}}
+	master := &fakeMaster{metadata: baseMetadata()}
+	sess := &fakeSession{}
+
+	record, err := NewRunner("match-init-timeout-env", players, master, map[string]PlayerSession{"p1": sess}).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if record.Status != game.StatusCompleted {
+		t.Fatalf("record.Status = %q, want completed", record.Status)
+	}
+	if got := sess.initRequests[0].Deadline; got != 2200*time.Millisecond {
+		t.Fatalf("init deadline = %s, want 2.2s", got)
+	}
+}
+
+func TestRunnerFallsBackToDefaultInitAckDeadlineForInvalidOverride(t *testing.T) {
+	t.Setenv(initAckTimeoutEnv, "invalid")
+
+	players := []game.Player{{PlayerID: "p1", AIID: "bot-a"}}
+	master := &fakeMaster{metadata: baseMetadata()}
+	sess := &fakeSession{}
+
+	record, err := NewRunner("match-init-timeout-invalid", players, master, map[string]PlayerSession{"p1": sess}).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if record.Status != game.StatusCompleted {
+		t.Fatalf("record.Status = %q, want completed", record.Status)
+	}
+	if got := sess.initRequests[0].Deadline; got != defaultInitAckDeadline {
+		t.Fatalf("init deadline = %s, want %s", got, defaultInitAckDeadline)
+	}
+}
+
 func TestRunnerReturnsFailedRecordForInitFailure(t *testing.T) {
 	players := []game.Player{{PlayerID: "p1", AIID: "bot-a"}}
 	master := &fakeMaster{

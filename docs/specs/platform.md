@@ -332,6 +332,7 @@ error response:
 `init` response は protocol-ready ACK として扱う。ゲーム固有 readiness の詳細は各ゲーム仕様が定義する。
 - `init` request の deadline は turn deadline と独立に設定してよい
 - 競技上の主要制約は turn processing に置き、`init` は一度きりの runtime 起動コストを吸収できる上限を許容してよい
+- platform 実装は host override として環境変数 `AI_ARENA_INIT_ACK_TIMEOUT` を読んでよい。未設定時の既定は 1.5 秒とする
 
 ### `turn`
 
