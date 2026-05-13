@@ -299,3 +299,33 @@ Dungeon turn progression は fixed-order phase engine として扱う。
 - phase 抽象化を広げすぎず、まずは現行 mechanic の移送に留める
 
 ---
+
+## [2026-05-14] Dungeon feature expansion は subsystem seam と deterministic contract を先に固定する
+
+### Context
+Phase 5-06-01 と 02 で、dungeon domain は ruleset / layout / state / payload に分かれ、turn progression も
+fixed-order phase engine へ寄せた。ここから actor、item、inventory、combat、effect、visibility/FOV を追加できるが、
+phase 追加や helper 追加をその都度 ad-hoc に行うと、hidden information 境界、replay source-of-truth、stable iteration
+order が再び曖昧になる。
+
+### Decision
+Dungeon feature expansion は subsystem seam を先に固定してから進める。
+
+- subsystem は少なくとも `actors`、`items`、`inventory`、`combat`、`effects`、`visibility/fov` を前提にする
+- 各 subsystem は `generated layout` 由来か `match state` 由来かを先に決めてから payload へ投影する
+- subsystem hook は既存 5 phase の内側 slot へだけ差し込み、新しい top-level phase を安易に増やさない
+- subsystem を跨いでも deterministic contract は single RNG ownership、fixed phase order、stable iteration order、replay / resume source-of-truth を維持する
+- scenario catalog、deterministic result regression、replay / resume verification は別役割の gate として併存させる
+
+### Consequences
+
+**利点:**
+- feature expansion 前に「どの subsystem がどの phase で state を読むか/書くか」を固定できる
+- hidden information を bypass する近道を runtime helper や reference AI 側へ入れにくくなる
+- same-condition regression と replay verification の責務が混ざらず、failure の意味が読みやすい
+
+**制約:**
+- seam は narrow hook と deterministic helper の明示に留め、未実装 subsystem の抽象化を過度に広げない
+- platform は引き続き payload 境界だけを前提とし、subsystem internal state を特別扱いしない
+
+---

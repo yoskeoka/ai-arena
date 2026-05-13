@@ -64,7 +64,9 @@ func (e *turnEngine) resolveMovement() {
 }
 
 func (e *turnEngine) resolveInteractions() {
-	for chestID, chest := range chestsCopy(e.match.state.uncollectedChests) {
+	e.match.seams.actors.ResolveInteractions(e)
+	for _, chest := range chestsFromMap(e.match.state.uncollectedChests) {
+		chestID := chestKey(chest)
 		claimants := e.claimantsAt(Position{X: chest.X, Y: chest.Y})
 		if len(claimants) == 0 {
 			continue
@@ -82,11 +84,13 @@ func (e *turnEngine) resolveInteractions() {
 			delete(known, chestID)
 		}
 	}
+	e.match.seams.items.ResolveInteractions(e)
+	e.match.seams.inventory.ResolveInteractions(e)
+	e.match.seams.combat.ResolveInteractions(e)
 }
 
 func (e *turnEngine) updateTerminalAndScores() {
-	// Future effect ticks stay inside this phase until a later plan expands the
-	// deterministic phase contract beyond the current 5-step pipeline.
+	e.match.seams.effects.BeforeTerminalUpdate(e)
 	for _, playerID := range e.frame.activePlayers {
 		player := e.match.state.playerStates[playerID]
 		if player.FinishedTurn == nil && player.X == e.match.layout.Goal.X && player.Y == e.match.layout.Goal.Y {
@@ -100,7 +104,7 @@ func (e *turnEngine) updateTerminalAndScores() {
 }
 
 func (e *turnEngine) refreshVisibility() {
-	e.match.state.refreshDiscoveries(e.match.ruleset, e.match.layout, e.match.playerOrder)
+	e.match.seams.visibility.Refresh(e)
 }
 
 func (e *turnEngine) claimantsAt(pos Position) []string {
