@@ -1,3 +1,4 @@
+// Command hung-after-game-over-ai stops responding after game_over.
 package main
 
 import (

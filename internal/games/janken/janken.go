@@ -15,10 +15,15 @@ import (
 )
 
 const (
-	GameID              = "janken"
-	BuilderIDInProcess  = "janken/in-process"
-	GameVersion         = "2.1.0"
-	RulesetRegular      = "regular"
+	// GameID is the canonical id for the janken game.
+	GameID = "janken"
+	// BuilderIDInProcess is the registry builder id for the in-process janken game.
+	BuilderIDInProcess = "janken/in-process"
+	// GameVersion is the supported janken game version.
+	GameVersion = "2.1.0"
+	// RulesetRegular is the standard multi-round janken ruleset.
+	RulesetRegular = "regular"
+	// RegularRounds is the fixed round count for the regular ruleset.
 	RegularRounds       = 5
 	defaultTurnDeadline = 100 * time.Millisecond
 )
@@ -34,12 +39,14 @@ var legalActionHint = mustRaw(map[string]any{
 	},
 })
 
+// Config selects the janken variant and participating players.
 type Config struct {
 	GameVersion string
 	Ruleset     string
 	Players     []game.Player
 }
 
+// Master executes one janken match.
 type Master struct {
 	meta          catalog.GameMetadata
 	players       []game.Player
@@ -104,6 +111,7 @@ type publicState struct {
 	PublicHistory  []publicRound    `json:"public_history"`
 }
 
+// New builds a fresh janken master.
 func New(cfg Config) (*Master, error) {
 	if len(cfg.Players) < 2 {
 		return nil, fmt.Errorf("janken: at least two players are required")
@@ -140,6 +148,7 @@ func New(cfg Config) (*Master, error) {
 	}, nil
 }
 
+// NewFromSnapshot rebuilds a janken master from a persisted snapshot.
 func NewFromSnapshot(cfg Config, snapshot game.Snapshot) (*Master, error) {
 	master, err := New(cfg)
 	if err != nil {
@@ -151,14 +160,17 @@ func NewFromSnapshot(cfg Config, snapshot game.Snapshot) (*Master, error) {
 	return master, nil
 }
 
+// Metadata returns the selected game metadata.
 func (m *Master) Metadata() catalog.GameMetadata {
 	return m.meta
 }
 
+// SupportedRulesets lists the supported janken rulesets.
 func SupportedRulesets() []string {
 	return []string{RulesetRegular}
 }
 
+// SnapshotFromHistory rebuilds a janken snapshot from event history.
 func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
 	master, err := New(Config{
 		GameVersion: gameVersion,
@@ -240,6 +252,7 @@ func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, eve
 	return snapshot, nil
 }
 
+// MetadataForSelection resolves metadata and round settings for janken.
 func MetadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, int, time.Duration, error) {
 	return metadataForSelection(gameVersion, ruleset)
 }
@@ -260,6 +273,7 @@ func metadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, in
 	}
 }
 
+// Init returns the per-player initialization payloads for the match.
 func (m *Master) Init(context.Context) (game.InitState, error) {
 	state := mustRaw(initState{
 		Players: append([]string(nil), m.playerIDs...),
@@ -272,6 +286,7 @@ func (m *Master) Init(context.Context) (game.InitState, error) {
 	return game.InitState{PerPlayer: perPlayer}, nil
 }
 
+// NextStep returns the next decision step or nil when the match is complete.
 func (m *Master) NextStep(context.Context) (*game.DecisionStep, error) {
 	if m.resolved >= m.rounds {
 		return nil, nil
@@ -293,6 +308,7 @@ func (m *Master) NextStep(context.Context) (*game.DecisionStep, error) {
 	}, nil
 }
 
+// NormalizeAction validates one submitted janken action.
 func (m *Master) NormalizeAction(req game.DecisionRequest, actionStatus game.ActionStatus) game.ActionStatus {
 	if actionStatus.ActionStatus != session.StatusAccepted {
 		actionStatus.Action = nil
@@ -312,6 +328,7 @@ func (m *Master) NormalizeAction(req game.DecisionRequest, actionStatus game.Act
 	return actionStatus
 }
 
+// ApplyStep commits one resolved janken round into match state.
 func (m *Master) ApplyStep(_ context.Context, step game.DecisionStep, actionStatuses []game.ActionStatus) error {
 	if step.Mode != game.Simultaneous {
 		return fmt.Errorf("janken: unsupported mode %q", step.Mode)
@@ -382,6 +399,7 @@ func (m *Master) ApplyStep(_ context.Context, step game.DecisionStep, actionStat
 	return nil
 }
 
+// VisibleState returns the visible state sent to a player.
 func (m *Master) VisibleState(playerID string) json.RawMessage {
 	return mustRaw(visibleState{
 		Round:         m.visibleRound(),
@@ -391,6 +409,7 @@ func (m *Master) VisibleState(playerID string) json.RawMessage {
 	})
 }
 
+// Snapshot returns the internal replay/resume snapshot.
 func (m *Master) Snapshot() game.Snapshot {
 	return game.Snapshot{
 		GameID:         m.meta.GameID,
@@ -408,6 +427,7 @@ func (m *Master) Snapshot() game.Snapshot {
 	}
 }
 
+// ExportedSnapshot returns the public snapshot safe to expose externally.
 func (m *Master) ExportedSnapshot() game.ExportedSnapshot {
 	exported := game.ExportedSnapshot{
 		GameID:         m.meta.GameID,
@@ -431,6 +451,7 @@ func (m *Master) ExportedSnapshot() game.ExportedSnapshot {
 	return exported
 }
 
+// Result returns the final placement summary implied by the current score state.
 func (m *Master) Result() game.MatchResult {
 	ordered := append([]string(nil), m.playerIDs...)
 	sort.Slice(ordered, func(i, j int) bool {

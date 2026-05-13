@@ -1,3 +1,4 @@
+// Command janken-rock-ai always returns rock.
 package main
 
 import (

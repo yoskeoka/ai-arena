@@ -11,14 +11,19 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/runtime"
 )
 
+// Mode selects how a game master is hosted.
 type Mode string
 
 const (
-	ModeInProcess             Mode = "in-process"
-	ModeLocalSubprocess       Mode = "local-subprocess"
+	// ModeInProcess runs the game master inside the current process.
+	ModeInProcess Mode = "in-process"
+	// ModeLocalSubprocess runs the game master as a local child process.
+	ModeLocalSubprocess Mode = "local-subprocess"
+	// ModeFutureExternalAdapter reserves the external-adapter hosting mode.
 	ModeFutureExternalAdapter Mode = "future-external-adapter"
 )
 
+// Session is the platform-facing game-master session contract.
 type Session interface {
 	Metadata() catalog.GameMetadata
 	InitializeMatch(context.Context) (game.InitState, error)
@@ -31,16 +36,19 @@ type Session interface {
 	Shutdown(context.Context) error
 }
 
+// InitializeMatchParams contains the inputs for starting or resuming a match.
 type InitializeMatchParams struct {
 	Players        []game.Player  `json:"players"`
 	RNGSeed        string         `json:"rng_seed,omitempty"`
 	ResumeSnapshot *game.Snapshot `json:"resume_snapshot,omitempty"`
 }
 
+// InitializeMatchResult returns the initial per-player state from a game master.
 type InitializeMatchResult struct {
 	InitState game.InitState `json:"init_state"`
 }
 
+// ApplyDecisionResultsParams carries one resolved step back to the game master.
 type ApplyDecisionResultsParams struct {
 	Step           game.DecisionStep   `json:"step"`
 	ActionStatuses []game.ActionStatus `json:"action_statuses"`
@@ -50,6 +58,7 @@ type inProcessSession struct {
 	master game.Master
 }
 
+// NewInProcessSession wraps an in-process game implementation as a Session.
 func NewInProcessSession(master game.Master) Session {
 	return &inProcessSession{master: master}
 }
@@ -105,6 +114,7 @@ func (s *inProcessSession) Shutdown(context.Context) error {
 	return nil
 }
 
+// LocalSubprocessConfig configures a subprocess-hosted game master.
 type LocalSubprocessConfig struct {
 	ExpectedMetadata catalog.GameMetadata
 	Command          []string
@@ -126,6 +136,7 @@ type localSubprocessSession struct {
 	initState      game.InitState
 }
 
+// StartLocalSubprocess starts a subprocess-backed game-master session.
 func StartLocalSubprocess(cfg LocalSubprocessConfig) (Session, error) {
 	adapter, err := runtime.Start(context.Background(), runtime.Config{
 		Command:          cfg.Command,

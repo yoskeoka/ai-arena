@@ -15,17 +15,26 @@ import (
 )
 
 const (
-	GameID                   = "echo-count"
-	SubprocessGameID         = "echo-count-subprocess"
-	BuilderIDInProcess       = "echo-count/in-process"
+	// GameID is the canonical id for the echo-count game family.
+	GameID = "echo-count"
+	// SubprocessGameID is the game id used for the subprocess-hosted variant.
+	SubprocessGameID = "echo-count-subprocess"
+	// BuilderIDInProcess is the registry builder id for the in-process echo game.
+	BuilderIDInProcess = "echo-count/in-process"
+	// BuilderIDLocalSubprocess is the registry builder id for the subprocess echo game.
 	BuilderIDLocalSubprocess = "echo-count-subprocess/local-subprocess"
-	GameVersion              = "2.0.0"
+	// GameVersion is the supported echo game version.
+	GameVersion = "2.0.0"
+	// RulesetSimultaneous3Turn runs three simultaneous turns.
 	RulesetSimultaneous3Turn = "phase2-simultaneous-3turn"
-	RulesetSequential3Turn   = "phase2-sequential-3turn"
+	// RulesetSequential3Turn runs three sequential turns.
+	RulesetSequential3Turn = "phase2-sequential-3turn"
+	// RulesetSimultaneous2Turn runs two simultaneous turns.
 	RulesetSimultaneous2Turn = "phase2-simultaneous-2turn"
 	defaultTurnDeadline      = 100 * time.Millisecond
 )
 
+// Config selects the echo game variant and participating players.
 type Config struct {
 	GameID      string
 	GameVersion string
@@ -33,6 +42,7 @@ type Config struct {
 	Players     []game.Player
 }
 
+// Master executes one echo-count match.
 type Master struct {
 	meta       catalog.GameMetadata
 	players    []game.Player
@@ -75,6 +85,7 @@ type snapshotState struct {
 	Score    map[string]int    `json:"score"`
 }
 
+// New builds a fresh echo-count master.
 func New(cfg Config) (*Master, error) {
 	if len(cfg.Players) == 0 {
 		return nil, fmt.Errorf("echo: at least one player is required")
@@ -109,6 +120,7 @@ func New(cfg Config) (*Master, error) {
 	}, nil
 }
 
+// NewFromSnapshot rebuilds an echo-count master from a persisted snapshot.
 func NewFromSnapshot(cfg Config, snapshot game.Snapshot) (*Master, error) {
 	master, err := New(cfg)
 	if err != nil {
@@ -120,14 +132,17 @@ func NewFromSnapshot(cfg Config, snapshot game.Snapshot) (*Master, error) {
 	return master, nil
 }
 
+// Metadata returns the selected game metadata.
 func (m *Master) Metadata() catalog.GameMetadata {
 	return m.meta
 }
 
+// SnapshotFromHistory rebuilds an echo snapshot from event history.
 func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
 	return SnapshotFromHistoryWithGameID(GameID, gameVersion, ruleset, players, events, targetTurn)
 }
 
+// SnapshotFromHistoryWithGameID rebuilds an echo snapshot for an explicit game id.
 func SnapshotFromHistoryWithGameID(gameID, gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
 	meta, mode, maxTurns, _, err := metadataForSelection(gameID, gameVersion, ruleset)
 	if err != nil {
@@ -215,10 +230,12 @@ func SnapshotFromHistoryWithGameID(gameID, gameVersion, ruleset string, players 
 	}, nil
 }
 
+// MetadataForSelection resolves metadata and turn settings for the default game id.
 func MetadataForSelection(gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
 	return MetadataForSelectionWithGameID(GameID, gameVersion, ruleset)
 }
 
+// SupportedRulesets lists the supported echo rulesets.
 func SupportedRulesets() []string {
 	return []string{
 		RulesetSimultaneous3Turn,
@@ -227,6 +244,7 @@ func SupportedRulesets() []string {
 	}
 }
 
+// MetadataForSelectionWithGameID resolves metadata and turn settings for one game id.
 func MetadataForSelectionWithGameID(gameID, gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
 	if gameVersion != GameVersion {
 		return catalog.GameMetadata{}, "", 0, 0, fmt.Errorf("echo: unsupported game version %q", gameVersion)
@@ -263,6 +281,7 @@ func metadataForSelection(gameID, gameVersion, ruleset string) (catalog.GameMeta
 	return MetadataForSelectionWithGameID(gameID, gameVersion, ruleset)
 }
 
+// Init returns the per-player initialization payloads for the match.
 func (m *Master) Init(context.Context) (game.InitState, error) {
 	state := mustRaw(initState{
 		Mode:        m.mode,
@@ -276,6 +295,7 @@ func (m *Master) Init(context.Context) (game.InitState, error) {
 	return game.InitState{PerPlayer: perPlayer}, nil
 }
 
+// NextStep returns the next decision step or nil when the match is complete.
 func (m *Master) NextStep(context.Context) (*game.DecisionStep, error) {
 	if m.resolved >= m.turns {
 		return nil, nil
@@ -312,6 +332,7 @@ func (m *Master) NextStep(context.Context) (*game.DecisionStep, error) {
 	}
 }
 
+// NormalizeAction validates one player action against the expected echo value.
 func (m *Master) NormalizeAction(req game.DecisionRequest, actionStatus game.ActionStatus) game.ActionStatus {
 	if actionStatus.ActionStatus != session.StatusAccepted {
 		actionStatus.Action = nil
@@ -336,6 +357,7 @@ func (m *Master) NormalizeAction(req game.DecisionRequest, actionStatus game.Act
 	return actionStatus
 }
 
+// ApplyStep commits one resolved decision step into match state.
 func (m *Master) ApplyStep(_ context.Context, step game.DecisionStep, actionStatuses []game.ActionStatus) error {
 	for _, actionStatus := range actionStatuses {
 		m.lastAction[actionStatus.PlayerID] = actionStatus
@@ -359,6 +381,7 @@ func (m *Master) ApplyStep(_ context.Context, step game.DecisionStep, actionStat
 	return nil
 }
 
+// Snapshot returns the internal replay/resume snapshot.
 func (m *Master) Snapshot() game.Snapshot {
 	return game.Snapshot{
 		GameID:         m.meta.GameID,
@@ -370,6 +393,7 @@ func (m *Master) Snapshot() game.Snapshot {
 	}
 }
 
+// VisibleState returns the visible state sent to a player.
 func (m *Master) VisibleState(string) json.RawMessage {
 	turn := m.resolved + 1
 	if turn > m.turns {
@@ -379,6 +403,7 @@ func (m *Master) VisibleState(string) json.RawMessage {
 	return mustRaw(m.currentVisibleState(turn, expected))
 }
 
+// ExportedSnapshot returns the public snapshot safe to expose externally.
 func (m *Master) ExportedSnapshot() game.ExportedSnapshot {
 	exported := game.ExportedSnapshot{
 		GameID:         m.meta.GameID,
@@ -397,6 +422,7 @@ func (m *Master) ExportedSnapshot() game.ExportedSnapshot {
 	return exported
 }
 
+// Result returns the final placement summary implied by the current score state.
 func (m *Master) Result() game.MatchResult {
 	type ranked struct {
 		playerID string

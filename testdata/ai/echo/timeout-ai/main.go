@@ -1,3 +1,4 @@
+// Command timeout-ai times out on the first turn request.
 package main
 
 import (

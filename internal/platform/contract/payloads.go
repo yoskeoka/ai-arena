@@ -2,6 +2,7 @@ package contract
 
 import "encoding/json"
 
+// InitParams is the payload sent to an AI player's init request.
 type InitParams struct {
 	MatchID        string          `json:"match_id"`
 	PlayerID       string          `json:"player_id"`
@@ -12,6 +13,7 @@ type InitParams struct {
 	State          json.RawMessage `json:"state"`
 }
 
+// TurnParams is the payload sent to an AI player's turn request.
 type TurnParams struct {
 	Turn            int             `json:"turn"`
 	VisibleState    json.RawMessage `json:"visible_state"`
@@ -19,6 +21,7 @@ type TurnParams struct {
 	DeadlineMS      int64           `json:"deadline_ms"`
 }
 
+// GameOverParams is the payload sent during final shutdown notification.
 type GameOverParams struct {
 	MatchID           string          `json:"match_id"`
 	FinalVisibleState json.RawMessage `json:"final_visible_state"`

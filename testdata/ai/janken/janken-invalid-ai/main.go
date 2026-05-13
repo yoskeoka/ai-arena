@@ -1,3 +1,4 @@
+// Command janken-invalid-ai returns invalid janken actions.
 package main
 
 import (

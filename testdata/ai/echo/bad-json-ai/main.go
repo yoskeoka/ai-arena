@@ -1,3 +1,4 @@
+// Command bad-json-ai emits malformed JSON for protocol verification.
 package main
 
 import (

@@ -1,3 +1,4 @@
+// Command arena-runner executes local AI Arena matches and writes artifacts.
 package main
 
 import (

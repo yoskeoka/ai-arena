@@ -1,3 +1,4 @@
+// Command init-timeout-ai times out during the init handshake.
 package main
 
 import (

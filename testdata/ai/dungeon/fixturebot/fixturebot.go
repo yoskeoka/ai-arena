@@ -1,3 +1,4 @@
+// Package fixturebot provides lightweight dungeon fixture bots for tests.
 package fixturebot
 
 import (
@@ -10,11 +11,13 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/protocol"
 )
 
+// Behavior configures how the dungeon fixture bot responds.
 type Behavior struct {
 	AIID    string
 	Actions []dungeon.Action
 }
 
+// Run serves the JSON-RPC loop for one configured fixture bot.
 func Run(behavior Behavior) error {
 	dec := protocol.NewDecoder(os.Stdin)
 	enc := protocol.NewEncoder(os.Stdout)

@@ -1,3 +1,4 @@
+// Command invalid-action-ai returns semantically invalid echo actions.
 package main
 
 import (

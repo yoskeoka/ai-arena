@@ -11,6 +11,7 @@ CARGO_TARGET_DIR ?= $(CACHE_ROOT)/cargo-target
 RUST_WASM_TARGET ?= wasm32-wasip1
 GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
 GOFILES = $(shell git ls-files -- '*.go')
+REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtime/testdata | grep '\.go$$' | xargs -n1 dirname | sort -u)
 
 .PHONY: test test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval build-dungeon-go-wasm run-echo-simultaneous run-echo-sequential run-dungeon-local run-dungeon-local-quiet run-dungeon-go-wasm inspect-dungeon-map
 
@@ -61,7 +62,7 @@ lint-gosec:
 
 lint-revive:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	$(GO_ENV) $(GO) tool revive -config revive.toml ./...
+	$(GO_ENV) $(GO) tool revive -config revive.toml ./cmd/... ./games/... ./internal/... ./e2e/... $(REVIVE_TESTDATA_DIRS)
 
 build-janken-go-wasm:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"

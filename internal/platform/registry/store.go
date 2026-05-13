@@ -5,10 +5,12 @@ import (
 	"fmt"
 )
 
+// InMemoryStore is a registry store backed by an in-memory map.
 type InMemoryStore struct {
 	records map[RegistryKey]DescriptorRecord
 }
 
+// NewInMemoryStore constructs a store preloaded with descriptor records.
 func NewInMemoryStore(records ...DescriptorRecord) (*InMemoryStore, error) {
 	store := &InMemoryStore{records: make(map[RegistryKey]DescriptorRecord, len(records))}
 	for _, record := range records {
@@ -19,6 +21,7 @@ func NewInMemoryStore(records ...DescriptorRecord) (*InMemoryStore, error) {
 	return store, nil
 }
 
+// Register inserts one descriptor record into the store.
 func (s *InMemoryStore) Register(record DescriptorRecord) error {
 	if err := validateDescriptorRecord(record); err != nil {
 		return err
@@ -30,6 +33,7 @@ func (s *InMemoryStore) Register(record DescriptorRecord) error {
 	return nil
 }
 
+// Lookup resolves a descriptor record by registry key.
 func (s *InMemoryStore) Lookup(_ context.Context, key RegistryKey) (DescriptorRecord, error) {
 	if err := validateRegistryKey(key); err != nil {
 		return DescriptorRecord{}, err

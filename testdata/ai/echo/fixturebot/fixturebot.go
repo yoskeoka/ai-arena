@@ -1,3 +1,4 @@
+// Package fixturebot provides lightweight echo fixture bots for tests.
 package fixturebot
 
 import (
@@ -11,6 +12,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/protocol"
 )
 
+// Behavior configures how the echo fixture bot responds.
 type Behavior struct {
 	AIID               string
 	InitTimeout        bool
@@ -28,6 +30,7 @@ type turnState struct {
 	Expected int `json:"expected"`
 }
 
+// Run serves the JSON-RPC loop for one configured fixture bot.
 func Run(behavior Behavior) error {
 	dec := protocol.NewDecoder(os.Stdin)
 	enc := protocol.NewEncoder(os.Stdout)

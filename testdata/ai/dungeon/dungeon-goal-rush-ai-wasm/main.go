@@ -1,3 +1,4 @@
+// Command dungeon-goal-rush-ai-wasm runs a fixed-action dungeon WASM fixture bot.
 package main
 
 import (

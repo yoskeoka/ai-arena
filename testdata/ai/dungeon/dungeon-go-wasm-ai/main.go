@@ -1,3 +1,4 @@
+// Command dungeon-go-wasm-ai runs the Go WASM dungeon fixture bot.
 package main
 
 import (

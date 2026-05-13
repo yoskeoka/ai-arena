@@ -1,3 +1,4 @@
+// Command janken-cycle-ai cycles through fixed janken actions.
 package main
 
 import (
