@@ -330,6 +330,8 @@ error response:
 - `state`
 
 `init` response は protocol-ready ACK として扱う。ゲーム固有 readiness の詳細は各ゲーム仕様が定義する。
+- `init` request の deadline は turn deadline と独立に設定してよい
+- 競技上の主要制約は turn processing に置き、`init` は一度きりの runtime 起動コストを吸収できる上限を許容してよい
 
 ### `turn`
 
@@ -513,6 +515,7 @@ foundation で最低限必要な `kind`:
 
 - `match_started`
 - `session_initialized`
+- `session_initialization_failed`
 - `turn_requested`
 - `turn_result`
 - `turn_timeout`
@@ -687,6 +690,8 @@ AI metadata 読み取り:
 - sidecar がある場合、`protocol.game_id` / `game_version` / `ruleset_version` を compatibility 判定に使う
 - sidecar がない場合、`local-subprocess` fallback として entry-path 自体を実行コマンドとし、protocol metadata は match 側設定と同一でなければならない
 - runtime kind の妥当性と entrypoint の必須項目は、match loop 開始前に runner が検証して失敗させる
+- local verification と e2e helper は checked-in sidecar を source of truth としつつ、prepared binary/module を指す temp sidecar を生成して使ってよい
+- prepared sidecar を使う場合も、metadata compatibility 判定と runtime kind 解決は checked-in sidecar と同じ code path を通す
 
 起動前 compatibility:
 
@@ -923,6 +928,10 @@ late response は当該 turn の action status を遡って変更せず、`late_
 ```
 
 init failure と shutdown failure は lifecycle event として残す。
+
+- `session_initialization_failed` は `turn=0` で記録し、`payload.reason` に `invalid-timeout` などの failure reason を入れてよい
+- `match_failed` は最終 status を表す terminal event とし、init timeout でも turn timeout と同じ failure reason taxonomy を使ってよい
+- event log 上は `session_initialization_failed` と `match_failed` の組み合わせで init phase failure と読めること
 
 ```json
 {

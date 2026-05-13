@@ -77,7 +77,7 @@ type Runner struct {
 }
 
 const (
-	initDeadline               = time.Second
+	defaultInitAckDeadline     = 1500 * time.Millisecond
 	shutdownDeadline           = time.Second
 	defaultGameOverAckDeadline = 3 * time.Second
 	gameOverTimeoutEnv         = "AI_ARENA_GAME_OVER_TIMEOUT"
@@ -208,14 +208,14 @@ func (r *Runner) initializeSessions(ctx context.Context, meta catalog.GameMetada
 			GameID:         meta.GameID,
 			GameVersion:    meta.GameVersion,
 			RulesetVersion: meta.RulesetVersion,
-			DeadlineMS:     initDeadline.Milliseconds(),
+			DeadlineMS:     defaultInitAckDeadline.Milliseconds(),
 			State:          json.RawMessage(state),
 		}
 		result := r.sessions[player.PlayerID].Init(ctx, session.Request{
 			ID:       "init",
 			Method:   "init",
 			Params:   params,
-			Deadline: initDeadline,
+			Deadline: defaultInitAckDeadline,
 		})
 		r.appendEvent("session_initialized", 0, player.PlayerID, result)
 		if ctxErr := ctx.Err(); ctxErr != nil && result.FailureReason == session.ReasonTimeout {
@@ -225,6 +225,7 @@ func (r *Runner) initializeSessions(ctx context.Context, meta catalog.GameMetada
 			r.appendRuntimeExited(0, player.PlayerID, map[string]any{"stage": "init"})
 		}
 		if result.Status != session.StatusAccepted {
+			r.appendEvent("session_initialization_failed", 0, player.PlayerID, map[string]any{"reason": result.FailureReason})
 			return fmt.Errorf("init failed for %s: %s", player.PlayerID, result.FailureReason)
 		}
 	}

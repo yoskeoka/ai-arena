@@ -116,6 +116,8 @@ deny-by-default を基本方針とする。
 ## Resource Limit と Deadline
 
 - request deadline は session/request 側の責務であり、各 `init` / `turn` / `game_over` request の締切として扱う
+- request deadline は request kind ごとに独立でよく、`init` / `turn` / `game_over` を同一値へ固定しない
+- 競技上の厳しい締切は通常 `turn` に置き、`init` は一度きりの起動コストを吸収するためより大きい上限を持ってよい
 - runtime 側は memory 上限と host capability 制限を担う
 - runtime shutdown は platform が主導し、cooperative shutdown を試みた後に必要なら強制停止してよい
 
@@ -194,6 +196,7 @@ GOOS=wasip1 GOARCH=wasm go build \
 - checked-in fixture の正本は `.go` source と `.arena.json` manifest であり、`.wasm` binary は commit しない
 - local helper / targeted verification / CI は必要に応じて `.wasm` を都度 build して使う
 - sidecar manifest は build output と同じ directory に置き、`runtime.module` は sidecar 基準で解決できる相対 path を使う
+- e2e helper / CI helper は caller から AI player entry 名だけを受け取り、build 済み module を指す temp sidecar を生成して runtime kind 差分を隠蔽してよい
 
 Go sample で期待する runtime 振る舞い:
 
@@ -239,6 +242,7 @@ GOOS=wasip1 GOARCH=wasm go build \
 
 - checked-in の正本は `.go` source と `.arena.json` manifest とし、`.wasm` binary は commit しない
 - local subprocess bot と WASM bot が shared decision layer を共有し、transport / runtime 差分だけを entrypoint 側へ閉じ込める
+- local-subprocess fixture でも checked-in manifest が `go run` を指す場合、test helper / CI helper は reproducible build step で native binary を用意し、prepared sidecar からその binary を起動してよい
 - dungeon reference AI の shared decision layer は、runtime kind を問わず同じ memory update / world-model query / policy contract を使う
 - dungeon の actor / item / inventory / combat / effect / visibility subsystem が増えても、shared decision layer が参照してよい入力は各 turn request の `visible_state` と自前で保持した過去観測だけに限る
 - runtime ごとの entrypoint や test helper が `full_state`、replay artifact、hidden tile 全体を shared policy へ直接渡してはならない

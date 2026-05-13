@@ -80,6 +80,8 @@ entrypoint、repo-internal package、fixture/helper package も同じ comment po
 - formatter drift は test failure ではなく lint failure として扱う
 - `revive.toml` のような lint config 変更は、`.go` source や `Makefile` 変更と同様に Go CI を再実行すべき relevant change として扱う
 - default Go CI は Rust toolchain setup や WASM fixture build/e2e cost を持ち込まない
+- e2e fixture build helper は lazy prebuild + shared reuse を前提にしてよい
+- default `make test` は local-subprocess verification に必要な Go fixture だけを build し、未要求の Go-WASM / Rust-WASM artifact は build しない
 - WASM verification は dedicated workflow から `make test-wasm-go` / `make test-wasm-rust` を呼ぶ
 - dedicated WASM workflow は `runtime` / `runner` / `e2e` / `testdata/ai/janken` / `Makefile` / workflow file など、WASM verification に影響する path 変更時だけ自動実行してよい
 
@@ -92,6 +94,7 @@ dedicated CI lane と manual helper に分けて維持する。
 - Go-WASM verification は supported path の targeted automated check として `make test-wasm-go` から継続実行する
 - Rust-WASM verification は experiment / evaluation lane として `make test-wasm-rust` から CI 再現可能にするが、default Go gate には混ぜない
 - WASM 専用 tests は default `go test ./...` から外れた dedicated selection mechanism で管理する。現行実装では dedicated env guard または build tag を使って分離してよい
+- Go-WASM lane と Rust-WASM lane は、それぞれその test が宣言した fixture set だけを build する
 
 ### Manual Helpers
 
