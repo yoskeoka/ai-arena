@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -200,7 +199,7 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 }
 
 func TestArenaRunnerPreflightMetadataMismatch(t *testing.T) {
-	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+	cmd := newArenaRunnerCommand(t,
 		"--game", "echo-count",
 		"--game-version", "2.0.0",
 		"--ruleset", "phase2-simultaneous-3turn",
@@ -218,7 +217,7 @@ func TestArenaRunnerPreflightMetadataMismatch(t *testing.T) {
 }
 
 func TestArenaRunnerRejectsDuplicatePlayerIDs(t *testing.T) {
-	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+	cmd := newArenaRunnerCommand(t,
 		"--game", "echo-count",
 		"--game-version", "2.0.0",
 		"--ruleset", "phase2-simultaneous-3turn",
@@ -495,7 +494,7 @@ func TestArenaRunnerRejectsRNGSeedOverrideForSnapshotInput(t *testing.T) {
 		t.Fatalf("write snapshot input: %v", err)
 	}
 
-	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+	cmd := newArenaRunnerCommand(t,
 		"--snapshot-input", snapshotPath,
 		"--rng-seed", dungeon.DefaultRNGSeed,
 		"--match-id", "snapshot-seed-conflict",
@@ -522,7 +521,7 @@ func TestArenaRunnerRejectsRNGSeedOverrideForRecordInput(t *testing.T) {
 		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
 	)
 
-	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+	cmd := newArenaRunnerCommand(t,
 		"--record-input", filepath.Join(base.MatchDir, "record.json"),
 		"--rng-seed", dungeon.DefaultRNGSeed,
 		"--match-id", "record-seed-conflict",
@@ -687,8 +686,7 @@ func runArenaWithOptions(t *testing.T, opts arenaRunOptions) arenaRunResult {
 	if opts.ExportedTarget != "" {
 		fullArgs = append(fullArgs, "--exported-snapshot-output", opts.ExportedTarget)
 	}
-	cmd := exec.CommandContext(newTestContext(t), "go", fullArgs...)
-	cmd.Dir = repoRoot(t)
+	cmd := newArenaRunnerCommand(t, fullArgs[2:]...)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -726,7 +724,7 @@ func TestArenaRunnerWritesStandardArtifactsToDefaultOutputDir(t *testing.T) {
 		_ = os.RemoveAll(matchDir)
 	})
 
-	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+	cmd := newArenaRunnerCommand(t,
 		"--game", "echo-count",
 		"--game-version", "2.0.0",
 		"--ruleset", "phase2-simultaneous-3turn",
@@ -750,7 +748,7 @@ func TestArenaRunnerWritesStandardArtifactsToDefaultOutputDir(t *testing.T) {
 }
 
 func TestArenaRunnerRejectsEmptyOutputDir(t *testing.T) {
-	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+	cmd := newArenaRunnerCommand(t,
 		"--game", "echo-count",
 		"--game-version", "2.0.0",
 		"--ruleset", "phase2-simultaneous-3turn",
@@ -776,7 +774,7 @@ func TestArenaRunnerFailsBeforeSessionStartWhenOutputDirCannotBeCreated(t *testi
 		t.Fatalf("write blocking path: %v", err)
 	}
 
-	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+	cmd := newArenaRunnerCommand(t,
 		"--game", "echo-count",
 		"--game-version", "2.0.0",
 		"--ruleset", "phase2-simultaneous-3turn",

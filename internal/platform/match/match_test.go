@@ -89,8 +89,49 @@ func TestRunnerBuildsCompletedRecordAcrossSimultaneousAndSequentialSteps(t *test
 	if !hasEventKind(record.EventLog, "session_shutdown_completed") {
 		t.Fatalf("event log missing session_shutdown_completed: %+v", record.EventLog)
 	}
+	if got := sessions["p1"].(*fakeSession).initRequests[0].Deadline; got != defaultInitAckDeadline {
+		t.Fatalf("init deadline = %s, want %s", got, defaultInitAckDeadline)
+	}
 	if record.ExportedSnapshot.MatchID != "match-001" {
 		t.Fatalf("exported snapshot match id = %q, want match-001", record.ExportedSnapshot.MatchID)
+	}
+}
+
+func TestRunnerUsesConfiguredInitAckDeadline(t *testing.T) {
+	t.Setenv(initAckTimeoutEnv, "2200ms")
+
+	players := []game.Player{{PlayerID: "p1", AIID: "bot-a"}}
+	master := &fakeMaster{metadata: baseMetadata()}
+	sess := &fakeSession{}
+
+	record, err := NewRunner("match-init-timeout-env", players, master, map[string]PlayerSession{"p1": sess}).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if record.Status != game.StatusCompleted {
+		t.Fatalf("record.Status = %q, want completed", record.Status)
+	}
+	if got := sess.initRequests[0].Deadline; got != 2200*time.Millisecond {
+		t.Fatalf("init deadline = %s, want 2.2s", got)
+	}
+}
+
+func TestRunnerFallsBackToDefaultInitAckDeadlineForInvalidOverride(t *testing.T) {
+	t.Setenv(initAckTimeoutEnv, "invalid")
+
+	players := []game.Player{{PlayerID: "p1", AIID: "bot-a"}}
+	master := &fakeMaster{metadata: baseMetadata()}
+	sess := &fakeSession{}
+
+	record, err := NewRunner("match-init-timeout-invalid", players, master, map[string]PlayerSession{"p1": sess}).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if record.Status != game.StatusCompleted {
+		t.Fatalf("record.Status = %q, want completed", record.Status)
+	}
+	if got := sess.initRequests[0].Deadline; got != defaultInitAckDeadline {
+		t.Fatalf("init deadline = %s, want %s", got, defaultInitAckDeadline)
 	}
 }
 
@@ -114,6 +155,9 @@ func TestRunnerReturnsFailedRecordForInitFailure(t *testing.T) {
 	}
 	if !hasEventKind(record.EventLog, "runtime_exited") {
 		t.Fatalf("event log missing runtime_exited: %+v", record.EventLog)
+	}
+	if !hasEventKind(record.EventLog, "session_initialization_failed") {
+		t.Fatalf("event log missing session_initialization_failed: %+v", record.EventLog)
 	}
 	if !hasEventKind(record.EventLog, "match_failed") {
 		t.Fatalf("event log missing match_failed: %+v", record.EventLog)
@@ -271,13 +315,15 @@ func (f *fakeMaster) Shutdown(context.Context) error {
 
 type fakeSession struct {
 	initResult     session.Result
+	initRequests   []session.Request
 	turnResults    []session.Result
 	turnIndex      int
 	gameOverResult session.Result
 	closeErr       error
 }
 
-func (f *fakeSession) Init(context.Context, session.Request) session.Result {
+func (f *fakeSession) Init(_ context.Context, req session.Request) session.Result {
+	f.initRequests = append(f.initRequests, req)
 	if f.initResult.Status == "" {
 		return session.Result{Status: session.StatusAccepted, Payload: raw(`{"ready":true}`)}
 	}

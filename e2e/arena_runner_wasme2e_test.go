@@ -17,7 +17,6 @@ import (
 
 func TestArenaRunnerJankenGoWASMMixedRuntimePath(t *testing.T) {
 	requireWASME2E(t)
-	buildJankenGoWASMFixture(t)
 
 	result := runArena(t,
 		"--game", janken.GameID,
@@ -44,7 +43,6 @@ func TestArenaRunnerJankenGoWASMMixedRuntimePath(t *testing.T) {
 
 func TestArenaRunnerDungeonGoWASMMixedRuntimePath(t *testing.T) {
 	requireWASME2E(t)
-	buildDungeonGoalRushGoWASMFixture(t)
 
 	result := runArena(t,
 		"--game", dungeon.GameID,
@@ -99,7 +97,7 @@ func TestArenaRunnerJankenGoWASMMissingModuleFails(t *testing.T) {
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	cmd := exec.CommandContext(newTestContext(t), "go", "run", "./cmd/arena-runner",
+	cmd := newArenaRunnerCommand(t,
 		"--game", janken.GameID,
 		"--game-version", janken.GameVersion,
 		"--ruleset", janken.RulesetRegular,
@@ -136,8 +134,6 @@ func TestArenaRunnerJankenRustWASMEvaluationPath(t *testing.T) {
 		t.Skip("set AI_ARENA_EXPERIMENT_RUST_WASM=1 to enable Rust-WASM evaluation")
 	}
 
-	buildJankenRustWASMFixture(t)
-
 	result := runArena(t,
 		"--game", janken.GameID,
 		"--game-version", janken.GameVersion,
@@ -169,30 +165,6 @@ func requireWASME2E(t *testing.T) {
 	}
 }
 
-func buildJankenGoWASMFixture(t *testing.T) {
-	t.Helper()
-
-	outputPath := filepath.Join(repoRoot(t), "testdata/ai/janken/janken-go-wasm-ai.wasm")
-	if err := buildGoWASM(newTestContext(t), repoRoot(t), "./testdata/ai/janken/janken-go-wasm-ai", outputPath); err != nil {
-		t.Fatalf("build Go-WASM fixture: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Remove(outputPath)
-	})
-}
-
-func buildDungeonGoalRushGoWASMFixture(t *testing.T) {
-	t.Helper()
-
-	outputPath := filepath.Join(repoRoot(t), "testdata/ai/dungeon/dungeon-goal-rush-ai-wasm.wasm")
-	if err := buildGoWASM(newTestContext(t), repoRoot(t), "./testdata/ai/dungeon/dungeon-goal-rush-ai-wasm", outputPath); err != nil {
-		t.Fatalf("build dungeon scripted Go-WASM fixture: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Remove(outputPath)
-	})
-}
-
 func mustFindDungeonPlayer(t *testing.T, players []dungeon.PlayerState, playerID string) dungeon.PlayerState {
 	t.Helper()
 
@@ -203,19 +175,6 @@ func mustFindDungeonPlayer(t *testing.T, players []dungeon.PlayerState, playerID
 	}
 	t.Fatalf("player %q missing from final dungeon state", playerID)
 	return dungeon.PlayerState{}
-}
-
-func buildJankenRustWASMFixture(t *testing.T) {
-	t.Helper()
-
-	outputPath := filepath.Join(repoRoot(t), "testdata/ai/janken/janken-rust-wasm-ai.wasm")
-	manifestPath := filepath.Join(repoRoot(t), "testdata/ai/janken/janken-rust-wasm-ai/Cargo.toml")
-	if err := buildRustWASM(newTestContext(t), repoRoot(t), manifestPath, outputPath); err != nil {
-		t.Fatalf("build Rust-WASM fixture: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Remove(outputPath)
-	})
 }
 
 func buildGoWASM(ctx context.Context, dir, pkg, outputPath string) error {
