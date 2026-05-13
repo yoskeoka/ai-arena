@@ -15,8 +15,8 @@ local subprocess と WASM verification の両方で安定した black-box verifi
 
 Addresses:
 
-- `docs/issues/arena-runner-e2e-init-regression.md`
-- `docs/issues/arena-runner-e2e-timeout-flake.md`
+- `docs/issues/done/arena-runner-e2e-init-regression.md`
+- `docs/issues/done/arena-runner-e2e-timeout-flake.md`
 
 ## Context
 
@@ -25,7 +25,7 @@ Addresses:
 - `docs/specs/platform.md` では `init` response を protocol-ready ACK として扱っており、現行 contract では別の boot/readiness handshake は定義していない
 - `docs/specs/ai-runtime.md` は request deadline を session/request 側の責務としているが、現行実装では `init` と `turn` が同じ短い deadline に寄っている
 - `docs/specs/go-quality-gates.md` は default gate と dedicated WASM lane をすでに分離しているため、fixture prebuild も同じ lane boundary に従うべきである
-- `docs/issues/arena-runner-e2e-init-regression.md` では `timeout` / `bad-json` / `mismatched-id` のような turn/failure-path test まで `p1` の init timeout で崩れており、AI ロジックではなく fixture 起動形態が不安定要因になっている
+- `docs/issues/done/arena-runner-e2e-init-regression.md` では `timeout` / `bad-json` / `mismatched-id` のような turn/failure-path test まで `p1` の init timeout で崩れており、AI ロジックではなく fixture 起動形態が不安定要因になっている
 
 ## Scope
 

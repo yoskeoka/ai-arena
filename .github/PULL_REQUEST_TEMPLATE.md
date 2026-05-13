@@ -5,8 +5,8 @@ If the matching execution plan has an `Addresses:` line with local issue paths, 
 paths under Issues unless you are intentionally leaving one open. In that case, keep the path
 here and say `remains open: <reason>` somewhere in the PR body. -->
 
-- **Plan**: <!-- e.g., docs/exec-plan/todo/feature-name.md -->
-- **Issues**: <!-- e.g., docs/issues/bug-name.md, or GitHub issue link -->
+- **Plan**: <!-- e.g., docs/exec-plan/todo/0013-feature-name.md -->
+- **Issues**: <!-- e.g., docs/issues/0013-bug-name.md, or GitHub issue link -->
 
 ## Type of Change
 
@@ -31,8 +31,8 @@ If this PR executes an approved plan, record the execution command that
 produced the implementation PR.
 
 Examples:
-- Plan creation: `/plan-execution docs/exec-plan/todo/<plan-name>.md`
-- Plan execution: `/execute-task docs/exec-plan/todo/<plan-name>.md`
+- Plan creation: `/plan-execution docs/exec-plan/todo/<sequence>-<plan-name>.md`
+- Plan execution: `/execute-task docs/exec-plan/todo/<sequence>-<plan-name>.md`
 - Project planning: `/plan-project docs/project-plan.md`
 
 For chores/docs-only or other non-execution PRs, use:

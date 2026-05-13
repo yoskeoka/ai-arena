@@ -3,7 +3,7 @@
 // The dungeon-specific parts of this command are intended to stay movable to a
 // separate repository. Avoid introducing new ai-arena internal dependencies on
 // the dungeon side of the boundary; the remaining platform coupling tracked by
-// docs/issues/dungeon-sidecars-should-not-depend-on-internal-platform-protocol.md
+// docs/issues/0013-dungeon-sidecars-should-not-depend-on-internal-platform-protocol.md
 // should be reduced rather than expanded.
 package main
 
