@@ -14,6 +14,7 @@ type Match struct {
 	playerOrder []string
 	state       matchState
 	rngSeed     string
+	seams       subsystemSeams
 }
 
 // SupportedRulesets returns the ruleset identifiers accepted by this package.
@@ -94,6 +95,7 @@ func newMatch(meta Metadata, ruleset Ruleset, layout GeneratedLayout, playerOrde
 		playerOrder: playerOrder,
 		state:       state,
 		rngSeed:     rngSeed,
+		seams:       defaultSubsystemSeams(),
 	}
 }
 

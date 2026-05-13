@@ -398,14 +398,6 @@ func chestsFromMap(values map[string]ChestState) []ChestState {
 	return chests
 }
 
-func chestsCopy(values map[string]ChestState) map[string]ChestState {
-	cloned := make(map[string]ChestState, len(values))
-	for key, chest := range values {
-		cloned[key] = chest
-	}
-	return cloned
-}
-
 func posKey(pos Position) string {
 	return fmt.Sprintf("%d,%d", pos.X, pos.Y)
 }
