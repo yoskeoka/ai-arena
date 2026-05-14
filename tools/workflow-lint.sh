@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Workflow linter for AI-Centered Development
-# Mechanically enforces rules declared in .claude/vendor/workflow/AI_WORKFLOW.md
+# Mechanically enforces rules declared in AI_WORKFLOW.md
 # All checks are warnings only (exit 0)
 
 # Colors
@@ -20,8 +20,6 @@ DIFF_CHECKS_AVAILABLE=true
 CHANGED_FILES=""
 DELETED_FILES=""
 NAME_STATUS=""
-WORKFLOW_DOC=".claude/vendor/workflow/AI_WORKFLOW.md"
-WORKFLOW_DOGFOOD_DOC=".claude/vendor/workflow/docs/specs/ww-dogfooding-workflow.md"
 
 usage() {
     echo "Usage: $0 --mode=pre-push|ci [--pr-title=TITLE] [--pr-body=BODY]" >&2
@@ -67,7 +65,15 @@ current_branch() {
 }
 
 active_workflow_filename_regex() {
-    echo '^([0-9]{4}|[1-9][0-9]{4,})-[a-z0-9]([a-z0-9-]*[a-z0-9])?\.md$'
+    echo '^((000[1-9])|(00[1-9][0-9])|(0[1-9][0-9]{2})|([1-9][0-9]{3,}))-[a-z0-9]([a-z0-9-]*[a-z0-9])?\.md$'
+}
+
+matching_exec_plan_files() {
+    local plan_name="$1"
+
+    find docs/exec-plan/todo docs/exec-plan/done -maxdepth 1 -type f \
+        \( -name "*-${plan_name}.md" -o -name "${plan_name}.md" \) \
+        | sort
 }
 
 resolve_exec_plan_paths() {
@@ -90,11 +96,7 @@ resolve_exec_plan_paths() {
                 fi
                 ;;
         esac
-    done < <(
-        find docs/exec-plan/todo docs/exec-plan/done -maxdepth 1 -type f \
-            \( -name "*-${plan_name}.md" -o -name "${plan_name}.md" \) 2>/dev/null \
-            | sort
-    )
+    done < <(matching_exec_plan_files "$plan_name")
 
     printf '%s|%s\n' "$todo_match" "$done_match"
 }
@@ -127,8 +129,50 @@ extract_linked_issue_paths_from_plan() {
 
         /^Addresses:/ {
             emit_paths($0)
+            collect = 1
+            next
+        }
+
+        collect && /^#{1,6}[[:space:]]/ {
+            collect = 0
+        }
+
+        collect && /^[^[:space:]#-].*:[[:space:]]*$/ {
+            collect = 0
+        }
+
+        collect {
+            emit_paths($0)
         }
     ' "$plan_file"
+}
+
+check_ambiguous_exec_plan_mapping() {
+    local branch="$1"
+    local plan_name="$2"
+    local todo_matches=0
+    local done_matches=0
+    local path=""
+
+    while IFS= read -r path; do
+        [ -z "$path" ] && continue
+        case "$path" in
+            docs/exec-plan/todo/*)
+                todo_matches=$((todo_matches + 1))
+                ;;
+            docs/exec-plan/done/*)
+                done_matches=$((done_matches + 1))
+                ;;
+        esac
+    done < <(matching_exec_plan_files "$plan_name")
+
+    if [ "$todo_matches" -gt 1 ] || [ "$done_matches" -gt 1 ]; then
+        emit_warning \
+            "fixable" \
+            "Ambiguous exec-plan mapping for branch '${branch}'" \
+            "Multiple active or completed exec-plans share the same '-${plan_name}.md' suffix, so workflow-lint cannot reliably tell which file the branch should map to." \
+            "Keep only one matching file per directory for suffix '${plan_name}.md' by renaming or removing the duplicate plan entry."
+    fi
 }
 
 pr_body_justifies_open_issue() {
@@ -184,10 +228,10 @@ check_active_filename_format() {
             emit_warning \
                 "fixable" \
                 "Active ${label} file '${file}' does not use the required <sequence>-<name>.md format" \
-                "Active workflow files carry durable ordering and branch-to-file mapping through the numbered filename convention (${WORKFLOW_DOC} Active Plan / Issue Naming)." \
+                "Active workflow files carry durable ordering and branch-to-file mapping through the numbered filename convention (AI_WORKFLOW.md Active Plan / Issue Naming)." \
                 "Rename it to '<sequence>-<name>.md' using the next correct sequence while keeping the '-<name>.md' suffix stable."
         fi
-    done < <(find "$dir_path" -maxdepth 1 -type f 2>/dev/null | sort)
+    done < <(find "$dir_path" -maxdepth 1 -type f | sort)
 }
 
 # Parse arguments
@@ -239,6 +283,8 @@ if ! git rev-parse --verify --quiet "${BASE_REF}" >/dev/null; then
         "Shallow or partially fetched clones can omit the branch the linter compares against, which would otherwise look like 'no changes'. Fetch the base branch locally before rerunning workflow-lint."
     DIFF_CHECKS_AVAILABLE=false
 else
+    # Get changed files relative to base
+    # --diff-filter=D lists deleted files, ADMR lists added/deleted/modified/renamed
     if ! CHANGED_FILES=$(git diff --name-only --diff-filter=ADMR "${BASE_REF}...HEAD" 2>/dev/null); then
         emit_warning \
             "advisory" \
@@ -289,11 +335,12 @@ check_issue_lifecycle() {
         local done_file
         base_name=$(basename "$issue_file")
         done_file="docs/issues/done/$base_name"
+        # Check if the file was added to done/ in this diff
         if ! echo "$CHANGED_FILES" | grep -qF "$done_file"; then
             emit_warning \
                 "fixable" \
                 "Issue file '${issue_file}' was deleted instead of moved to done/" \
-                "Issues must be preserved for audit trail (${WORKFLOW_DOC} Step 3)." \
+                "Issues must be preserved for audit trail (AI_WORKFLOW.md Step 3)" \
                 "git mv ${issue_file} docs/issues/done/${base_name}"
         fi
     done
@@ -312,6 +359,7 @@ check_docs_change_hint() {
         return
     fi
 
+    # Check for [trivial] marker in PR title or body
     if echo "$PR_TITLE" | grep -qi '\[trivial\]'; then
         return
     fi
@@ -319,11 +367,13 @@ check_docs_change_hint() {
         return
     fi
 
+    # Check if any code files changed (non-docs, non-config)
     local code_changed=false
     while IFS= read -r file; do
         [ -z "$file" ] && continue
         case "$file" in
             docs/*|*.md|.gitignore|.githooks/*|*.yml|*.yaml)
+                # Not code files
                 ;;
             *)
                 code_changed=true
@@ -336,6 +386,7 @@ check_docs_change_hint() {
         return
     fi
 
+    # Check if any docs/ files changed
     local docs_changed=false
     while IFS= read -r file; do
         [ -z "$file" ] && continue
@@ -351,7 +402,7 @@ check_docs_change_hint() {
         emit_warning \
             "advisory" \
             "Code changed without updating docs/ (Spec-Code Parity review needed)" \
-            "docs/specs/ should usually change with implementation updates (${WORKFLOW_DOC} Core Principle 2)."
+            "docs/specs/ should usually change with implementation updates (AI_WORKFLOW.md Core Principle 2)"
     fi
 }
 
@@ -361,8 +412,9 @@ check_docs_change_hint() {
 # =============================================================================
 check_branch_naming() {
     local branch
-    branch=$(current_branch)
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
 
+    # Skip for main/master or detached HEAD
     if [ -z "$branch" ] || [ "$branch" = "main" ] || [ "$branch" = "master" ] || [ "$branch" = "HEAD" ]; then
         return
     fi
@@ -372,7 +424,7 @@ check_branch_naming() {
         emit_warning \
             "fixable" \
             "Invalid branch name: '${branch}'" \
-            "Consistent naming enables automation and exec-plan mapping (${WORKFLOW_DOC} Branch Naming Convention)." \
+            "Consistent naming enables automation and exec-plan mapping (AI_WORKFLOW.md Branch Naming Convention)" \
             "Create a compliant branch with ww create <type>/<description> where type = plan|feat|fix|chore|docs and description is kebab-case (for example: feat/add-auth)"
     fi
 }
@@ -385,11 +437,13 @@ check_exec_plan_existence() {
     local branch
     branch=$(current_branch)
 
+    # Only check feat/* and fix/* branches
     if ! echo "$branch" | grep -qE "^(feat|fix)/"; then
         return
     fi
 
     local plan_name="${branch#*/}"
+    check_ambiguous_exec_plan_mapping "$branch" "$plan_name"
     local plan_paths
     local todo_file
     local done_file
@@ -401,13 +455,15 @@ check_exec_plan_existence() {
         emit_warning \
             "fixable" \
             "Missing exec-plan for branch '${branch}'" \
-            "feat/* and fix/* branches must have a plan before implementation (${WORKFLOW_DOC} Exec-Plan Mapping)." \
+            "feat/* and fix/* branches must have a plan before implementation (AI_WORKFLOW.md Exec-Plan Mapping)" \
             "Create the matching numbered plan first on plan/${plan_name}, then add docs/exec-plan/todo/<sequence>-${plan_name}.md"
     fi
 }
 
 # =============================================================================
 # Check 5: Workflow docs should not reintroduce raw-git startup (pre-push + ci)
+# Warn when migrated workflow-facing docs/skills contain startup snippets that
+# bypass the global ww CLI.
 # =============================================================================
 check_workflow_doc_startup_commands() {
     if ! $DIFF_CHECKS_AVAILABLE; then
@@ -438,7 +494,7 @@ check_workflow_doc_startup_commands() {
             emit_warning \
                 "fixable" \
                 "Workflow doc '${file}' reintroduces raw git startup commands" \
-                "Normal planning/execution should dogfood the global ww CLI (${WORKFLOW_DOGFOOD_DOC})." \
+                "Normal planning/execution should dogfood the global ww CLI (docs/specs/ww-dogfooding-workflow.md)" \
                 "Replace startup instructions with 'ww create ...' and 'cd \"\$(ww cd ...)\"'"
         fi
     done
@@ -446,6 +502,9 @@ check_workflow_doc_startup_commands() {
 
 # =============================================================================
 # Check 6: Linked local issues declared in completed exec-plans must move to done/
+# Narrow scope: only the matching feat/* or fix/* branch, only after the plan
+# has moved to docs/exec-plan/done/, and only for explicit docs/issues/*.md
+# paths named on an Addresses: line.
 # =============================================================================
 check_linked_issue_resolution() {
     if ! $DIFF_CHECKS_AVAILABLE; then
@@ -489,19 +548,22 @@ check_linked_issue_resolution() {
         emit_warning \
             "fixable" \
             "Completed exec-plan '${plan_reference}' links local issue '${issue_file}' but this branch does not move it to done/" \
-            "Execution branches should close explicitly linked local issues in the same branch so reviewers and future sessions can trust the plan-to-issue completion trail (${WORKFLOW_DOC} Step 3)." \
+            "Execution branches should close explicitly linked local issues in the same branch so reviewers and future sessions can trust the plan-to-issue completion trail (AI_WORKFLOW.md Step 3)." \
             "Move the issue with 'git mv ${issue_file} ${moved_issue_file}', or explain in the PR body why ${issue_file} remains open."
     done
 }
 
 # =============================================================================
 # Check 7: Active plan / issue naming (pre-push + ci)
+# Active files under docs/exec-plan/todo/ and docs/issues/ must use
+# <sequence>-<name>.md, while README.md remains exempt.
 # =============================================================================
 check_active_workflow_file_naming() {
     check_active_filename_format "docs/exec-plan/todo" "exec-plan"
     check_active_filename_format "docs/issues" "issue"
 }
 
+# Run checks
 check_issue_lifecycle
 check_docs_change_hint
 check_branch_naming
@@ -510,6 +572,7 @@ check_workflow_doc_startup_commands
 check_linked_issue_resolution
 check_active_workflow_file_naming
 
+# Summary
 if [ "$WARN_COUNT" -gt 0 ]; then
     echo -e "${YELLOW}Workflow linter summary:${NC}" >&2
     echo "  Total warnings: ${WARN_COUNT}" >&2
