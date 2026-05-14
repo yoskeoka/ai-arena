@@ -12,7 +12,7 @@
 - **Mistake**: unrelated regression を `docs/issues/` へ切り出したとき、失敗テスト名と推測だけを書き、実際の assertion や event log 抜粋を十分に残さなかった
 - **Pattern**: 「後で main で再現すればよい」と考えて、その場でしか取れない failure output を durable note に落としきらない
 - **Rule**: 偶発かもしれない test/runtime failure を `docs/issues/` へ記録するときは、少なくとも実行コマンド、失敗した test 名、代表 assertion、再調査に効く output 抜粋を同じ issue に残す。完全ログの保存先があるならその path も書く
-- **Applied**: `docs/issues/arena-runner-e2e-init-regression.md`、今後の ai-arena verification blocker 切り出し全般
+- **Applied**: `docs/issues/done/arena-runner-e2e-init-regression.md`、今後の ai-arena verification blocker 切り出し全般
 
 ## [2026-05-09] heuristic AI の e2e は固定期待値にしない
 

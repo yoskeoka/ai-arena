@@ -10,3 +10,9 @@ The linter remains warnings-only. When the vendored workflow is updated, refresh
 - the local root copies at `tools/workflow-lint.sh` and `.githooks/pre-push`
 
 `docs/issues/done/` is the archive location for resolved local issues referenced by the workflow linter.
+Active workflow files use the numbered convention from the vendored workflow:
+
+- active exec-plans under `docs/exec-plan/todo/` use `<sequence>-<name>.md`
+- active issues under `docs/issues/` use `<sequence>-<name>.md`
+- execution branches still map by the `-<name>.md` suffix
+- historical files already under `docs/issues/done/` keep their existing names
