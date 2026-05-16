@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	publicgm "github.com/yoskeoka/ai-arena/gamemaster"
 	"github.com/yoskeoka/ai-arena/games/dungeon"
-	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
-	"github.com/yoskeoka/ai-arena/internal/platform/game"
 )
 
 func TestCurrentExportedSnapshotHidesSeedUntilCompleted(t *testing.T) {
@@ -20,13 +19,13 @@ func TestCurrentExportedSnapshotHidesSeedUntilCompleted(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	server := serverState{
-		meta: catalog.GameMetadata{
+		meta: publicgm.GameMetadata{
 			GameID:         dungeon.GameID,
 			GameVersion:    dungeon.GameVersion,
 			RulesetVersion: dungeon.RulesetSeededMazeV1,
 		},
 		world:   world,
-		players: []game.Player{{PlayerID: "p1"}, {PlayerID: "p2"}},
+		players: []publicgm.Player{{PlayerID: "p1"}, {PlayerID: "p2"}},
 	}
 
 	exported := server.currentExportedSnapshot()
@@ -61,13 +60,13 @@ func TestCurrentExportedSnapshotIncludesSeedAfterCompletion(t *testing.T) {
 		t.Fatalf("NewFromFullState: %v", err)
 	}
 	server := serverState{
-		meta: catalog.GameMetadata{
+		meta: publicgm.GameMetadata{
 			GameID:         dungeon.GameID,
 			GameVersion:    dungeon.GameVersion,
 			RulesetVersion: dungeon.RulesetSeededMazeV1,
 		},
 		world:   completed,
-		players: []game.Player{{PlayerID: "p1"}, {PlayerID: "p2"}},
+		players: []publicgm.Player{{PlayerID: "p1"}, {PlayerID: "p2"}},
 	}
 
 	exported := server.currentExportedSnapshot()

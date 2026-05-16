@@ -1,103 +1,74 @@
 package contract
 
 import (
-	"encoding/json"
-	"fmt"
+	"github.com/yoskeoka/ai-arena/gamemaster"
 )
 
 // GameMetadata identifies one game build and ruleset selection.
-type GameMetadata struct {
-	GameID         string `json:"game_id"`
-	GameVersion    string `json:"game_version"`
-	RulesetVersion string `json:"ruleset_version"`
-}
+type GameMetadata = gamemaster.GameMetadata
 
 // DecisionMode describes whether a turn is sequential or simultaneous.
-type DecisionMode string
+type DecisionMode = gamemaster.DecisionMode
 
 const (
 	// Sequential runs exactly one player request at a time.
-	Sequential DecisionMode = "sequential"
+	Sequential DecisionMode = gamemaster.Sequential
 	// Simultaneous runs all player requests for a turn together.
-	Simultaneous DecisionMode = "simultaneous"
+	Simultaneous DecisionMode = gamemaster.Simultaneous
 )
 
 // MatchStatus describes the current lifecycle phase of a match.
-type MatchStatus string
+type MatchStatus = gamemaster.MatchStatus
 
 const (
 	// StatusStarting marks a match before initialization begins.
-	StatusStarting MatchStatus = "starting"
+	StatusStarting MatchStatus = gamemaster.StatusStarting
 	// StatusInitializing marks the initialization handshake phase.
-	StatusInitializing MatchStatus = "initializing"
+	StatusInitializing MatchStatus = gamemaster.StatusInitializing
 	// StatusRunning marks an active match with pending turns.
-	StatusRunning MatchStatus = "running"
+	StatusRunning MatchStatus = gamemaster.StatusRunning
 	// StatusFinishing marks a match after turn processing has ended.
-	StatusFinishing MatchStatus = "finishing"
+	StatusFinishing MatchStatus = gamemaster.StatusFinishing
 	// StatusCompleted marks a successfully finished match.
-	StatusCompleted MatchStatus = "completed"
+	StatusCompleted MatchStatus = gamemaster.StatusCompleted
 	// StatusFailed marks a match that ended with an error.
-	StatusFailed MatchStatus = "failed"
+	StatusFailed MatchStatus = gamemaster.StatusFailed
 	// StatusCanceled marks a match canceled by context shutdown.
-	StatusCanceled MatchStatus = "canceled"
+	StatusCanceled MatchStatus = gamemaster.StatusCanceled
 )
 
 // ActionDecision describes whether a submitted action was accepted.
-type ActionDecision string
+type ActionDecision = gamemaster.ActionDecision
 
 const (
 	// ActionAccepted means the player's action payload was accepted.
-	ActionAccepted ActionDecision = "accepted"
+	ActionAccepted ActionDecision = gamemaster.ActionAccepted
 	// ActionNoAction means the player produced no usable action.
-	ActionNoAction ActionDecision = "no_action"
+	ActionNoAction ActionDecision = gamemaster.ActionNoAction
 )
 
 // FailureReason classifies why a player action was not accepted.
-type FailureReason string
+type FailureReason = gamemaster.FailureReason
 
 const (
 	// ReasonTimeout indicates that the player missed the deadline.
-	ReasonTimeout FailureReason = "invalid-timeout"
+	ReasonTimeout FailureReason = gamemaster.ReasonTimeout
 	// ReasonMalformed indicates malformed protocol data.
-	ReasonMalformed FailureReason = "invalid-protocol-malformed"
+	ReasonMalformed FailureReason = gamemaster.ReasonMalformed
 	// ReasonMismatchedID indicates a response id mismatch.
-	ReasonMismatchedID FailureReason = "invalid-protocol-mismatched-id"
+	ReasonMismatchedID FailureReason = gamemaster.ReasonMismatchedID
 	// ReasonLateResponse indicates that a response arrived after timeout.
-	ReasonLateResponse FailureReason = "invalid-protocol-late-response"
+	ReasonLateResponse FailureReason = gamemaster.ReasonLateResponse
 	// ReasonIllegalAction indicates that the action payload was semantically invalid.
-	ReasonIllegalAction FailureReason = "invalid-illegal-action"
+	ReasonIllegalAction FailureReason = gamemaster.ReasonIllegalAction
 	// ReasonRuntimeStop indicates that the player runtime stopped unexpectedly.
-	ReasonRuntimeStop FailureReason = "runtime-stopped"
+	ReasonRuntimeStop FailureReason = gamemaster.ReasonRuntimeStop
 )
 
 // ActionStatus records the normalized action result for one player turn.
-type ActionStatus struct {
-	PlayerID      string          `json:"player_id"`
-	ActionStatus  ActionDecision  `json:"action_status"`
-	FailureReason FailureReason   `json:"failure_reason,omitempty"`
-	Action        json.RawMessage `json:"action,omitempty"`
-}
+type ActionStatus = gamemaster.ActionStatus
 
 // ValidateActionStatus checks that an action status carries a consistent payload.
 func ValidateActionStatus(status ActionStatus) error {
-	if status.PlayerID == "" {
-		return fmt.Errorf("player_id is required")
-	}
-
-	switch status.ActionStatus {
-	case ActionAccepted:
-		if status.FailureReason != "" {
-			return fmt.Errorf("accepted action must not carry failure_reason")
-		}
-		if len(status.Action) == 0 {
-			return fmt.Errorf("accepted action must carry action payload")
-		}
-	case ActionNoAction:
-		if len(status.Action) != 0 {
-			return fmt.Errorf("no_action must not carry action payload")
-		}
-	default:
-		return fmt.Errorf("unknown action_status %q", status.ActionStatus)
-	}
-	return nil
+	return gamemaster.ValidateActionStatus(status)
 }

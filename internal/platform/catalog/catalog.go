@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yoskeoka/ai-arena/internal/platform/contract"
+	publicgm "github.com/yoskeoka/ai-arena/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/runtime"
 )
 
@@ -19,7 +19,7 @@ var (
 )
 
 // GameMetadata is the canonical game identity tuple used across the platform.
-type GameMetadata = contract.GameMetadata
+type GameMetadata = publicgm.GameMetadata
 
 // SidecarManifest describes one AI entry and its transport/runtime contract.
 type SidecarManifest struct {

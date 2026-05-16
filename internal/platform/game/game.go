@@ -3,88 +3,73 @@ package game
 import (
 	"context"
 	"encoding/json"
-	"time"
 
+	publicgm "github.com/yoskeoka/ai-arena/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
-	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 )
 
 // Player identifies one participating AI player.
-type Player struct {
-	PlayerID string `json:"player_id"`
-	AIID     string `json:"ai_id"`
-}
+type Player = publicgm.Player
 
 // DecisionMode aliases the shared contract decision mode.
-type DecisionMode = contract.DecisionMode
+type DecisionMode = publicgm.DecisionMode
 
 const (
 	// Sequential aliases the sequential decision mode.
-	Sequential = contract.Sequential
+	Sequential = publicgm.Sequential
 	// Simultaneous aliases the simultaneous decision mode.
-	Simultaneous = contract.Simultaneous
+	Simultaneous = publicgm.Simultaneous
 )
 
 // InitState contains per-player initialization payloads.
-type InitState struct {
-	PerPlayer map[string]json.RawMessage
-}
+type InitState = publicgm.InitState
 
 // DecisionRequest contains the visible state and deadline for one player turn.
-type DecisionRequest struct {
-	PlayerID        string
-	VisibleState    json.RawMessage
-	LegalActionHint json.RawMessage
-	Deadline        time.Duration
-}
+type DecisionRequest = publicgm.DecisionRequest
 
 // DecisionStep describes one game-master step that players must answer.
-type DecisionStep struct {
-	Turn     int
-	Mode     DecisionMode
-	Requests []DecisionRequest
-}
+type DecisionStep = publicgm.DecisionStep
 
 // MatchStatus aliases the shared contract match lifecycle status.
-type MatchStatus = contract.MatchStatus
+type MatchStatus = publicgm.MatchStatus
 
 const (
 	// StatusStarting aliases the starting lifecycle status.
-	StatusStarting = contract.StatusStarting
+	StatusStarting = publicgm.StatusStarting
 	// StatusInitializing aliases the initializing lifecycle status.
-	StatusInitializing = contract.StatusInitializing
+	StatusInitializing = publicgm.StatusInitializing
 	// StatusRunning aliases the running lifecycle status.
-	StatusRunning = contract.StatusRunning
+	StatusRunning = publicgm.StatusRunning
 	// StatusFinishing aliases the finishing lifecycle status.
-	StatusFinishing = contract.StatusFinishing
+	StatusFinishing = publicgm.StatusFinishing
 	// StatusCompleted aliases the completed lifecycle status.
-	StatusCompleted = contract.StatusCompleted
+	StatusCompleted = publicgm.StatusCompleted
 	// StatusFailed aliases the failed lifecycle status.
-	StatusFailed = contract.StatusFailed
+	StatusFailed = publicgm.StatusFailed
 	// StatusCanceled aliases the canceled lifecycle status.
-	StatusCanceled = contract.StatusCanceled
+	StatusCanceled = publicgm.StatusCanceled
 )
 
 // ActionStatus aliases the shared per-player turn outcome.
-type ActionStatus = contract.ActionStatus
+type ActionStatus = publicgm.ActionStatus
 
 // Placement aliases the shared match placement record.
-type Placement = contract.Placement
+type Placement = publicgm.Placement
 
 // MatchResult aliases the shared final match result.
-type MatchResult = contract.MatchResult
+type MatchResult = publicgm.MatchResult
 
 // PlayerSnapshot aliases the shared internal player snapshot.
-type PlayerSnapshot = contract.PlayerSnapshot
+type PlayerSnapshot = publicgm.PlayerSnapshot
 
 // Snapshot aliases the shared internal match snapshot.
-type Snapshot = contract.Snapshot
+type Snapshot = publicgm.Snapshot
 
 // ExportedPlayerSnapshot aliases the shared public player snapshot.
-type ExportedPlayerSnapshot = contract.ExportedPlayerSnapshot
+type ExportedPlayerSnapshot = publicgm.ExportedPlayerSnapshot
 
 // ExportedSnapshot aliases the shared public match snapshot.
-type ExportedSnapshot = contract.ExportedSnapshot
+type ExportedSnapshot = publicgm.ExportedSnapshot
 
 // Master defines the game-master surface used by the platform core.
 type Master interface {
