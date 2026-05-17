@@ -39,7 +39,8 @@ game master sidecar 実装者が依存してよい公開境界は
   stdio JSON-RPC 2.0 + NDJSON helper を持つ
 - external repo の sidecar は、local `replace` や workspace 参照ではなく、review 済みの ai-arena module tag を
   `go.mod` から参照してこの package を import する
-- `cmd/dungeon-gamemaster` のような sidecar entrypoint は、game 固有 package とこの公開 package だけへ依存してよい
+- ai-arena repo 内に残す game master / game 実装例も、`internal/games/janken` や `cmd/echo-count-gamemaster` を基準に、
+  game 固有 package とこの公開 package だけで責務を説明できる状態を保つ
 - `internal/platform/runtime` / `internal/platform/session` / `internal/platform/registry` / `internal/platform/catalog` は
   platform 側 consumer / adapter 実装であり、sidecar 実装者向けの依存先ではない
 - local subprocess transport の method 名と payload 契約は、この公開 package を通じて安定させる
@@ -55,7 +56,8 @@ game master sidecar 実装者が依存してよい公開境界は
   「ai-arena version を上げる」操作として取り込む
 - `v0.1.0` のような release tag を切る前に、少なくとも以下を確認する
   - `gamemaster` package の公開 DTO / NDJSON helper が sidecar 開発に必要な最小面を満たしている
-  - `cmd/dungeon-gamemaster` のような sidecar entrypoint が game 固有 package と `gamemaster` package だけで build できる
+  - ai-arena repo 内に残す game master / game 実装例について、`internal/games/janken` や `cmd/echo-count-gamemaster` を基準に、
+    game 固有 package と `gamemaster` package の境界が崩れていない
   - external repo 側 import audit で `gamemaster` を越える ai-arena 依存が残っていない
   - external repo 側で local `replace` なしの tagged import build/test/CI が通る
 
