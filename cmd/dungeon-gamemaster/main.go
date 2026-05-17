@@ -14,13 +14,8 @@ import (
 	"fmt"
 	"os"
 
+	publicgm "github.com/yoskeoka/ai-arena/gamemaster"
 	"github.com/yoskeoka/ai-arena/games/dungeon"
-	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
-	"github.com/yoskeoka/ai-arena/internal/platform/contract"
-	"github.com/yoskeoka/ai-arena/internal/platform/game"
-	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
-	"github.com/yoskeoka/ai-arena/internal/platform/protocol"
-	"github.com/yoskeoka/ai-arena/internal/platform/session"
 )
 
 func main() {
@@ -47,16 +42,16 @@ func run() error {
 		return err
 	}
 	server := &serverState{
-		meta: catalog.GameMetadata{
+		meta: publicgm.GameMetadata{
 			GameID:         meta.GameID,
 			GameVersion:    meta.GameVersion,
 			RulesetVersion: meta.RulesetVersion,
 		},
-		lastAction: make(map[string]game.ActionStatus),
+		lastAction: make(map[string]publicgm.ActionStatus),
 	}
 
-	dec := protocol.NewDecoder(os.Stdin)
-	enc := protocol.NewEncoder(os.Stdout)
+	dec := publicgm.NewDecoder(os.Stdin)
+	enc := publicgm.NewEncoder(os.Stdout)
 	for {
 		req, err := dec.DecodeRequest()
 		if err != nil {
@@ -64,10 +59,10 @@ func run() error {
 		}
 		resp, exit, err := server.handleRequest(context.Background(), req)
 		if err != nil {
-			resp = protocol.Response{
+			resp = publicgm.Response{
 				JSONRPC: "2.0",
 				ID:      req.ID,
-				Error: &protocol.ErrorObject{
+				Error: &publicgm.ErrorObject{
 					Code:    -32000,
 					Message: err.Error(),
 				},
@@ -83,21 +78,21 @@ func run() error {
 }
 
 type serverState struct {
-	meta       catalog.GameMetadata
+	meta       publicgm.GameMetadata
 	world      *dungeon.Match
-	players    []game.Player
-	lastAction map[string]game.ActionStatus
+	players    []publicgm.Player
+	lastAction map[string]publicgm.ActionStatus
 }
 
-func (s *serverState) handleRequest(ctx context.Context, req protocol.Request) (protocol.Response, bool, error) {
+func (s *serverState) handleRequest(ctx context.Context, req publicgm.Request) (publicgm.Response, bool, error) {
 	switch req.Method {
-	case "metadata":
-		resp, err := protocol.NewResponse(req.ID, s.meta)
+	case publicgm.MethodMetadata:
+		resp, err := publicgm.NewResponse(req.ID, s.meta)
 		return resp, false, err
-	case "initialize_match":
-		var params gamemaster.InitializeMatchParams
+	case publicgm.MethodInitializeMatch:
+		var params publicgm.InitializeMatchParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
-			return protocol.Response{}, false, err
+			return publicgm.Response{}, false, err
 		}
 		playerIDs := make([]string, 0, len(params.Players))
 		for _, player := range params.Players {
@@ -116,89 +111,86 @@ func (s *serverState) handleRequest(ctx context.Context, req protocol.Request) (
 		} else {
 			fullState, decodeErr := snapshotToFullState(*params.ResumeSnapshot)
 			if decodeErr != nil {
-				return protocol.Response{}, false, decodeErr
+				return publicgm.Response{}, false, decodeErr
 			}
 			world, err = dungeon.NewFromFullState(cfg, fullState)
 		}
 		if err != nil {
-			return protocol.Response{}, false, err
+			return publicgm.Response{}, false, err
 		}
 		s.world = world
-		s.players = append([]game.Player(nil), params.Players...)
-		s.lastAction = make(map[string]game.ActionStatus, len(params.Players))
+		s.players = append([]publicgm.Player(nil), params.Players...)
+		s.lastAction = make(map[string]publicgm.ActionStatus, len(params.Players))
 		initState := make(map[string]json.RawMessage, len(params.Players))
 		for _, player := range params.Players {
 			visible, err := s.world.CurrentVisibleState(player.PlayerID)
 			if err != nil {
-				return protocol.Response{}, false, err
+				return publicgm.Response{}, false, err
 			}
 			initState[player.PlayerID] = mustJSON(visible)
-			s.lastAction[player.PlayerID] = game.ActionStatus{
+			s.lastAction[player.PlayerID] = publicgm.ActionStatus{
 				PlayerID:     player.PlayerID,
-				ActionStatus: session.StatusNoAction,
+				ActionStatus: publicgm.ActionNoAction,
 			}
 		}
-		resp, err := protocol.NewResponse(req.ID, gamemaster.InitializeMatchResult{
-			InitState: game.InitState{PerPlayer: initState},
+		resp, err := publicgm.NewResponse(req.ID, publicgm.InitializeMatchResult{
+			InitState: publicgm.InitState{PerPlayer: initState},
 		})
 		return resp, false, err
-	case "next_decision_step":
+	case publicgm.MethodNextDecisionStep:
 		if s.world == nil {
-			return protocol.Response{}, false, fmt.Errorf("match is not initialized")
+			return publicgm.Response{}, false, fmt.Errorf("match is not initialized")
 		}
 		if s.world.Terminal() {
-			resp, err := protocol.NewResponse(req.ID, (*game.DecisionStep)(nil))
+			resp, err := publicgm.NewResponse(req.ID, (*publicgm.DecisionStep)(nil))
 			return resp, false, err
 		}
 		ruleset := s.world.Ruleset()
-		requests := make([]game.DecisionRequest, 0)
+		requests := make([]publicgm.DecisionRequest, 0)
 		for _, playerID := range s.world.PendingPlayerIDs() {
 			visible, err := s.world.CurrentVisibleState(playerID)
 			if err != nil {
-				return protocol.Response{}, false, err
+				return publicgm.Response{}, false, err
 			}
-			requests = append(requests, game.DecisionRequest{
+			requests = append(requests, publicgm.DecisionRequest{
 				PlayerID:        playerID,
 				VisibleState:    mustJSON(visible),
 				LegalActionHint: s.world.LegalActionHint(),
 				Deadline:        ruleset.TurnDeadline,
 			})
 		}
-		resp, err := protocol.NewResponse(req.ID, &game.DecisionStep{
+		resp, err := publicgm.NewResponse(req.ID, &publicgm.DecisionStep{
 			Turn:     s.world.Turn() + 1,
-			Mode:     game.Simultaneous,
+			Mode:     publicgm.Simultaneous,
 			Requests: requests,
 		})
 		return resp, false, err
-	case "normalize_action":
+	case publicgm.MethodNormalizeAction:
 		if s.world == nil {
-			return protocol.Response{}, false, fmt.Errorf("match is not initialized")
+			return publicgm.Response{}, false, fmt.Errorf("match is not initialized")
 		}
-		var params struct {
-			Request      game.DecisionRequest `json:"request"`
-			ActionStatus game.ActionStatus    `json:"action_status"`
-		}
+		var params publicgm.NormalizeActionParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
-			return protocol.Response{}, false, err
+			return publicgm.Response{}, false, err
 		}
 		normalized := normalizeAction(s.world, params.Request.PlayerID, params.ActionStatus)
-		resp, err := protocol.NewResponse(req.ID, normalized)
+		resp, err := publicgm.NewResponse(req.ID, normalized)
 		return resp, false, err
-	case "apply_decision_results":
+	case publicgm.MethodApplyDecisionResults:
 		if s.world == nil {
-			return protocol.Response{}, false, fmt.Errorf("match is not initialized")
+			return publicgm.Response{}, false, fmt.Errorf("match is not initialized")
 		}
-		var params gamemaster.ApplyDecisionResultsParams
+		var params publicgm.ApplyDecisionResultsParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
-			return protocol.Response{}, false, err
+			return publicgm.Response{}, false, err
 		}
 		actions := make(map[string]dungeon.Action, len(params.ActionStatuses))
 		for _, status := range params.ActionStatuses {
 			s.lastAction[status.PlayerID] = status
-			if status.ActionStatus == session.StatusAccepted {
+			if status.ActionStatus == publicgm.ActionAccepted {
 				action, err := dungeon.ParseAction(status.Action)
 				if err != nil {
-					return protocol.Response{}, false, err
+					return publicgm.Response{}, false, err
 				}
 				actions[status.PlayerID] = action
 				continue
@@ -206,58 +198,58 @@ func (s *serverState) handleRequest(ctx context.Context, req protocol.Request) (
 			actions[status.PlayerID] = dungeon.Action{Action: "wait"}
 		}
 		if err := s.world.Apply(actions); err != nil {
-			return protocol.Response{}, false, err
+			return publicgm.Response{}, false, err
 		}
-		resp, err := protocol.NewResponse(req.ID, map[string]bool{"ok": true})
+		resp, err := publicgm.NewResponse(req.ID, map[string]bool{"ok": true})
 		return resp, false, err
-	case "current_snapshot":
+	case publicgm.MethodCurrentSnapshot:
 		if s.world == nil {
-			return protocol.Response{}, false, fmt.Errorf("match is not initialized")
+			return publicgm.Response{}, false, fmt.Errorf("match is not initialized")
 		}
 		snapshot, err := s.currentSnapshot()
 		if err != nil {
-			return protocol.Response{}, false, err
+			return publicgm.Response{}, false, err
 		}
-		resp, err := protocol.NewResponse(req.ID, snapshot)
+		resp, err := publicgm.NewResponse(req.ID, snapshot)
 		return resp, false, err
-	case "current_exported_snapshot":
+	case publicgm.MethodCurrentExportedSnapshot:
 		if s.world == nil {
-			return protocol.Response{}, false, fmt.Errorf("match is not initialized")
+			return publicgm.Response{}, false, fmt.Errorf("match is not initialized")
 		}
-		resp, err := protocol.NewResponse(req.ID, s.currentExportedSnapshot())
+		resp, err := publicgm.NewResponse(req.ID, s.currentExportedSnapshot())
 		return resp, false, err
-	case "current_result":
+	case publicgm.MethodCurrentResult:
 		if s.world == nil {
-			return protocol.Response{}, false, fmt.Errorf("match is not initialized")
+			return publicgm.Response{}, false, fmt.Errorf("match is not initialized")
 		}
-		resp, err := protocol.NewResponse(req.ID, s.currentResult())
+		resp, err := publicgm.NewResponse(req.ID, s.currentResult())
 		return resp, false, err
-	case "shutdown":
-		resp, err := protocol.NewResponse(req.ID, map[string]bool{"ok": true})
+	case publicgm.MethodShutdown:
+		resp, err := publicgm.NewResponse(req.ID, map[string]bool{"ok": true})
 		return resp, true, err
 	default:
-		return protocol.Response{}, false, fmt.Errorf("unsupported method %q", req.Method)
+		return publicgm.Response{}, false, fmt.Errorf("unsupported method %q", req.Method)
 	}
 }
 
-func (s *serverState) currentSnapshot() (game.Snapshot, error) {
+func (s *serverState) currentSnapshot() (publicgm.Snapshot, error) {
 	full := s.world.FullState()
-	perPlayer := make(map[string]game.PlayerSnapshot, len(s.players))
+	perPlayer := make(map[string]publicgm.PlayerSnapshot, len(s.players))
 	for _, player := range s.players {
 		visible, err := s.world.CurrentVisibleState(player.PlayerID)
 		if err != nil {
-			return game.Snapshot{}, err
+			return publicgm.Snapshot{}, err
 		}
 		status := s.lastAction[player.PlayerID]
 		if status.PlayerID == "" {
-			status = game.ActionStatus{PlayerID: player.PlayerID, ActionStatus: session.StatusNoAction}
+			status = publicgm.ActionStatus{PlayerID: player.PlayerID, ActionStatus: publicgm.ActionNoAction}
 		}
-		perPlayer[player.PlayerID] = game.PlayerSnapshot{
+		perPlayer[player.PlayerID] = publicgm.PlayerSnapshot{
 			VisibleState:     mustJSON(visible),
 			LastActionStatus: status,
 		}
 	}
-	return game.Snapshot{
+	return publicgm.Snapshot{
 		GameID:         s.meta.GameID,
 		GameVersion:    s.meta.GameVersion,
 		RulesetVersion: s.meta.RulesetVersion,
@@ -268,23 +260,23 @@ func (s *serverState) currentSnapshot() (game.Snapshot, error) {
 	}, nil
 }
 
-func (s *serverState) currentExportedSnapshot() game.ExportedSnapshot {
+func (s *serverState) currentExportedSnapshot() publicgm.ExportedSnapshot {
 	public := s.world.PublicState()
-	if statusForWorld(s.world) != game.StatusCompleted {
+	if statusForWorld(s.world) != publicgm.StatusCompleted {
 		public.RNGSeed = ""
 	}
-	players := make([]game.ExportedPlayerSnapshot, 0, len(s.players))
+	players := make([]publicgm.ExportedPlayerSnapshot, 0, len(s.players))
 	for _, player := range s.players {
 		status := s.lastAction[player.PlayerID]
 		if status.PlayerID == "" {
-			status = game.ActionStatus{PlayerID: player.PlayerID, ActionStatus: session.StatusNoAction}
+			status = publicgm.ActionStatus{PlayerID: player.PlayerID, ActionStatus: publicgm.ActionNoAction}
 		}
-		players = append(players, game.ExportedPlayerSnapshot{
+		players = append(players, publicgm.ExportedPlayerSnapshot{
 			PlayerID:         player.PlayerID,
 			LastActionStatus: status,
 		})
 	}
-	return game.ExportedSnapshot{
+	return publicgm.ExportedSnapshot{
 		GameID:         s.meta.GameID,
 		GameVersion:    s.meta.GameVersion,
 		RulesetVersion: s.meta.RulesetVersion,
@@ -295,11 +287,11 @@ func (s *serverState) currentExportedSnapshot() game.ExportedSnapshot {
 	}
 }
 
-func (s *serverState) currentResult() game.MatchResult {
+func (s *serverState) currentResult() publicgm.MatchResult {
 	placements := s.world.Placements()
-	result := game.MatchResult{Placements: make([]game.Placement, 0, len(placements))}
+	result := publicgm.MatchResult{Placements: make([]publicgm.Placement, 0, len(placements))}
 	for _, placement := range placements {
-		result.Placements = append(result.Placements, game.Placement{
+		result.Placements = append(result.Placements, publicgm.Placement{
 			PlayerID: placement.PlayerID,
 			Place:    placement.Place,
 		})
@@ -307,33 +299,33 @@ func (s *serverState) currentResult() game.MatchResult {
 	return result
 }
 
-func normalizeAction(world *dungeon.Match, playerID string, status game.ActionStatus) game.ActionStatus {
+func normalizeAction(world *dungeon.Match, playerID string, status publicgm.ActionStatus) publicgm.ActionStatus {
 	if status.PlayerID == "" {
 		status.PlayerID = playerID
 	}
-	if status.ActionStatus != session.StatusAccepted {
+	if status.ActionStatus != publicgm.ActionAccepted {
 		status.Action = nil
 		return status
 	}
 	action, err := dungeon.ParseAction(status.Action)
 	if err != nil || !world.CanApply(playerID, action) {
-		return game.ActionStatus{
+		return publicgm.ActionStatus{
 			PlayerID:      playerID,
-			ActionStatus:  session.StatusNoAction,
-			FailureReason: contract.ReasonIllegalAction,
+			ActionStatus:  publicgm.ActionNoAction,
+			FailureReason: publicgm.ReasonIllegalAction,
 		}
 	}
 	return status
 }
 
-func statusForWorld(world *dungeon.Match) game.MatchStatus {
+func statusForWorld(world *dungeon.Match) publicgm.MatchStatus {
 	if world.Terminal() {
-		return game.StatusCompleted
+		return publicgm.StatusCompleted
 	}
-	return game.StatusRunning
+	return publicgm.StatusRunning
 }
 
-func snapshotToFullState(snapshot game.Snapshot) (dungeon.FullState, error) {
+func snapshotToFullState(snapshot publicgm.Snapshot) (dungeon.FullState, error) {
 	var state dungeon.FullState
 	if err := json.Unmarshal(snapshot.GameState, &state); err != nil {
 		return dungeon.FullState{}, fmt.Errorf("decode dungeon snapshot game_state: %w", err)

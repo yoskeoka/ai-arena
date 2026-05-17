@@ -30,6 +30,19 @@ game master が満たすべき metadata / lifecycle / state exchange / turn reso
 - `docs/specs/platform.md`: platform core と runner / registry / adapter の責務
 - `docs/specs/platform-game-registry.md`: descriptor と game master 接続方式の登録契約
 
+## 公開境界と internal 実装の分離
+
+game master sidecar 実装者が依存してよい公開境界は
+`github.com/yoskeoka/ai-arena/gamemaster` package とする。
+
+- この package は sidecar SDK 候補として、metadata / decision / action status / snapshot / result DTO と
+  stdio JSON-RPC 2.0 + NDJSON helper を持つ
+- `cmd/dungeon-gamemaster` のような sidecar entrypoint は、game 固有 package とこの公開 package だけへ依存してよい
+- `internal/platform/runtime` / `internal/platform/session` / `internal/platform/registry` / `internal/platform/catalog` は
+  platform 側 consumer / adapter 実装であり、sidecar 実装者向けの依存先ではない
+- local subprocess transport の method 名と payload 契約は、この公開 package を通じて安定させる
+- 将来 sidecar 実装を別 repo へ移すときも、この公開契約は import path 置換以外そのまま使える状態を狙う
+
 ## game master metadata
 
 game master は少なくとも以下の metadata を返せること。
@@ -66,6 +79,7 @@ game master は trusted component であり、player AI と違って turn timeou
 ### local subprocess
 
 - platform が game master 実行ファイルを起動し、stdio JSON-RPC で接続する
+- sidecar 実装は `github.com/yoskeoka/ai-arena/gamemaster` package を使って transport contract を実装する
 - game master 側は起動時引数または sidecar 相当の設定から、自身の `game_version` / `ruleset_version` を確定できること
 - match ごとの players と resume snapshot は、後述の初期化 API で受け取る
 
@@ -206,6 +220,7 @@ local subprocess adapter では以下の method 名を使う。これは transpo
 - `shutdown`
 
 これらの request / response payload は上記論理 API と 1 対 1 に対応する。
+payload DTO と NDJSON framing helper の正本は `github.com/yoskeoka/ai-arena/gamemaster` package とする。
 
 ## 実装者向け最小チェックリスト
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	sidecar "github.com/yoskeoka/ai-arena/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/protocol"
@@ -37,22 +38,13 @@ type Session interface {
 }
 
 // InitializeMatchParams contains the inputs for starting or resuming a match.
-type InitializeMatchParams struct {
-	Players        []game.Player  `json:"players"`
-	RNGSeed        string         `json:"rng_seed,omitempty"`
-	ResumeSnapshot *game.Snapshot `json:"resume_snapshot,omitempty"`
-}
+type InitializeMatchParams = sidecar.InitializeMatchParams
 
 // InitializeMatchResult returns the initial per-player state from a game master.
-type InitializeMatchResult struct {
-	InitState game.InitState `json:"init_state"`
-}
+type InitializeMatchResult = sidecar.InitializeMatchResult
 
 // ApplyDecisionResultsParams carries one resolved step back to the game master.
-type ApplyDecisionResultsParams struct {
-	Step           game.DecisionStep   `json:"step"`
-	ActionStatuses []game.ActionStatus `json:"action_statuses"`
-}
+type ApplyDecisionResultsParams = sidecar.ApplyDecisionResultsParams
 
 type inProcessSession struct {
 	master game.Master
@@ -164,7 +156,7 @@ func (s *localSubprocessSession) InitializeMatch(ctx context.Context) (game.Init
 		return s.initState, nil
 	}
 	var actual catalog.GameMetadata
-	if err := s.call(ctx, "metadata", nil, &actual); err != nil {
+	if err := s.call(ctx, sidecar.MethodMetadata, nil, &actual); err != nil {
 		return game.InitState{}, fmt.Errorf("game master metadata: %w", err)
 	}
 	if err := catalog.Compatible(s.meta, actual); err != nil {
@@ -173,7 +165,7 @@ func (s *localSubprocessSession) InitializeMatch(ctx context.Context) (game.Init
 	s.meta = actual
 
 	var result InitializeMatchResult
-	if err := s.call(ctx, "initialize_match", InitializeMatchParams{
+	if err := s.call(ctx, sidecar.MethodInitializeMatch, InitializeMatchParams{
 		Players:        append([]game.Player(nil), s.players...),
 		RNGSeed:        s.rngSeed,
 		ResumeSnapshot: cloneSnapshotPtr(s.resumeSnapshot),
@@ -187,7 +179,7 @@ func (s *localSubprocessSession) InitializeMatch(ctx context.Context) (game.Init
 
 func (s *localSubprocessSession) NextDecisionStep(ctx context.Context) (*game.DecisionStep, error) {
 	var step *game.DecisionStep
-	if err := s.call(ctx, "next_decision_step", nil, &step); err != nil {
+	if err := s.call(ctx, sidecar.MethodNextDecisionStep, nil, &step); err != nil {
 		return nil, fmt.Errorf("game master next_decision_step: %w", err)
 	}
 	return step, nil
@@ -195,10 +187,7 @@ func (s *localSubprocessSession) NextDecisionStep(ctx context.Context) (*game.De
 
 func (s *localSubprocessSession) NormalizeAction(ctx context.Context, req game.DecisionRequest, actionStatus game.ActionStatus) (game.ActionStatus, error) {
 	var normalized game.ActionStatus
-	if err := s.call(ctx, "normalize_action", struct {
-		Request      game.DecisionRequest `json:"request"`
-		ActionStatus game.ActionStatus    `json:"action_status"`
-	}{
+	if err := s.call(ctx, sidecar.MethodNormalizeAction, sidecar.NormalizeActionParams{
 		Request:      req,
 		ActionStatus: actionStatus,
 	}, &normalized); err != nil {
@@ -208,7 +197,7 @@ func (s *localSubprocessSession) NormalizeAction(ctx context.Context, req game.D
 }
 
 func (s *localSubprocessSession) ApplyDecisionResults(ctx context.Context, step game.DecisionStep, actionStatuses []game.ActionStatus) error {
-	return s.call(ctx, "apply_decision_results", ApplyDecisionResultsParams{
+	return s.call(ctx, sidecar.MethodApplyDecisionResults, ApplyDecisionResultsParams{
 		Step:           step,
 		ActionStatuses: append([]game.ActionStatus(nil), actionStatuses...),
 	}, nil)
@@ -219,7 +208,7 @@ func (s *localSubprocessSession) CurrentSnapshot(ctx context.Context) (game.Snap
 		return game.Snapshot{}, err
 	}
 	var snapshot game.Snapshot
-	if err := s.call(ctx, "current_snapshot", nil, &snapshot); err != nil {
+	if err := s.call(ctx, sidecar.MethodCurrentSnapshot, nil, &snapshot); err != nil {
 		return game.Snapshot{}, fmt.Errorf("game master current_snapshot: %w", err)
 	}
 	return snapshot, nil
@@ -230,7 +219,7 @@ func (s *localSubprocessSession) CurrentExportedSnapshot(ctx context.Context) (g
 		return game.ExportedSnapshot{}, err
 	}
 	var snapshot game.ExportedSnapshot
-	if err := s.call(ctx, "current_exported_snapshot", nil, &snapshot); err != nil {
+	if err := s.call(ctx, sidecar.MethodCurrentExportedSnapshot, nil, &snapshot); err != nil {
 		return game.ExportedSnapshot{}, fmt.Errorf("game master current_exported_snapshot: %w", err)
 	}
 	return snapshot, nil
@@ -241,14 +230,14 @@ func (s *localSubprocessSession) CurrentResult(ctx context.Context) (game.MatchR
 		return game.MatchResult{}, err
 	}
 	var result game.MatchResult
-	if err := s.call(ctx, "current_result", nil, &result); err != nil {
+	if err := s.call(ctx, sidecar.MethodCurrentResult, nil, &result); err != nil {
 		return game.MatchResult{}, fmt.Errorf("game master current_result: %w", err)
 	}
 	return result, nil
 }
 
 func (s *localSubprocessSession) Shutdown(ctx context.Context) error {
-	shutdownErr := s.call(ctx, "shutdown", nil, nil)
+	shutdownErr := s.call(ctx, sidecar.MethodShutdown, nil, nil)
 	closeErr := s.adapter.Close(ctx)
 	if shutdownErr != nil && closeErr != nil {
 		return fmt.Errorf("%v; close runtime: %w", shutdownErr, closeErr)

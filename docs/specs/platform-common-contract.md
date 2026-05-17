@@ -32,6 +32,26 @@
 
 共通語彙の正本はこの spec とし、個別 game spec はここで定義した語彙を前提に差分だけを書く。
 
+## sidecar SDK 候補へ載せる DTO 範囲
+
+game master sidecar 実装者と platform adapter が共有してよい game 非依存 DTO は、
+`github.com/yoskeoka/ai-arena/gamemaster` package に置く。
+
+- `GameMetadata`
+- `DecisionMode`
+- `Player`
+- `InitState`
+- `DecisionRequest`
+- `DecisionStep`
+- `ActionStatus`
+- `Snapshot`
+- `ExportedSnapshot`
+- `MatchResult`
+
+この spec で定義する共通語彙は、公開 sidecar SDK 候補へ載せる正本でもある。
+一方で registry lookup、runtime 起動、session timeout 管理、catalog 解決の責務は
+platform internal implementation に残し、上記 DTO に含めない。
+
 ## 共通 metadata 契約
 
 各 game は少なくとも以下を持つ。
