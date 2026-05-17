@@ -132,3 +132,10 @@
 - **Pattern**: golden の更新理由と差分確認導線を code 側に閉じると、PR review と AI-assisted 更新時の境界が曖昧になる
 - **Rule**: deterministic regression golden は review しやすい外部 JSON file に置き、test は rerun determinism と golden parity を機械的に比較する
 - **Applied**: `ai-arena/e2e/*` の deterministic regression test、特に dungeon の normalized result golden
+
+## [2026-05-18] ai-arena の spec で game code を repo 内既定に見せない
+
+- **Mistake**: `docs/specs/game-master.md` に external repo 配置を例外扱いする補足を書き、ai-arena repo 内に game 実装が置かれているのが通常であるかのような含みを残した
+- **Pattern**: 移行中の一時的な repo 配置を基準に spec を書き、platform 契約の通常前提と bootstrap / e2e 用の例外配置を分離できていない
+- **Rule**: ai-arena の platform spec では、game master / sidecar は repo 外実装が通常前提として読める書き方にする。ai-arena repo 内に残る実装や fixture は e2e・移行・比較元の都合である場合だけ個別に書き、external repo をわざわざ例外扱いしない
+- **Applied**: `docs/specs/game-master.md` の sidecar / transport 記述、今後の ai-arena 側 external game repo 関連 spec 全般
