@@ -37,6 +37,10 @@
 game master sidecar 実装者と platform adapter が共有してよい game 非依存 DTO は、
 `github.com/yoskeoka/ai-arena/gamemaster` package に置く。
 
+- external repo 側 consumer は、workspace 内の local checkout ではなく、review 済みの ai-arena module tag を
+  `go.mod` から参照してこの package を取り込む
+- external repo が安定依存してよい ai-arena 側 import surface は、この package に含まれる DTO / NDJSON helper までとする
+
 - `GameMetadata`
 - `DecisionMode`
 - `Player`

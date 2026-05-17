@@ -37,6 +37,8 @@ game master sidecar 実装者が依存してよい公開境界は
 
 - この package は sidecar SDK 候補として、metadata / decision / action status / snapshot / result DTO と
   stdio JSON-RPC 2.0 + NDJSON helper を持つ
+- external repo の sidecar は、local `replace` や workspace 参照ではなく、review 済みの ai-arena module tag を
+  `go.mod` から参照してこの package を import する
 - `cmd/dungeon-gamemaster` のような sidecar entrypoint は、game 固有 package とこの公開 package だけへ依存してよい
 - `internal/platform/runtime` / `internal/platform/session` / `internal/platform/registry` / `internal/platform/catalog` は
   platform 側 consumer / adapter 実装であり、sidecar 実装者向けの依存先ではない
@@ -80,6 +82,7 @@ game master は trusted component であり、player AI と違って turn timeou
 
 - platform が game master 実行ファイルを起動し、stdio JSON-RPC で接続する
 - sidecar 実装は `github.com/yoskeoka/ai-arena/gamemaster` package を使って transport contract を実装する
+- module version 更新は、意図的に採用する ai-arena release tag を上げる形で行い、unreleased checkout 差分への依存は持ち込まない
 - game master 側は起動時引数または sidecar 相当の設定から、自身の `game_version` / `ruleset_version` を確定できること
 - match ごとの players と resume snapshot は、後述の初期化 API で受け取る
 

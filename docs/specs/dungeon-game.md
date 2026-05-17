@@ -36,6 +36,8 @@ portable sidecar boundary と payload / golden contract は変えない。
   `cmd/dungeon-bot-local`、`cmd/dungeon-map-helper`、`games/dungeon/...`、
   same-golden verification に必要な `testdata/ai/dungeon/...` の portable subset、
   `e2e/golden/normalized-dungeon-result.json` とする
+- external repo は sidecar SDK import に local `replace` を使わず、review 済みの ai-arena module tag を
+  `go.mod` から参照する
 - `ai-arena` は bootstrap 段階では dungeon verification の比較元として残り、
   external repo 側で parity が成立するまで canonical implementation を兼ねる
 - bootstrap 完了条件は、現行の deterministic golden を変更せずに
@@ -620,7 +622,7 @@ terminal public state から導ける compact な normalized result shape を比
 
 - same-condition regression test は、同一条件で再実行した normalized result が一致しない場合に失敗しなければならない
 - この failure は「勝者が変わった」「score breakdown が変わった」「残宝箱が変わった」などを含む deterministic drift として扱い、まず golden 更新ではなく実装修正対象とみなす
-- golden 更新を許可するのは、`game_version` または `ruleset_version` の意図的更新、deterministic AI 実装の意図的変更、normalized result shape 自体の見直しを行った場合に限る
+- golden 更新を許可するのは、`game_version` または `ruleset_version` の意図的更新、deterministic AI 実装の意図的変更、normalized result shape 自体の見直し、または external repo が意図的に採用する ai-arena runner / platform version を上げた場合に限る
 - golden 更新時は、何が変わったため更新可能なのかを PR と spec/plan に明示する
 - たとえば `remaining_chests` の座標まで deterministic contract に含めるよう shape を強めた場合や、どの summary field を public-state の正本として比較するかを見直した場合は、その shape review を更新理由として明示してよい
 
