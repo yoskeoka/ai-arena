@@ -67,20 +67,21 @@ depends on:
 - `github.com/yoskeoka/ai-arena/gamemaster` だけで external repo sidecar が build できる
 - `dungeon-game-ai-arena` が ai-arena local checkout ではなく `v0.1.0` tag を参照して動く
 - tagged import に切り替えた後も same-golden local / CI e2e が維持される
-- ai-arena 側の public import surface が `gamemaster` package を越えて広がっていない
+- external repo 側の ai-arena import surface が `gamemaster` package を越えて広がっていない
 
 ## Sub-tasks
 
 - [ ] ai-arena に残す public SDK surface を最終確認する
-- [ ] external repo の ai-arena 依存を release tag consumption 前提へ更新する
 - [ ] [parallel] ai-arena 側の package doc / release 補助 docs を整える
-- [ ] [parallel] tagged import での build/test/CI 確認を用意する
-- [ ] [depends on: ai-arena 側の package doc / release 補助 docs を整える, tagged import での build/test/CI 確認を用意する] `v0.1.0` tag を作成し、external repo verification を固定する
+- [ ] [parallel] tagged import へ切り替えた後に確認すべき build/test/CI 項目を先に整理する
+- [ ] [depends on: ai-arena 側の package doc / release 補助 docs を整える, tagged import へ切り替えた後に確認すべき build/test/CI 項目を先に整理する] `v0.1.0` tag を作成する
+- [ ] [depends on: `v0.1.0` tag を作成する] external repo の ai-arena 依存を release tag consumption 前提へ更新する
+- [ ] [depends on: external repo の ai-arena 依存を release tag consumption 前提へ更新する] tagged import での build/test/CI を実行し、external repo verification を固定する
 
 ## Parallelism
 
-- public SDK surface の確認後は、release 補助 docs と tagged-import verification を並行できる
-- tag 作成自体は verification 導線が揃ってから直列で行う
+- public SDK surface の確認後は、release 補助 docs と tagged-import verification 項目の整理を並行できる
+- tag 作成後に external repo の dependency 更新と consumer verification を直列で行う
 
 ## Risks and Mitigations
 

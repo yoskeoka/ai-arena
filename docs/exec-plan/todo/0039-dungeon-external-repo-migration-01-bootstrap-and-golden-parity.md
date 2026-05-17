@@ -38,7 +38,6 @@ local 起動から完了までと CI e2e が問題なく成立することに置
 - dungeon game の開発場所を external repo へ移しても、portable sidecar boundary と
   payload / golden contract は不変であることを明記する
 - 移行完了の判定を「現行 golden が同じまま external repo の local と CI e2e で通ること」として明記する
-- `cp` 主体での物理移設を前提にし、移行中は content rewrite より file move / import path 置換を優先する方針を書く
 
 ### `docs/specs/game-master.md`
 
@@ -81,6 +80,7 @@ execution では、移設作業の主経路を以下の順に固定する。
 ## Sub-tasks
 
 - [ ] external repo へ `cp` で持ち出す portable file 群を列挙する
+  - 少なくとも `cmd/dungeon-gamemaster`、`cmd/dungeon-bot-local`、`cmd/dungeon-map-helper`、`games/dungeon/...`、`testdata/ai/dungeon/...`、golden / fixture / e2e に必要な asset 群を対象にする
 - [ ] `dungeon-game-ai-arena` の最小 module / CI / local command skeleton を作る
 - [ ] [parallel] dungeon game master / domain / fixture 群を `cp` 主体で移設する
 - [ ] [parallel] same-golden local verification 導線を移設する
@@ -96,8 +96,8 @@ execution では、移設作業の主経路を以下の順に固定する。
 ## Risks and Mitigations
 
 - copy 対象の見落としで external repo 側だけ hidden dependency が残る
-  - mitigation: `cmd/dungeon-gamemaster` から辿る portable package 群を先に列挙し、`cp` source set を明文化する
+  - mitigation: `cmd/dungeon-gamemaster` だけでなく local bot / map helper / AI fixture / golden asset まで含めた portable source set を先に列挙し、`cp` source set を明文化する
 - 移行中に golden を更新してしまい parity 判定が曖昧になる
   - mitigation: この plan では golden 更新を禁止し、差分はまず移設不備として扱う
 - file 内容を広く読み替えながら移すと boundary が再び崩れる
-  - mitigation: content rewrite は module/import/CI に必要な最小限に限定し、主経路は `cp` と path 置換にする
+  - mitigation: content rewrite は module/import/CI に必要な最小限に限定し、`cp` と path 置換は implementation 手順として plan に閉じ込める
