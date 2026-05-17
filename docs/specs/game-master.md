@@ -37,11 +37,29 @@ game master sidecar 実装者が依存してよい公開境界は
 
 - この package は sidecar SDK 候補として、metadata / decision / action status / snapshot / result DTO と
   stdio JSON-RPC 2.0 + NDJSON helper を持つ
-- `cmd/dungeon-gamemaster` のような sidecar entrypoint は、game 固有 package とこの公開 package だけへ依存してよい
+- external repo の sidecar は、local `replace` や workspace 参照ではなく、review 済みの ai-arena module tag を
+  `go.mod` から参照してこの package を import する
+- ai-arena repo 内に残す game master / game 実装例も、`internal/games/janken` や `cmd/echo-count-gamemaster` を基準に、
+  game 固有 package とこの公開 package だけで責務を説明できる状態を保つ
 - `internal/platform/runtime` / `internal/platform/session` / `internal/platform/registry` / `internal/platform/catalog` は
   platform 側 consumer / adapter 実装であり、sidecar 実装者向けの依存先ではない
 - local subprocess transport の method 名と payload 契約は、この公開 package を通じて安定させる
 - 将来 sidecar 実装を別 repo へ移すときも、この公開契約は import path 置換以外そのまま使える状態を狙う
+
+### external consumer 向け release 運用
+
+- external repo が ai-arena 側へ安定依存してよい import surface は
+  `github.com/yoskeoka/ai-arena/gamemaster` package までとする
+- external repo は local workspace checkout や `replace ../ai-arena` ではなく、
+  review 済み ai-arena module tag を `go.mod` から参照する
+- ai-arena runner / platform host の更新は、consumer repo 側では
+  「ai-arena version を上げる」操作として取り込む
+- `v0.1.0` のような release tag を切る前に、少なくとも以下を確認する
+  - `gamemaster` package の公開 DTO / NDJSON helper が sidecar 開発に必要な最小面を満たしている
+  - ai-arena repo 内に残す game master / game 実装例について、`internal/games/janken` や `cmd/echo-count-gamemaster` を基準に、
+    game 固有 package と `gamemaster` package の境界が崩れていない
+  - external repo 側 import audit で `gamemaster` を越える ai-arena 依存が残っていない
+  - external repo 側で local `replace` なしの tagged import build/test/CI が通る
 
 ## game master metadata
 
@@ -80,6 +98,7 @@ game master は trusted component であり、player AI と違って turn timeou
 
 - platform が game master 実行ファイルを起動し、stdio JSON-RPC で接続する
 - sidecar 実装は `github.com/yoskeoka/ai-arena/gamemaster` package を使って transport contract を実装する
+- module version 更新は、意図的に採用する ai-arena release tag を上げる形で行い、unreleased checkout 差分への依存は持ち込まない
 - game master 側は起動時引数または sidecar 相当の設定から、自身の `game_version` / `ruleset_version` を確定できること
 - match ごとの players と resume snapshot は、後述の初期化 API で受け取る
 

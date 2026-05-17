@@ -139,3 +139,10 @@
 - **Pattern**: 移行中の一時的な repo 配置を基準に spec を書き、platform 契約の通常前提と bootstrap / e2e 用の例外配置を分離できていない
 - **Rule**: ai-arena の platform spec では、game master / sidecar は repo 外実装が通常前提として読める書き方にする。ai-arena repo 内に残る実装や fixture は e2e・移行・比較元の都合である場合だけ個別に書き、external repo をわざわざ例外扱いしない
 - **Applied**: `docs/specs/game-master.md` の sidecar / transport 記述、今後の ai-arena 側 external game repo 関連 spec 全般
+
+## [2026-05-18] external repo 移行後の golden 更新理由は採用 version change で書く
+
+- **Mistake**: external repo 移行後の deterministic golden 更新理由を、ai-arena repo 内で platform 実装を直接直した場合だけで考えかけた
+- **Pattern**: host platform を consumer repo から versioned dependency として取り込む段階に移っているのに、golden 更新理由を mono repo 内の直接修正前提でしか表現しない
+- **Rule**: external repo が ai-arena runner / platform を host として使う段階では、golden 更新理由の 1 つを「consumer repo が意図的に採用する ai-arena version change」として書く。direct code edit と import version update を混同しない
+- **Applied**: `docs/specs/platform.md` と `docs/specs/dungeon-game.md` の deterministic golden 運用、今後の external repo tagged import verification 全般

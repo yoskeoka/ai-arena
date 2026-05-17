@@ -36,6 +36,8 @@ portable sidecar boundary と payload / golden contract は変えない。
   `cmd/dungeon-bot-local`、`cmd/dungeon-map-helper`、`games/dungeon/...`、
   same-golden verification に必要な `testdata/ai/dungeon/...` の portable subset、
   `e2e/golden/normalized-dungeon-result.json` とする
+- external repo は sidecar SDK import に local `replace` を使わず、review 済みの ai-arena module tag を
+  `go.mod` から参照する
 - `ai-arena` は bootstrap 段階では dungeon verification の比較元として残り、
   external repo 側で parity が成立するまで canonical implementation を兼ねる
 - bootstrap 完了条件は、現行の deterministic golden を変更せずに
