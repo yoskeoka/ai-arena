@@ -624,7 +624,7 @@ targeted verification の想定:
 - same `game_id` / `game_version` / `ruleset_version` / deterministic AI 実装 / player 順 / `rng_seed` の組み合わせでは、game 固有 regression test が normalized result shape の再実行一致を確認してよい
 - この same-condition regression で比較する normalized result shape は、順位、score breakdown、selected public-state field、残差分のような deterministic contract に効く field に限定し、`match_id` や artifact path のような run-specific field は比較対象に含めない
 - game が subsystem seam を持つ場合も、same-condition regression が比較するのは public outcome と compact derived field だけとし、subsystem 内部 dump 全量を golden にしてはならない
-- same-condition regression が壊れた場合は、同一条件下の non-deterministic drift としてまず test failure 扱いにする。golden 更新を許可するのは、`game_version` / `ruleset_version` の意図的更新、deterministic AI 実装の意図的変更、normalized result shape 自体の見直し、または external repo が意図的に採用する ai-arena runner / platform version を上げた場合に限り、PR と spec で変更理由を明示する
+- same-condition regression が壊れた場合は、同一条件下の non-deterministic drift としてまず test failure 扱いにする。golden 更新を許可するのは、`game_version` / `ruleset_version` の意図的更新、deterministic AI 実装の意図的変更、normalized result shape 自体の見直しを PR と spec で明示した場合に限る
 - same-condition regression の必須 coverage は game ごとに primary runtime path を 1 つ以上持てばよく、runtime parity まで同時に要求しない。Phase 5 dungeon では Go local-subprocess reference path を必須とし、WASM path は既存 mixed-runtime verification を別レイヤで維持する
 
 replay / resume verification は別責務として維持する。`snapshot.json` / `history.json` / `record.json` は source-of-truth
