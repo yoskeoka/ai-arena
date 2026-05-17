@@ -82,6 +82,9 @@ game master は trusted component であり、player AI と違って turn timeou
 - sidecar 実装は `github.com/yoskeoka/ai-arena/gamemaster` package を使って transport contract を実装する
 - game master 側は起動時引数または sidecar 相当の設定から、自身の `game_version` / `ruleset_version` を確定できること
 - match ごとの players と resume snapshot は、後述の初期化 API で受け取る
+- sidecar 実装が external repo に置かれていても、transport は引き続き
+  JSON-RPC 2.0 + NDJSON stdio のままとし、ai-arena 側 runner / registry から見える
+  method 名と payload 契約は変えない
 
 ### future external adapter
 
