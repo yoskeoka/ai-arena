@@ -63,6 +63,36 @@ type DecisionRequest struct {
 	Deadline        time.Duration   `json:"deadline_ms"`
 }
 
+type decisionRequestJSON struct {
+	PlayerID        string          `json:"player_id"`
+	VisibleState    json.RawMessage `json:"visible_state,omitempty"`
+	LegalActionHint json.RawMessage `json:"legal_action_hint,omitempty"`
+	DeadlineMS      int64           `json:"deadline_ms"`
+}
+
+// MarshalJSON keeps the public wire contract on milliseconds while the Go API uses time.Duration.
+func (r DecisionRequest) MarshalJSON() ([]byte, error) {
+	return json.Marshal(decisionRequestJSON{
+		PlayerID:        r.PlayerID,
+		VisibleState:    r.VisibleState,
+		LegalActionHint: r.LegalActionHint,
+		DeadlineMS:      r.Deadline.Milliseconds(),
+	})
+}
+
+// UnmarshalJSON decodes the public wire contract from milliseconds into time.Duration.
+func (r *DecisionRequest) UnmarshalJSON(data []byte) error {
+	var wire decisionRequestJSON
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	r.PlayerID = wire.PlayerID
+	r.VisibleState = wire.VisibleState
+	r.LegalActionHint = wire.LegalActionHint
+	r.Deadline = time.Duration(wire.DeadlineMS) * time.Millisecond
+	return nil
+}
+
 // DecisionStep describes one game-master step that players must answer.
 type DecisionStep struct {
 	Turn     int               `json:"turn"`
