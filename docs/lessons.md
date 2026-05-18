@@ -146,3 +146,10 @@
 - **Pattern**: host platform を consumer repo から versioned dependency として取り込む段階に移っているのに、golden 更新理由を mono repo 内の直接修正前提でしか表現しない
 - **Rule**: external repo が ai-arena runner / platform を host として使う段階では、golden 更新理由の 1 つを「consumer repo が意図的に採用する ai-arena version change」として書く。direct code edit と import version update を混同しない
 - **Applied**: `docs/specs/platform.md` と `docs/specs/dungeon-game.md` の deterministic golden 運用、今後の external repo tagged import verification 全般
+
+## [2026-05-18] game repo 完全移管時は ai-arena 側 game spec を移行メモ化しない
+
+- **Mistake**: dungeon game の repo 外移管後も、`docs/specs/dungeon-game.md` を ownership note として残しつつ、same-golden parity だけで ai-arena 側削除 gate を閉じられる前提で考えかけた
+- **Pattern**: historical context を spec として温存しようとして spec-code parity を崩し、削除前に移し切るべき verification path の列挙も不足する
+- **Rule**: game 実装と game 固有 verification 資産が ai-arena から完全に外へ出る段階では、その game 専用 spec file は ai-arena から削除する。削除 gate は canonical golden だけでなく、その game の fixture bot、WASM/Rust AI player、CI coverage まで移行完了を列挙してから閉じる
+- **Applied**: `0041-dungeon-external-repo-migration-03-ai-arena-removal.md`、`0042-dungeon-external-repo-removal-gate-verification.md`、今後の external game repo removal plan 全般
