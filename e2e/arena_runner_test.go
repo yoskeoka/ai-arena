@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/yoskeoka/ai-arena/games/dungeon"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
@@ -52,57 +49,6 @@ type resultSummaryArtifact struct {
 		ExportedSnapshot string `json:"exported_snapshot"`
 		History          string `json:"history"`
 	} `json:"artifact_paths"`
-	Dungeon *struct {
-		MapID    string `json:"map_id"`
-		Turn     int    `json:"turn"`
-		MaxTurns int    `json:"max_turns"`
-		Players  []struct {
-			PlayerID     string `json:"player_id"`
-			Place        int    `json:"place"`
-			Score        int    `json:"score"`
-			GoalBonus    int    `json:"goal_bonus"`
-			ChestPoints  int    `json:"chest_points"`
-			FinishedTurn *int   `json:"finished_turn"`
-		} `json:"players"`
-		RemainingChests []struct {
-			X      int `json:"x"`
-			Y      int `json:"y"`
-			Points int `json:"points"`
-		} `json:"remaining_chests"`
-		RemainingChestCount  int `json:"remaining_chest_count"`
-		RemainingChestPoints int `json:"remaining_chest_points"`
-	} `json:"dungeon"`
-}
-
-type normalizedDungeonResult struct {
-	MapID               string                    `json:"map_id"`
-	Turn                int                       `json:"turn"`
-	MaxTurns            int                       `json:"max_turns"`
-	Placements          []normalizedPlacement     `json:"placements"`
-	Players             []normalizedDungeonPlayer `json:"players"`
-	RemainingChests     []normalizedChest         `json:"remaining_chests"`
-	RemainingChestCount int                       `json:"remaining_chest_count"`
-	RemainingChestTotal int                       `json:"remaining_chest_total"`
-}
-
-type normalizedPlacement struct {
-	PlayerID string `json:"player_id"`
-	Place    int    `json:"place"`
-}
-
-type normalizedDungeonPlayer struct {
-	PlayerID     string `json:"player_id"`
-	Place        int    `json:"place"`
-	Score        int    `json:"score"`
-	GoalBonus    int    `json:"goal_bonus"`
-	ChestPoints  int    `json:"chest_points"`
-	FinishedTurn int    `json:"finished_turn"`
-}
-
-type normalizedChest struct {
-	X      int `json:"x"`
-	Y      int `json:"y"`
-	Points int `json:"points"`
 }
 
 func TestArenaRunnerHappyPaths(t *testing.T) {
@@ -174,28 +120,6 @@ func TestArenaRunnerHappyPaths(t *testing.T) {
 		}
 	})
 
-	t.Run("dungeon-local-subprocess", func(t *testing.T) {
-		result := runArena(t,
-			"--game", dungeon.GameID,
-			"--game-version", dungeon.GameVersion,
-			"--ruleset", dungeon.RulesetFixedMapV1,
-			"--match-id", "dungeon-happy",
-			"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
-			"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
-		)
-		if result.Record.Status != contract.StatusCompleted {
-			t.Fatalf("status = %q, want completed", result.Record.Status)
-		}
-		if !hasEvent(result.Record.EventLog, "game_master_initialized") {
-			t.Fatalf("event log missing game_master_initialized: %+v", result.Record.EventLog)
-		}
-		if result.Record.Game.GameID != dungeon.GameID {
-			t.Fatalf("game id = %q, want %q", result.Record.Game.GameID, dungeon.GameID)
-		}
-		if !hasLogKind(result.Logs, "terminal_summary") {
-			t.Fatalf("logs missing terminal_summary: %+v", result.Logs)
-		}
-	})
 }
 
 func TestArenaRunnerPreflightMetadataMismatch(t *testing.T) {
@@ -473,68 +397,6 @@ func TestArenaRunnerResumeFromHistoryAndContinue(t *testing.T) {
 	}
 	if result.Record.Snapshot.Turn != 3 {
 		t.Fatalf("final snapshot turn = %d, want 3", result.Record.Snapshot.Turn)
-	}
-}
-
-func TestArenaRunnerRejectsRNGSeedOverrideForSnapshotInput(t *testing.T) {
-	base := runArena(t,
-		"--game", dungeon.GameID,
-		"--game-version", dungeon.GameVersion,
-		"--ruleset", dungeon.RulesetFixedMapV1,
-		"--match-id", "snapshot-seed-source",
-		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
-		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
-	)
-	snapshotPath := filepath.Join(t.TempDir(), "snapshot.json")
-	data, err := json.Marshal(base.Record.Snapshot)
-	if err != nil {
-		t.Fatalf("marshal snapshot: %v", err)
-	}
-	if err := os.WriteFile(snapshotPath, data, 0o644); err != nil {
-		t.Fatalf("write snapshot input: %v", err)
-	}
-
-	cmd := newArenaRunnerCommand(t,
-		"--snapshot-input", snapshotPath,
-		"--rng-seed", dungeon.DefaultRNGSeed,
-		"--match-id", "snapshot-seed-conflict",
-		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
-		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
-	)
-	cmd.Dir = repoRoot(t)
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatal("expected snapshot rng_seed conflict error")
-	}
-	if !strings.Contains(string(output), "--rng-seed cannot be combined with --snapshot-input") {
-		t.Fatalf("output = %s, want snapshot rng_seed conflict", output)
-	}
-}
-
-func TestArenaRunnerRejectsRNGSeedOverrideForRecordInput(t *testing.T) {
-	base := runArena(t,
-		"--game", dungeon.GameID,
-		"--game-version", dungeon.GameVersion,
-		"--ruleset", dungeon.RulesetFixedMapV1,
-		"--match-id", "record-seed-source",
-		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
-		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
-	)
-
-	cmd := newArenaRunnerCommand(t,
-		"--record-input", filepath.Join(base.MatchDir, "record.json"),
-		"--rng-seed", dungeon.DefaultRNGSeed,
-		"--match-id", "record-seed-conflict",
-		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
-		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
-	)
-	cmd.Dir = repoRoot(t)
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatal("expected record rng_seed conflict error")
-	}
-	if !strings.Contains(string(output), "--rng-seed cannot be combined with --record-input") {
-		t.Fatalf("output = %s, want record rng_seed conflict", output)
 	}
 }
 
@@ -843,84 +705,90 @@ func TestArenaRunnerWritesDerivedArtifacts(t *testing.T) {
 	}
 }
 
-func TestArenaRunnerWritesDungeonResultSummary(t *testing.T) {
-	result := runArena(t,
-		"--game", dungeon.GameID,
-		"--game-version", dungeon.GameVersion,
-		"--ruleset", dungeon.RulesetFixedMapV1,
-		"--match-id", "dungeon-summary",
-		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
-		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
+func TestArenaRunnerRejectsRNGSeedOverrideForSnapshotInput(t *testing.T) {
+	base := runArena(t,
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "snapshot-seed-source",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
 	)
+	base.Record.Snapshot.GameState = json.RawMessage(`{"rng_seed":"seed-from-snapshot"}`)
 
-	summary := readResultSummary(t, result.MatchDir)
-	if summary.MatchID != result.Record.MatchID {
-		t.Fatalf("summary match id = %q, want %q", summary.MatchID, result.Record.MatchID)
-	}
-	if summary.GameID != dungeon.GameID {
-		t.Fatalf("summary game id = %q, want %q", summary.GameID, dungeon.GameID)
-	}
-	if summary.Dungeon == nil {
-		t.Fatal("summary missing dungeon payload")
-	}
-	if summary.Dungeon.MapID != dungeon.RulesetFixedMapV1 {
-		t.Fatalf("summary map id = %q, want %q", summary.Dungeon.MapID, dungeon.RulesetFixedMapV1)
-	}
-	if len(summary.Placements) != len(result.Record.Result.Placements) {
-		t.Fatalf("summary placements = %d, want %d", len(summary.Placements), len(result.Record.Result.Placements))
-	}
-	if len(summary.Dungeon.Players) != len(result.Record.ExportedSnapshot.Players) {
-		t.Fatalf("summary players = %d, want %d", len(summary.Dungeon.Players), len(result.Record.ExportedSnapshot.Players))
-	}
-	if summary.ArtifactPaths.Record != "record.json" || summary.ArtifactPaths.StructuredLog != "structured-log.ndjson" {
-		t.Fatalf("unexpected artifact paths: %+v", summary.ArtifactPaths)
-	}
-	if summary.Dungeon.RemainingChestCount != len(summary.Dungeon.RemainingChests) {
-		t.Fatalf("remaining chest count = %d, want %d", summary.Dungeon.RemainingChestCount, len(summary.Dungeon.RemainingChests))
-	}
-	remainingPoints := 0
-	for _, chest := range summary.Dungeon.RemainingChests {
-		remainingPoints += chest.Points
-	}
-	if summary.Dungeon.RemainingChestPoints != remainingPoints {
-		t.Fatalf("remaining chest points = %d, want %d", summary.Dungeon.RemainingChestPoints, remainingPoints)
-	}
-}
-
-func TestArenaRunnerDungeonSeededReferenceBotDeterministicResultRegression(t *testing.T) {
-	first := runSeededDungeonDeterministicRegression(t, "dungeon-seeded-deterministic-a")
-	second := runSeededDungeonDeterministicRegression(t, "dungeon-seeded-deterministic-b")
-
-	// Fail fast on same-condition nondeterminism before comparing to the checked-in golden.
-	assertCanonicalJSONEqual(t, first, second, "normalized result mismatch across reruns")
-	assertGoldenJSON(t, filepath.Join(repoRoot(t), "e2e", "golden", "normalized-dungeon-result.json"), first)
-}
-
-func TestArenaRunnerDungeonDeterministicGoldenIsCanonicalJSON(t *testing.T) {
-	goldenPath := filepath.Join(repoRoot(t), "e2e", "golden", "normalized-dungeon-result.json")
-	data, err := os.ReadFile(goldenPath)
+	snapshotPath := filepath.Join(t.TempDir(), "snapshot.json")
+	data, err := json.Marshal(base.Record.Snapshot)
 	if err != nil {
-		t.Fatalf("read golden: %v", err)
+		t.Fatalf("marshal snapshot: %v", err)
 	}
-	var payload normalizedDungeonResult
-	if err := json.Unmarshal(data, &payload); err != nil {
-		t.Fatalf("decode golden: %v", err)
+	if err := os.WriteFile(snapshotPath, data, 0o644); err != nil {
+		t.Fatalf("write snapshot input: %v", err)
 	}
-	if string(data) != string(mustIndentedJSON(payload)) {
-		t.Fatalf("golden %s is not canonical pretty JSON", goldenPath)
+
+	cmd := newArenaRunnerCommand(t,
+		"--snapshot-input", snapshotPath,
+		"--rng-seed", "override-seed",
+		"--match-id", "snapshot-seed-conflict",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected snapshot rng_seed conflict error")
+	}
+	if !strings.Contains(string(output), "--rng-seed cannot be combined with --snapshot-input") {
+		t.Fatalf("output = %s, want snapshot rng_seed conflict", output)
+	}
+}
+
+func TestArenaRunnerRejectsRNGSeedOverrideForRecordInput(t *testing.T) {
+	base := runArena(t,
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "record-seed-source",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	base.Record.Snapshot.GameState = json.RawMessage(`{"rng_seed":"seed-from-record"}`)
+
+	recordPath := filepath.Join(t.TempDir(), "record.json")
+	data, err := json.Marshal(base.Record)
+	if err != nil {
+		t.Fatalf("marshal record: %v", err)
+	}
+	if err := os.WriteFile(recordPath, data, 0o644); err != nil {
+		t.Fatalf("write record input: %v", err)
+	}
+
+	cmd := newArenaRunnerCommand(t,
+		"--record-input", recordPath,
+		"--rng-seed", "override-seed",
+		"--match-id", "record-seed-conflict",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected record rng_seed conflict error")
+	}
+	if !strings.Contains(string(output), "--rng-seed cannot be combined with --record-input") {
+		t.Fatalf("output = %s, want record rng_seed conflict", output)
 	}
 }
 
 func TestArenaRunnerCanSuppressStdoutLogsWithLogOutputNone(t *testing.T) {
 	result := runArenaWithOptions(t, arenaRunOptions{
 		Args: []string{
-			"--game", dungeon.GameID,
-			"--game-version", dungeon.GameVersion,
-			"--ruleset", dungeon.RulesetFixedMapV1,
-			"--match-id", "dungeon-quiet",
+			"--game", "echo-count",
+			"--game-version", "2.0.0",
+			"--ruleset", "phase2-simultaneous-3turn",
+			"--match-id", "echo-quiet",
 			"--log-output", "none",
-			"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local",
-			"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local",
+			"--player", "p1=./testdata/ai/echo/echo-ai",
+			"--player", "p2=./testdata/ai/echo/echo-ai",
 		},
 	})
 
@@ -954,87 +822,6 @@ func readResultSummary(t *testing.T, matchDir string) resultSummaryArtifact {
 	return summary
 }
 
-func runSeededDungeonDeterministicRegression(t *testing.T, matchID string) normalizedDungeonResult {
-	t.Helper()
-
-	result := runArena(t,
-		"--game", dungeon.GameID,
-		"--game-version", dungeon.GameVersion,
-		"--ruleset", dungeon.RulesetSeededMazeV1,
-		"--rng-seed", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-		"--match-id", matchID,
-		"--player", "p1=./testdata/ai/dungeon/dungeon-bot-local-seeded",
-		"--player", "p2=./testdata/ai/dungeon/dungeon-bot-local-seeded",
-	)
-	if result.Record.Status != contract.StatusCompleted {
-		t.Fatalf("status = %q, want completed", result.Record.Status)
-	}
-	summary := readResultSummary(t, result.MatchDir)
-	if summary.RulesetVersion != dungeon.RulesetSeededMazeV1 {
-		t.Fatalf("summary ruleset = %q, want %q", summary.RulesetVersion, dungeon.RulesetSeededMazeV1)
-	}
-	return normalizeDungeonResult(t, summary)
-}
-
-func normalizeDungeonResult(t *testing.T, summary resultSummaryArtifact) normalizedDungeonResult {
-	t.Helper()
-
-	if summary.Dungeon == nil {
-		t.Fatal("summary missing dungeon payload")
-	}
-
-	got := normalizedDungeonResult{
-		MapID:               summary.Dungeon.MapID,
-		Turn:                summary.Dungeon.Turn,
-		MaxTurns:            summary.Dungeon.MaxTurns,
-		RemainingChestCount: summary.Dungeon.RemainingChestCount,
-		RemainingChestTotal: summary.Dungeon.RemainingChestPoints,
-	}
-	if summary.Turn != summary.Dungeon.Turn {
-		t.Fatalf("summary turn mismatch: top-level=%d dungeon=%d", summary.Turn, summary.Dungeon.Turn)
-	}
-	for _, placement := range summary.Placements {
-		got.Placements = append(got.Placements, normalizedPlacement{
-			PlayerID: placement.PlayerID,
-			Place:    placement.Place,
-		})
-	}
-	for _, player := range summary.Dungeon.Players {
-		got.Players = append(got.Players, normalizedDungeonPlayer{
-			PlayerID:     player.PlayerID,
-			Place:        player.Place,
-			Score:        player.Score,
-			GoalBonus:    player.GoalBonus,
-			ChestPoints:  player.ChestPoints,
-			FinishedTurn: finishedTurnValue(player.FinishedTurn),
-		})
-	}
-	for _, chest := range summary.Dungeon.RemainingChests {
-		got.RemainingChests = append(got.RemainingChests, normalizedChest{
-			X:      chest.X,
-			Y:      chest.Y,
-			Points: chest.Points,
-		})
-	}
-	sort.Slice(got.RemainingChests, func(i, j int) bool {
-		if got.RemainingChests[i].X != got.RemainingChests[j].X {
-			return got.RemainingChests[i].X < got.RemainingChests[j].X
-		}
-		if got.RemainingChests[i].Y != got.RemainingChests[j].Y {
-			return got.RemainingChests[i].Y < got.RemainingChests[j].Y
-		}
-		return got.RemainingChests[i].Points < got.RemainingChests[j].Points
-	})
-	return got
-}
-
-func finishedTurnValue(v *int) int {
-	if v == nil {
-		return -1
-	}
-	return *v
-}
-
 func findFlagValue(args []string, name string) string {
 	for i := 0; i < len(args)-1; i++ {
 		if args[i] == name {
@@ -1062,38 +849,6 @@ func mustJSON(v any) []byte {
 		panic(err)
 	}
 	return data
-}
-
-func mustIndentedJSON(v any) []byte {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	return append(data, '\n')
-}
-
-func assertGoldenJSON(t *testing.T, goldenPath string, got any) {
-	t.Helper()
-
-	wantData, err := os.ReadFile(goldenPath)
-	if err != nil {
-		t.Fatalf("read golden %s: %v", goldenPath, err)
-	}
-	var want normalizedDungeonResult
-	if err := json.Unmarshal(wantData, &want); err != nil {
-		t.Fatalf("decode golden %s: %v", goldenPath, err)
-	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("golden mismatch for %s (-want +got):\n%s", goldenPath, diff)
-	}
-}
-
-func assertCanonicalJSONEqual(t *testing.T, left, right any, message string) {
-	t.Helper()
-
-	if diff := cmp.Diff(left, right); diff != "" {
-		t.Fatalf("%s (-left +right):\n%s", message, diff)
-	}
 }
 
 func parseArenaOutput(stdout string) ([]runnerLogRecord, match.Record, error) {

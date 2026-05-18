@@ -28,7 +28,7 @@
 - `docs/specs/platform.md`: platform core 全体像、runner contract、fixture appendix
 - `docs/specs/game-master.md`: game master 開発者向けの論理 API と transport 契約
 - `docs/specs/janken-game.md`: `janken` 固有 payload と validation
-- `docs/specs/dungeon-game.md`: Phase 3 の本命 game が platform に要求する性質
+- repo 外へ切り出した game 固有仕様: game 開発側 repo がこの共通語彙を前提に差分だけを定義する
 
 共通語彙の正本はこの spec とし、個別 game spec はここで定義した語彙を前提に差分だけを書く。
 

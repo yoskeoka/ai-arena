@@ -163,8 +163,8 @@ platform はこの API が返した state を各 player session へ送る。
 
 game master はここで状態遷移を進める。
 simultaneous turn の game では、request 集約後に game 固有 spec で固定された phase 順へ従って progression を進める。
-たとえば dungeon では action normalization -> movement resolution -> interaction resolution ->
-terminal / score update -> visibility refresh の順を deterministic に適用する。
+たとえば turn-based game では action normalization -> game-specific resolution phases ->
+terminal / score update -> visible-state refresh の順を deterministic に適用してよい。
 
 ### `NormalizeAction`
 
