@@ -80,12 +80,12 @@ depends on:
   `dungeon-game-ai-arena/docs/specs/dungeon-external-sdk-consumption.md` に固定する
 - dungeon 固有 Go-WASM verification は
   `dungeon-game-ai-arena/testdata/ai/dungeon/dungeon-go-wasm-ai`,
-  `dungeon-game-ai-arena/e2e/dungeon_wasm_test.go`,
+  `dungeon-game-ai-arena/e2e/dungeon_go_wasm_e2e_test.go`,
   `dungeon-game-ai-arena/Makefile`,
   `dungeon-game-ai-arena/.github/workflows/wasm-verification.yml`
   を証跡とする
 - Rust AI player runtime は dungeon 固有 asset を増やさず、
-  host repo `ai-arena/.github/workflows/wasm-verification.yml` の Rust-WASM lane を canonical coverage とする
+  host repo ai-arena の `.github/workflows/wasm-verification.yml` にある Rust-WASM lane を canonical coverage とする
 
 ## Sub-tasks
 

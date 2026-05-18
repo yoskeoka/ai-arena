@@ -81,7 +81,7 @@ depends on:
 
 - ownership / removal gate: `dungeon-game-ai-arena/docs/specs/dungeon-external-sdk-consumption.md`
 - dungeon Go-WASM CI: `dungeon-game-ai-arena/.github/workflows/wasm-verification.yml`
-- host runtime Rust-WASM coverage: `ai-arena/.github/workflows/wasm-verification.yml`
+- host runtime Rust-WASM coverage: ai-arena repo の `.github/workflows/wasm-verification.yml`
 
 ## Sub-tasks
 
