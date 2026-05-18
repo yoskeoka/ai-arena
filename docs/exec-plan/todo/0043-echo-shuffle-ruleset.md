@@ -34,8 +34,8 @@ depends on:
 - `rng_seed` を受け取るのは game master であり、AI player へ shuffle 結果や seed を露出しないことを明記する
 - seed-aware ruleset の `expected` 列は `rng_seed` による deterministic shuffle で決まり、
   同一 `player` 順・同一 `rng_seed` なら同じ turn progression になることを明記する
-- `snapshot.game_state.rng_seed` を source of truth として replay/debug entrypoint から再投入できることを、
-  fixture appendix の具体例として補足する
+- `snapshot.json.game_state.rng_seed` と `record.json.snapshot.game_state.rng_seed` を source of truth として
+  replay/debug entrypoint から再投入できることを、fixture appendix の具体例として補足する
 
 ## Expected Code Changes
 
@@ -54,7 +54,8 @@ depends on:
 ### `e2e/` and fixture data
 
 - dungeon 依存の `rng_seed` conflict tests を `echo-count` shuffle ruleset ベースへ置き換える
-- 小さい handcrafted `snapshot.json` / `record.json` fixture を追加し、`game_state.rng_seed` を含む path を固定する
+- 小さい handcrafted `snapshot.json` / `record.json` fixture を追加し、
+  `snapshot.json.game_state.rng_seed` と `record.json.snapshot.game_state.rng_seed` の参照 path を固定する
 - same-seed rerun で normalized result shape が一致する e2e を追加する
 - 必要なら different-seed で expected sequence が変わることを確認する narrow e2e を追加する
 
@@ -64,8 +65,11 @@ depends on:
 
 - `arena-runner --game echo-count --ruleset <shuffle-ruleset> --rng-seed <seed>` で match を完走できる
 - 同一 `rng_seed`・同一 player 順で 2 回実行したとき、normalized result shape が一致する
-- handcrafted `snapshot.json` / `record.json` が `game_state.rng_seed` を含み、`--rng-seed` override を reject する
-- `--snapshot-input` / `--record-input` 指定時に seed が source of truth として復元される
+- handcrafted `snapshot.json` / `record.json` が
+  `snapshot.json.game_state.rng_seed` / `record.json.snapshot.game_state.rng_seed` を含み、
+  `--rng-seed` override を reject する
+- `--snapshot-input` では `snapshot.json.game_state.rng_seed`、`--record-input` では
+  `record.json.snapshot.game_state.rng_seed` が source of truth として復元される
 - 既存の non-seeded `echo-count` ruleset coverage が壊れていない
 
 想定 verification コマンド:
@@ -99,5 +103,7 @@ depends on:
 ## Design Decisions
 
 - shuffle 結果は game master だけが保持し、AI player へ事前公開しない
-- `rng_seed` は `echo-count` shuffle ruleset の game master 初期条件として受け取り、snapshot/record から復元できる source of truth とする
+- `rng_seed` は `echo-count` shuffle ruleset の game master 初期条件として受け取り、
+  `snapshot.json.game_state.rng_seed` または `record.json.snapshot.game_state.rng_seed` から復元できる
+  source of truth とする
 - seed-aware coverage は新 game を増やさず `echo-count` fixture appendix の ruleset 追加で閉じる
