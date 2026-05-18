@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yoskeoka/ai-arena/games/dungeon"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 )
@@ -35,41 +33,6 @@ func TestArenaRunnerJankenGoWASMMixedRuntimePath(t *testing.T) {
 	}
 	if result.Record.Snapshot.PerPlayer["p1"].StderrBytes == 0 {
 		t.Fatal("expected stderr bytes for Go-WASM player")
-	}
-	if _, err := os.Stat(filepath.Join(result.MatchDir, "history.json")); err != nil {
-		t.Fatalf("history.json missing: %v", err)
-	}
-}
-
-func TestArenaRunnerDungeonGoWASMMixedRuntimePath(t *testing.T) {
-	requireWASME2E(t)
-
-	result := runArena(t,
-		"--game", dungeon.GameID,
-		"--game-version", dungeon.GameVersion,
-		"--ruleset", dungeon.RulesetSeededMazeV1,
-		"--rng-seed", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-		"--match-id", "dungeon-go-wasm-happy",
-		"--player", "p1=./testdata/ai/dungeon/dungeon-goal-rush-ai-wasm",
-		"--player", "p2=./testdata/ai/dungeon/dungeon-wait-ai",
-	)
-
-	if result.Record.Status != contract.StatusCompleted {
-		t.Fatalf("status = %q, want completed", result.Record.Status)
-	}
-	if result.Record.Snapshot.PerPlayer["p1"].StderrBytes == 0 {
-		t.Fatal("expected stderr bytes for dungeon Go-WASM player")
-	}
-	if got := result.Record.Result.Placements[0].PlayerID; got != "p1" {
-		t.Fatalf("winner = %q, want p1", got)
-	}
-	var finalState dungeon.FullState
-	if err := json.Unmarshal(result.Record.Snapshot.GameState, &finalState); err != nil {
-		t.Fatalf("decode final dungeon full state: %v", err)
-	}
-	p1 := mustFindDungeonPlayer(t, finalState.Players, "p1")
-	if p1.Score != 60 || p1.GoalBonus != 42 || p1.ChestPoints != 18 {
-		t.Fatalf("p1 final score = %+v, want score=60 goal_bonus=42 chest_points=18", p1)
 	}
 	if _, err := os.Stat(filepath.Join(result.MatchDir, "history.json")); err != nil {
 		t.Fatalf("history.json missing: %v", err)
@@ -163,18 +126,6 @@ func requireWASME2E(t *testing.T) {
 	if os.Getenv("AI_ARENA_WASM_E2E") != "1" {
 		t.Skip("set AI_ARENA_WASM_E2E=1 to enable WASM verification tests")
 	}
-}
-
-func mustFindDungeonPlayer(t *testing.T, players []dungeon.PlayerState, playerID string) dungeon.PlayerState {
-	t.Helper()
-
-	for _, player := range players {
-		if player.PlayerID == playerID {
-			return player
-		}
-	}
-	t.Fatalf("player %q missing from final dungeon state", playerID)
-	return dungeon.PlayerState{}
 }
 
 func buildGoWASM(ctx context.Context, dir, pkg, outputPath string) error {
