@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -78,40 +77,6 @@ type resultSummary struct {
 	Placements     []game.Placement `json:"placements,omitempty"`
 	ArtifactPaths  artifactPathRefs `json:"artifact_paths"`
 	Error          string           `json:"error,omitempty"`
-	Dungeon        *dungeonSummary  `json:"dungeon,omitempty"`
-}
-
-type dungeonSummary struct {
-	MapID                string                 `json:"map_id"`
-	Turn                 int                    `json:"turn"`
-	MaxTurns             int                    `json:"max_turns"`
-	Goal                 dungeonPosition        `json:"goal"`
-	Players              []dungeonPlayerSummary `json:"players"`
-	RemainingChests      []dungeonChestSummary  `json:"remaining_chests"`
-	RemainingChestCount  int                    `json:"remaining_chest_count"`
-	RemainingChestPoints int                    `json:"remaining_chest_points"`
-}
-
-type dungeonPlayerSummary struct {
-	PlayerID     string `json:"player_id"`
-	Place        int    `json:"place,omitempty"`
-	X            int    `json:"x"`
-	Y            int    `json:"y"`
-	Score        int    `json:"score"`
-	GoalBonus    int    `json:"goal_bonus"`
-	ChestPoints  int    `json:"chest_points"`
-	FinishedTurn *int   `json:"finished_turn"`
-}
-
-type dungeonPosition struct {
-	X int `json:"x"`
-	Y int `json:"y"`
-}
-
-type dungeonChestSummary struct {
-	X      int `json:"x"`
-	Y      int `json:"y"`
-	Points int `json:"points"`
 }
 
 func main() {
@@ -564,66 +529,7 @@ func buildResultSummary(layout artifactLayout, record match.Record) (resultSumma
 	if errMsg := terminalError(record); errMsg != "" {
 		summary.Error = errMsg
 	}
-	if record.Game.GameID == "dungeon" {
-		dungeon, err := buildDungeonSummary(record)
-		if err != nil {
-			return resultSummary{}, fmt.Errorf("build dungeon result summary: %w", err)
-		}
-		summary.Dungeon = dungeon
-	}
 	return summary, nil
-}
-
-func buildDungeonSummary(record match.Record) (*dungeonSummary, error) {
-	var publicState struct {
-		MapID             string                 `json:"map_id"`
-		Turn              int                    `json:"turn"`
-		MaxTurns          int                    `json:"max_turns"`
-		Goal              dungeonPosition        `json:"goal"`
-		Players           []dungeonPlayerSummary `json:"players"`
-		UncollectedChests []dungeonChestSummary  `json:"uncollected_chests"`
-	}
-	if err := json.Unmarshal(record.ExportedSnapshot.PublicState, &publicState); err != nil {
-		return nil, fmt.Errorf("decode exported public_state: %w", err)
-	}
-
-	placements := make(map[string]int, len(record.Result.Placements))
-	for _, placement := range record.Result.Placements {
-		placements[placement.PlayerID] = placement.Place
-	}
-	for i := range publicState.Players {
-		publicState.Players[i].Place = placements[publicState.Players[i].PlayerID]
-	}
-	sort.Slice(publicState.Players, func(i, j int) bool {
-		left := publicState.Players[i]
-		right := publicState.Players[j]
-		if left.Place == right.Place {
-			return left.PlayerID < right.PlayerID
-		}
-		if left.Place == 0 {
-			return false
-		}
-		if right.Place == 0 {
-			return true
-		}
-		return left.Place < right.Place
-	})
-
-	remainingChestPoints := 0
-	for _, chest := range publicState.UncollectedChests {
-		remainingChestPoints += chest.Points
-	}
-
-	return &dungeonSummary{
-		MapID:                publicState.MapID,
-		Turn:                 publicState.Turn,
-		MaxTurns:             publicState.MaxTurns,
-		Goal:                 publicState.Goal,
-		Players:              publicState.Players,
-		RemainingChests:      publicState.UncollectedChests,
-		RemainingChestCount:  len(publicState.UncollectedChests),
-		RemainingChestPoints: remainingChestPoints,
-	}, nil
 }
 
 func mustMarshal(v any) json.RawMessage {

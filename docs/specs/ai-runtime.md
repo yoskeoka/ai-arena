@@ -204,50 +204,18 @@ Go sample で期待する runtime 振る舞い:
 - `stderr`: `janken-go-wasm-ai init`, `turn <n>`, `game_over` のような debug/audit 用ログを出してよい
 - exit/shutdown: `game_over` に ACK 後は clean exit してよく、platform が `stdin` close 後に cooperative shutdown を完了できること
 
-## Dungeon Go-WASM Reference Lane
+## Game-Owned Additional Lanes
 
-Phase 5 では `dungeon` にも Go source から build する official reference lane を追加してよい。
-この lane は Phase 4 の `janken` lane と同じ runtime contract に従い、違いは game metadata と shared decision
-logic の中身だけに留める。
+`ai-arena` が継続して canonical asset を持つのは platform fixture と runtime contract の検証 lane までとする。
+repo 外へ切り出した game が Go-WASM や独自 fixture lane を持つ場合、その source / manifest / golden / CI は
+game 開発側 repo が ownership を持つ。
 
-想定 build 例:
-
-```sh
-GOOS=wasip1 GOARCH=wasm go build \
-  -o ./testdata/ai/dungeon/dungeon-go-wasm-ai.wasm \
-  ./testdata/ai/dungeon/dungeon-go-wasm-ai
-```
-
-対応する sidecar manifest 例:
-
-```json
-{
-  "ai_id": "dungeon-go-wasm-ai",
-  "protocol": {
-    "transport": "stdio-jsonrpc-ndjson",
-    "game_id": "dungeon",
-    "game_version": "1.0.0",
-    "ruleset_version": "seeded-maze-v1"
-  },
-  "runtime": {
-    "kind": "wasm-wasi",
-    "module": "./dungeon-go-wasm-ai.wasm",
-    "args": ["./dungeon-go-wasm-ai.wasm"],
-    "memory_limit_pages": 1024
-  }
-}
-```
-
-運用ルール:
+その場合でも守る契約:
 
 - checked-in の正本は `.go` source と `.arena.json` manifest とし、`.wasm` binary は commit しない
-- local subprocess bot と WASM bot が shared decision layer を共有し、transport / runtime 差分だけを entrypoint 側へ閉じ込める
-- local-subprocess fixture でも checked-in manifest が `go run` を指す場合、test helper / CI helper は reproducible build step で native binary を用意し、prepared sidecar からその binary を起動してよい
-- dungeon reference AI の shared decision layer は、runtime kind を問わず同じ memory update / world-model query / policy contract を使う
-- dungeon の actor / item / inventory / combat / effect / visibility subsystem が増えても、shared decision layer が参照してよい入力は各 turn request の `visible_state` と自前で保持した過去観測だけに限る
-- runtime ごとの entrypoint や test helper が `full_state`、replay artifact、hidden tile 全体を shared policy へ直接渡してはならない
-- policy variant を分ける場合も、runtime ごとに別 heuristic を持つのではなく、同じ shared layer 上で `balanced` や `goal-rush` のような差し替えとして扱う
-- `arena-runner` の targeted verification では、seeded dungeon match を local-subprocess path と `wasm-wasi` path の両方で完走できることを確認する
+- local subprocess bot と WASM bot が shared decision layer を共有する場合、transport / runtime 差分は entrypoint 側へ閉じ込める
+- runtime ごとの entrypoint や test helper が `full_state` や hidden information 全体を shared policy へ直接渡してはならない
+- runner host を versioned dependency として使う場合、game 開発側 repo が採用する ai-arena version を明示して verification を固定する
 
 ## Rust Evaluation Lane
 
