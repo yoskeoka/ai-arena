@@ -160,3 +160,10 @@
 - **Pattern**: platform repo が責務境界を説明する場面で、非責務領域を「外部がやってよいこと」と表現してしまい、ownership と権限の境界を曖昧にする
 - **Rule**: ai-arena の spec では、platform の責務を明示し、非責務領域は `ai-arena が規定しない` と書く。consumer repo や game 開発側の所有物に対して、platform が許可を与える文型を使わない
 - **Applied**: `docs/specs/game-master.md`、`docs/specs/platform.md`、今後の external repo ownership / verification asset 記述全般
+
+## [2026-05-18] ai-arena spec を consumer 向け開発ガイド化しない
+
+- **Mistake**: `docs/specs/platform.md` と `docs/specs/game-master.md` に、ai-arena が提供する契約そのものではなく、external repo 側の開発・ownership・verification 運用まで混ぜて書きかけた
+- **Pattern**: platform spec が説明すべき「提供する外形契約」と、別 repo の利用者向けガイドや migration 文脈を同じ文書で扱ってしまう
+- **Rule**: ai-arena の spec は、platform / runner / SDK が何を提供し、どの共通契約を固定するかだけを簡潔に書く。external game repo の開発方法、asset 配置、ownership、verification 運用は別の guide / plan / migration note に分離する
+- **Applied**: `docs/specs/platform.md`、`docs/specs/game-master.md`、今後の external repo 前提の spec wording 全般
