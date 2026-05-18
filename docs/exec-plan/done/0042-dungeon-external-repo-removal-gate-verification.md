@@ -74,14 +74,27 @@ depends on:
   external repo CI における扱いが reviewers に分かる
 - `0041` から参照できる removal gate 証跡が docs または CI config に残る
 
+## Completion Notes
+
+- external repo の ownership 表と removal gate は
+  `dungeon-game-ai-arena/docs/specs/dungeon-external-sdk-consumption.md` に固定する
+- dungeon 固有 Go-WASM verification は
+  `dungeon-game-ai-arena/testdata/ai/dungeon/dungeon-go-wasm-ai`,
+  `dungeon-game-ai-arena/e2e/dungeon_wasm_test.go`,
+  `dungeon-game-ai-arena/Makefile`,
+  `dungeon-game-ai-arena/.github/workflows/wasm-verification.yml`
+  を証跡とする
+- Rust AI player runtime は dungeon 固有 asset を増やさず、
+  host repo `ai-arena/.github/workflows/wasm-verification.yml` の Rust-WASM lane を canonical coverage とする
+
 ## Sub-tasks
 
-- [ ] ai-arena 側に残っている dungeon verification asset と CI path を棚卸しし、external repo 側 ownership 表を作る
-- [ ] [parallel] external repo 側へ dungeon fixture bot / local AI asset を移し、local verification を通す
-- [ ] [parallel] external repo 側へ dungeon Go-WASM verification を移し、CI 化する
-- [ ] [parallel] external repo 側の Rust AI player verification 方針を確定し、asset/CI か不要化理由のどちらかを固定する
-- [ ] [depends on: external repo 側へ dungeon fixture bot / local AI asset を移し、local verification を通す, external repo 側へ dungeon Go-WASM verification を移し、CI 化する, external repo 側の Rust AI player verification 方針を確定し、asset/CI か不要化理由のどちらかを固定する] removal gate 証跡を docs と CI config にまとめる
-- [ ] [depends on: removal gate 証跡を docs と CI config にまとめる] `0041` の dependency と verification 条件が満たせることを確認する
+- [x] ai-arena 側に残っている dungeon verification asset と CI path を棚卸しし、external repo 側 ownership 表を作る
+- [x] [parallel] external repo 側へ dungeon fixture bot / local AI asset を移し、local verification を通す
+- [x] [parallel] external repo 側へ dungeon Go-WASM verification を移し、CI 化する
+- [x] [parallel] external repo 側の Rust AI player verification 方針を確定し、asset/CI か不要化理由のどちらかを固定する
+- [x] [depends on: external repo 側へ dungeon fixture bot / local AI asset を移し、local verification を通す, external repo 側へ dungeon Go-WASM verification を移し、CI 化する, external repo 側の Rust AI player verification 方針を確定し、asset/CI か不要化理由のどちらかを固定する] removal gate 証跡を docs と CI config にまとめる
+- [x] [depends on: removal gate 証跡を docs と CI config にまとめる] `0041` の dependency と verification 条件が満たせることを確認する
 
 ## Parallelism
 

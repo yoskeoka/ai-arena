@@ -77,6 +77,12 @@ depends on:
 - external repo 側で same-golden local / CI e2e、fixture bot verification、Go-WASM verification、
   Rust AI player verification、tagged import、dungeon 用 CI coverage の証跡が参照できる
 
+`0042` 完了後に参照する gate 証跡:
+
+- ownership / removal gate: `dungeon-game-ai-arena/docs/specs/dungeon-external-sdk-consumption.md`
+- dungeon Go-WASM CI: `dungeon-game-ai-arena/.github/workflows/wasm-verification.yml`
+- host runtime Rust-WASM coverage: `ai-arena/.github/workflows/wasm-verification.yml`
+
 ## Sub-tasks
 
 - [ ] 0039、0040、0042 の完了証跡を確認し、削除 gate を閉じる
