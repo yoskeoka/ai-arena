@@ -705,6 +705,80 @@ func TestArenaRunnerWritesDerivedArtifacts(t *testing.T) {
 	}
 }
 
+func TestArenaRunnerRejectsRNGSeedOverrideForSnapshotInput(t *testing.T) {
+	base := runArena(t,
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "snapshot-seed-source",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	base.Record.Snapshot.GameState = json.RawMessage(`{"rng_seed":"seed-from-snapshot"}`)
+
+	snapshotPath := filepath.Join(t.TempDir(), "snapshot.json")
+	data, err := json.Marshal(base.Record.Snapshot)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	if err := os.WriteFile(snapshotPath, data, 0o644); err != nil {
+		t.Fatalf("write snapshot input: %v", err)
+	}
+
+	cmd := newArenaRunnerCommand(t,
+		"--snapshot-input", snapshotPath,
+		"--rng-seed", "override-seed",
+		"--match-id", "snapshot-seed-conflict",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected snapshot rng_seed conflict error")
+	}
+	if !strings.Contains(string(output), "--rng-seed cannot be combined with --snapshot-input") {
+		t.Fatalf("output = %s, want snapshot rng_seed conflict", output)
+	}
+}
+
+func TestArenaRunnerRejectsRNGSeedOverrideForRecordInput(t *testing.T) {
+	base := runArena(t,
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--match-id", "record-seed-source",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	base.Record.Snapshot.GameState = json.RawMessage(`{"rng_seed":"seed-from-record"}`)
+
+	recordPath := filepath.Join(t.TempDir(), "record.json")
+	data, err := json.Marshal(base.Record)
+	if err != nil {
+		t.Fatalf("marshal record: %v", err)
+	}
+	if err := os.WriteFile(recordPath, data, 0o644); err != nil {
+		t.Fatalf("write record input: %v", err)
+	}
+
+	cmd := newArenaRunnerCommand(t,
+		"--record-input", recordPath,
+		"--rng-seed", "override-seed",
+		"--match-id", "record-seed-conflict",
+		"--player", "p1=./testdata/ai/echo/echo-ai",
+		"--player", "p2=./testdata/ai/echo/echo-ai",
+	)
+	cmd.Dir = repoRoot(t)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected record rng_seed conflict error")
+	}
+	if !strings.Contains(string(output), "--rng-seed cannot be combined with --record-input") {
+		t.Fatalf("output = %s, want record rng_seed conflict", output)
+	}
+}
+
 func TestArenaRunnerCanSuppressStdoutLogsWithLogOutputNone(t *testing.T) {
 	result := runArenaWithOptions(t, arenaRunOptions{
 		Args: []string{
