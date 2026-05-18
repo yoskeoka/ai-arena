@@ -40,7 +40,7 @@ game master sidecar 実装者が依存してよい公開境界は
 - external repo の sidecar は、local `replace` や workspace 参照ではなく、review 済みの ai-arena module tag を
   `go.mod` から参照してこの package を import する
 - game 固有の fixture bot / local AI / WASM AI / deterministic golden など、sidecar と同じ game ownership に属する
-  verification asset は consumer repo 側で持ってよい
+  verification asset は ai-arena の責務ではない。どの repo で管理するかは game 開発側の設計に委ねる
 - ai-arena repo 内に残す game master / game 実装例も、`internal/games/janken` や `cmd/echo-count-gamemaster` を基準に、
   game 固有 package とこの公開 package だけで責務を説明できる状態を保つ
 - `internal/platform/runtime` / `internal/platform/session` / `internal/platform/registry` / `internal/platform/catalog` は
@@ -56,8 +56,8 @@ game master sidecar 実装者が依存してよい公開境界は
   review 済み ai-arena module tag を `go.mod` から参照する
 - ai-arena runner / platform host の更新は、consumer repo 側では
   「ai-arena version を上げる」操作として取り込む
-- game 固有 verification line の ownership も同じ consumer repo 側で持ってよく、ai-arena 側に残すべきものは
-  `gamemaster` package と runner / runtime contract の継続検証だけとする
+- ai-arena 側が継続検証する責務を持つのは `gamemaster` package と runner / runtime contract までとする
+- game 固有 verification line の canonical source や asset 配置は、game 開発側 repo の判断対象であり、ai-arena が規定しない
 - `v0.1.0` のような release tag を切る前に、少なくとも以下を確認する
   - `gamemaster` package の公開 DTO / NDJSON helper が sidecar 開発に必要な最小面を満たしている
   - ai-arena repo 内に残す game master / game 実装例について、`internal/games/janken` や `cmd/echo-count-gamemaster` を基準に、

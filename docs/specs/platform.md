@@ -81,9 +81,11 @@ game master sidecar については、platform と sidecar が共有してよい
 この公開 package を使う consumer / adapter であり、sidecar 側から逆参照してはならない。
 external game repo が ai-arena runner / platform を host として使う場合も、この import surface 制約は変わらない。
 consumer repo から ai-arena 側へ安定依存してよいのは release tag 経由の `gamemaster` package までとする。
-game 固有の fixture bot / local AI / WASM AI / deterministic golden / game-specific e2e は、
-host platform repo ではなく consumer repo が ownership を持ってよい。ai-arena 側に残す verification は、
+game 固有の fixture bot / local AI / WASM AI / deterministic golden / game-specific e2e は
+platform 契約の責務範囲外とする。ai-arena 側に残す verification は、
 runner / runtime / SDK contract を継続確認する lane に限る。
+それ以外の game-specific verification asset の canonical source や repo 配置は、
+game 開発側が独立に決める。
 
 ## 参照関係
 

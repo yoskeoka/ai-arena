@@ -153,3 +153,10 @@
 - **Pattern**: historical context を spec として温存しようとして spec-code parity を崩し、削除前に移し切るべき verification path の列挙も不足する
 - **Rule**: game 実装と game 固有 verification 資産が ai-arena から完全に外へ出る段階では、その game 専用 spec file は ai-arena から削除する。削除 gate は canonical golden だけでなく、その game の fixture bot、WASM/Rust AI player、CI coverage まで移行完了を列挙してから閉じる
 - **Applied**: `0041-dungeon-external-repo-migration-03-ai-arena-removal.md`、`0042-dungeon-external-repo-removal-gate-verification.md`、今後の external game repo removal plan 全般
+
+## [2026-05-18] platform spec が consumer repo の所有物に許可を出す書き方をしない
+
+- **Mistake**: game 固有 verification asset について、`consumer repo 側で持ってよい` のように ai-arena が許可を与える書き方を spec に入れた
+- **Pattern**: platform repo が責務境界を説明する場面で、非責務領域を「外部がやってよいこと」と表現してしまい、ownership と権限の境界を曖昧にする
+- **Rule**: ai-arena の spec では、platform の責務を明示し、非責務領域は `ai-arena が規定しない` と書く。consumer repo や game 開発側の所有物に対して、platform が許可を与える文型を使わない
+- **Applied**: `docs/specs/game-master.md`、`docs/specs/platform.md`、今後の external repo ownership / verification asset 記述全般
