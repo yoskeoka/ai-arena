@@ -92,6 +92,7 @@ func handleRequest(ctx context.Context, meta gameMetadata, state *serverState, r
 			GameID:      meta.GameID,
 			GameVersion: meta.GameVersion,
 			Ruleset:     meta.RulesetVersion,
+			RNGSeed:     params.RNGSeed,
 			Players:     append([]game.Player(nil), params.Players...),
 		}
 		var impl game.Master

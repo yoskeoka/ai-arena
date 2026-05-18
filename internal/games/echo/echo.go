@@ -2,6 +2,7 @@ package echo
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -31,7 +32,9 @@ const (
 	RulesetSequential3Turn = "phase2-sequential-3turn"
 	// RulesetSimultaneous2Turn runs two simultaneous turns.
 	RulesetSimultaneous2Turn = "phase2-simultaneous-2turn"
-	defaultTurnDeadline      = 100 * time.Millisecond
+	// RulesetSimultaneousShuffle3Turn runs three simultaneous turns with a seed-aware expected order.
+	RulesetSimultaneousShuffle3Turn = "phase2-simultaneous-shuffle-3turn"
+	defaultTurnDeadline             = 100 * time.Millisecond
 )
 
 // Config selects the echo game variant and participating players.
@@ -39,6 +42,7 @@ type Config struct {
 	GameID      string
 	GameVersion string
 	Ruleset     string
+	RNGSeed     string
 	Players     []game.Player
 }
 
@@ -50,6 +54,9 @@ type Master struct {
 	mode       game.DecisionMode
 	turns      int
 	deadline   time.Duration
+	rngSeed    string
+	seedAware  bool
+	order      []int
 	resolved   int
 	nextPlayer int
 	score      map[string]int
@@ -79,10 +86,20 @@ type publicState struct {
 }
 
 type snapshotState struct {
-	Mode     game.DecisionMode `json:"mode"`
-	Turn     int               `json:"turn"`
-	Expected int               `json:"expected"`
-	Score    map[string]int    `json:"score"`
+	Mode          game.DecisionMode `json:"mode"`
+	Turn          int               `json:"turn"`
+	Expected      int               `json:"expected"`
+	Score         map[string]int    `json:"score"`
+	RNGSeed       string            `json:"rng_seed,omitempty"`
+	ExpectedOrder []int             `json:"expected_order,omitempty"`
+}
+
+type selection struct {
+	meta      catalog.GameMetadata
+	mode      game.DecisionMode
+	turns     int
+	deadline  time.Duration
+	seedAware bool
 }
 
 // New builds a fresh echo-count master.
@@ -94,9 +111,12 @@ func New(cfg Config) (*Master, error) {
 		return nil, fmt.Errorf("echo: game version is required")
 	}
 
-	meta, mode, turns, deadline, err := metadataForSelection(cfg.GameID, cfg.GameVersion, cfg.Ruleset)
+	selected, err := selectionFor(cfg.GameID, cfg.GameVersion, cfg.Ruleset)
 	if err != nil {
 		return nil, err
+	}
+	if selected.seedAware && cfg.RNGSeed == "" {
+		return nil, fmt.Errorf("echo: rng_seed is required for ruleset %q", cfg.Ruleset)
 	}
 
 	score := make(map[string]int, len(cfg.Players))
@@ -109,12 +129,15 @@ func New(cfg Config) (*Master, error) {
 	}
 
 	return &Master{
-		meta:       meta,
+		meta:       selected.meta,
 		players:    append([]game.Player(nil), cfg.Players...),
 		playerIDs:  playerIDs,
-		mode:       mode,
-		turns:      turns,
-		deadline:   deadline,
+		mode:       selected.mode,
+		turns:      selected.turns,
+		deadline:   selected.deadline,
+		rngSeed:    cfg.RNGSeed,
+		seedAware:  selected.seedAware,
+		order:      expectedOrder(selected.turns, cfg.RNGSeed, selected.seedAware),
 		score:      score,
 		lastAction: lastAction,
 	}, nil
@@ -122,6 +145,12 @@ func New(cfg Config) (*Master, error) {
 
 // NewFromSnapshot rebuilds an echo-count master from a persisted snapshot.
 func NewFromSnapshot(cfg Config, snapshot game.Snapshot) (*Master, error) {
+	if cfg.RNGSeed == "" {
+		var state snapshotState
+		if err := json.Unmarshal(snapshot.GameState, &state); err == nil {
+			cfg.RNGSeed = state.RNGSeed
+		}
+	}
 	master, err := New(cfg)
 	if err != nil {
 		return nil, err
@@ -138,19 +167,23 @@ func (m *Master) Metadata() catalog.GameMetadata {
 }
 
 // SnapshotFromHistory rebuilds an echo snapshot from event history.
-func SnapshotFromHistory(gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
-	return SnapshotFromHistoryWithGameID(GameID, gameVersion, ruleset, players, events, targetTurn)
+func SnapshotFromHistory(gameVersion, ruleset, rngSeed string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
+	return SnapshotFromHistoryWithGameID(GameID, gameVersion, ruleset, rngSeed, players, events, targetTurn)
 }
 
 // SnapshotFromHistoryWithGameID rebuilds an echo snapshot for an explicit game id.
-func SnapshotFromHistoryWithGameID(gameID, gameVersion, ruleset string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
-	meta, mode, maxTurns, _, err := metadataForSelection(gameID, gameVersion, ruleset)
+func SnapshotFromHistoryWithGameID(gameID, gameVersion, ruleset, rngSeed string, players []game.Player, events []match.Event, targetTurn int) (game.Snapshot, error) {
+	selected, err := selectionFor(gameID, gameVersion, ruleset)
 	if err != nil {
 		return game.Snapshot{}, err
 	}
-	if targetTurn < 0 || targetTurn > maxTurns {
-		return game.Snapshot{}, fmt.Errorf("target turn %d out of range 0..%d", targetTurn, maxTurns)
+	if selected.seedAware && rngSeed == "" {
+		return game.Snapshot{}, fmt.Errorf("echo: rng_seed is required for ruleset %q", ruleset)
 	}
+	if targetTurn < 0 || targetTurn > selected.turns {
+		return game.Snapshot{}, fmt.Errorf("target turn %d out of range 0..%d", targetTurn, selected.turns)
+	}
+	order := expectedOrder(selected.turns, rngSeed, selected.seedAware)
 
 	score := make(map[string]int, len(players))
 	perPlayer := make(map[string]game.PlayerSnapshot, len(players))
@@ -196,10 +229,7 @@ func SnapshotFromHistoryWithGameID(gameID, gameVersion, ruleset string, players 
 		}
 	}
 
-	expected := targetTurn + 1
-	if targetTurn >= maxTurns {
-		expected = maxTurns
-	}
+	expected := expectedForResolvedCount(order, targetTurn)
 	for _, player := range players {
 		playerState := perPlayer[player.PlayerID]
 		playerState.VisibleState = mustRaw(visibleState{
@@ -209,20 +239,25 @@ func SnapshotFromHistoryWithGameID(gameID, gameVersion, ruleset string, players 
 		})
 		perPlayer[player.PlayerID] = playerState
 	}
-	gameState, err := json.Marshal(snapshotState{
-		Mode:     mode,
+	state := snapshotState{
+		Mode:     selected.mode,
 		Turn:     targetTurn,
 		Expected: expected,
 		Score:    score,
-	})
+	}
+	if selected.seedAware {
+		state.RNGSeed = rngSeed
+		state.ExpectedOrder = append([]int(nil), order...)
+	}
+	gameState, err := json.Marshal(state)
 	if err != nil {
 		return game.Snapshot{}, fmt.Errorf("encode replay snapshot: %w", err)
 	}
 
 	return game.Snapshot{
-		GameID:         meta.GameID,
-		GameVersion:    meta.GameVersion,
-		RulesetVersion: meta.RulesetVersion,
+		GameID:         selected.meta.GameID,
+		GameVersion:    selected.meta.GameVersion,
+		RulesetVersion: selected.meta.RulesetVersion,
 		Turn:           targetTurn,
 		Status:         game.StatusRunning,
 		GameState:      gameState,
@@ -241,44 +276,17 @@ func SupportedRulesets() []string {
 		RulesetSimultaneous3Turn,
 		RulesetSequential3Turn,
 		RulesetSimultaneous2Turn,
+		RulesetSimultaneousShuffle3Turn,
 	}
 }
 
 // MetadataForSelectionWithGameID resolves metadata and turn settings for one game id.
 func MetadataForSelectionWithGameID(gameID, gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
-	if gameVersion != GameVersion {
-		return catalog.GameMetadata{}, "", 0, 0, fmt.Errorf("echo: unsupported game version %q", gameVersion)
+	selected, err := selectionFor(gameID, gameVersion, ruleset)
+	if err != nil {
+		return catalog.GameMetadata{}, "", 0, 0, err
 	}
-	if gameID == "" {
-		gameID = GameID
-	}
-
-	switch ruleset {
-	case RulesetSimultaneous3Turn:
-		return catalog.GameMetadata{
-			GameID:         gameID,
-			GameVersion:    gameVersion,
-			RulesetVersion: RulesetSimultaneous3Turn,
-		}, game.Simultaneous, 3, defaultTurnDeadline, nil
-	case RulesetSequential3Turn:
-		return catalog.GameMetadata{
-			GameID:         gameID,
-			GameVersion:    gameVersion,
-			RulesetVersion: RulesetSequential3Turn,
-		}, game.Sequential, 3, defaultTurnDeadline, nil
-	case RulesetSimultaneous2Turn:
-		return catalog.GameMetadata{
-			GameID:         gameID,
-			GameVersion:    gameVersion,
-			RulesetVersion: RulesetSimultaneous2Turn,
-		}, game.Simultaneous, 2, defaultTurnDeadline, nil
-	default:
-		return catalog.GameMetadata{}, "", 0, 0, fmt.Errorf("echo: unsupported ruleset %q", ruleset)
-	}
-}
-
-func metadataForSelection(gameID, gameVersion, ruleset string) (catalog.GameMetadata, game.DecisionMode, int, time.Duration, error) {
-	return MetadataForSelectionWithGameID(gameID, gameVersion, ruleset)
+	return selected.meta, selected.mode, selected.turns, selected.deadline, nil
 }
 
 // Init returns the per-player initialization payloads for the match.
@@ -302,7 +310,7 @@ func (m *Master) NextStep(context.Context) (*game.DecisionStep, error) {
 	}
 
 	turn := m.resolved + 1
-	expected := turn
+	expected := m.expectedForResolvedCount(m.resolved)
 	switch m.mode {
 	case game.Simultaneous:
 		reqs := make([]game.DecisionRequest, 0, len(m.players))
@@ -399,7 +407,7 @@ func (m *Master) VisibleState(string) json.RawMessage {
 	if turn > m.turns {
 		turn = m.turns
 	}
-	expected := turn
+	expected := m.expectedForResolvedCount(m.resolved)
 	return mustRaw(m.currentVisibleState(turn, expected))
 }
 
@@ -463,18 +471,17 @@ func (m *Master) currentVisibleState(turn, expected int) visibleState {
 }
 
 func (m *Master) snapshotState() map[string]any {
-	expected := 0
-	if m.resolved < m.turns {
-		expected = m.resolved + 1
-	} else {
-		expected = m.turns
-	}
-	return map[string]any{
+	state := map[string]any{
 		"mode":     m.mode,
 		"turn":     m.resolved,
-		"expected": expected,
+		"expected": m.expectedForResolvedCount(m.resolved),
 		"score":    cloneScore(m.score),
 	}
+	if m.seedAware {
+		state["rng_seed"] = m.rngSeed
+		state["expected_order"] = append([]int(nil), m.order...)
+	}
+	return state
 }
 
 func (m *Master) applySnapshot(snapshot game.Snapshot) error {
@@ -497,6 +504,28 @@ func (m *Master) applySnapshot(snapshot game.Snapshot) error {
 	}
 	if snapshot.Turn < 0 || snapshot.Turn > m.turns {
 		return fmt.Errorf("echo: snapshot turn %d out of range 0..%d", snapshot.Turn, m.turns)
+	}
+	if m.seedAware {
+		if state.RNGSeed == "" {
+			return fmt.Errorf("echo: snapshot rng_seed is required for ruleset %q", m.meta.RulesetVersion)
+		}
+		if m.rngSeed != "" && state.RNGSeed != m.rngSeed {
+			return fmt.Errorf("echo: snapshot rng_seed %q does not match %q", state.RNGSeed, m.rngSeed)
+		}
+		m.rngSeed = state.RNGSeed
+		expected := expectedOrder(m.turns, m.rngSeed, true)
+		if len(state.ExpectedOrder) > 0 {
+			if !sameIntSlice(state.ExpectedOrder, expected) {
+				return fmt.Errorf("echo: snapshot expected_order %v does not match seed-derived order %v", state.ExpectedOrder, expected)
+			}
+		}
+		m.order = expected
+	}
+	if state.Expected > 0 {
+		expected := m.expectedForResolvedCount(snapshot.Turn)
+		if state.Expected != expected {
+			return fmt.Errorf("echo: snapshot expected %d does not match %d", state.Expected, expected)
+		}
 	}
 
 	m.resolved = snapshot.Turn
@@ -530,7 +559,90 @@ func (m *Master) expectedForTurn(req game.DecisionRequest) int {
 	if err := json.Unmarshal(req.VisibleState, &state); err == nil && state.Expected > 0 {
 		return state.Expected
 	}
-	return m.resolved + 1
+	return m.expectedForResolvedCount(m.resolved)
+}
+
+func (m *Master) expectedForResolvedCount(resolved int) int {
+	return expectedForResolvedCount(m.order, resolved)
+}
+
+func selectionFor(gameID, gameVersion, ruleset string) (selection, error) {
+	if gameVersion != GameVersion {
+		return selection{}, fmt.Errorf("echo: unsupported game version %q", gameVersion)
+	}
+	if gameID == "" {
+		gameID = GameID
+	}
+
+	newSelection := func(ruleset string, mode game.DecisionMode, turns int, seedAware bool) selection {
+		return selection{
+			meta: catalog.GameMetadata{
+				GameID:         gameID,
+				GameVersion:    gameVersion,
+				RulesetVersion: ruleset,
+			},
+			mode:      mode,
+			turns:     turns,
+			deadline:  defaultTurnDeadline,
+			seedAware: seedAware,
+		}
+	}
+
+	switch ruleset {
+	case RulesetSimultaneous3Turn:
+		return newSelection(RulesetSimultaneous3Turn, game.Simultaneous, 3, false), nil
+	case RulesetSequential3Turn:
+		return newSelection(RulesetSequential3Turn, game.Sequential, 3, false), nil
+	case RulesetSimultaneous2Turn:
+		return newSelection(RulesetSimultaneous2Turn, game.Simultaneous, 2, false), nil
+	case RulesetSimultaneousShuffle3Turn:
+		return newSelection(RulesetSimultaneousShuffle3Turn, game.Simultaneous, 3, true), nil
+	default:
+		return selection{}, fmt.Errorf("echo: unsupported ruleset %q", ruleset)
+	}
+}
+
+func expectedOrder(turns int, rngSeed string, seedAware bool) []int {
+	order := make([]int, turns)
+	for i := range turns {
+		order[i] = i + 1
+	}
+	if !seedAware {
+		return order
+	}
+	sort.Slice(order, func(i, j int) bool {
+		left := turnRank(rngSeed, order[i])
+		right := turnRank(rngSeed, order[j])
+		return left < right
+	})
+	return order
+}
+
+func turnRank(rngSeed string, turn int) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", rngSeed, turn)))
+	return string(sum[:])
+}
+
+func expectedForResolvedCount(order []int, resolved int) int {
+	if len(order) == 0 {
+		return 0
+	}
+	if resolved < len(order) {
+		return order[resolved]
+	}
+	return order[len(order)-1]
+}
+
+func sameIntSlice(left, right []int) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func cloneScore(src map[string]int) map[string]int {

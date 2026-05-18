@@ -1,0 +1,56 @@
+{
+  "game_id": "echo-count",
+  "game_version": "2.0.0",
+  "ruleset_version": "phase2-simultaneous-shuffle-3turn",
+  "turn": 1,
+  "status": "running",
+  "game_state": {
+    "mode": "simultaneous",
+    "turn": 1,
+    "expected": 1,
+    "score": {
+      "p1": 1,
+      "p2": 1
+    },
+    "rng_seed": "echo-shuffle-fixture-seed",
+    "expected_order": [2, 1, 3]
+  },
+  "per_player": {
+    "p1": {
+      "visible_state": {
+        "turn": 2,
+        "expected": 1,
+        "score": {
+          "p1": 1,
+          "p2": 1
+        }
+      },
+      "last_action_status": {
+        "player_id": "p1",
+        "action_status": "accepted",
+        "action": {
+          "echo": 2
+        }
+      },
+      "stderr_bytes": 0
+    },
+    "p2": {
+      "visible_state": {
+        "turn": 2,
+        "expected": 1,
+        "score": {
+          "p1": 1,
+          "p2": 1
+        }
+      },
+      "last_action_status": {
+        "player_id": "p2",
+        "action_status": "accepted",
+        "action": {
+          "echo": 2
+        }
+      },
+      "stderr_bytes": 0
+    }
+  }
+}

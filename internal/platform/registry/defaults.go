@@ -58,7 +58,7 @@ func mustDefaultRegistry() *Registry {
 				return buildEchoInProcessSession(spec, &snapshot)
 			},
 			SnapshotFromHistory: func(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
-				return echo.SnapshotFromHistory(spec.GameVersion, spec.Ruleset, append([]game.Player(nil), spec.Players...), events, targetTurn)
+				return echo.SnapshotFromHistory(spec.GameVersion, spec.Ruleset, spec.RNGSeed, append([]game.Player(nil), spec.Players...), events, targetTurn)
 			},
 		},
 		echo.BuilderIDLocalSubprocess: {
@@ -73,7 +73,7 @@ func mustDefaultRegistry() *Registry {
 				return buildEchoLocalSubprocessSession(spec, &snapshot)
 			},
 			SnapshotFromHistory: func(spec BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
-				return echo.SnapshotFromHistoryWithGameID(echo.SubprocessGameID, spec.GameVersion, spec.Ruleset, append([]game.Player(nil), spec.Players...), events, targetTurn)
+				return echo.SnapshotFromHistoryWithGameID(echo.SubprocessGameID, spec.GameVersion, spec.Ruleset, spec.RNGSeed, append([]game.Player(nil), spec.Players...), events, targetTurn)
 			},
 		},
 		janken.BuilderIDInProcess: {
@@ -114,6 +114,7 @@ func buildEchoInProcessSession(spec BuildSpec, snapshot *game.Snapshot) (gamemas
 	cfg := echo.Config{
 		GameVersion: spec.GameVersion,
 		Ruleset:     spec.Ruleset,
+		RNGSeed:     spec.RNGSeed,
 		Players:     append([]game.Player(nil), spec.Players...),
 	}
 	var (
@@ -146,6 +147,7 @@ func buildEchoLocalSubprocessSession(spec BuildSpec, snapshot *game.Snapshot) (g
 		ExpectedMetadata: meta,
 		Command:          command,
 		Players:          append([]game.Player(nil), spec.Players...),
+		RNGSeed:          spec.RNGSeed,
 		ResumeSnapshot:   snapshot,
 		StderrLimitBytes: 4096,
 	})
