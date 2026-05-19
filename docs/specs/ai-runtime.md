@@ -127,112 +127,19 @@ deny-by-default を基本方針とする。
 - memory limit の適用
 - cooperative shutdown 後の forced shutdown
 
-## Support Policy
+## Language-Specific Guides and Verification
 
-WASM/WASI runtime contract 自体は言語非依存で共通とする。一方で、公式の guide・sample・verification assets
-を整備して継続的に動作保証する範囲は、toolchain ごとに段階的に管理する。
+この spec は、runtime kind、manifest、stream、sandbox、resource limit の共通契約だけを定義する。
 
-Phase 4 時点の区分:
+以下はこの spec の責務外とする。
 
-- `supported`: Go
-- `experiment-only`: Rust
-- `future candidate`: TypeScript, Python
+- 特定言語向けの build 手順
+- sample AI の配置
+- CI verification lane の構成
+- fixture / helper / golden の ownership
+- language support 拡張の評価メモ
 
-区分基準:
-
-- `supported`
-  - repo 内に公式 sample、build helper、targeted verification path がある
-  - `janken` で再現可能な verification asset があり、継続確認の責務を負う
-- `experiment-only`
-  - WASM/WASI contract に沿う module の提出自体は許可する
-  - repo 内に最小評価用 sample または再現可能 artifact を置いてよい
-  - build/runtime 成否の観測は残すが、常設 gate や外部向け guide 整備までは約束しない
-- `future candidate`
-  - support 拡張候補として意図だけ残す
-  - sample、helper、verification asset はまだ持たない
-
-運用ルール:
-
-- `supported` 以外を、公式サポート済み言語として告知してはならない
-- `experiment-only` の評価結果は恒久 spec へ詳細に埋め込まず、必要に応じて appendix / issue note / PR artifact に逃がしてよい
-- runtime host 側は language ごとの差別扱いをせず、manifest と module の contract だけを正本として扱う
-
-## Go 参照フロー
-
-Phase 4 の first supported reference path は Go source から `GOOS=wasip1 GOARCH=wasm` で build した
-WASM/WASI module とする。`janken` sample AI はこの参照フローを固定するための正本 fixture であり、
-binary artifact ではなく source + reproducible build step を正本として扱う。
-
-参照 build 例:
-
-```sh
-GOOS=wasip1 GOARCH=wasm go build \
-  -o ./testdata/ai/janken/janken-go-wasm-ai.wasm \
-  ./testdata/ai/janken/janken-go-wasm-ai
-```
-
-対応する sidecar manifest 例:
-
-```json
-{
-  "ai_id": "janken-go-wasm-ai",
-  "protocol": {
-    "transport": "stdio-jsonrpc-ndjson",
-    "game_id": "janken",
-    "game_version": "2.1.0",
-    "ruleset_version": "regular"
-  },
-  "runtime": {
-    "kind": "wasm-wasi",
-    "module": "./janken-go-wasm-ai.wasm",
-    "args": ["./janken-go-wasm-ai.wasm"],
-    "memory_limit_pages": 64
-  }
-}
-```
-
-運用ルール:
-
-- checked-in fixture の正本は `.go` source と `.arena.json` manifest であり、`.wasm` binary は commit しない
-- local helper / targeted verification / CI は必要に応じて `.wasm` を都度 build して使う
-- sidecar manifest は build output と同じ directory に置き、`runtime.module` は sidecar 基準で解決できる相対 path を使う
-- e2e helper / CI helper は caller から AI player entry 名だけを受け取り、build 済み module を指す temp sidecar を生成して runtime kind 差分を隠蔽してよい
-
-Go sample で期待する runtime 振る舞い:
-
-- `stdout`: `init` / `turn` / `game_over` への JSON-RPC response だけを NDJSON で返す
-- `stderr`: `janken-go-wasm-ai init`, `turn <n>`, `game_over` のような debug/audit 用ログを出してよい
-- exit/shutdown: `game_over` に ACK 後は clean exit してよく、platform が `stdin` close 後に cooperative shutdown を完了できること
-
-## Game-Owned Additional Lanes
-
-`ai-arena` が継続して canonical asset を持つのは platform fixture と runtime contract の検証 lane までとする。
-repo 外へ切り出した game が Go-WASM や独自 fixture lane を持つ場合、その source / manifest / golden / CI は
-game 開発側 repo が ownership を持つ。
-
-その場合でも守る契約:
-
-- checked-in の正本は `.go` source と `.arena.json` manifest とし、`.wasm` binary は commit しない
-- local subprocess bot と WASM bot が shared decision layer を共有する場合、transport / runtime 差分は entrypoint 側へ閉じ込める
-- runtime ごとの entrypoint や test helper が `full_state` や hidden information 全体を shared policy へ直接渡してはならない
-- runner host を versioned dependency として使う場合、game 開発側 repo が採用する ai-arena version を明示して verification を固定する
-
-## Rust Evaluation Lane
-
-Rust は Phase 4 時点では `experiment-only` とする。最初の non-Go candidate として、
-`janken` で最小の WASM/WASI evaluation lane を持ってよい。
-
-前提:
-
-- module は command-style WASI program として起動できること
-- `stdout` / `stderr` / shutdown contract は Go 参照フローと同じであること
-- toolchain 前提や blocker 切り分けは helper / appendix / issue note 側へ残し、外部 developer guide には昇格しないこと
-
-この lane が意味するもの:
-
-- Rust module の提出可否を runtime contract 上で評価できる
-- `janken` の targeted verification path で build/runtime 観測を再現できる
-- ただし official support は Go のみであり、Rust の成功は将来サポート判断の材料に留まる
+それらの development harness 文書は `docs/development/` や issue / plan / PR artifact 側で扱う。
 
 ## 監査対象
 
