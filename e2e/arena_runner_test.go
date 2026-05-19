@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yoskeoka/ai-arena/internal/games/echo"
 	"github.com/yoskeoka/ai-arena/internal/games/janken"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
@@ -705,32 +706,61 @@ func TestArenaRunnerWritesDerivedArtifacts(t *testing.T) {
 	}
 }
 
-func TestArenaRunnerRejectsRNGSeedOverrideForSnapshotInput(t *testing.T) {
-	base := runArena(t,
-		"--game", "echo-count",
-		"--game-version", "2.0.0",
-		"--ruleset", "phase2-simultaneous-3turn",
-		"--match-id", "snapshot-seed-source",
-		"--player", "p1=./testdata/ai/echo/echo-ai",
-		"--player", "p2=./testdata/ai/echo/echo-ai",
+func TestArenaRunnerEchoShuffleSameSeedDeterministic(t *testing.T) {
+	args := []string{
+		"--game", echo.GameID,
+		"--game-version", echo.GameVersion,
+		"--ruleset", echo.RulesetSimultaneousShuffle3Turn,
+		"--rng-seed", "echo-shuffle-seed",
+		"--match-id", "echo-shuffle-same-seed",
+		"--player", "p1=./testdata/ai/echo/echo-ai-shuffle",
+		"--player", "p2=./testdata/ai/echo/echo-ai-shuffle",
+	}
+	first := runArenaWithOptions(t, arenaRunOptions{OutputDir: t.TempDir(), Args: args})
+	second := runArenaWithOptions(t, arenaRunOptions{OutputDir: t.TempDir(), Args: args})
+
+	if !jsonEqual(mustJSON(normalizeRecordShape(first.Record)), mustJSON(normalizeRecordShape(second.Record))) {
+		t.Fatalf("same-seed normalized record mismatch\nfirst=%s\nsecond=%s", mustJSON(normalizeRecordShape(first.Record)), mustJSON(normalizeRecordShape(second.Record)))
+	}
+}
+
+func TestArenaRunnerEchoShuffleResumeFromSnapshotInputUsesEmbeddedSeed(t *testing.T) {
+	result := runArena(t,
+		"--snapshot-input", echoShuffleFixturePath(t, "snapshot.json"),
+		"--match-id", "echo-shuffle-snapshot-resume",
+		"--player", "p1=./testdata/ai/echo/echo-ai-shuffle",
+		"--player", "p2=./testdata/ai/echo/echo-ai-shuffle",
 	)
-	base.Record.Snapshot.GameState = json.RawMessage(`{"rng_seed":"seed-from-snapshot"}`)
-
-	snapshotPath := filepath.Join(t.TempDir(), "snapshot.json")
-	data, err := json.Marshal(base.Record.Snapshot)
-	if err != nil {
-		t.Fatalf("marshal snapshot: %v", err)
+	if result.Record.Status != contract.StatusCompleted {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
 	}
-	if err := os.WriteFile(snapshotPath, data, 0o644); err != nil {
-		t.Fatalf("write snapshot input: %v", err)
+	if got := extractRNGSeedFromGameState(t, result.Record.Snapshot.GameState); got != "echo-shuffle-fixture-seed" {
+		t.Fatalf("snapshot rng_seed = %q, want echo-shuffle-fixture-seed", got)
 	}
+}
 
+func TestArenaRunnerEchoShuffleResumeFromRecordInputUsesEmbeddedSeed(t *testing.T) {
+	result := runArena(t,
+		"--record-input", echoShuffleFixturePath(t, "record.json"),
+		"--match-id", "echo-shuffle-record-resume",
+		"--player", "p1=./testdata/ai/echo/echo-ai-shuffle",
+		"--player", "p2=./testdata/ai/echo/echo-ai-shuffle",
+	)
+	if result.Record.Status != contract.StatusCompleted {
+		t.Fatalf("status = %q, want completed", result.Record.Status)
+	}
+	if got := extractRNGSeedFromGameState(t, result.Record.Snapshot.GameState); got != "echo-shuffle-fixture-seed" {
+		t.Fatalf("snapshot rng_seed = %q, want echo-shuffle-fixture-seed", got)
+	}
+}
+
+func TestArenaRunnerRejectsRNGSeedOverrideForSnapshotInput(t *testing.T) {
 	cmd := newArenaRunnerCommand(t,
-		"--snapshot-input", snapshotPath,
+		"--snapshot-input", echoShuffleFixturePath(t, "snapshot.json"),
 		"--rng-seed", "override-seed",
 		"--match-id", "snapshot-seed-conflict",
-		"--player", "p1=./testdata/ai/echo/echo-ai",
-		"--player", "p2=./testdata/ai/echo/echo-ai",
+		"--player", "p1=./testdata/ai/echo/echo-ai-shuffle",
+		"--player", "p2=./testdata/ai/echo/echo-ai-shuffle",
 	)
 	cmd.Dir = repoRoot(t)
 	output, err := cmd.CombinedOutput()
@@ -743,31 +773,12 @@ func TestArenaRunnerRejectsRNGSeedOverrideForSnapshotInput(t *testing.T) {
 }
 
 func TestArenaRunnerRejectsRNGSeedOverrideForRecordInput(t *testing.T) {
-	base := runArena(t,
-		"--game", "echo-count",
-		"--game-version", "2.0.0",
-		"--ruleset", "phase2-simultaneous-3turn",
-		"--match-id", "record-seed-source",
-		"--player", "p1=./testdata/ai/echo/echo-ai",
-		"--player", "p2=./testdata/ai/echo/echo-ai",
-	)
-	base.Record.Snapshot.GameState = json.RawMessage(`{"rng_seed":"seed-from-record"}`)
-
-	recordPath := filepath.Join(t.TempDir(), "record.json")
-	data, err := json.Marshal(base.Record)
-	if err != nil {
-		t.Fatalf("marshal record: %v", err)
-	}
-	if err := os.WriteFile(recordPath, data, 0o644); err != nil {
-		t.Fatalf("write record input: %v", err)
-	}
-
 	cmd := newArenaRunnerCommand(t,
-		"--record-input", recordPath,
+		"--record-input", echoShuffleFixturePath(t, "record.json"),
 		"--rng-seed", "override-seed",
 		"--match-id", "record-seed-conflict",
-		"--player", "p1=./testdata/ai/echo/echo-ai",
-		"--player", "p2=./testdata/ai/echo/echo-ai",
+		"--player", "p1=./testdata/ai/echo/echo-ai-shuffle",
+		"--player", "p2=./testdata/ai/echo/echo-ai-shuffle",
 	)
 	cmd.Dir = repoRoot(t)
 	output, err := cmd.CombinedOutput()
@@ -820,6 +831,40 @@ func readResultSummary(t *testing.T, matchDir string) resultSummaryArtifact {
 		t.Fatalf("decode result summary: %v\nsummary=%s", err, data)
 	}
 	return summary
+}
+
+func echoShuffleFixturePath(t *testing.T, name string) string {
+	t.Helper()
+	return filepath.Join(repoRoot(t), "e2e", "testdata", "echo-shuffle", name)
+}
+
+func extractRNGSeedFromGameState(t *testing.T, state json.RawMessage) string {
+	t.Helper()
+	var payload struct {
+		RNGSeed string `json:"rng_seed"`
+	}
+	if err := json.Unmarshal(state, &payload); err != nil {
+		t.Fatalf("decode game_state: %v", err)
+	}
+	return payload.RNGSeed
+}
+
+func normalizeRecordShape(record match.Record) any {
+	return struct {
+		Game             any `json:"game"`
+		Status           any `json:"status"`
+		Result           any `json:"result"`
+		EventLog         any `json:"event_log"`
+		Snapshot         any `json:"snapshot"`
+		ExportedSnapshot any `json:"exported_snapshot"`
+	}{
+		Game:             record.Game,
+		Status:           record.Status,
+		Result:           record.Result,
+		EventLog:         record.EventLog,
+		Snapshot:         record.Snapshot,
+		ExportedSnapshot: record.ExportedSnapshot,
+	}
 }
 
 func findFlagValue(args []string, name string) string {

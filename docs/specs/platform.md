@@ -796,6 +796,14 @@ Phase 3 の runtime boundary 検証では、同じ挙動を持つ fixture を 2 
 }
 ```
 
+```json
+{
+  "game_id": "echo-count",
+  "game_version": "2.0.0",
+  "ruleset_version": "phase2-simultaneous-shuffle-3turn"
+}
+```
+
 同時行動 / 順番制の違いは ruleset の意味と decision step の返し方で表現する。turn 数も ruleset に含める。
 
 ### ルール
@@ -829,8 +837,17 @@ Phase 3 の runtime boundary 検証では、同じ挙動を持つ fixture を 2 
 - 全員の結果が揃ってから score と public state を進める
 - 2 turns で終了する
 
+`phase2-simultaneous-shuffle-3turn`:
+
+- 同一 turn で全 player に同じ `expected` を送る
+- `rng_seed` を game master の初期条件として受け取り、`1, 2, 3` の期待値列を deterministic に shuffle する
+- same `player` 順・same `rng_seed` では same turn progression になる
+- shuffle 結果と `rng_seed` は game master 内部 state と `snapshot.json.game_state` / `record.json.snapshot.game_state` に保持し、AI player へは current turn の `expected` だけを渡す
+- 全員の結果が揃ってから score と public state を進める
+- 3 turns で終了する
+
 全 ruleset で per-turn deadline は game 側仕様として 100ms を使う。
-期待値列は deterministic に `1, 2, 3, ...` とする。
+`phase2-simultaneous-3turn` / `phase2-sequential-3turn` / `phase2-simultaneous-2turn` の期待値列は deterministic に `1, 2, 3, ...` とする。
 
 ### payload 形
 
@@ -938,6 +955,28 @@ init failure と shutdown failure は lifecycle event として残す。
 - `session_initialization_failed` は `turn=0` で記録し、`payload.reason` に `invalid-timeout` などの failure reason を入れてよい
 - `match_failed` は最終 status を表す terminal event とし、init timeout でも turn timeout と同じ failure reason taxonomy を使ってよい
 - event log 上は `session_initialization_failed` と `match_failed` の組み合わせで init phase failure と読めること
+
+seed-aware ruleset の snapshot / record source-of-truth 例:
+
+```json
+{
+  "game_state": {
+    "mode": "simultaneous",
+    "turn": 1,
+    "expected": 1,
+    "score": {
+      "p1": 1,
+      "p2": 1
+    },
+    "rng_seed": "echo-shuffle-seed",
+    "expected_order": [2, 1, 3]
+  }
+}
+```
+
+- `snapshot.json.game_state.rng_seed` は `--snapshot-input <path>` からの resume source of truth である
+- `record.json.snapshot.game_state.rng_seed` は `--record-input <path>` からの resume / replay source of truth である
+- これらが `rng_seed` を含む場合、runner は別途与えられた `--rng-seed` を受け付けず reject する
 
 ```json
 {

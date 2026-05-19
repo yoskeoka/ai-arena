@@ -3,6 +3,7 @@ package echo
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
@@ -132,12 +133,97 @@ func TestNewFromSnapshotRestoresNextTurnState(t *testing.T) {
 	}
 }
 
+func TestShuffleRulesetRequiresSeed(t *testing.T) {
+	_, err := New(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetSimultaneousShuffle3Turn,
+		Players: []game.Player{
+			{PlayerID: "p1"},
+			{PlayerID: "p2"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "rng_seed is required") {
+		t.Fatalf("New error = %v, want rng_seed is required", err)
+	}
+}
+
+func TestShuffleRulesetUsesSeededExpectedOrder(t *testing.T) {
+	const seed = "echo-shuffle-seed"
+	master := newTestMasterWithSeed(t, RulesetSimultaneousShuffle3Turn, seed)
+
+	step, err := master.NextStep(context.Background())
+	if err != nil {
+		t.Fatalf("NextStep: %v", err)
+	}
+	order := expectedOrder(3, seed, true)
+	var state map[string]any
+	if err := json.Unmarshal(step.Requests[0].VisibleState, &state); err != nil {
+		t.Fatalf("decode visible state: %v", err)
+	}
+	if got := int(state["expected"].(float64)); got != order[0] {
+		t.Fatalf("first expected = %d, want %d", got, order[0])
+	}
+	if _, ok := state["rng_seed"]; ok {
+		t.Fatalf("visible state leaked rng_seed: %+v", state)
+	}
+}
+
+func TestShuffleNewFromSnapshotRestoresExpectedOrder(t *testing.T) {
+	const seed = "echo-shuffle-seed"
+	order := expectedOrder(3, seed, true)
+	master, err := NewFromSnapshot(Config{
+		GameVersion: GameVersion,
+		Ruleset:     RulesetSimultaneousShuffle3Turn,
+		Players: []game.Player{
+			{PlayerID: "p1"},
+			{PlayerID: "p2"},
+		},
+	}, game.Snapshot{
+		GameID:         GameID,
+		GameVersion:    GameVersion,
+		RulesetVersion: RulesetSimultaneousShuffle3Turn,
+		Turn:           1,
+		GameState: mustRaw(snapshotState{
+			Mode:          game.Simultaneous,
+			Turn:          1,
+			Expected:      order[1],
+			Score:         map[string]int{"p1": 1, "p2": 1},
+			RNGSeed:       seed,
+			ExpectedOrder: order,
+		}),
+		PerPlayer: map[string]game.PlayerSnapshot{
+			"p1": {LastActionStatus: game.ActionStatus{PlayerID: "p1", ActionStatus: session.StatusAccepted}},
+			"p2": {LastActionStatus: game.ActionStatus{PlayerID: "p2", ActionStatus: session.StatusAccepted}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewFromSnapshot: %v", err)
+	}
+
+	step, err := master.NextStep(context.Background())
+	if err != nil {
+		t.Fatalf("NextStep: %v", err)
+	}
+	var visible visibleState
+	if err := json.Unmarshal(step.Requests[0].VisibleState, &visible); err != nil {
+		t.Fatalf("decode visible state: %v", err)
+	}
+	if visible.Expected != order[1] {
+		t.Fatalf("visible expected = %d, want %d", visible.Expected, order[1])
+	}
+}
+
 func newTestMaster(t *testing.T, ruleset string) *Master {
+	return newTestMasterWithSeed(t, ruleset, "")
+}
+
+func newTestMasterWithSeed(t *testing.T, ruleset, seed string) *Master {
 	t.Helper()
 
 	master, err := New(Config{
 		GameVersion: GameVersion,
 		Ruleset:     ruleset,
+		RNGSeed:     seed,
 		Players: []game.Player{
 			{PlayerID: "p1", AIID: "bot-a"},
 			{PlayerID: "p2", AIID: "bot-b"},
