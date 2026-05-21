@@ -94,11 +94,25 @@
 - [x] Phase 2: プラットフォームコア実装 + `janken` によるローカル実行での実証
 - [x] Phase 3: AI player / platform / game master の共通 interface 契約を固定し、複数ゲーム対応と trusted external game backend 対応の土台を整える
 - [x] Phase 4: WASM/WASI 実行を正式な AI 実行経路として成立させ、Go 製 AI を基準に `janken` で検証する
-- [ ] Phase 5: ダンジョンゲーム MVP を、プラットフォーム改善と並行で進める
+- [x] Phase 5: ダンジョンゲーム MVP を、プラットフォーム改善と並行で進める
+  - `dungeon-game-ai-arena` への切り出しと golden parity 確認を完了し、ai-arena 側には platform / SDK / artifact / registry の責務を残す
+  - dungeon 固有コードが `internal/platform/*` に依存しない境界を整え、platform 側の public contract 候補を狭く固定する
 - [ ] Phase 6: match state・artifact・公開用 game state を扱える永続化基盤と service skeleton を整える
+  - child item: match submission から result persist までを 1 本通す service skeleton を整える
+  - child item: `record` / `event_log` / `snapshot` / `exported_snapshot` の保存モデルと read model を定義する
+  - child item: resume / replay / audit に再利用できる source-of-truth artifact の置き場を固める
 - [ ] Phase 7: AI 提出、game 提出、matchmaking、ranking、早期 deploy pipeline を含むオンライン運営基盤を整える
+  - child item: AI submission / game registration / validation / queueing の operator flow を成立させる
+  - child item: matchmaking / ranking / rerun を含む最小運営サイクルを整える
+  - child item: service / worker / storage の最小 deploy 形を定め、継続運用できる実行トポロジを固める
 - [ ] Phase 8: public な external game state を読み取る観戦用ビジュアライザを整える
+  - child item: public game state を取得・配信する API / artifact 契約を固める
+  - child item: spectator 向けの snapshot / event stream 読み取り導線を整える
+  - child item: game repo 側 visualizer と platform 側 state delivery を接続できる最小 viewer を成立させる
 - [ ] Phase 9: Go 製 WASM AI 開発フローの外部向け導線を整え、Rust を複数言語評価の先行レーンとして取り込みつつ、多言語サポート拡張の準備を進める
+  - child item: Go WASM を公式サポート言語として扱う guide / sample / verification assets を整える
+  - child item: Rust を先行 evaluation lane として CI / sample / compatibility matrix に載せる
+  - child item: 他言語へ広げるための support policy と acceptance bar を定義する
 
 ### Phase の意図
 
@@ -108,6 +122,9 @@
   - 最初の到達点は、固定 1 ステージでゴール到達と宝箱回収を競う MVP とする
   - 実装は別 repo へ移動できる境界を保つため、ダンジョン固有コードは `internal` package に依存させない
   - 開発中のフィードバックサイクルは Go subprocess bot で高速化しつつ、同じ判断ロジックを WASM 版 reference AI へ流用できる形を目指す
+- Phase 5 完了後の ai-arena は、特定ゲームの拡張よりも online platform としての service skeleton・永続化・運営導線を優先して進める
+- Phase 6 の最初の到達点は、submission -> validation -> queue -> match run -> result persist を 1 本の運営フローとして通すことである
+- Phase 7 は、その最小 online flow を運営可能な形へ厚くする phase であり、operator workflow・matchmaking・ranking・deploy を順に閉じる
 - Phase 6 で公開向け state の永続化と供給基盤を整えた後は、Phase 8 のビジュアライザを段階的に前倒しで進めてよい
 - Phase 9 では、WASM/WASI の実装仕様に沿う module は提出可能としたまま、公式の guide・sample・verification assets を整備して動作保証する AI 開発言語はいったん Go に限定する。Rust は platform の複数言語評価の先行候補として扱い、TypeScript や Python など開発者層を広げやすい言語は Go 向け資産の横展開先として将来サポート候補に残す
 
