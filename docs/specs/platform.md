@@ -35,6 +35,7 @@ Phase 4 では AI 実行 runtime を正式 contract として固定し、`local-
 ### プラットフォームの責務
 
 - ゲーム定義を catalog に登録し、metadata 互換性を検証する
+- admission 済み match submission を queue へ載せ、worker lease と terminal persist を orchestrate する
 - 試合ごとに game master session と player AI session を接続する
 - 各 AI runtime の起動、標準 stream 接続、終了を管理する
 - game master runtime の起動、標準 stream 接続、終了を管理する
@@ -51,6 +52,7 @@ Phase 4 では AI 実行 runtime を正式 contract として固定し、`local-
 - AI ソースコードのビルド
 - 試合中の AI 間通信
 - trusted external game backend への実ネットワーク接続実装
+- runner 自身による queue ownership、retry policy、自動 rematch 判定
 
 ## 試合実行の仕組み
 
@@ -83,6 +85,7 @@ game master sidecar については、platform と sidecar が共有してよい
 ## 参照関係
 
 - `docs/specs/platform-common-contract.md`: metadata / action status / failure 分類 / record core schema の正本
+- `docs/specs/platform-service-skeleton.md`: online service skeleton の submission / admission / queue lifecycle 契約
 - `docs/specs/game-master.md`: game master 開発者向けの論理 API と transport 契約
 - `docs/specs/platform-game-registry.md`: registered game の lookup key / descriptor / build/replay 入口
 - `docs/specs/janken-game.md`: `janken` 固有 payload / validation / ranking
@@ -110,6 +113,7 @@ registered game の build 入口へ渡して game 固有 validation を受ける
   - CLI / artifact / replay-debug entrypoint から `game_id` と `game_version` を集める
   - `game_id + game_version major` で registry lookup を行う
   - lookup 済みの registered game 入口へ `ruleset_version` と player list、必要なら resume source を渡して fresh run / snapshot resume / history replay を起動する
+  - single-match execution engine として 1 試合分の session / game master lifecycle だけを担当し、queue state や worker lease は持たない
 - game registry の責務:
   - persisted registered game record を store から読む
   - record を process-local な runtime descriptor へ解決する
@@ -662,6 +666,8 @@ artifact hierarchy:
 - `exported-snapshot.json` は `record.json.exported_snapshot` をそのまま抜き出した derived exported snapshot とする
 - `result-summary.json` は human / AI Agent の既定観察導線向け compact derived artifact とし、少なくとも `status`、placement、artifact path 参照を含める
 - `structured-log.ndjson` は `stdout` に流れる structured log と同じ NDJSON record を保存する
+- online service skeleton が terminal persist を行うときも、最低限この `record.json` と `result-summary.json` を正本 / summary artifact として残す
+- online service skeleton は各 player の captured stderr を `<player-id>-stderr.log` として同じ match directory へ保存してよい
 
 出力:
 
