@@ -55,12 +55,11 @@ queued match を worker が claim し、runner 実行から terminal persist ま
 - [ ] claim 済み record を `running` に進めて runner を起動する
 - [ ] terminal `record.json` と player stderr logs を `output-dir` に保存する
 - [ ] `persisting` から terminal status へ進める
-- [ ] completed / failed / canceled-by-timeout 相当の integration test を追加する
+- [ ] completed / failed / timeout reason 付き canceled 相当の integration test を追加する
 
 ## Parallelism
 
-- depends on: `0048-platform-online-foundation-01-01-service-contract-and-lifecycle.md`
-- [parallel] `0049-platform-online-foundation-01-02-submission-entry-and-queue-write.md` と並行可能
+- `0048` の contract 固定後は、worker claim / persist path と `0049` の submission entry path を並行で進められる
 
 ## Dependencies
 

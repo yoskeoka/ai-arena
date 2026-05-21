@@ -59,8 +59,7 @@ admission validation を通過したものだけを queue record として保存
 
 ## Parallelism
 
-- depends on: `0048-platform-online-foundation-01-01-service-contract-and-lifecycle.md`
-- [parallel] `0050-platform-online-foundation-01-03-worker-dispatch-and-terminal-persist.md` と並行可能
+- `0048` の contract 固定後は、CLI entry / validation path と `0050` の worker path を並行で進められる
 
 ## Dependencies
 

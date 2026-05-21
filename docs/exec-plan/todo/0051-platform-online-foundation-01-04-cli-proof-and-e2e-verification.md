@@ -54,15 +54,14 @@
 
 ## Parallelism
 
-- depends on: `0049-platform-online-foundation-01-02-submission-entry-and-queue-write.md`
-- depends on: `0050-platform-online-foundation-01-03-worker-dispatch-and-terminal-persist.md`
+- `0049` と `0050` が揃った後は、success / rejection / queued cancel の各 verification lane を分担して進められる
 
 ## Dependencies
 
 - depends on: `0049-platform-online-foundation-01-02-submission-entry-and-queue-write.md`
 - depends on: `0050-platform-online-foundation-01-03-worker-dispatch-and-terminal-persist.md`
-- unblocks handoff into: `0046-platform-online-foundation-02-persistence-and-read-model.md`
-- unblocks handoff into: `0047-platform-online-foundation-03-operator-flow-and-matchmaking.md`
+- informs: `0046-platform-online-foundation-02-persistence-and-read-model.md`
+- informs: `0047-platform-online-foundation-03-operator-flow-and-matchmaking.md`
 
 ## Risks and Mitigations
 
