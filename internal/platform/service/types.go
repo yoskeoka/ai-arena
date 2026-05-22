@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
-	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
 
@@ -23,8 +22,8 @@ type MatchSubmission struct {
 
 // SubmittedPlayer binds a player id to an opaque AI artifact reference.
 type SubmittedPlayer struct {
-	Player      game.Player `json:"player"`
-	ArtifactRef string      `json:"artifact_ref"`
+	PlayerID    string `json:"player_id"`
+	ArtifactRef string `json:"artifact_ref"`
 }
 
 // LifecycleState tracks service-side queue and execution progress.
@@ -49,10 +48,10 @@ const (
 
 // QueueRecord is the persisted service-side lifecycle state for one submission.
 type QueueRecord struct {
-	Submission MatchSubmission   `json:"submission"`
-	State      LifecycleState    `json:"state"`
-	Lease      WorkerLease       `json:"lease,omitempty"`
-	Terminal   TerminalArtifacts `json:"terminal,omitempty"`
+	Submission MatchSubmission    `json:"submission"`
+	State      LifecycleState     `json:"state"`
+	Lease      *WorkerLease       `json:"lease,omitempty"`
+	Terminal   *TerminalArtifacts `json:"terminal,omitempty"`
 }
 
 // WorkerLease records which worker currently owns a queued submission.
@@ -130,16 +129,16 @@ func ValidateSubmission(submission MatchSubmission) error {
 
 	playerIDs := make([]string, 0, len(submission.Players))
 	for _, player := range submission.Players {
-		if strings.TrimSpace(player.Player.PlayerID) == "" {
-			return fmt.Errorf("service: player.player_id is required")
+		if strings.TrimSpace(player.PlayerID) == "" {
+			return fmt.Errorf("service: player_id is required")
 		}
 		if strings.TrimSpace(player.ArtifactRef) == "" {
-			return fmt.Errorf("service: artifact_ref is required for player %q", player.Player.PlayerID)
+			return fmt.Errorf("service: artifact_ref is required for player %q", player.PlayerID)
 		}
-		if slices.Contains(playerIDs, player.Player.PlayerID) {
-			return fmt.Errorf("service: duplicate player_id %q", player.Player.PlayerID)
+		if slices.Contains(playerIDs, player.PlayerID) {
+			return fmt.Errorf("service: duplicate player_id %q", player.PlayerID)
 		}
-		playerIDs = append(playerIDs, player.Player.PlayerID)
+		playerIDs = append(playerIDs, player.PlayerID)
 	}
 
 	return nil

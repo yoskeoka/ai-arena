@@ -55,6 +55,32 @@ online service skeleton は、single-match runner を 1 段外側から包む or
 - `output_dir`: terminal persist の base directory
 - `attempt_count`: 将来 retry 用の拡張予約。初期 contract では `1` 固定
 
+最小 JSON shape:
+
+```json
+{
+  "submission_id": "sub-1",
+  "match_id": "match-1",
+  "game": {
+    "game_id": "janken",
+    "game_version": "2.1.0",
+    "ruleset_version": "regular"
+  },
+  "players": [
+    {
+      "player_id": "p1",
+      "artifact_ref": "file:///tmp/p1.wasm"
+    },
+    {
+      "player_id": "p2",
+      "artifact_ref": "s3://bucket/p2.wasm"
+    }
+  ],
+  "output_dir": "arena-service-output",
+  "attempt_count": 1
+}
+```
+
 ### `artifact_ref`
 
 - `artifact_ref` は opaque locator / URI として扱う

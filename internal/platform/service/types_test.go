@@ -1,10 +1,10 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
-	"github.com/yoskeoka/ai-arena/internal/platform/game"
 )
 
 func TestValidateSubmission(t *testing.T) {
@@ -18,11 +18,11 @@ func TestValidateSubmission(t *testing.T) {
 		},
 		Players: []SubmittedPlayer{
 			{
-				Player:      game.Player{PlayerID: "p1"},
+				PlayerID:    "p1",
 				ArtifactRef: "file:///tmp/p1.wasm",
 			},
 			{
-				Player:      game.Player{PlayerID: "p2"},
+				PlayerID:    "p2",
 				ArtifactRef: "s3://bucket/p2.wasm",
 			},
 		},
@@ -61,7 +61,7 @@ func TestValidateSubmission(t *testing.T) {
 			name: "rejects duplicate player ids",
 			submission: func() MatchSubmission {
 				sub := clone()
-				sub.Players[1].Player.PlayerID = "p1"
+				sub.Players[1].PlayerID = "p1"
 				return sub
 			}(),
 		},
@@ -94,6 +94,71 @@ func TestValidateSubmission(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestQueueRecordJSONOmitEmpty(t *testing.T) {
+	record := QueueRecord{
+		Submission: MatchSubmission{
+			SubmissionID: "sub-1",
+			MatchID:      "match-1",
+			Game: contract.GameMetadata{
+				GameID:         "janken",
+				GameVersion:    "2.1.0",
+				RulesetVersion: "regular",
+			},
+			Players: []SubmittedPlayer{
+				{
+					PlayerID:    "p1",
+					ArtifactRef: "file:///tmp/p1.wasm",
+				},
+			},
+			OutputDir:    "arena-service-output",
+			AttemptCount: 1,
+		},
+		State: StateQueued,
+	}
+
+	data, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if string(data) == "" {
+		t.Fatal("json.Marshal() returned empty payload")
+	}
+	if contains := string(data); contains != "" {
+		if jsonContainsField(t, data, "lease") {
+			t.Fatalf("json = %s, unexpected lease field", data)
+		}
+		if jsonContainsField(t, data, "terminal") {
+			t.Fatalf("json = %s, unexpected terminal field", data)
+		}
+	}
+}
+
+func TestSubmittedPlayerJSONShape(t *testing.T) {
+	player := SubmittedPlayer{
+		PlayerID:    "p1",
+		ArtifactRef: "file:///tmp/p1.wasm",
+	}
+
+	data, err := json.Marshal(player)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if string(data) != `{"player_id":"p1","artifact_ref":"file:///tmp/p1.wasm"}` {
+		t.Fatalf("json = %s", data)
+	}
+}
+
+func jsonContainsField(t *testing.T, data []byte, field string) bool {
+	t.Helper()
+
+	var decoded map[string]any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	_, ok := decoded[field]
+	return ok
 }
 
 func TestValidateTransition(t *testing.T) {
