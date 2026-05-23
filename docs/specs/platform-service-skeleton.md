@@ -151,6 +151,14 @@ queue / execution lifecycle は `record.json.status` と別契約である。
 
 初期 contract では retry による `failed -> queued` の巻き戻しを持たない。
 
+### queue lifecycle と runner terminal status の分離
+
+- queue lifecycle は orchestration の進捗を表し、runner の試合結果そのものとは別に扱う
+- `completed` は `record.json` / `result-summary.json` / player stderr artifact の persist が完了したことを表す
+- runner が `failed` や timeout reason 付き `canceled` の terminal record を返しても、artifact persist が成功した場合は queue lifecycle を `completed` に進めてよい
+- `failed` は runner invocation request を組み立てられなかった場合、runner が terminal record を返せないまま落ちた場合、または terminal persist 自体が失敗した場合に使う
+- queue record は terminal artifact 参照に加えて、runner が返した terminal match status と terminal error summary を保持してよい
+
 ### cancel 制約
 
 - cancel は `queued` 中のみ許可する
@@ -210,6 +218,15 @@ service skeleton が terminal success / failure を判断する正本は `record
 - player ごとの captured stderr は runner terminal status に関係なく保存対象に含めてよい
 - `stderr` の本文は platform 共通 snapshot schema に埋め込まず、artifact file として分離する
 - summary には必要なら `stderr` path 参照を含めてよい
+
+### worker dispatch の最小ルール
+
+- worker claim は `queued` record だけを対象にする
+- claim 後は queue record に worker identifier を残し、同じ record を別 worker が再 claim してはならない
+- worker は queue record から runner invocation request を materialize し、player artifact locator を local runtime entrypoint に解決して runner を 1 回だけ起動する
+- 初期実装の worker は `attempt_count=1` を前提にし、run 中断後の retry / redelivery を行わない
+- runner が terminal record を返したら、worker は queue lifecycle を `running -> persisting -> completed|failed` に進める
+- terminal persist 完了後の queue record には、最低でも `match_dir`、`record.json` path、`result-summary.json` path、player stderr path 群、runner terminal status を残す
 
 `output_dir` は terminal persist artifact の保存先であり、queue store の永続化責務を意味しない。
 `0049` の queue store 初期実装は in-memory のみとし、cross-process durability や queue 再起動復旧は後続 plan で扱う。

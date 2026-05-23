@@ -54,6 +54,12 @@ Phase 4 では AI 実行 runtime を正式 contract として固定し、`local-
 - trusted external game backend への実ネットワーク接続実装
 - runner 自身による queue ownership、retry policy、自動 rematch 判定
 
+service skeleton が runner を包むとき、runner の terminal match status と service 側 queue lifecycle は分離して扱う。
+runner が `failed` や timeout reason 付き `canceled` の source-of-truth `record.json` を返しても、
+service 側の artifact persist が成功したなら queue lifecycle は `completed` に進めてよい。
+逆に、runner invocation request を組み立てられない、terminal record を得られない、artifact persist に失敗する、
+といった orchestration failure は service 側 queue lifecycle の `failed` として扱う。
+
 ## 試合実行の仕組み
 
 1試合ごとに独立した試合部屋を作る。
@@ -133,6 +139,10 @@ manifest が与えられた場合、runner は built-in persisted record lookup 
 runner-local overlay descriptor を構築し、その descriptor を以後の build / compatibility /
 match execution へ流す。この経路は fresh run 限定で、resume / replay / history build は
 match loop 開始前に fail-fast しなければならない。
+
+service skeleton が runner result を file-backed first で受け取るとき、標準 artifact layout は
+`record.json`、`result-summary.json`、`snapshot.json`、`exported-snapshot.json`、`history.json`
+を match directory に保存し、player stderr は `<player-id>-stderr.log` として同じ directory に分離保存する。
 
 ### 必須 metadata
 

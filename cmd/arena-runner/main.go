@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
@@ -46,37 +47,6 @@ type streamObserver struct {
 	enc     *json.Encoder
 	nextSeq int
 	err     error // first encode/write error
-}
-
-type artifactLayout struct {
-	BaseDir              string
-	MatchDir             string
-	RecordPath           string
-	StructuredLogPath    string
-	SnapshotPath         string
-	ExportedSnapshotPath string
-	HistoryPath          string
-	ResultSummaryPath    string
-}
-
-type artifactPathRefs struct {
-	Record           string `json:"record"`
-	StructuredLog    string `json:"structured_log"`
-	Snapshot         string `json:"snapshot"`
-	ExportedSnapshot string `json:"exported_snapshot"`
-	History          string `json:"history"`
-}
-
-type resultSummary struct {
-	MatchID        string           `json:"match_id"`
-	GameID         string           `json:"game_id"`
-	GameVersion    string           `json:"game_version"`
-	RulesetVersion string           `json:"ruleset_version"`
-	Status         game.MatchStatus `json:"status"`
-	Turn           int              `json:"turn"`
-	Placements     []game.Placement `json:"placements,omitempty"`
-	ArtifactPaths  artifactPathRefs `json:"artifact_paths"`
-	Error          string           `json:"error,omitempty"`
 }
 
 func main() {
@@ -139,8 +109,8 @@ func run(args []string) error {
 	if matchID == "" {
 		matchID = "match-" + uuid.NewString()
 	}
-	layout := newArtifactLayout(outputDir, matchID)
-	if err := ensureArtifactLayout(layout); err != nil {
+	layout := artifacts.NewLayout(outputDir, matchID)
+	if err := artifacts.EnsureLayout(layout); err != nil {
 		return err
 	}
 
@@ -328,7 +298,7 @@ func run(args []string) error {
 		}
 		exported.MatchID = matchID
 		exported.Status = game.StatusRunning
-		if err := writeJSONToTarget(exportedOutput, exported, os.Stdout, "exported snapshot"); err != nil {
+		if err := artifacts.WriteJSONToTarget(exportedOutput, exported, os.Stdout, "exported snapshot"); err != nil {
 			return err
 		}
 	}
@@ -374,11 +344,11 @@ func run(args []string) error {
 		return fmt.Errorf("stream log: %w", observer.err)
 	}
 	if exportedOutput != "" && resumeSnapshot == nil {
-		if err := writeJSONToTarget(exportedOutput, record.ExportedSnapshot, os.Stdout, "exported snapshot"); err != nil {
+		if err := artifacts.WriteJSONToTarget(exportedOutput, record.ExportedSnapshot, os.Stdout, "exported snapshot"); err != nil {
 			return err
 		}
 	}
-	if err := writeStandardArtifacts(layout, record); err != nil {
+	if err := artifacts.WriteStandardArtifacts(layout, record); err != nil {
 		return err
 	}
 	if err := persistRecordToTarget(persistRecord, record, os.Stdout); err != nil {
@@ -430,54 +400,17 @@ func terminalSummary(record match.Record) map[string]any {
 		"status": record.Status,
 		"result": record.Result,
 	}
-	if errMsg := terminalError(record); errMsg != "" {
+	if errMsg := artifacts.TerminalError(record); errMsg != "" {
 		summary["error"] = errMsg
 	}
 	return summary
-}
-
-func terminalError(record match.Record) string {
-	for i := len(record.EventLog) - 1; i >= 0; i-- {
-		event := record.EventLog[i]
-		if event.Kind != "match_failed" && event.Kind != "match_canceled" {
-			continue
-		}
-		var payload struct {
-			Error string `json:"error"`
-		}
-		if err := json.Unmarshal(event.Payload, &payload); err == nil {
-			return payload.Error
-		}
-	}
-	return ""
 }
 
 func persistRecordToTarget(target string, record match.Record, stdout io.Writer) error {
 	if target == "" {
 		return nil
 	}
-	return writeJSONToTarget(target, record, stdout, "persist target")
-}
-
-func newArtifactLayout(outputDir, matchID string) artifactLayout {
-	matchDir := filepath.Join(outputDir, matchID)
-	return artifactLayout{
-		BaseDir:              outputDir,
-		MatchDir:             matchDir,
-		RecordPath:           filepath.Join(matchDir, "record.json"),
-		StructuredLogPath:    filepath.Join(matchDir, "structured-log.ndjson"),
-		SnapshotPath:         filepath.Join(matchDir, "snapshot.json"),
-		ExportedSnapshotPath: filepath.Join(matchDir, "exported-snapshot.json"),
-		HistoryPath:          filepath.Join(matchDir, "history.json"),
-		ResultSummaryPath:    filepath.Join(matchDir, "result-summary.json"),
-	}
-}
-
-func ensureArtifactLayout(layout artifactLayout) error {
-	if err := os.MkdirAll(layout.MatchDir, 0o750); err != nil {
-		return fmt.Errorf("create artifact directory %s: %w", layout.MatchDir, err)
-	}
-	return nil
+	return artifacts.WriteJSONToTarget(target, record, stdout, "persist target")
 }
 
 func openLogOutputs(standardPath, extraTarget string, stdout io.Writer) (io.Writer, func() error, error) {
@@ -488,7 +421,7 @@ func openLogOutputs(standardPath, extraTarget string, stdout io.Writer) (io.Writ
 		writers = append(writers, stdout)
 	}
 
-	standardFile, err := createFileOutput(standardPath)
+	standardFile, err := artifacts.CreateFileOutput(standardPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create standard log output %s: %w", standardPath, err)
 	}
@@ -496,7 +429,7 @@ func openLogOutputs(standardPath, extraTarget string, stdout io.Writer) (io.Writ
 	closers = append(closers, standardFile)
 
 	if extraTarget != "" && extraTarget != "stdout" && extraTarget != "none" && !sameCleanPath(extraTarget, standardPath) {
-		extraFile, err := createFileOutput(extraTarget)
+		extraFile, err := artifacts.CreateFileOutput(extraTarget)
 		if err != nil {
 			_ = closeAll(closers)
 			return nil, nil, fmt.Errorf("create extra log output %s: %w", extraTarget, err)
@@ -506,52 +439,6 @@ func openLogOutputs(standardPath, extraTarget string, stdout io.Writer) (io.Writ
 	}
 
 	return io.MultiWriter(writers...), func() error { return closeAll(closers) }, nil
-}
-
-func writeStandardArtifacts(layout artifactLayout, record match.Record) error {
-	if err := writeJSONFile(layout.RecordPath, record, "record"); err != nil {
-		return err
-	}
-	if err := writeJSONFile(layout.SnapshotPath, record.Snapshot, "snapshot"); err != nil {
-		return err
-	}
-	if err := writeJSONFile(layout.ExportedSnapshotPath, record.ExportedSnapshot, "exported snapshot"); err != nil {
-		return err
-	}
-	if err := writeJSONFile(layout.HistoryPath, record.EventLog, "history"); err != nil {
-		return err
-	}
-	summary, err := buildResultSummary(layout, record)
-	if err != nil {
-		return err
-	}
-	if err := writeJSONFile(layout.ResultSummaryPath, summary, "result summary"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func buildResultSummary(layout artifactLayout, record match.Record) (resultSummary, error) {
-	summary := resultSummary{
-		MatchID:        record.MatchID,
-		GameID:         record.Game.GameID,
-		GameVersion:    record.Game.GameVersion,
-		RulesetVersion: record.Game.RulesetVersion,
-		Status:         record.Status,
-		Turn:           record.Snapshot.Turn,
-		Placements:     append([]game.Placement(nil), record.Result.Placements...),
-		ArtifactPaths: artifactPathRefs{
-			Record:           filepath.Base(layout.RecordPath),
-			StructuredLog:    filepath.Base(layout.StructuredLogPath),
-			Snapshot:         filepath.Base(layout.SnapshotPath),
-			ExportedSnapshot: filepath.Base(layout.ExportedSnapshotPath),
-			History:          filepath.Base(layout.HistoryPath),
-		},
-	}
-	if errMsg := terminalError(record); errMsg != "" {
-		summary.Error = errMsg
-	}
-	return summary, nil
 }
 
 func mustMarshal(v any) json.RawMessage {
@@ -662,51 +549,6 @@ func parsePlayerSpec(raw string) (playerSpec, error) {
 	return playerSpec{PlayerID: playerID, Entry: entry}, nil
 }
 
-func openOutputTarget(target string, stdout io.Writer) (io.Writer, func() error, error) {
-	switch target {
-	case "", "stdout":
-		return stdout, func() error { return nil }, nil
-	default:
-		file, err := createFileOutput(target)
-		if err != nil {
-			return nil, nil, fmt.Errorf("create output target %s: %w", target, err)
-		}
-		return file, file.Close, nil
-	}
-}
-
-func createFileOutput(path string) (*os.File, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		return nil, err
-	}
-	// #nosec G304 -- the caller explicitly selects the local output target path.
-	return os.Create(path)
-}
-
-func writeJSONToTarget(target string, value any, stdout io.Writer, label string) error {
-	writer, closeWriter, err := openOutputTarget(target, stdout)
-	if err != nil {
-		return err
-	}
-	defer closeWriter()
-	if err := json.NewEncoder(writer).Encode(value); err != nil {
-		return fmt.Errorf("write %s %s: %w", label, target, err)
-	}
-	return nil
-}
-
-func writeJSONFile(path string, value any, label string) error {
-	file, err := createFileOutput(path)
-	if err != nil {
-		return fmt.Errorf("create %s %s: %w", label, path, err)
-	}
-	defer file.Close()
-	if err := json.NewEncoder(file).Encode(value); err != nil {
-		return fmt.Errorf("write %s %s: %w", label, path, err)
-	}
-	return nil
-}
-
 func closeAll(closers []io.Closer) error {
 	var firstErr error
 	for _, closer := range closers {
@@ -743,6 +585,8 @@ func closeSessions(sessions map[string]match.PlayerSession) {
 }
 
 type multiFlag []string
+
+type resultSummary = artifacts.ResultSummary
 
 func (m *multiFlag) String() string {
 	return strings.Join(*m, ",")
