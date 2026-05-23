@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -23,7 +25,12 @@ type gameMasterManifest struct {
 
 func loadGameMasterManifestDescriptor(path string, stderrLimitBytes int) (registry.GameDescriptor, catalog.GameMetadata, error) {
 	var manifest gameMasterManifest
-	if err := readJSON(path, &manifest); err != nil {
+	// #nosec G304 -- the operator explicitly chooses the local manifest path.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return registry.GameDescriptor{}, catalog.GameMetadata{}, fmt.Errorf("read game master manifest %s: %w", path, err)
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
 		return registry.GameDescriptor{}, catalog.GameMetadata{}, fmt.Errorf("read game master manifest %s: %w", path, err)
 	}
 	if err := catalog.ValidateMetadata(manifest.Metadata); err != nil {
