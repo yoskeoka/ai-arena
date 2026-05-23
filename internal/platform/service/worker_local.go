@@ -50,7 +50,7 @@ func (i *LocalRunnerInvoker) Run(ctx context.Context, req ExecutionRequest) (Exe
 		return ExecutionResult{}, err
 	}
 
-	players, sessions, err := i.loadPlayersAndSessions(submission)
+	players, sessions, err := i.loadPlayersAndSessions(ctx, submission)
 	if err != nil {
 		return ExecutionResult{}, err
 	}
@@ -79,7 +79,7 @@ func (i *LocalRunnerInvoker) Run(ctx context.Context, req ExecutionRequest) (Exe
 	}, runErr
 }
 
-func (i *LocalRunnerInvoker) loadPlayersAndSessions(submission MatchSubmission) ([]game.Player, map[string]match.PlayerSession, error) {
+func (i *LocalRunnerInvoker) loadPlayersAndSessions(ctx context.Context, submission MatchSubmission) ([]game.Player, map[string]match.PlayerSession, error) {
 	meta := catalog.GameMetadata{
 		GameID:         submission.Game.GameID,
 		GameVersion:    submission.Game.GameVersion,
@@ -101,7 +101,7 @@ func (i *LocalRunnerInvoker) loadPlayersAndSessions(submission MatchSubmission) 
 		cfg := loaded.Runtime
 		cfg.Dir = i.baseDir
 		cfg.StderrLimitBytes = i.stderrLimitBytes
-		adapter, err := runtime.Start(context.Background(), cfg)
+		adapter, err := runtime.Start(ctx, cfg)
 		if err != nil {
 			closeSessions(sessions)
 			return nil, nil, fmt.Errorf("service: %s runtime start failed: %w", submitted.PlayerID, err)
@@ -125,6 +125,9 @@ func (LocalTerminalPersister) Persist(_ context.Context, submission MatchSubmiss
 		return TerminalArtifacts{}, err
 	}
 	if err := artifacts.WriteStandardArtifacts(layout, result.Record); err != nil {
+		return TerminalArtifacts{}, err
+	}
+	if err := ensureStructuredLogFile(layout.StructuredLogPath); err != nil {
 		return TerminalArtifacts{}, err
 	}
 
@@ -156,6 +159,14 @@ func writePlayerStderr(path, stderr string) error {
 		return fmt.Errorf("write stderr artifact %s: %w", path, err)
 	}
 	return nil
+}
+
+func ensureStructuredLogFile(path string) error {
+	file, err := artifacts.CreateFileOutput(path)
+	if err != nil {
+		return fmt.Errorf("create structured log artifact %s: %w", path, err)
+	}
+	return file.Close()
 }
 
 func closeSessions(sessions map[string]match.PlayerSession) {

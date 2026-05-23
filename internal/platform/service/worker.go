@@ -55,6 +55,17 @@ func (w *Worker) ProcessNext(ctx context.Context, workerID string) (QueueRecord,
 		}
 		return cloneQueueRecord(record), fmt.Errorf("service: runner returned no terminal record")
 	}
+	if result.Record.MatchID != record.Submission.MatchID {
+		record.State = StateFailed
+		if updateErr := w.queue.Update(ctx, record); updateErr != nil {
+			return QueueRecord{}, updateErr
+		}
+		return cloneQueueRecord(record), fmt.Errorf(
+			"service: runner returned mismatched match_id %q for submission %q",
+			result.Record.MatchID,
+			record.Submission.MatchID,
+		)
+	}
 
 	record.State = StatePersisting
 	if err := w.queue.Update(ctx, record); err != nil {
