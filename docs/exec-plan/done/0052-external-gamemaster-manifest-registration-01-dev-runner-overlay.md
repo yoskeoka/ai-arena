@@ -79,13 +79,13 @@ fresh run を開始できることを到達点に置く。
 
 ## Sub-tasks
 
-- [ ] runner opt-in manifest entry の CLI contract を追加する
-- [ ] game master manifest schema と validation rules を定義する
-- [ ] manifest file 基準の path resolution を実装する
-- [ ] built-in registry path と並立する local-subprocess descriptor overlay path を追加する
-- [ ] manifest metadata を source of truth にした compatibility validation を追加する
-- [ ] external fixture を用意し、fresh run e2e を追加する
-- [ ] manifest 不正 / path 不正 / metadata mismatch の failure coverage を追加する
+- [x] runner opt-in manifest entry の CLI contract を追加する
+- [x] game master manifest schema と validation rules を定義する
+- [x] manifest file 基準の path resolution を実装する
+- [x] built-in registry path と並立する local-subprocess descriptor overlay path を追加する
+- [x] manifest metadata を source of truth にした compatibility validation を追加する
+- [x] external fixture を用意し、fresh run e2e を追加する
+- [x] manifest 不正 / path 不正 / metadata mismatch の failure coverage を追加する
 
 ## Parallelism
 

@@ -12,6 +12,7 @@ game master が満たすべき metadata / lifecycle / state exchange / turn reso
 この spec が定義するもの:
 
 - game master metadata
+- external game master manifest の最小責務
 - local subprocess を含む共通 transport 前提
 - platform との初期ハンドシェイク
 - decision step の返し方
@@ -52,6 +53,10 @@ game master は少なくとも以下の metadata を返せること。
 platform は registry lookup 後に選ばれた game master metadata と runner 入力の metadata を照合する。
 不一致は compatibility error とする。
 
+runner-local manifest overlay で起動する場合、runner 入力の metadata source of truth は
+manifest とする。CLI は manifest path を渡すだけに留め、`game_id` / `game_version` /
+`ruleset_version` を個別 flag で上書きしてはならない。
+
 `turn_mode` は metadata に含めない。進行形態は runtime 上の `DecisionStep` が表す。
 
 ## transport 前提
@@ -80,6 +85,30 @@ game master は trusted component であり、player AI と違って turn timeou
 - sidecar 実装は `github.com/yoskeoka/ai-arena/gamemaster` package を使って transport contract を実装する
 - game master 側は起動時引数または sidecar 相当の設定から、自身の `game_version` / `ruleset_version` を確定できること
 - match ごとの players と resume snapshot は、後述の初期化 API で受け取る
+
+#### external game master manifest
+
+consumer repo が built-in registry 非登録の game master を tagged runner で検証したい場合、
+runner は game master manifest file を受け取る opt-in dev entry を持ってよい。
+
+manifest は少なくとも以下を持つ。
+
+- metadata
+  - `game_id`
+  - `game_version`
+  - `ruleset_version`
+- runtime
+  - `kind`
+  - `command`
+  - 任意の `args`
+
+manifest の初期スコープは `runtime.kind = local-subprocess` のみとする。
+`command` は空であってはならない。relative path を含む command 解決は cwd 基準ではなく、
+manifest file 自身の配置ディレクトリ基準で行う。absolute path はそのまま使ってよい。
+
+この manifest は fresh run 用の開発入口であり、resume / replay / history build 用 entry は
+この段階では要求しない。runner が resume / replay を要求された場合は、match loop 開始前に
+未対応として fail-fast してよい。
 
 ### future external adapter
 

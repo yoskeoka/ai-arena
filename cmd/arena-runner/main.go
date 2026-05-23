@@ -88,22 +88,23 @@ func main() {
 
 func run(args []string) error {
 	var (
-		gameName         string
-		gameVersion      string
-		ruleset          string
-		rngSeed          string
-		matchID          string
-		outputDir        string
-		logOutput        string
-		persistRecord    string
-		exportedOutput   string
-		recordInput      string
-		snapshotInput    string
-		historyInput     string
-		targetTurn       int
-		matchTimeout     time.Duration
-		stderrLimitBytes int
-		playerArgs       multiFlag
+		gameName           string
+		gameVersion        string
+		ruleset            string
+		gameMasterManifest string
+		rngSeed            string
+		matchID            string
+		outputDir          string
+		logOutput          string
+		persistRecord      string
+		exportedOutput     string
+		recordInput        string
+		snapshotInput      string
+		historyInput       string
+		targetTurn         int
+		matchTimeout       time.Duration
+		stderrLimitBytes   int
+		playerArgs         multiFlag
 	)
 
 	fs := flag.NewFlagSet("arena-runner", flag.ContinueOnError)
@@ -111,6 +112,7 @@ func run(args []string) error {
 	fs.StringVar(&gameName, "game", "", "game id")
 	fs.StringVar(&gameVersion, "game-version", "", "game version")
 	fs.StringVar(&ruleset, "ruleset", "", "game ruleset")
+	fs.StringVar(&gameMasterManifest, "game-master-manifest", "", "game master manifest path for a dev-only local-subprocess overlay")
 	fs.StringVar(&rngSeed, "rng-seed", "", "deterministic seed for seed-aware games")
 	fs.StringVar(&matchID, "match-id", "", "match id")
 	fs.StringVar(&outputDir, "output-dir", defaultOutputDir, "base directory for standard runner artifacts")
@@ -171,6 +173,14 @@ func run(args []string) error {
 	if targetTurn < 0 {
 		return fmt.Errorf("--target-turn must be non-negative")
 	}
+	if gameMasterManifest != "" {
+		if gameName != "" || gameVersion != "" || ruleset != "" {
+			return fmt.Errorf("--game-master-manifest cannot be combined with --game, --game-version, or --ruleset")
+		}
+		if recordInput != "" || snapshotInput != "" || historyInput != "" || targetTurn > 0 {
+			return fmt.Errorf("--game-master-manifest supports fresh run only")
+		}
+	}
 
 	var (
 		recordSource   *match.Record
@@ -224,18 +234,30 @@ func run(args []string) error {
 			rngSeed = extracted
 		}
 	}
-	if gameName == "" {
-		return fmt.Errorf("--game is required")
-	}
-	if gameVersion == "" {
-		return fmt.Errorf("--game-version is required")
-	}
-	if ruleset == "" {
-		return fmt.Errorf("--ruleset is required")
-	}
-	descriptor, err := registry.Default().LookupVersion(context.Background(), gameName, gameVersion)
-	if err != nil {
-		return err
+	var descriptor registry.GameDescriptor
+	if gameMasterManifest != "" {
+		var manifestMeta catalog.GameMetadata
+		descriptor, manifestMeta, err = loadGameMasterManifestDescriptor(gameMasterManifest, defaultStderrLimitBytes)
+		if err != nil {
+			return err
+		}
+		gameName = manifestMeta.GameID
+		gameVersion = manifestMeta.GameVersion
+		ruleset = manifestMeta.RulesetVersion
+	} else {
+		if gameName == "" {
+			return fmt.Errorf("--game is required")
+		}
+		if gameVersion == "" {
+			return fmt.Errorf("--game-version is required")
+		}
+		if ruleset == "" {
+			return fmt.Errorf("--ruleset is required")
+		}
+		descriptor, err = registry.Default().LookupVersion(context.Background(), gameName, gameVersion)
+		if err != nil {
+			return err
+		}
 	}
 
 	var metaOverride *catalog.GameMetadata

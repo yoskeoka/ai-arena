@@ -167,3 +167,10 @@
 - **Pattern**: platform spec が説明すべき「提供する外形契約」と、別 repo の利用者向けガイドや migration 文脈を同じ文書で扱ってしまう
 - **Rule**: ai-arena の spec は、platform / runner / SDK が何を提供し、どの共通契約を固定するかだけを簡潔に書く。external game repo の開発方法、asset 配置、ownership、verification 運用は別の guide / plan / migration note に分離する
 - **Applied**: `docs/specs/platform.md`、`docs/specs/game-master.md`、今後の external repo 前提の spec wording 全般
+
+## [2026-05-23] 先行 plan の一時ガードは後続 plan に具体化して残す
+
+- **Mistake**: `0052` の fresh-run only 実装で fail-fast guard と未対応入口を追加しながら、その具体的な制約を `0054` にすぐ反映しないまま進めかけた
+- **Pattern**: first milestone と follow-up を分けるとき、code/spec に入れた暫定制約は残るのに、後続 plan には抽象的な目的しか残らず、次の実装者が「どの guard を何で置き換えるか」を再発見する必要が出る
+- **Rule**: 現在の execution plan が後続 plan を block/inform しており、そこで一時的な fail-fast guard・未対応 API・暫定 precedence を導入した場合は、その具体名と解除条件を同じ branch で後続 plan に追記する
+- **Applied**: `docs/exec-plan/done/0052-external-gamemaster-manifest-registration-01-dev-runner-overlay.md` と `docs/exec-plan/todo/0054-external-gamemaster-manifest-registration-03-resume-replay-follow-up.md`、今後の milestone 分割された plan chain 全般
