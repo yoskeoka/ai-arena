@@ -174,3 +174,10 @@
 - **Pattern**: first milestone と follow-up を分けるとき、code/spec に入れた暫定制約は残るのに、後続 plan には抽象的な目的しか残らず、次の実装者が「どの guard を何で置き換えるか」を再発見する必要が出る
 - **Rule**: 現在の execution plan が後続 plan を block/inform しており、そこで一時的な fail-fast guard・未対応 API・暫定 precedence を導入した場合は、その具体名と解除条件を同じ branch で後続 plan に追記する
 - **Applied**: `docs/exec-plan/done/0052-external-gamemaster-manifest-registration-01-dev-runner-overlay.md` と `docs/exec-plan/todo/0054-external-gamemaster-manifest-registration-03-resume-replay-follow-up.md`、今後の milestone 分割された plan chain 全般
+
+## [2026-05-24] advisory review 指摘は queue/orchestration 境界の不整合を先に潰す
+
+- **Mistake**: worker dispatch 実装を PR 化した時点で、runner が返す `match_id` の整合性、summary が参照する artifact の実在、runtime 起動への worker `ctx` 伝播といった orchestration 境界の整合性チェックが抜けていた
+- **Pattern**: happy-path の queue lifecycle 完了に意識が寄ると、runner/service 境界の「参照先が実在するか」「返却値が submission と一致するか」「cancel が start path に届くか」を後回しにしやすい
+- **Rule**: queue/worker/runner/persist をまたぐ新規 orchestration を追加するときは、少なくとも `returned identifiers match submission`、`summary references only persisted artifacts`、`worker ctx reaches startup path` の3点を初回 PR 前に明示確認し、足りなければ test で固定する
+- **Applied**: `internal/platform/service/worker.go`、`internal/platform/service/worker_local.go`、`internal/platform/service/integration_test.go`、今後の service-side orchestration 実装全般

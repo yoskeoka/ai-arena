@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
+	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
 
@@ -64,12 +65,20 @@ type ExecutionRequest struct {
 	Submission MatchSubmission `json:"submission"`
 }
 
+// ExecutionResult is the worker-visible terminal runner output plus captured stderr text.
+type ExecutionResult struct {
+	Record       match.Record      `json:"record"`
+	PlayerStderr map[string]string `json:"player_stderr,omitempty"`
+}
+
 // TerminalArtifacts captures the minimum persisted output for one terminal match.
 type TerminalArtifacts struct {
 	MatchDir          string            `json:"match_dir"`
 	RecordPath        string            `json:"record_path"`
 	ResultSummaryPath string            `json:"result_summary_path"`
 	PlayerStderrPaths map[string]string `json:"player_stderr_paths,omitempty"`
+	MatchStatus       game.MatchStatus  `json:"match_status"`
+	Error             string            `json:"error,omitempty"`
 }
 
 // QueueStore manages service-side queue state.
@@ -92,12 +101,12 @@ type DryRunChecker interface {
 
 // RunnerInvoker executes exactly one match for a leased submission.
 type RunnerInvoker interface {
-	Run(context.Context, ExecutionRequest) (match.Record, error)
+	Run(context.Context, ExecutionRequest) (ExecutionResult, error)
 }
 
 // TerminalPersister writes file-backed artifacts for a terminal runner result.
 type TerminalPersister interface {
-	Persist(context.Context, MatchSubmission, match.Record) (TerminalArtifacts, error)
+	Persist(context.Context, MatchSubmission, ExecutionResult) (TerminalArtifacts, error)
 }
 
 // ValidateSubmission checks the minimum service skeleton contract.

@@ -3,12 +3,15 @@ package service
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	goRuntime "runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
+	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
 
 func TestCommandServiceSubmitSuccess(t *testing.T) {
@@ -120,7 +123,139 @@ func TestEnsureCommandStartableSupportsGoRunFlags(t *testing.T) {
 	}
 }
 
+func TestWorkerProcessNextCompleted(t *testing.T) {
+	store := NewInMemoryQueueStore()
+	commands := newTestCommandServiceWithStore(t, store)
+	submission := testEchoSubmission(t, t.TempDir(),
+		"phase2-simultaneous-2turn",
+		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
+		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
+	)
+
+	if _, err := commands.Submit(context.Background(), submission); err != nil {
+		t.Fatalf("Submit() error = %v", err)
+	}
+
+	record, err := newTestWorker(t, store, 0).ProcessNext(context.Background(), "worker-1")
+	if err != nil {
+		t.Fatalf("ProcessNext() error = %v", err)
+	}
+	if record.State != StateCompleted {
+		t.Fatalf("record.State = %q, want %q", record.State, StateCompleted)
+	}
+	if record.Terminal == nil {
+		t.Fatal("record.Terminal = nil, want persisted artifacts")
+	}
+	if record.Terminal.MatchStatus != contract.StatusCompleted {
+		t.Fatalf("record.Terminal.MatchStatus = %q, want completed", record.Terminal.MatchStatus)
+	}
+	assertTerminalArtifacts(t, record)
+	if _, err := os.Stat(filepath.Join(record.Terminal.MatchDir, "structured-log.ndjson")); err != nil {
+		t.Fatalf("structured log artifact missing: %v", err)
+	}
+}
+
+func TestWorkerProcessNextPersistsFailedRunnerRecord(t *testing.T) {
+	store := NewInMemoryQueueStore()
+	commands := newTestCommandServiceWithStore(t, store)
+	submission := testEchoSubmission(t, t.TempDir(),
+		"phase2-simultaneous-2turn",
+		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
+		repoJoin(t, "testdata/ai/echo/init-timeout-ai"),
+	)
+
+	if _, err := commands.Submit(context.Background(), submission); err != nil {
+		t.Fatalf("Submit() error = %v", err)
+	}
+
+	record, err := newTestWorker(t, store, 0).ProcessNext(context.Background(), "worker-1")
+	if err == nil {
+		t.Fatal("ProcessNext() returned nil error")
+	}
+	if record.State != StateCompleted {
+		t.Fatalf("record.State = %q, want %q", record.State, StateCompleted)
+	}
+	if record.Terminal == nil {
+		t.Fatal("record.Terminal = nil, want persisted artifacts")
+	}
+	if record.Terminal.MatchStatus != contract.StatusFailed {
+		t.Fatalf("record.Terminal.MatchStatus = %q, want failed", record.Terminal.MatchStatus)
+	}
+	assertTerminalArtifacts(t, record)
+}
+
+func TestWorkerProcessNextPersistsCanceledRunnerRecord(t *testing.T) {
+	store := NewInMemoryQueueStore()
+	commands := newTestCommandServiceWithStore(t, store)
+	submission := testEchoSubmission(t, t.TempDir(),
+		"phase2-simultaneous-2turn",
+		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
+		repoJoin(t, "testdata/ai/echo/timeout-ai"),
+	)
+
+	if _, err := commands.Submit(context.Background(), submission); err != nil {
+		t.Fatalf("Submit() error = %v", err)
+	}
+
+	record, err := newTestWorker(t, store, 10*time.Millisecond).ProcessNext(context.Background(), "worker-1")
+	if err == nil {
+		t.Fatal("ProcessNext() returned nil error")
+	}
+	if !strings.Contains(err.Error(), "context deadline exceeded") {
+		t.Fatalf("ProcessNext() error = %v, want context deadline exceeded", err)
+	}
+	if record.State != StateCompleted {
+		t.Fatalf("record.State = %q, want %q", record.State, StateCompleted)
+	}
+	if record.Terminal == nil {
+		t.Fatal("record.Terminal = nil, want persisted artifacts")
+	}
+	if record.Terminal.MatchStatus != contract.StatusCanceled {
+		t.Fatalf("record.Terminal.MatchStatus = %q, want canceled", record.Terminal.MatchStatus)
+	}
+	if !strings.Contains(record.Terminal.Error, "context deadline exceeded") {
+		t.Fatalf("record.Terminal.Error = %q, want context deadline exceeded", record.Terminal.Error)
+	}
+	assertTerminalArtifacts(t, record)
+}
+
+func TestWorkerProcessNextFailsOnMismatchedMatchID(t *testing.T) {
+	store := NewInMemoryQueueStore()
+	submission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
+	if _, err := store.Enqueue(context.Background(), submission); err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+
+	worker, err := NewWorker(
+		store,
+		stubRunnerInvoker{
+			result: ExecutionResult{
+				Record: match.Record{MatchID: "other-match"},
+			},
+		},
+		stubTerminalPersister{},
+	)
+	if err != nil {
+		t.Fatalf("NewWorker() error = %v", err)
+	}
+
+	record, err := worker.ProcessNext(context.Background(), "worker-1")
+	if err == nil {
+		t.Fatal("ProcessNext() returned nil error")
+	}
+	if !strings.Contains(err.Error(), "mismatched match_id") {
+		t.Fatalf("ProcessNext() error = %v, want mismatched match_id", err)
+	}
+	if record.State != StateFailed {
+		t.Fatalf("record.State = %q, want %q", record.State, StateFailed)
+	}
+}
+
 func newTestCommandService(t *testing.T) *CommandService {
+	return newTestCommandServiceWithStore(t, NewInMemoryQueueStore())
+}
+
+func newTestCommandServiceWithStore(t *testing.T, store QueueStore) *CommandService {
 	t.Helper()
 
 	dryRun, err := NewLocalDryRunChecker(repoRoot(t))
@@ -131,11 +266,25 @@ func newTestCommandService(t *testing.T) *CommandService {
 	if err != nil {
 		t.Fatalf("NewDefaultAdmissionValidator() error = %v", err)
 	}
-	commands, err := NewCommandService(NewInMemoryQueueStore(), validator)
+	commands, err := NewCommandService(store, validator)
 	if err != nil {
 		t.Fatalf("NewCommandService() error = %v", err)
 	}
 	return commands
+}
+
+func newTestWorker(t *testing.T, store QueueStore, timeout time.Duration) *Worker {
+	t.Helper()
+
+	invoker, err := NewLocalRunnerInvoker(repoRoot(t), nil, timeout)
+	if err != nil {
+		t.Fatalf("NewLocalRunnerInvoker() error = %v", err)
+	}
+	worker, err := NewWorker(store, invoker, LocalTerminalPersister{})
+	if err != nil {
+		t.Fatalf("NewWorker() error = %v", err)
+	}
+	return worker
 }
 
 func testSubmission(artifactRef string) MatchSubmission {
@@ -156,6 +305,60 @@ func testSubmission(artifactRef string) MatchSubmission {
 		OutputDir:    "arena-service-output",
 		AttemptCount: 1,
 	}
+}
+
+func testEchoSubmission(t *testing.T, outputDir, ruleset, player1, player2 string) MatchSubmission {
+	t.Helper()
+
+	return MatchSubmission{
+		SubmissionID: "sub-echo-1",
+		MatchID:      "match-echo-1",
+		Game: contract.GameMetadata{
+			GameID:         "echo-count",
+			GameVersion:    "2.0.0",
+			RulesetVersion: ruleset,
+		},
+		Players: []SubmittedPlayer{
+			{PlayerID: "p1", ArtifactRef: player1},
+			{PlayerID: "p2", ArtifactRef: player2},
+		},
+		OutputDir:    outputDir,
+		AttemptCount: 1,
+	}
+}
+
+func assertTerminalArtifacts(t *testing.T, record QueueRecord) {
+	t.Helper()
+
+	if _, err := os.Stat(record.Terminal.RecordPath); err != nil {
+		t.Fatalf("record artifact missing: %v", err)
+	}
+	if _, err := os.Stat(record.Terminal.ResultSummaryPath); err != nil {
+		t.Fatalf("result summary artifact missing: %v", err)
+	}
+	if len(record.Terminal.PlayerStderrPaths) == 0 {
+		t.Fatal("player stderr artifacts missing")
+	}
+	for playerID, path := range record.Terminal.PlayerStderrPaths {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("stderr artifact for %s missing: %v", playerID, err)
+		}
+	}
+}
+
+type stubRunnerInvoker struct {
+	result ExecutionResult
+	err    error
+}
+
+func (s stubRunnerInvoker) Run(context.Context, ExecutionRequest) (ExecutionResult, error) {
+	return s.result, s.err
+}
+
+type stubTerminalPersister struct{}
+
+func (stubTerminalPersister) Persist(context.Context, MatchSubmission, ExecutionResult) (TerminalArtifacts, error) {
+	return TerminalArtifacts{}, nil
 }
 
 func repoRoot(t *testing.T) string {
