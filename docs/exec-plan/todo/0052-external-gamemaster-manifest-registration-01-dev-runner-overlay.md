@@ -8,7 +8,8 @@ Addresses: `docs/issues/0018-external-gamemaster-manifest-registration.md`
 built-in registry に未登録の external game master でも、consumer repo が `arena-runner` に
 game master manifest file を渡すだけで、開発中バージョンをローカル検証できる入口を追加する。
 この段階では registry の persisted record や built-in lookup を変更せず、
-runner が opt-in で consumer-supplied manifest から ephemeral descriptor を構築して
+runner が opt-in の temporary-local descriptor overlay として consumer-supplied manifest から
+process-local descriptor を構築して
 fresh run を開始できることを到達点に置く。
 
 ## Context
@@ -25,7 +26,7 @@ fresh run を開始できることを到達点に置く。
 ## Scope
 
 - `arena-runner` に game master manifest file を受け取る opt-in entry を追加する
-- runner が manifest から game metadata と runtime entrypoint を読み、ephemeral descriptor を構築する
+- runner が manifest から game metadata と runtime entrypoint を読み、temporary-local descriptor overlay として process-local descriptor を構築する
 - local subprocess game master binary の path を manifest file 基準で解決する
 - built-in registry lookup と同じ metadata compatibility / build flow へ接続する
 - external consumer repo fixture で fresh run e2e を通す
@@ -42,9 +43,9 @@ fresh run を開始できることを到達点に置く。
 
 ### `docs/specs/platform-game-registry.md`
 
-- built-in registry に加えて、runner が opt-in で consumer-supplied manifest から
-  temporary runtime descriptor を構築できる経路を追記する
-- この経路は persisted `DescriptorRecord` を追加せず、runner local の ephemeral descriptor 構築として扱うことを明記する
+- built-in registry に加えて、runner が opt-in の temporary-local descriptor overlay として
+  consumer-supplied manifest から process-local descriptor を構築できる経路を追記する
+- この経路は persisted `DescriptorRecord` を追加せず、runner local overlay から process-local descriptor を構築するものとして扱うことを明記する
 - registry lookup key や built-in lookup contract は変更しないことを明記する
 
 ### `docs/specs/game-master.md`
@@ -70,7 +71,7 @@ fresh run を開始できることを到達点に置く。
 - `cmd/arena-runner/`
   - game master manifest file を受け取る flag 追加
   - manifest parse / validation / path resolution
-  - ephemeral descriptor build path の追加
+  - temporary-local descriptor overlay path の追加
 - game master manifest schema / loader package
 - runner-local descriptor adapter
 - external fixture or test helper for a consumer-supplied local subprocess game master
@@ -81,7 +82,7 @@ fresh run を開始できることを到達点に置く。
 - [ ] runner opt-in manifest entry の CLI contract を追加する
 - [ ] game master manifest schema と validation rules を定義する
 - [ ] manifest file 基準の path resolution を実装する
-- [ ] built-in registry path と並立する ephemeral descriptor build path を追加する
+- [ ] built-in registry path と並立する temporary-local descriptor overlay path を追加する
 - [ ] manifest metadata を source of truth にした compatibility validation を追加する
 - [ ] external fixture を用意し、fresh run e2e を追加する
 - [ ] manifest 不正 / path 不正 / metadata mismatch の failure coverage を追加する
@@ -109,7 +110,7 @@ fresh run を開始できることを到達点に置く。
 
 ## Design Decisions
 
-- external game master の開発用入口は「registry 一時登録」ではなく「runner-local ephemeral descriptor overlay」として扱う
+- external game master の開発用入口は「registry 一時登録」ではなく「runner-local temporary-local descriptor overlay」として扱う
 - built-in registry の persisted shape と default resolver は変更しない
 - game master metadata の source of truth は manifest とする
 - local subprocess はこの plan では開発用 runtime kind としてのみ扱う
