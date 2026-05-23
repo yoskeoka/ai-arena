@@ -12,12 +12,14 @@ admission validation を通過したものだけを queue record として保存
 - `0048-platform-online-foundation-01-01-service-contract-and-lifecycle.md` が service skeleton contract を固定する
 - 0045 系では public HTTP API ではなく CLI-first で始める
 - queue に未検証の submission を入れると DLQ / retry 運用を先に背負うため、この段階では queue 前 validation を採る
+- queue 済み match 情報の durable storage contract はまだ `0046-platform-online-foundation-02-persistence-and-read-model.md` 側で確定していない
 
 ## Scope
 
 - CLI から `match submission` を受ける entrypoint を追加する
 - service command 経由で admission validation を実行する
 - validation 済み submission だけ queue record を作成する
+- replaceable な submission / queue store interface を切り、その背後に初期実装として in-memory store を置く
 - `queued` までの lifecycle を扱う
 - `queued` 中だけ cancel できる最小導線を扱う
 
@@ -28,6 +30,7 @@ admission validation を通過したものだけを queue record として保存
 - terminal persist
 - retry / DLQ
 - HTTP API
+- DB / Redis / remote storage 向け durable queue backend
 
 ## Spec Changes
 
@@ -36,6 +39,8 @@ admission validation を通過したものだけを queue record として保存
 - CLI-first operator entry を追加する
 - submission create / validate / queue write / queued-only cancel の contract を追記する
 - opaque artifact locator の accepted forms と validation timing を明記する
+- queue store は replaceable interface 越しに扱い、初期実装は in-memory のみとすることを明記する
+- `output_dir` は terminal persist 用であり、queue store の保存先責務ではないことを明記する
 
 ### `docs/specs/ai-runtime.md`
 
@@ -44,7 +49,8 @@ admission validation を通過したものだけを queue record として保存
 ## Expected Code Changes
 
 - operator-facing CLI command for match submission
-- submission store / queue write path
+- submission / queue store interface と in-memory 実装
+- queue write path
 - admission validation orchestration
 - queued-only cancellation path
 - queue write path の integration test
@@ -53,7 +59,8 @@ admission validation を通過したものだけを queue record として保存
 
 - [ ] CLI input から `match submission` を組み立てる
 - [ ] artifact locator / sidecar / registry / dry-run validation を束ねる
-- [ ] validation success 時だけ queue record を作成する
+- [ ] submission / queue store interface と in-memory 実装を追加する
+- [ ] validation success 時だけ queue record を store 経由で作成する
 - [ ] `queued` 中 cancel を実装する
 - [ ] success / rejection / cancel の integration test を追加する
 
@@ -73,8 +80,11 @@ admission validation を通過したものだけを queue record として保存
   - mitigation: CLI は adapter に留め、service command が validation と queue write を所有する
 - opaque locator を早く複雑化しすぎる
   - mitigation: URI shape を受けるが、初期実装は file-backed / local storage path に絞ってよい
+- 初期実装の store 詳細がそのまま durable contract に見えると、後続の persistence 設計を縛る
+  - mitigation: `0049` は replaceable interface と in-memory backend までに留め、durable backend は `0046` の後続 child plan へ残す
 
 ## Design Decisions
 
 - queue には validation 済み submission だけを入れる
+- queue store は replaceable interface で切り、初期実装は in-memory のみとする
 - cancel は `queued` 中だけを対象にする
