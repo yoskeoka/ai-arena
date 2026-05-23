@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	goRuntime "runtime"
+	"strings"
 	"testing"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
@@ -56,6 +57,20 @@ func TestCommandServiceCancelQueued(t *testing.T) {
 	}
 }
 
+func TestCommandServiceRejectsUnsupportedRuleset(t *testing.T) {
+	commands := newTestCommandService(t)
+	submission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
+	submission.Game.RulesetVersion = "unsupported-ruleset"
+
+	_, err := commands.Submit(context.Background(), submission)
+	if err == nil {
+		t.Fatal("Submit() returned nil error")
+	}
+	if !strings.Contains(err.Error(), "is not supported") {
+		t.Fatalf("Submit() error = %v, want unsupported ruleset error", err)
+	}
+}
+
 func TestInMemoryQueueStoreRejectsCancelAfterClaim(t *testing.T) {
 	store := NewInMemoryQueueStore()
 	submission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
@@ -69,12 +84,39 @@ func TestInMemoryQueueStoreRejectsCancelAfterClaim(t *testing.T) {
 	if _, err := store.CancelQueued(context.Background(), submission.SubmissionID); err == nil {
 		t.Fatal("CancelQueued() returned nil error")
 	}
+	if len(store.order) != 0 {
+		t.Fatalf("len(store.order) = %d, want 0", len(store.order))
+	}
 }
 
 func TestInMemoryQueueStoreReportsMissingRecord(t *testing.T) {
 	store := NewInMemoryQueueStore()
 	if _, err := store.CancelQueued(context.Background(), "missing"); !errors.Is(err, ErrQueueRecordNotFound) {
 		t.Fatalf("CancelQueued() error = %v, want %v", err, ErrQueueRecordNotFound)
+	}
+}
+
+func TestInMemoryQueueStoreCopiesSubmissionPlayers(t *testing.T) {
+	store := NewInMemoryQueueStore()
+	submission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
+
+	record, err := store.Enqueue(context.Background(), submission)
+	if err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+
+	submission.Players[0].ArtifactRef = "mutated"
+	if record.Submission.Players[0].ArtifactRef == "mutated" {
+		t.Fatal("record submission changed after caller mutation")
+	}
+}
+
+func TestEnsureCommandStartableSupportsGoRunFlags(t *testing.T) {
+	baseDir := repoRoot(t)
+	command := []string{"go", "run", "-mod=mod", "-tags", "integration", "./testdata/ai/janken/janken-rock-ai"}
+
+	if err := ensureCommandStartable(baseDir, command); err != nil {
+		t.Fatalf("ensureCommandStartable() error = %v", err)
 	}
 }
 

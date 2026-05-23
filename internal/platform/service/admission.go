@@ -129,12 +129,44 @@ func ensureCommandStartable(baseDir string, command []string) error {
 		return fmt.Errorf("runtime.command is required")
 	}
 	if len(command) >= 3 && command[0] == "go" && command[1] == "run" {
-		return ensureCommandTargetExists(baseDir, command[2])
+		target, err := goRunTarget(command)
+		if err != nil {
+			return err
+		}
+		return ensureCommandTargetExists(baseDir, target)
 	}
 	if !looksLikePath(command[0]) {
 		return nil
 	}
 	return ensureCommandTargetExists(baseDir, command[0])
+}
+
+func goRunTarget(command []string) (string, error) {
+	const separator = "--"
+
+	for i := 2; i < len(command); i++ {
+		arg := command[i]
+		if arg == separator {
+			if i+1 >= len(command) {
+				return "", fmt.Errorf("go run command is missing a package or file target")
+			}
+			return command[i+1], nil
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			return arg, nil
+		}
+		if strings.Contains(arg, "=") || isGoRunBooleanFlag(arg) {
+			continue
+		}
+		if isGoRunValueFlag(arg) {
+			i++
+			if i >= len(command) {
+				return "", fmt.Errorf("go run flag %q is missing a value", arg)
+			}
+			continue
+		}
+	}
+	return "", fmt.Errorf("go run command is missing a package or file target")
 }
 
 func ensureCommandTargetExists(baseDir, target string) error {
@@ -170,4 +202,22 @@ func slicesContain(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func isGoRunBooleanFlag(flag string) bool {
+	switch flag {
+	case "-asan", "-cover", "-modcacherw", "-msan", "-n", "-race", "-trimpath", "-v", "-work", "-x":
+		return true
+	default:
+		return false
+	}
+}
+
+func isGoRunValueFlag(flag string) bool {
+	switch flag {
+	case "-C", "-buildmode", "-buildvcs", "-compiler", "-exec", "-mod", "-modfile", "-overlay", "-pgo", "-pkgdir", "-tags", "-toolexec":
+		return true
+	default:
+		return false
+	}
 }

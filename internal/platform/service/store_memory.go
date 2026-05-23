@@ -41,12 +41,12 @@ func (s *InMemoryQueueStore) Enqueue(_ context.Context, submission MatchSubmissi
 		return QueueRecord{}, fmt.Errorf("service: submission_id %q already exists", submission.SubmissionID)
 	}
 	record := QueueRecord{
-		Submission: submission,
+		Submission: cloneMatchSubmission(submission),
 		State:      StateQueued,
 	}
 	s.records[submission.SubmissionID] = record
 	s.order = append(s.order, submission.SubmissionID)
-	return record, nil
+	return cloneQueueRecord(record), nil
 }
 
 // Claim moves the next queued record to leased for the supplied worker id.
@@ -57,7 +57,10 @@ func (s *InMemoryQueueStore) Claim(_ context.Context, workerID string) (QueueRec
 	if strings.TrimSpace(workerID) == "" {
 		return QueueRecord{}, fmt.Errorf("service: worker_id is required")
 	}
-	for _, submissionID := range s.order {
+	for len(s.order) > 0 {
+		submissionID := s.order[0]
+		s.order = s.order[1:]
+
 		record, ok := s.records[submissionID]
 		if !ok || record.State != StateQueued {
 			continue
@@ -65,7 +68,7 @@ func (s *InMemoryQueueStore) Claim(_ context.Context, workerID string) (QueueRec
 		record.State = StateLeased
 		record.Lease = &WorkerLease{WorkerID: workerID}
 		s.records[submissionID] = record
-		return record, nil
+		return cloneQueueRecord(record), nil
 	}
 	return QueueRecord{}, ErrNoQueuedSubmission
 }
@@ -82,7 +85,7 @@ func (s *InMemoryQueueStore) Update(_ context.Context, next QueueRecord) error {
 	if err := ValidateTransition(current.State, next.State); err != nil {
 		return err
 	}
-	s.records[next.Submission.SubmissionID] = next
+	s.records[next.Submission.SubmissionID] = cloneQueueRecord(next)
 	return nil
 }
 
@@ -105,5 +108,41 @@ func (s *InMemoryQueueStore) CancelQueued(_ context.Context, submissionID string
 	record.Lease = nil
 	record.Terminal = nil
 	s.records[submissionID] = record
-	return record, nil
+	s.removeFromOrder(submissionID)
+	return cloneQueueRecord(record), nil
+}
+
+func (s *InMemoryQueueStore) removeFromOrder(submissionID string) {
+	filtered := s.order[:0]
+	for _, queuedID := range s.order {
+		if queuedID == submissionID {
+			continue
+		}
+		filtered = append(filtered, queuedID)
+	}
+	s.order = filtered
+}
+
+func cloneQueueRecord(record QueueRecord) QueueRecord {
+	record.Submission = cloneMatchSubmission(record.Submission)
+	if record.Lease != nil {
+		lease := *record.Lease
+		record.Lease = &lease
+	}
+	if record.Terminal != nil {
+		terminal := *record.Terminal
+		if terminal.PlayerStderrPaths != nil {
+			terminal.PlayerStderrPaths = make(map[string]string, len(record.Terminal.PlayerStderrPaths))
+			for playerID, path := range record.Terminal.PlayerStderrPaths {
+				terminal.PlayerStderrPaths[playerID] = path
+			}
+		}
+		record.Terminal = &terminal
+	}
+	return record
+}
+
+func cloneMatchSubmission(submission MatchSubmission) MatchSubmission {
+	submission.Players = append([]SubmittedPlayer(nil), submission.Players...)
+	return submission
 }

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -53,6 +54,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	resolveOutputDir(baseDir, &submission)
 
 	dryRun, err := service.NewLocalDryRunChecker(baseDir)
 	if err != nil {
@@ -97,4 +99,19 @@ func loadSubmission(path string, stdin io.Reader) (service.MatchSubmission, erro
 		return service.MatchSubmission{}, fmt.Errorf("decode submission: %w", err)
 	}
 	return submission, nil
+}
+
+func resolveOutputDir(baseDir string, submission *service.MatchSubmission) {
+	if submission == nil || submission.OutputDir == "" {
+		return
+	}
+	parsed, err := url.Parse(submission.OutputDir)
+	if err == nil && parsed.Scheme != "" {
+		return
+	}
+	if filepath.IsAbs(submission.OutputDir) {
+		submission.OutputDir = filepath.Clean(submission.OutputDir)
+		return
+	}
+	submission.OutputDir = filepath.Join(baseDir, filepath.Clean(submission.OutputDir))
 }

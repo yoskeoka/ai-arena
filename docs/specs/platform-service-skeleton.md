@@ -45,6 +45,7 @@ online service skeleton は、single-match runner を 1 段外側から包む or
 
 初期の CLI adapter は operator input を `Match Submission` schema に decode して service command へ渡すだけに留める。
 artifact locator 解決、registry lookup、sidecar manifest 互換性確認、queue write は CLI ではなく service 側の責務とする。
+local CLI invocation では、relative `output_dir` を invocation base directory 基準の local path へ正規化してから service command へ渡してよい。
 
 ## Match Submission
 
