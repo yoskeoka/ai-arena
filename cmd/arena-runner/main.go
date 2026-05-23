@@ -647,36 +647,11 @@ type loadedEntry struct {
 }
 
 func loadEntry(matchMeta catalog.GameMetadata, spec playerSpec) (loadedEntry, error) {
-	sidecarPath := spec.Entry + ".arena.json"
-	if _, err := os.Stat(sidecarPath); err == nil {
-		var manifest catalog.SidecarManifest
-		if err := readJSON(sidecarPath, &manifest); err != nil {
-			return loadedEntry{}, err
-		}
-		aiMeta := catalog.GameMetadata{
-			GameID:         manifest.Protocol.GameID,
-			GameVersion:    manifest.Protocol.GameVersion,
-			RulesetVersion: manifest.Protocol.RulesetVersion,
-		}
-		if err := catalog.Compatible(matchMeta, aiMeta); err != nil {
-			return loadedEntry{}, fmt.Errorf("%s metadata incompatible: %w", spec.PlayerID, err)
-		}
-		if manifest.Protocol.Transport != "" && manifest.Protocol.Transport != "stdio-jsonrpc-ndjson" {
-			return loadedEntry{}, fmt.Errorf("%s transport %q is unsupported", spec.PlayerID, manifest.Protocol.Transport)
-		}
-		runtimeCfg, err := catalog.ResolveRuntime(spec.Entry, manifest.Runtime)
-		if err != nil {
-			return loadedEntry{}, fmt.Errorf("%s runtime invalid: %w", spec.PlayerID, err)
-		}
-		return loadedEntry{Runtime: runtimeCfg, AIID: manifest.AIID}, nil
-	} else if err != nil && !os.IsNotExist(err) {
-		return loadedEntry{}, err
+	loaded, err := catalog.LoadEntry(matchMeta, spec.Entry)
+	if err != nil {
+		return loadedEntry{}, fmt.Errorf("%s: %w", spec.PlayerID, err)
 	}
-
-	if err := catalog.ValidateMetadata(matchMeta); err != nil {
-		return loadedEntry{}, err
-	}
-	return loadedEntry{Runtime: catalog.FallbackRuntime(spec.Entry), AIID: filepath.Base(spec.Entry)}, nil
+	return loadedEntry{Runtime: loaded.Runtime, AIID: loaded.AIID}, nil
 }
 
 func parsePlayerSpec(raw string) (playerSpec, error) {
@@ -685,23 +660,6 @@ func parsePlayerSpec(raw string) (playerSpec, error) {
 		return playerSpec{}, fmt.Errorf("invalid --player %q", raw)
 	}
 	return playerSpec{PlayerID: playerID, Entry: entry}, nil
-}
-
-func readJSON(path string, dest any) error {
-	root, err := os.OpenRoot(repoRoot())
-	if err != nil {
-		return err
-	}
-	defer root.Close()
-
-	data, err := root.ReadFile(strings.TrimPrefix(filepath.Clean(path), "./"))
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(data, dest); err != nil {
-		return fmt.Errorf("decode %s: %w", path, err)
-	}
-	return nil
 }
 
 func openOutputTarget(target string, stdout io.Writer) (io.Writer, func() error, error) {

@@ -1,0 +1,109 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"sync"
+)
+
+var (
+	// ErrQueueRecordNotFound reports that no queue record exists for the requested submission id.
+	ErrQueueRecordNotFound = errors.New("service: queue record not found")
+	// ErrNoQueuedSubmission reports that no queued record is available to claim.
+	ErrNoQueuedSubmission = errors.New("service: no queued submission available")
+)
+
+// InMemoryQueueStore keeps queue state inside one process for the initial service skeleton.
+type InMemoryQueueStore struct {
+	mu      sync.Mutex
+	order   []string
+	records map[string]QueueRecord
+}
+
+// NewInMemoryQueueStore constructs the initial replaceable queue backend.
+func NewInMemoryQueueStore() *InMemoryQueueStore {
+	return &InMemoryQueueStore{
+		records: make(map[string]QueueRecord),
+	}
+}
+
+// Enqueue appends one admitted submission in queued state.
+func (s *InMemoryQueueStore) Enqueue(_ context.Context, submission MatchSubmission) (QueueRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if strings.TrimSpace(submission.SubmissionID) == "" {
+		return QueueRecord{}, fmt.Errorf("service: submission_id is required")
+	}
+	if _, exists := s.records[submission.SubmissionID]; exists {
+		return QueueRecord{}, fmt.Errorf("service: submission_id %q already exists", submission.SubmissionID)
+	}
+	record := QueueRecord{
+		Submission: submission,
+		State:      StateQueued,
+	}
+	s.records[submission.SubmissionID] = record
+	s.order = append(s.order, submission.SubmissionID)
+	return record, nil
+}
+
+// Claim moves the next queued record to leased for the supplied worker id.
+func (s *InMemoryQueueStore) Claim(_ context.Context, workerID string) (QueueRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if strings.TrimSpace(workerID) == "" {
+		return QueueRecord{}, fmt.Errorf("service: worker_id is required")
+	}
+	for _, submissionID := range s.order {
+		record, ok := s.records[submissionID]
+		if !ok || record.State != StateQueued {
+			continue
+		}
+		record.State = StateLeased
+		record.Lease = &WorkerLease{WorkerID: workerID}
+		s.records[submissionID] = record
+		return record, nil
+	}
+	return QueueRecord{}, ErrNoQueuedSubmission
+}
+
+// Update replaces one existing record after validating the lifecycle transition.
+func (s *InMemoryQueueStore) Update(_ context.Context, next QueueRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	current, ok := s.records[next.Submission.SubmissionID]
+	if !ok {
+		return ErrQueueRecordNotFound
+	}
+	if err := ValidateTransition(current.State, next.State); err != nil {
+		return err
+	}
+	s.records[next.Submission.SubmissionID] = next
+	return nil
+}
+
+// CancelQueued moves one queued record into canceled.
+func (s *InMemoryQueueStore) CancelQueued(_ context.Context, submissionID string) (QueueRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	record, ok := s.records[submissionID]
+	if !ok {
+		return QueueRecord{}, ErrQueueRecordNotFound
+	}
+	if record.State != StateQueued {
+		return QueueRecord{}, fmt.Errorf("service: only queued submissions can be canceled")
+	}
+	if err := ValidateTransition(record.State, StateCanceled); err != nil {
+		return QueueRecord{}, err
+	}
+	record.State = StateCanceled
+	record.Lease = nil
+	record.Terminal = nil
+	s.records[submissionID] = record
+	return record, nil
+}
