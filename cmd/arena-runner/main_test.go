@@ -15,6 +15,8 @@ import (
 )
 
 func TestResolveGameMasterRuntimeResolvesManifestRelativeCommand(t *testing.T) {
+	chdirRepoRoot(t)
+
 	cfg, err := resolveGameMasterRuntime("./testdata/game-master/external-echo/manifest.json", catalog.RuntimeManifest{
 		Kind:    platformruntime.KindLocalSubprocess,
 		Command: []string{"./bin/gamemaster", "--demo"},
@@ -31,6 +33,8 @@ func TestResolveGameMasterRuntimeResolvesManifestRelativeCommand(t *testing.T) {
 }
 
 func TestResolveGameMasterRuntimeRejectsUnsupportedKind(t *testing.T) {
+	chdirRepoRoot(t)
+
 	_, err := resolveGameMasterRuntime("./testdata/game-master/external-echo/manifest.json", catalog.RuntimeManifest{
 		Kind: platformruntime.KindWASMWASI,
 	})
