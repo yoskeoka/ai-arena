@@ -104,7 +104,10 @@ manifest は少なくとも以下を持つ。
 
 manifest の初期スコープは `runtime.kind = local-subprocess` のみとする。
 `command` は空であってはならない。relative path を含む command 解決は cwd 基準ではなく、
-manifest file 自身の配置ディレクトリ基準で行う。absolute path はそのまま使ってよい。
+manifest file 自身の配置ディレクトリ基準で行う。runner はその解決結果を local-subprocess
+adapter へ渡す前に、実起動時に曖昧さが残らない startable command path へ正規化しなければならない。
+absolute path はそのまま使ってよい。path 解決や正規化に失敗した場合、runner は match loop
+開始前に fail-fast しなければならない。
 
 この manifest は fresh run 用の開発入口であり、resume / replay / history build 用 entry は
 この段階では要求しない。runner が resume / replay を要求された場合は、match loop 開始前に

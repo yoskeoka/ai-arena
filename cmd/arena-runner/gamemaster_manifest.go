@@ -88,15 +88,31 @@ func resolveGameMasterRuntime(manifestPath string, manifest catalog.RuntimeManif
 		return runtime.Config{}, fmt.Errorf("%w: runtime.command is required", catalog.ErrInvalidMetadata)
 	}
 
+	manifestDir, err := filepath.Abs(filepath.Dir(manifestPath))
+	if err != nil {
+		return runtime.Config{}, fmt.Errorf("resolve manifest directory: %w", err)
+	}
 	command := append([]string(nil), manifest.Command...)
-	if isManifestRelativeCommand(command[0]) {
-		command[0] = filepath.Join(filepath.Dir(manifestPath), command[0])
+	command[0], err = normalizeManifestRuntimeCommand(manifestDir, command[0])
+	if err != nil {
+		return runtime.Config{}, err
 	}
 	return runtime.Config{
 		Kind:    runtime.KindLocalSubprocess,
 		Command: command,
-		Dir:     filepath.Dir(manifestPath),
+		Dir:     manifestDir,
 	}, nil
+}
+
+func normalizeManifestRuntimeCommand(manifestDir, command string) (string, error) {
+	if !isManifestRelativeCommand(command) {
+		return command, nil
+	}
+	resolved, err := filepath.Abs(filepath.Join(manifestDir, command))
+	if err != nil {
+		return "", fmt.Errorf("resolve runtime.command[0]: %w", err)
+	}
+	return resolved, nil
 }
 
 func isManifestRelativeCommand(command string) bool {

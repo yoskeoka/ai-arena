@@ -22,10 +22,10 @@ func TestResolveGameMasterRuntimeResolvesManifestRelativeCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveGameMasterRuntime: %v", err)
 	}
-	if got, want := cfg.Command[0], filepath.Clean("testdata/game-master/external-echo/bin/gamemaster"); got != want {
+	if got, want := cfg.Command[0], mustAbsPath(t, "testdata/game-master/external-echo/bin/gamemaster"); got != want {
 		t.Fatalf("command[0] = %q, want %q", got, want)
 	}
-	if got, want := cfg.Dir, filepath.Clean("testdata/game-master/external-echo"); got != want {
+	if got, want := cfg.Dir, mustAbsPath(t, "testdata/game-master/external-echo"); got != want {
 		t.Fatalf("dir = %q, want %q", got, want)
 	}
 }
@@ -164,4 +164,14 @@ func readJSONFile(path string, dest any) error {
 		return err
 	}
 	return json.Unmarshal(data, dest)
+}
+
+func mustAbsPath(t *testing.T, path string) string {
+	t.Helper()
+
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatalf("filepath.Abs(%q): %v", path, err)
+	}
+	return abs
 }

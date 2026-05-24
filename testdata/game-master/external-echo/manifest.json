@@ -6,16 +6,6 @@
   },
   "runtime": {
     "kind": "local-subprocess",
-    "command": [
-      "go",
-      "run",
-      "../../../cmd/echo-count-gamemaster",
-      "--game-id",
-      "external-echo-count",
-      "--game-version",
-      "2.0.0",
-      "--ruleset",
-      "phase2-simultaneous-3turn"
-    ]
+    "command": ["./bin/gamemaster"]
   }
 }
