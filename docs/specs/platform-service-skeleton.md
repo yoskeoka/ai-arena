@@ -42,10 +42,14 @@ online service skeleton は、single-match runner を 1 段外側から包む or
 - worker は queue から 1 件を lease し、runner を 1 回起動する
 - runner は queue ownership を持たず、1 試合分の execution engine に留まる
 - terminal persist は service skeleton 側の責務であり、runner artifact を file-backed first で残す
+- reviewer / operator 向けの最小 acceptance では、single-process CLI lane で `submit -> queued-only cancel` または
+  `submit -> worker run -> terminal persist` を通せればよい
 
 初期の CLI adapter は operator input を `Match Submission` schema に decode して service command へ渡すだけに留める。
 artifact locator 解決、registry lookup、sidecar manifest 互換性確認、queue write は CLI ではなく service 側の責務とする。
 local CLI invocation では、relative `output_dir` を invocation base directory 基準の local path へ正規化してから service command へ渡してよい。
+initial acceptance 用の single-process CLI lane は、replaceable queue store の初期実装が in-memory だけであることを前提に、
+1 回の command invocation の中で queue write、queued-only cancel、または worker 実行までを閉じてよい。
 
 ## Match Submission
 
@@ -230,6 +234,44 @@ service skeleton が terminal success / failure を判断する正本は `record
 
 `output_dir` は terminal persist artifact の保存先であり、queue store の永続化責務を意味しない。
 `0049` の queue store 初期実装は in-memory のみとし、cross-process durability や queue 再起動復旧は後続 plan で扱う。
+
+## CLI-first Acceptance
+
+最初の operator-facing acceptance は public API ではなく CLI で確認する。
+
+### success path
+
+- operator は local submission JSON を渡して admission 済み queue record を作成し、そのまま worker 実行で terminal persist まで進められる
+- command 終了時には queue lifecycle が `completed` であり、runner terminal status は `record.json.status` から確認できる
+- artifact 確認の既定順は `result-summary.json` -> `record.json` path / stderr path 群 -> 必要なら `structured-log.ndjson` とする
+
+### rejection path
+
+- admission validation に失敗する submission は queue record を作成してはならない
+- operator は non-zero exit と validation error を受け取り、`output_dir` に match artifact directory が生えていないことを確認できる
+
+### queued-only cancel path
+
+- operator は `queued` 直後の submission だけを `canceled` にできる
+- `canceled` command は runner 実行を開始してはならず、terminal artifact を生成してはならない
+
+### reviewer 向け最小 manual verification
+
+- success path:
+  `go run ./cmd/arena-service run-once --submission <echo-submission.json> --base-dir <repo-root>`
+- rejection path:
+  `go run ./cmd/arena-service submit --submission <invalid-submission.json> --base-dir <repo-root>`
+- queued-only cancel path:
+  `go run ./cmd/arena-service submit-cancel --submission <echo-submission.json> --base-dir <repo-root>`
+- success path の確認は stdout queue record に含まれる `result_summary_path` / `record_path` / `player_stderr_paths` を起点に行う
+- rejection / queued-only cancel では `<output_dir>/<match_id>/` が生成されていないことを確認する
+
+## Deferred Follow-ups
+
+- `0046-platform-online-foundation-02-persistence-and-read-model.md`:
+  queue record / submission record の durable backend、cross-process queue 共有、artifact locator を含む read model、operator-facing list/get/read API
+- `0047-platform-online-foundation-03-operator-flow-and-matchmaking.md`:
+  matchmaking 後の submission 生成、ranking / rematch / retry policy、leased 以降の cancel / operator recovery
 
 ## Retry と Attempt Count
 

@@ -715,6 +715,7 @@ artifact 読取既定順:
 
 - local verification と AI Agent 実装時の既定読取順は `result-summary.json` -> `exported-snapshot.json` / `snapshot.json` -> `structured-log.ndjson` / `record.json` / `history.json` とする
 - `record.json.event_log` と `history.json` は source-of-truth / replay 用に保持するが、通常の結果確認では既定の最初の入口にしない
+- online service skeleton の CLI acceptance でも同じ読取順を使い、operator-facing queue record は artifact path 参照だけを返す
 
 AI metadata 読み取り:
 
