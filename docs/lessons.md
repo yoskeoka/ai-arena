@@ -181,3 +181,10 @@
 - **Pattern**: happy-path の queue lifecycle 完了に意識が寄ると、runner/service 境界の「参照先が実在するか」「返却値が submission と一致するか」「cancel が start path に届くか」を後回しにしやすい
 - **Rule**: queue/worker/runner/persist をまたぐ新規 orchestration を追加するときは、少なくとも `returned identifiers match submission`、`summary references only persisted artifacts`、`worker ctx reaches startup path` の3点を初回 PR 前に明示確認し、足りなければ test で固定する
 - **Applied**: `internal/platform/service/worker.go`、`internal/platform/service/worker_local.go`、`internal/platform/service/integration_test.go`、今後の service-side orchestration 実装全般
+
+## [2026-05-24] runtime kind と admission tier を同じ軸で書かない
+
+- **Mistake**: external game master の official policy を詰める場面で、`local-subprocess` / `wasm-wasi` / `future-external-adapter` の runtime kind と、`built-in` / `sandboxed submission` / `external adapter` の ownership・運用 tier を混ぜて考えかけた
+- **Pattern**: execution topology と admission ownership を 1 つの分類に潰すと、`built-in` 化すべき route と sandboxed runtime を優先すべき route が spec 上でぶれる
+- **Rule**: official external game master policy を書くときは、まず admission tier を分け、その中で許可する runtime kind を決める。`Docker` は候補として残しても、未サポートなら候補のまま明記し、暗黙に support 済みのように書かない
+- **Applied**: `docs/specs/platform-game-registry.md`、`docs/specs/platform.md`、`docs/specs/game-master.md`、`docs/design-decisions/adr.md`、今後の runtime/admission policy 記述全般

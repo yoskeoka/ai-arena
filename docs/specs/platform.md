@@ -249,6 +249,37 @@ official registration を暗黙に成立させてはならない。
 match execution へ流す責務を持つ。解決できない command は match loop 開始前に fail-fast
 しなければならない。
 
+## official game master admission tier
+
+game master の official registration は、「どの runtime kind に載せるか」と
+「誰が source / release / runtime を所有するか」を分けて扱う。
+
+### official built-in
+
+- 運営自身が開発した game master、または信頼できるパートナーから source 提供を受けて
+  運営が review / CI / release 管理を引き受けた game master を含む
+- この tier は external submission ではなく、platform の通常開発フローへ取り込んだ built-in game として扱う
+- 実行形態は `in-process` を基本としてよい
+
+### official sandboxed submission
+
+- source を built-in 化せず、platform が管理する sandboxed runtime に載せて運用する
+- 第一候補の runtime kind は `wasm-wasi` とする
+- raw `local-subprocess` executable は host 権限隔離が弱いため、この tier では admission しない
+- `docker` / OCI container は将来候補とするが、現時点では未サポートとする
+- 将来 support する場合は、少なくとも network isolation、filesystem / capability 制限、
+  resource limit、image / dependency scan を admission 条件として要求する
+
+### official external adapter
+
+- GPU / LLM / 外部専用 service など、platform 単体で抱えにくい計算資源を必要とする game master 向け tier
+- platform は match lifecycle、AI 実行、artifact 正本、監査ログの責務を維持しつつ、
+  game master 本体の実行と補助 service を trusted external backend へ委ねる
+
+この tier 分類は dev-only overlay と別物である。`--game-master-manifest` を使った local-subprocess
+fresh run path は consumer repo の開発検証を目的とした runner-local 入口であり、official admission を
+暗黙に成立させてはならない。
+
 ## AI metadata sidecar manifest
 
 AI 実行物の横に sidecar manifest を置く既定を持つ。manifest schema の正本は
