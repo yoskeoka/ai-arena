@@ -108,7 +108,9 @@ func usageFor(subcommand string) string {
 
 type cliApp struct {
 	commands *service.CommandService
-	worker   *service.Worker
+	queue    service.QueueStore
+	baseDir  string
+	timeout  time.Duration
 }
 
 func newCLIApp(baseDir string, matchTimeout time.Duration) (*cliApp, error) {
@@ -125,17 +127,11 @@ func newCLIApp(baseDir string, matchTimeout time.Duration) (*cliApp, error) {
 	if err != nil {
 		return nil, err
 	}
-	invoker, err := service.NewLocalRunnerInvoker(baseDir, nil, matchTimeout)
-	if err != nil {
-		return nil, err
-	}
-	worker, err := service.NewWorker(store, invoker, service.LocalTerminalPersister{})
-	if err != nil {
-		return nil, err
-	}
 	return &cliApp{
 		commands: commands,
-		worker:   worker,
+		queue:    store,
+		baseDir:  baseDir,
+		timeout:  matchTimeout,
 	}, nil
 }
 
@@ -143,7 +139,11 @@ func (a *cliApp) runOnce(ctx context.Context, submission service.MatchSubmission
 	if _, err := a.commands.Submit(ctx, submission); err != nil {
 		return service.QueueRecord{}, err
 	}
-	record, err := a.worker.ProcessNext(ctx, workerID)
+	worker, err := a.newWorker()
+	if err != nil {
+		return service.QueueRecord{}, err
+	}
+	record, err := worker.ProcessNext(ctx, workerID)
 	if err != nil {
 		return record, err
 	}
@@ -156,6 +156,14 @@ func (a *cliApp) submitCancel(ctx context.Context, submission service.MatchSubmi
 		return service.QueueRecord{}, err
 	}
 	return a.commands.Cancel(ctx, record.Submission.SubmissionID)
+}
+
+func (a *cliApp) newWorker() (*service.Worker, error) {
+	invoker, err := service.NewLocalRunnerInvoker(a.baseDir, nil, a.timeout)
+	if err != nil {
+		return nil, err
+	}
+	return service.NewWorker(a.queue, invoker, service.LocalTerminalPersister{})
 }
 
 func encodeRecord(stdout io.Writer, record service.QueueRecord) error {
