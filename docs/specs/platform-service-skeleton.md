@@ -268,8 +268,12 @@ service skeleton が terminal success / failure を判断する正本は `record
 
 ## Deferred Follow-ups
 
-- `0046-platform-online-foundation-02-persistence-and-read-model.md`:
-  queue record / submission record の durable backend、cross-process queue 共有、artifact locator を含む read model、operator-facing list/get/read API
+- `0056-platform-online-foundation-02-01-durable-store-and-write-model.md`:
+  queue lifecycle / terminal locator の durable backend、single-node cross-process queue 共有
+- `0057-platform-online-foundation-02-02-result-read-model-and-operator-query.md`:
+  artifact locator を含む result read model、operator-facing list/get/read API
+- `0058-platform-online-foundation-02-03-replay-resume-audit-inputs.md`:
+  persisted match artifact を使う replay / resume / audit input contract
 - `0047-platform-online-foundation-03-operator-flow-and-matchmaking.md`:
   matchmaking 後の submission 生成、ranking / rematch / retry policy、leased 以降の cancel / operator recovery
 
