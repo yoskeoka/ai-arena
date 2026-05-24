@@ -77,6 +77,11 @@ consumer-supplied manifest から一時的な local-subprocess descriptor を構
 runner process 内だけで完結する overlay として扱い、DB / catalog へ official registration を
 追加したものと見なしてはならない。
 
+official registration path は、runner-local overlay path とは別の admission policy に従う。
+運営が review して built-in game として取り込む経路、制約付き runtime に載せて platform 管理下で
+運用する経路、trusted external backend を official external adapter として登録する経路は区別して扱う。
+どの経路でも persisted record 化してよいのは、その tier で admission 済みの registered game だけとする。
+
 ## registry lookup 層
 
 runner / replay から見える registry lookup は、少なくとも以下 3 責務に分ける。
@@ -150,6 +155,26 @@ fixture 検証のために別接続形態も試したい場合は、`echo-count`
 
 consumer-supplied manifest overlay は、このうち `local-subprocess` だけを初期スコープとする。
 `future-external-adapter` やその他 runtime kind の一時 overlay は後続へ送る。
+
+official registration で許可する `BuildMode` は、dev-only overlay と同一とは限らない。
+現時点の admission policy は少なくとも次を想定する。
+
+- `official built-in`
+  - 運営自身が実装した game master
+  - 信頼できるパートナーから source 提供を受け、運営が review / CI / release 管理を引き受ける game master
+  - persisted record の `BuildMode` は `in-process` でよい
+- `official sandboxed submission`
+  - source を built-in 化せず、platform 管理下の制約付き runtime で運用する game master
+  - 第一候補の runtime kind は `wasm-wasi` とする
+  - `local-subprocess` は host 隔離が弱いため、この tier では admission しない
+  - `docker` / OCI container は将来候補に留め、現時点では未サポートとする
+- `official external adapter`
+  - GPU / LLM / 専用 service など、platform 単体では抱えにくい計算資源を必要とする trusted external game backend
+  - persisted record の `BuildMode` は `future-external-adapter` とする
+
+`docker` / OCI container を将来 `official sandboxed submission` に加える場合でも、
+少なくとも network isolation、filesystem / capability 制限、resource limit、image / dependency scan を
+admission 条件として要求する。これらの要件を満たす具体例が出るまでは、未サポート候補として扱う。
 
 ## build input 契約
 

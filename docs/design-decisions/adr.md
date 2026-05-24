@@ -258,6 +258,55 @@ Dungeon domain は少なくとも以下の subsystem 境界で再編する。
 **利点:**
 - 将来 actor / item / effect / combat を追加するときに、layout 由来か mutable state 由来かを先に固定できる
 - replay / resume で `rng_seed` から再生成した layout と保存済み payload の一致確認を独立責務として保てる
+
+---
+
+## [2026-05-24] official external game master admission は built-in / sandboxed / external adapter を分離する
+
+### Context
+
+`0052` により、consumer repo が `--game-master-manifest` で `local-subprocess` game master を
+fresh run 検証できる dev-only overlay path は成立した。一方で、official registered game として
+何を admission するかは別問題である。
+
+ここでは次を同時に整理する必要がある。
+
+- 運営自身の game master と、信頼できるパートナーが source 提供して運営が review する game master を
+  どの tier で扱うか
+- source を取り込まずに platform 管理下で運用する official submission に、どの runtime kind を許可するか
+- GPU / LLM など platform 単体では抱えにくい資源を必要とする game master を、どの route で受けるか
+- `docker` / OCI container を今すぐ official support に含めるか
+
+### Decision
+
+- official game master admission は少なくとも次の 3 tier に分ける
+  - `official built-in`
+  - `official sandboxed submission`
+  - `official external adapter`
+- `official built-in` には、運営自身が実装した game master に加え、信頼できるパートナーから source 提供を受けて
+  運営が review / CI / release 管理を引き受ける game master も含める
+- `official sandboxed submission` の第一候補 runtime kind は `wasm-wasi` とする
+- raw `local-subprocess` executable は host 隔離が弱いため、official registration では許可しない
+- `official external adapter` は trusted external game backend を使う GPU / LLM / 専用 service 依存の game 向け official route として残す
+- `docker` / OCI container は将来候補として残すが、現時点では未サポートとする
+
+### Consequences
+
+**利点:**
+- dev-only overlay と official admission policy を混同せずに進められる
+- `official built-in` は通常の repo review / CI / release フローへ載せられる
+- self-contained な外部投稿 game は `wasm-wasi` へ寄せることで、platform 運用と host security を単純化できる
+- GPU / LLM 系の例外は `official external adapter` に隔離できる
+
+**Docker を今すぐ採用しない理由:**
+- network isolation、filesystem / capability 制限、resource limit、image / dependency scan まで含めると
+  admission / 運用負荷が高い
+- 現時点では、まず `wasm-wasi` で受けられない具体例が出るまで lane を開けない方が簡潔
+
+**トレードオフ:**
+- `wasm-wasi` では使える言語・ライブラリ・OS 機能に制約がある
+- その制約で受けられない game master は、built-in 化するか、将来の Docker lane、または
+  `official external adapter` を使う判断が必要になる
 - `Match.Apply` のような façade API を残しつつ、内部の state assembly と payload projection を差し替えやすい
 
 **制約:**
