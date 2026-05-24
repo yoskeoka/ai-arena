@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/service"
 )
@@ -22,19 +23,28 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
-	if len(args) == 0 || args[0] != "submit" {
-		return fmt.Errorf("usage: arena-service submit --submission <path-or-> [--base-dir <dir>]")
+	if len(args) == 0 {
+		return fmt.Errorf("usage: arena-service <submit|run-once|submit-cancel> --submission <path-or-> [--base-dir <dir>]")
 	}
 
-	fs := flag.NewFlagSet("arena-service submit", flag.ContinueOnError)
+	subcommand := args[0]
+	if subcommand != "submit" && subcommand != "run-once" && subcommand != "submit-cancel" {
+		return fmt.Errorf("usage: arena-service <submit|run-once|submit-cancel> --submission <path-or-> [--base-dir <dir>]")
+	}
+
+	fs := flag.NewFlagSet("arena-service "+subcommand, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
 	var (
 		submissionPath string
 		baseDir        string
+		workerID       string
+		matchTimeout   time.Duration
 	)
 	fs.StringVar(&submissionPath, "submission", "", "submission JSON path or - for stdin")
 	fs.StringVar(&baseDir, "base-dir", "", "base directory for resolving local artifact refs and output_dir")
+	fs.StringVar(&workerID, "worker-id", "cli-worker", "worker identifier for run-once")
+	fs.DurationVar(&matchTimeout, "match-timeout", 0, "match timeout for run-once")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -56,25 +66,99 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 	resolveOutputDir(baseDir, &submission)
 
-	dryRun, err := service.NewLocalDryRunChecker(baseDir)
+	app, err := newCLIApp(baseDir, matchTimeout)
 	if err != nil {
 		return err
+	}
+
+	var record service.QueueRecord
+	switch subcommand {
+	case "submit":
+		record, err = app.commands.Submit(context.Background(), submission)
+	case "run-once":
+		record, err = app.runOnce(context.Background(), submission, workerID)
+	case "submit-cancel":
+		record, err = app.submitCancel(context.Background(), submission)
+	default:
+		return fmt.Errorf("unsupported subcommand %q", subcommand)
+	}
+	if err != nil {
+		return err
+	}
+	return encodeRecord(stdout, record)
+}
+
+type cliApp struct {
+	commands *service.CommandService
+	worker   *service.Worker
+}
+
+func newCLIApp(baseDir string, matchTimeout time.Duration) (*cliApp, error) {
+	dryRun, err := service.NewLocalDryRunChecker(baseDir)
+	if err != nil {
+		return nil, err
 	}
 	validator, err := service.NewDefaultAdmissionValidator(nil, dryRun)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	commands, err := service.NewCommandService(service.NewInMemoryQueueStore(), validator)
+	store := service.NewInMemoryQueueStore()
+	commands, err := service.NewCommandService(store, validator)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	record, err := commands.Submit(context.Background(), submission)
+	invoker, err := service.NewLocalRunnerInvoker(baseDir, nil, matchTimeout)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	worker, err := service.NewWorker(store, invoker, service.LocalTerminalPersister{})
+	if err != nil {
+		return nil, err
+	}
+	return &cliApp{
+		commands: commands,
+		worker:   worker,
+	}, nil
+}
+
+func (a *cliApp) runOnce(ctx context.Context, submission service.MatchSubmission, workerID string) (service.QueueRecord, error) {
+	if _, err := a.commands.Submit(ctx, submission); err != nil {
+		return service.QueueRecord{}, err
+	}
+	record, err := a.worker.ProcessNext(ctx, workerID)
+	if err != nil {
+		return record, err
+	}
+	return record, nil
+}
+
+func (a *cliApp) submitCancel(ctx context.Context, submission service.MatchSubmission) (service.QueueRecord, error) {
+	record, err := a.commands.Submit(ctx, submission)
+	if err != nil {
+		return service.QueueRecord{}, err
+	}
+	return a.commands.Cancel(ctx, record.Submission.SubmissionID)
+}
+
+func encodeRecord(stdout io.Writer, record service.QueueRecord) error {
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(record)
+}
+
+func resolveOutputDir(baseDir string, submission *service.MatchSubmission) {
+	if submission == nil || submission.OutputDir == "" {
+		return
+	}
+	parsed, err := url.Parse(submission.OutputDir)
+	if err == nil && parsed.Scheme != "" {
+		return
+	}
+	if filepath.IsAbs(submission.OutputDir) {
+		submission.OutputDir = filepath.Clean(submission.OutputDir)
+		return
+	}
+	submission.OutputDir = filepath.Join(baseDir, filepath.Clean(submission.OutputDir))
 }
 
 func loadSubmission(path string, stdin io.Reader) (service.MatchSubmission, error) {
@@ -99,19 +183,4 @@ func loadSubmission(path string, stdin io.Reader) (service.MatchSubmission, erro
 		return service.MatchSubmission{}, fmt.Errorf("decode submission: %w", err)
 	}
 	return submission, nil
-}
-
-func resolveOutputDir(baseDir string, submission *service.MatchSubmission) {
-	if submission == nil || submission.OutputDir == "" {
-		return
-	}
-	parsed, err := url.Parse(submission.OutputDir)
-	if err == nil && parsed.Scheme != "" {
-		return
-	}
-	if filepath.IsAbs(submission.OutputDir) {
-		submission.OutputDir = filepath.Clean(submission.OutputDir)
-		return
-	}
-	submission.OutputDir = filepath.Join(baseDir, filepath.Clean(submission.OutputDir))
 }
