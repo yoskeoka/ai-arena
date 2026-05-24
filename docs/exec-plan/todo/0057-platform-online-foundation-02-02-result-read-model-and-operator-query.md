@@ -17,7 +17,7 @@ result list と match detail を stable に引ける operator-facing query surfa
 ## Scope
 
 - match result list と match detail の最小 read model を定義する
-- queued / running / terminal を含む service lifecycle state を operator が参照できる query surface を定義する
+- queued / leased / running / persisting / completed|failed|canceled を含む service lifecycle state を operator が参照できる query surface を定義する
 - persisted queue/write model と file-backed artifact locator を結びつける
 - CLI-first の operator-facing list/get/read entrypoint を整える
 
@@ -66,7 +66,7 @@ result list と match detail を stable に引ける operator-facing query surfa
 ## Dependencies
 
 - depends on: `0056-platform-online-foundation-02-01-durable-store-and-write-model.md`
-- depends on: parent/base item `0046-platform-online-foundation-02-persistence-and-read-model.md` (to be retired to `docs/exec-plan/done/` after split)
+- depends on: parent/base item `0046-platform-online-foundation-02-persistence-and-read-model.md` (now retired to `docs/exec-plan/done/` after split)
 - informed by: `0051-platform-online-foundation-01-04-cli-proof-and-e2e-verification.md`
 
 ## Risks and Mitigations

@@ -18,7 +18,7 @@ submission 受理から terminal artifact locator 保存までを再起動耐性
 ## Scope
 
 - `MatchSubmission` / `QueueRecord` / `TerminalArtifacts` を durable に保持する write model を定義する
-- queued / leased / running / persisting / terminal の lifecycle を durable backend 上で扱えるようにする
+- queued / leased / running / persisting / completed|failed|canceled の lifecycle を durable backend 上で扱えるようにする
 - terminal artifact 本体は既存どおり file-backed artifact layout に残し、write model 側には locator と最小 summary だけを持たせる
 - single-node 前提の cross-process queue 共有を成立させる
 - `0049` / `0050` の service command / worker path を durable backend に載せ替える
@@ -68,7 +68,7 @@ submission 受理から terminal artifact locator 保存までを再起動耐性
 
 ## Dependencies
 
-- depends on: parent/base item `0046-platform-online-foundation-02-persistence-and-read-model.md` (to be retired to `docs/exec-plan/done/` after split)
+- depends on: parent/base item `0046-platform-online-foundation-02-persistence-and-read-model.md` (now retired to `docs/exec-plan/done/` after split)
 - informed by: `0049-platform-online-foundation-01-02-submission-entry-and-queue-write.md`
 - informed by: `0050-platform-online-foundation-01-03-worker-dispatch-and-terminal-persist.md`
 - blocks: `0057-platform-online-foundation-02-02-result-read-model-and-operator-query.md`

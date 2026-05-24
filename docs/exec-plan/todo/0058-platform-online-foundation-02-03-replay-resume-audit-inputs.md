@@ -66,7 +66,7 @@ persisted match artifact を replay / resume / audit の source-of-truth input �
 ## Dependencies
 
 - depends on: `0056-platform-online-foundation-02-01-durable-store-and-write-model.md`
-- depends on: parent/base item `0046-platform-online-foundation-02-persistence-and-read-model.md` (to be retired to `docs/exec-plan/done/` after split)
+- depends on: parent/base item `0046-platform-online-foundation-02-persistence-and-read-model.md` (now retired to `docs/exec-plan/done/` after split)
 - informed by: `0054-external-gamemaster-manifest-registration-03-resume-replay-follow-up.md`
 
 ## Risks and Mitigations
