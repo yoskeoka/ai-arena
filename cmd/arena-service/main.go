@@ -24,12 +24,12 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: arena-service <submit|run-once|submit-cancel> --submission <path-or-> [--base-dir <dir>]")
+		return fmt.Errorf("usage: %s", usageFor(""))
 	}
 
 	subcommand := args[0]
 	if subcommand != "submit" && subcommand != "run-once" && subcommand != "submit-cancel" {
-		return fmt.Errorf("usage: arena-service <submit|run-once|submit-cancel> --submission <path-or-> [--base-dir <dir>]")
+		return fmt.Errorf("usage: %s", usageFor(""))
 	}
 
 	fs := flag.NewFlagSet("arena-service "+subcommand, flag.ContinueOnError)
@@ -83,9 +83,27 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("unsupported subcommand %q", subcommand)
 	}
 	if err != nil {
+		if subcommand == "run-once" && record.Submission.SubmissionID != "" {
+			if encodeErr := encodeRecord(stdout, record); encodeErr != nil {
+				return encodeErr
+			}
+		}
 		return err
 	}
 	return encodeRecord(stdout, record)
+}
+
+func usageFor(subcommand string) string {
+	switch subcommand {
+	case "run-once":
+		return "arena-service run-once --submission <path-or-> [--base-dir <dir>] [--worker-id <id>] [--match-timeout <duration>]"
+	case "submit-cancel":
+		return "arena-service submit-cancel --submission <path-or-> [--base-dir <dir>]"
+	case "submit":
+		return "arena-service submit --submission <path-or-> [--base-dir <dir>]"
+	default:
+		return "arena-service <submit|run-once|submit-cancel> --submission <path-or-> [--base-dir <dir>]"
+	}
 }
 
 type cliApp struct {

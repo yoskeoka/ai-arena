@@ -59,6 +59,20 @@ func TestRunResolvesRelativeOutputDirAgainstBaseDir(t *testing.T) {
 	}
 }
 
+func TestRunWithoutSubcommandShowsTopLevelUsage(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := run(nil, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("run() returned nil error")
+	}
+	want := "usage: arena-service <submit|run-once|submit-cancel> --submission <path-or-> [--base-dir <dir>]"
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
 func TestRunOncePersistsTerminalArtifacts(t *testing.T) {
 	baseDir := repoRoot(t)
 	outputDir := t.TempDir()
@@ -114,6 +128,66 @@ func TestRunOncePersistsTerminalArtifacts(t *testing.T) {
 		assertPathExists(t, path)
 	}
 	assertPathExists(t, filepath.Join(record.Terminal.MatchDir, "structured-log.ndjson"))
+}
+
+func TestRunOnceFailureStillPrintsTerminalRecord(t *testing.T) {
+	baseDir := repoRoot(t)
+	outputDir := t.TempDir()
+	submission := service.MatchSubmission{
+		SubmissionID: "sub-echo-timeout-1",
+		MatchID:      "match-echo-timeout-1",
+		Game: contract.GameMetadata{
+			GameID:         "echo-count",
+			GameVersion:    "2.0.0",
+			RulesetVersion: "phase2-simultaneous-2turn",
+		},
+		Players: []service.SubmittedPlayer{
+			{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
+			{PlayerID: "p2", ArtifactRef: repoJoin(t, "testdata/ai/echo/timeout-ai")},
+		},
+		OutputDir:    outputDir,
+		AttemptCount: 1,
+	}
+	submissionPath := writeSubmissionFile(t, submission)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"run-once",
+		"--submission", submissionPath,
+		"--base-dir", baseDir,
+		"--match-timeout", "10ms",
+	}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("run() returned nil error")
+	}
+
+	var record struct {
+		State    string `json:"state"`
+		Terminal struct {
+			MatchDir          string            `json:"match_dir"`
+			RecordPath        string            `json:"record_path"`
+			ResultSummaryPath string            `json:"result_summary_path"`
+			PlayerStderrPaths map[string]string `json:"player_stderr_paths"`
+			MatchStatus       string            `json:"match_status"`
+			Error             string            `json:"error"`
+		} `json:"terminal"`
+	}
+	if jsonErr := json.Unmarshal(stdout.Bytes(), &record); jsonErr != nil {
+		t.Fatalf("json.Unmarshal() error = %v", jsonErr)
+	}
+	if record.State != "completed" {
+		t.Fatalf("state = %q, want completed", record.State)
+	}
+	if record.Terminal.MatchStatus != "canceled" {
+		t.Fatalf("match_status = %q, want canceled", record.Terminal.MatchStatus)
+	}
+	assertPathExists(t, record.Terminal.MatchDir)
+	assertPathExists(t, record.Terminal.RecordPath)
+	assertPathExists(t, record.Terminal.ResultSummaryPath)
+	if len(record.Terminal.PlayerStderrPaths) == 0 {
+		t.Fatal("player_stderr_paths should not be empty")
+	}
 }
 
 func TestSubmitRejectsIncompatibleArtifactWithoutArtifacts(t *testing.T) {
