@@ -137,7 +137,7 @@ official tier ごとの基本方針は次とする。
     この tier では許可しない
   - `docker` / OCI container は将来候補に留め、現時点では未サポートとする
 - `official external adapter`
-  - GPU / LLM / 専用 service を必要とする trusted external backend 向けの official route とする
+  - GPU / LLM / 専用 service を必要とする trusted external game backend 向けの official route とする
 
 `docker` / OCI container を将来採用候補として残す理由は、WASM/WASI 制約では受け入れにくい game master を
 platform 管理下で動かせる余地を保つためである。ただし support する場合でも、network isolation、

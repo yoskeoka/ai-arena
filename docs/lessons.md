@@ -186,5 +186,5 @@
 
 - **Mistake**: external game master の official policy を詰める場面で、`local-subprocess` / `wasm-wasi` / `future-external-adapter` の runtime kind と、`built-in` / `sandboxed submission` / `external adapter` の ownership・運用 tier を混ぜて考えかけた
 - **Pattern**: execution topology と admission ownership を 1 つの分類に潰すと、`built-in` 化すべき route と sandboxed runtime を優先すべき route が spec 上でぶれる
-- **Rule**: official external game master policy を書くときは、まず admission tier を分け、その中で許可する runtime kind を決める。`Docker` は候補として残しても、未サポートなら候補のまま明記し、暗黙に support 済みのように書かない
+- **Rule**: official external game master policy を書くときは、まず admission tier を分け、その中で許可する runtime kind を決める。`docker` は候補として残しても、未サポートなら候補のまま明記し、暗黙に support 済みのように書かない
 - **Applied**: `docs/specs/platform-game-registry.md`、`docs/specs/platform.md`、`docs/specs/game-master.md`、`docs/design-decisions/adr.md`、今後の runtime/admission policy 記述全般

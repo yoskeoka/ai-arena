@@ -287,7 +287,7 @@ fresh run 検証できる dev-only overlay path は成立した。一方で、of
   運営が review / CI / release 管理を引き受ける game master も含める
 - `official sandboxed submission` の第一候補 runtime kind は `wasm-wasi` とする
 - raw `local-subprocess` executable は host 隔離が弱いため、official registration では許可しない
-- `trusted external adapter` は GPU / LLM / 専用 service 依存の game 向け official route として残す
+- `official external adapter` は trusted external game backend を使う GPU / LLM / 専用 service 依存の game 向け official route として残す
 - `docker` / OCI container は将来候補として残すが、現時点では未サポートとする
 
 ### Consequences
