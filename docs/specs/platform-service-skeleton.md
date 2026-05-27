@@ -41,18 +41,21 @@ online service skeleton は、single-match runner を 1 段外側から包む or
 - service は `match submission` を受け取り、admission 済みの要求だけを queue へ入れる
 - worker は queue から 1 件を lease し、runner を 1 回起動する
 - runner は queue ownership を持たず、1 試合分の execution engine に留まる
-- terminal persist は service skeleton 側の責務であり、runner artifact を file-backed first で残す
+- terminal persist は service skeleton 側の責務であり、default では runner artifact を file-backed first で残し、
+  online service infra では同じ artifact contract を remote object storage へ差し替え可能に保つ
 - reviewer / operator 向けの最小 acceptance では、single-process CLI lane で `submit -> queued-only cancel` または
   `submit -> worker run -> terminal persist` を通せればよい
 
 Phase 6 の first deploy target は `Cloudflare Pages + Render + Neon Postgres + Cloudflare R2` とする。
 この target では、service metadata と queue lifecycle は `Neon Postgres` に置き、large artifact と executable payload は
 `Cloudflare R2` に置く。public watch/read UI は `Cloudflare Pages` から始め、match 実行を担う service / worker の
-single logical queue authority は `Render` 上の backend process に置く。
+single logical queue authority は `Render` 上の backend process に置く。local CLI、CI、external game 開発で runner を
+直接起動する lane では file-backed first を default とし、online service infra では同じ contract を `R2` へ差し替える。
 
 初期の CLI adapter は operator input を `Match Submission` schema に decode して service command へ渡すだけに留める。
 artifact locator 解決、registry lookup、sidecar manifest 互換性確認、queue write は CLI ではなく service 側の責務とする。
-local CLI invocation では、relative `output_dir` を invocation base directory 基準の local path へ正規化してから service command へ渡してよい。
+local CLI invocation では、`output_dir` が local path のときだけ relative path を invocation base directory 基準へ正規化してから
+service command へ渡してよい。remote artifact prefix を使う lane では `output_dir` を opaque prefix としてそのまま扱う。
 initial acceptance 用の single-process CLI lane は、replaceable queue store の初期実装が in-memory だけであることを前提に、
 1 回の command invocation の中で queue write、queued-only cancel、または worker 実行までを閉じてよい。
 
@@ -211,7 +214,8 @@ queue / execution lifecycle は `record.json.status` と別契約である。
 
 ## Terminal Persist
 
-terminal persist は既存 `output-dir` を使う artifact-backed first とする。
+terminal persist は既存 `output_dir` を使う artifact-backed first とする。default lane は file-backed first とし、
+online service infra では同じ artifact contract を remote object storage へ差し替えてよい。
 
 最低限残すもの:
 
@@ -242,7 +246,8 @@ service skeleton が terminal success / failure を判断する正本は `record
 
 Phase 6 の first durable split では、queue / registration / locator metadata / 必要なら latest world state を
 database 側へ置き、`record.json` / `result-summary.json` / `snapshot.json` / `history.json` / stderr artifact /
-AI or game master executable payload の本体は object storage 側へ置いてよい。
+AI or game master executable payload の本体は object storage 側へ置いてよい。local CLI、CI、external game 開発 lane では
+同じ artifact shape を local filesystem へ保存してもよい。
 
 ## CLI-first Acceptance
 

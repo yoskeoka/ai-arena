@@ -21,7 +21,8 @@ submission 受理から terminal artifact locator 保存までを再起動耐性
 
 - `MatchSubmission` / `QueueRecord` / `TerminalArtifacts` を durable に保持する write model を定義する
 - queued / leased / running / persisting / completed|failed|canceled の lifecycle を durable backend 上で扱えるようにする
-- terminal artifact 本体は既存どおり file-backed artifact layout に残し、write model 側には locator と最小 summary だけを持たせる
+- terminal artifact 本体は default では既存どおり file-backed artifact layout に残し、online service infra では
+  同じ artifact contract を `Cloudflare R2` へ差し替え可能にしたうえで、write model 側には locator と最小 summary だけを持たせる
 - `QueueRecord`、registration manifest metadata、必要なら latest world state は `Neon Postgres` に置き、
   snapshot / history / stderr / executable payload は `Cloudflare R2` へ逃がせる形にする
 - single logical queue authority 前提の cross-process queue 共有を成立させる
@@ -40,7 +41,7 @@ submission 受理から terminal artifact locator 保存までを再起動耐性
 
 - queue write / claim / update / cancel / terminal persist が durable backend 越しに進む contract を追記する
 - `output_dir` 配下 artifact と service write model の責務分離を明記する
-- first deploy target として `Render + Neon + R2` の保存責務分離を明記する
+- first deploy target として `Cloudflare Pages + Render + Neon Postgres + Cloudflare R2` の保存責務分離を明記する
 - single logical queue authority までは扱うが、multi-node fairness は対象外であることを明記する
 
 ### `docs/specs/platform.md`
