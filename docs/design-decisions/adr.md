@@ -37,6 +37,57 @@ project-planの要件:
 
 ---
 
+## [2026-05-27] Phase 6 first infra target は Pages + Render + Neon + R2 とする
+
+### Context
+Phase 6 の `0056` では、online service skeleton の durable write model を最初に成立させたい。一方で、
+`world state`、`snapshot`、`history`、stderr、AI/game master executable のような artifact 本体は、
+queue や registration manifest metadata より大きく、public watch/read API からも参照されうる。
+
+この段階で必要なのは、
+
+- queue / registration / locator metadata を durable に共有すること
+- latest world state を必要なら即時 read しやすい場所へ置けること
+- large artifact を DB 本体から切り離すこと
+- first deploy を低コストかつ簡潔に始められること
+
+であり、multi-node fairness や distributed queue 自体はまだ対象外である。
+
+### Decision
+Phase 6 の first infra target は次で固定する。
+
+- frontend / public watch UI: `Cloudflare Pages`
+- match 実行を担う backend process: `Render`
+- durable metadata backend: `Neon Postgres`
+- large artifact backend: `Cloudflare R2`
+
+保存責務は次で分離する。
+
+- `Neon Postgres`: queue lifecycle、registration manifest metadata、artifact locator metadata、必要なら latest world state
+- `Cloudflare R2`: snapshot、history、stderr、large world-state artifact、AI/game master executable payload
+
+public read/watch API は当初 backend process と同じ lane に置いてよいが、後続で `Cloudflare Workers` へ切り出しても
+この storage split は変えない。
+
+### Consequences
+
+**利点:**
+- `Neon` は DB 単体を軽く持てるため、queue や registration の coordination を素直に扱える
+- `R2` は large artifact と watch/read の object delivery を DB から切り離せる
+- `Render` は first backend process を分かりやすく常駐させやすく、match 実行 lane の運用を単純に始められる
+- `Pages` は watch UI を storage/backend と独立に配信できる
+
+**トレードオフ:**
+- vendor は 1 社に寄らず、DB と object storage は分離される
+- first deploy は single logical queue authority 前提であり、multi-node fairness や distributed worker coordination は後続に残る
+- latest world state を DB に置く場合は read は簡潔になるが、snapshot/history と保存場所が分かれる
+
+**制約:**
+- durable metadata と object artifact の責務分離は崩さない
+- public watch/read の実装場所を後で `Workers` や `Cloud Run` に移しても、`Neon + R2` の保存境界は維持する
+
+---
+
 ## [2026-03-08] Locale・言語・Timezone: 英語 + UTC
 
 ### Context

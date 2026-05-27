@@ -14,13 +14,17 @@ submission 受理から terminal artifact locator 保存までを再起動耐性
 - `0050` は runner terminal artifact を `output_dir/<match_id>/` に保存し、`QueueRecord.Terminal` に locator を戻す形を固定した
 - 現状は queue 順序、lease 状態、terminal locator がすべて process memory にしか残らず、service/worker を分けた運用へ進めない
 - `0046-platform-online-foundation-02-persistence-and-read-model.md` の親 scope のうち、write path の正本化を先に閉じる必要がある
+- first infra target は `Cloudflare Pages + Render + Neon Postgres + Cloudflare R2` とし、
+  durable metadata と large artifact を分離した形で online 運営の最初の landing を揃える
 
 ## Scope
 
 - `MatchSubmission` / `QueueRecord` / `TerminalArtifacts` を durable に保持する write model を定義する
 - queued / leased / running / persisting / completed|failed|canceled の lifecycle を durable backend 上で扱えるようにする
 - terminal artifact 本体は既存どおり file-backed artifact layout に残し、write model 側には locator と最小 summary だけを持たせる
-- single-node 前提の cross-process queue 共有を成立させる
+- `QueueRecord`、registration manifest metadata、必要なら latest world state は `Neon Postgres` に置き、
+  snapshot / history / stderr / executable payload は `Cloudflare R2` へ逃がせる形にする
+- single logical queue authority 前提の cross-process queue 共有を成立させる
 - `0049` / `0050` の service command / worker path を durable backend に載せ替える
 
 この plan では以下を扱わない。
@@ -36,7 +40,8 @@ submission 受理から terminal artifact locator 保存までを再起動耐性
 
 - queue write / claim / update / cancel / terminal persist が durable backend 越しに進む contract を追記する
 - `output_dir` 配下 artifact と service write model の責務分離を明記する
-- single-node cross-process 共有までは扱うが、multi-node fairness は対象外であることを明記する
+- first deploy target として `Render + Neon + R2` の保存責務分離を明記する
+- single logical queue authority までは扱うが、multi-node fairness は対象外であることを明記する
 
 ### `docs/specs/platform.md`
 
@@ -79,12 +84,14 @@ submission 受理から terminal artifact locator 保存までを再起動耐性
 - in-memory 前提の helper が durable backend 詳細へ漏れると差し替え seam が崩れる
   - mitigation: command / worker は `QueueStore` 契約に留め、backend 固有処理を service orchestration へ漏らさない
 - artifact 本体まで write model に重複保存すると source-of-truth が曖昧になる
-  - mitigation: `record.json` / `snapshot.json` / `history.json` は file-backed artifact を正本に保ち、store には locator と lifecycle 要約だけを保持する
+  - mitigation: `record.json` / `snapshot.json` / `history.json` は object storage artifact を正本に保ち、store には locator と lifecycle 要約だけを保持する
 - durable 化の勢いで distributed queue 前提を背負うと scope が膨らむ
-  - mitigation: single-node cross-process 共有を到達点に固定し、multi-node fairness は後続へ送る
+  - mitigation: single logical queue authority を到達点に固定し、multi-node fairness は後続へ送る
 
 ## Design Decisions
 
 - `0049` の replaceable store seam は維持し、durable 化はその差し替えとして行う
 - artifact directory 自体を store backend に埋め込まず、service write model と runner artifact layout を分離する
-- 最初の durable backend は single-node 運用を成立させることを優先し、分散 queue は対象外とする
+- first infra target は `Cloudflare Pages + Render + Neon Postgres + Cloudflare R2` とする
+- first durable metadata backend は `Neon Postgres` とし、large artifact backend は `Cloudflare R2` とする
+- 最初の durable backend は single logical queue authority を成立させることを優先し、分散 queue は対象外とする
