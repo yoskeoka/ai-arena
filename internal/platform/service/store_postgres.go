@@ -12,6 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const postgresQueueRecordPrimaryKey = "service_queue_records_pkey"
+
 const postgresQueueStoreSchema = `
 CREATE TABLE IF NOT EXISTS service_queue_records (
     submission_id TEXT PRIMARY KEY,
@@ -63,6 +65,10 @@ func (s *PostgresQueueStore) Close() {
 
 // Enqueue appends one admitted submission in queued state.
 func (s *PostgresQueueStore) Enqueue(ctx context.Context, submission MatchSubmission) (QueueRecord, error) {
+	if strings.TrimSpace(submission.SubmissionID) == "" {
+		return QueueRecord{}, fmt.Errorf("service: submission_id is required")
+	}
+
 	playersJSON, err := json.Marshal(submission.Players)
 	if err != nil {
 		return QueueRecord{}, fmt.Errorf("service: marshal submitted players: %w", err)
@@ -96,7 +102,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == postgresQueueRecordPrimaryKey {
 			return QueueRecord{}, fmt.Errorf("service: submission_id %q already exists", submission.SubmissionID)
 		}
 		return QueueRecord{}, fmt.Errorf("service: enqueue submission: %w", err)
