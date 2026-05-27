@@ -59,6 +59,8 @@ runner が `failed` や timeout reason 付き `canceled` の source-of-truth `re
 service 側の artifact persist が成功したなら queue lifecycle は `completed` に進めてよい。
 逆に、runner invocation request を組み立てられない、terminal record を得られない、artifact persist に失敗する、
 といった orchestration failure は service 側 queue lifecycle の `failed` として扱う。
+このとき service write model が durable に保持するのは queue lifecycle と artifact locator summary であり、
+`record.json` / `snapshot.json` / `history.json` / stderr 本体の source-of-truth は runner artifact backend 側に残す。
 
 ## 試合実行の仕組み
 
@@ -92,6 +94,7 @@ game master sidecar については、platform と sidecar が共有してよい
 
 - `docs/specs/platform-common-contract.md`: metadata / action status / failure 分類 / record core schema の正本
 - `docs/specs/platform-service-skeleton.md`: online service skeleton の submission / admission / queue lifecycle 契約
+- `docs/specs/platform-service-persistence.md`: online service write model と terminal locator 保存単位の正本
 - `docs/specs/game-master.md`: game master 開発者向けの論理 API と transport 契約
 - `docs/specs/platform-game-registry.md`: registered game の lookup key / descriptor / build/replay 入口
 - `docs/specs/janken-game.md`: `janken` 固有 payload / validation / ranking

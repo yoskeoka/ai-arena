@@ -12,4 +12,5 @@ CI / automation maintenance のような development harness 文書を置く。
 
 - `docs/development/go-quality-gates.md`: Go module の quality gate と CI lane の運用
 - `docs/development/github-actions-pinning.md`: GitHub Actions の `uses:` pinning 運用
+- `docs/development/platform-service-postgres.md`: durable queue backend 用 Postgres の local / CI harness
 - `docs/development/workflow-linter.md`: local workflow linter の maintenance 契約

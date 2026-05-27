@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/service"
@@ -40,11 +41,13 @@ func run(args []string, stdout, stderr io.Writer) error {
 		baseDir        string
 		workerID       string
 		matchTimeout   time.Duration
+		postgresDSN    string
 	)
 	fs.StringVar(&submissionPath, "submission", "", "submission JSON path or - for stdin")
 	fs.StringVar(&baseDir, "base-dir", "", "base directory for resolving local artifact refs and output_dir")
 	fs.StringVar(&workerID, "worker-id", "cli-worker", "worker identifier for run-once")
 	fs.DurationVar(&matchTimeout, "match-timeout", 0, "match timeout for run-once")
+	fs.StringVar(&postgresDSN, "postgres-dsn", "", "PostgreSQL DSN for durable queue storage")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -59,6 +62,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 		baseDir = cwd
 	}
 	baseDir = filepath.Clean(baseDir)
+	if postgresDSN == "" {
+		postgresDSN = strings.TrimSpace(os.Getenv("ARENA_SERVICE_POSTGRES_DSN"))
+	}
 
 	submission, err := loadSubmission(submissionPath, os.Stdin)
 	if err != nil {
@@ -66,10 +72,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 	resolveOutputDir(baseDir, &submission)
 
-	app, err := newCLIApp(baseDir, matchTimeout)
+	app, err := newCLIApp(baseDir, matchTimeout, postgresDSN)
 	if err != nil {
 		return err
 	}
+	defer app.close()
 
 	var record service.QueueRecord
 	switch subcommand {
@@ -96,13 +103,13 @@ func run(args []string, stdout, stderr io.Writer) error {
 func usageFor(subcommand string) string {
 	switch subcommand {
 	case "run-once":
-		return "arena-service run-once --submission <path-or-> [--base-dir <dir>] [--worker-id <id>] [--match-timeout <duration>]"
+		return "arena-service run-once --submission <path-or-> [--base-dir <dir>] [--worker-id <id>] [--match-timeout <duration>] [--postgres-dsn <dsn>]"
 	case "submit-cancel":
-		return "arena-service submit-cancel --submission <path-or-> [--base-dir <dir>]"
+		return "arena-service submit-cancel --submission <path-or-> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "submit":
-		return "arena-service submit --submission <path-or-> [--base-dir <dir>]"
+		return "arena-service submit --submission <path-or-> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	default:
-		return "arena-service <submit|run-once|submit-cancel> --submission <path-or-> [--base-dir <dir>]"
+		return "arena-service <submit|run-once|submit-cancel> --submission <path-or-> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	}
 }
 
@@ -111,9 +118,10 @@ type cliApp struct {
 	queue    service.QueueStore
 	baseDir  string
 	timeout  time.Duration
+	closeFn  func()
 }
 
-func newCLIApp(baseDir string, matchTimeout time.Duration) (*cliApp, error) {
+func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string) (*cliApp, error) {
 	dryRun, err := service.NewLocalDryRunChecker(baseDir)
 	if err != nil {
 		return nil, err
@@ -122,9 +130,13 @@ func newCLIApp(baseDir string, matchTimeout time.Duration) (*cliApp, error) {
 	if err != nil {
 		return nil, err
 	}
-	store := service.NewInMemoryQueueStore()
+	store, closeFn, err := newQueueStore(postgresDSN)
+	if err != nil {
+		return nil, err
+	}
 	commands, err := service.NewCommandService(store, validator)
 	if err != nil {
+		closeFn()
 		return nil, err
 	}
 	return &cliApp{
@@ -132,7 +144,27 @@ func newCLIApp(baseDir string, matchTimeout time.Duration) (*cliApp, error) {
 		queue:    store,
 		baseDir:  baseDir,
 		timeout:  matchTimeout,
+		closeFn:  closeFn,
 	}, nil
+}
+
+func newQueueStore(postgresDSN string) (service.QueueStore, func(), error) {
+	if strings.TrimSpace(postgresDSN) == "" {
+		return service.NewInMemoryQueueStore(), func() {}, nil
+	}
+
+	store, err := service.NewPostgresQueueStore(context.Background(), postgresDSN)
+	if err != nil {
+		return nil, nil, err
+	}
+	return store, store.Close, nil
+}
+
+func (a *cliApp) close() {
+	if a == nil || a.closeFn == nil {
+		return
+	}
+	a.closeFn()
 }
 
 func (a *cliApp) runOnce(ctx context.Context, submission service.MatchSubmission, workerID string) (service.QueueRecord, error) {

@@ -188,3 +188,10 @@
 - **Pattern**: execution topology と admission ownership を 1 つの分類に潰すと、`built-in` 化すべき route と sandboxed runtime を優先すべき route が spec 上でぶれる
 - **Rule**: official external game master policy を書くときは、まず admission tier を分け、その中で許可する runtime kind を決める。`docker` は候補として残しても、未サポートなら候補のまま明記し、暗黙に support 済みのように書かない
 - **Applied**: `docs/specs/platform-game-registry.md`、`docs/specs/platform.md`、`docs/specs/game-master.md`、`docs/design-decisions/adr.md`、今後の runtime/admission policy 記述全般
+
+## [2026-05-28] production storage target と local/CI harness を同じ lane とみなさない
+
+- **Mistake**: durable store plan の infra target を production の `Neon Postgres` 前提で読んだまま進めると、local contributor verification と CI で何を立てるかが実装前に明文化されない
+- **Pattern**: deploy target を決めた時点で development harness まで自明だと扱い、spec と code は進むのに local/CI の再現可能な backend 導入手順が後追いになる
+- **Rule**: production 向けの storage target が決まっている plan でも、local/CI で同じ contract をどう検証するかを同じ branch で固定する。spec には contract だけを書き、Docker compose や CI service container などの harness は `docs/development/` と workflow に分離して残す
+- **Applied**: `0056-platform-online-foundation-02-01-durable-store-and-write-model`、今後の durable backend / managed service 導入を伴う execution plan 全般

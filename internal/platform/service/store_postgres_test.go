@@ -1,0 +1,135 @@
+package service
+
+import (
+	"context"
+	"os"
+	"testing"
+
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
+)
+
+func TestPostgresQueueStoreSharesQueueAcrossInstances(t *testing.T) {
+	dsn := postgresTestDSN(t)
+	ctx := context.Background()
+
+	store1 := newTestPostgresQueueStore(t, ctx, dsn, true)
+	submission1 := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
+	submission1.SubmissionID = "sub-pg-1"
+	submission1.MatchID = "match-pg-1"
+	submission2 := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
+	submission2.SubmissionID = "sub-pg-2"
+	submission2.MatchID = "match-pg-2"
+
+	if _, err := store1.Enqueue(ctx, submission1); err != nil {
+		t.Fatalf("Enqueue(submission1) error = %v", err)
+	}
+	if _, err := store1.Enqueue(ctx, submission2); err != nil {
+		t.Fatalf("Enqueue(submission2) error = %v", err)
+	}
+	store1.Close()
+
+	store2 := newTestPostgresQueueStore(t, ctx, dsn, false)
+	record, err := store2.Claim(ctx, "worker-1")
+	if err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+	if record.Submission.SubmissionID != submission1.SubmissionID {
+		t.Fatalf("Claim() submission_id = %q, want %q", record.Submission.SubmissionID, submission1.SubmissionID)
+	}
+	if record.Lease == nil || record.Lease.WorkerID != "worker-1" {
+		t.Fatalf("Claim() lease = %+v, want worker-1", record.Lease)
+	}
+	record.State = StateRunning
+	if err := store2.Update(ctx, record); err != nil {
+		t.Fatalf("Update(running) error = %v", err)
+	}
+	record.State = StatePersisting
+	if err := store2.Update(ctx, record); err != nil {
+		t.Fatalf("Update(persisting) error = %v", err)
+	}
+	record.State = StateCompleted
+	record.Terminal = &TerminalArtifacts{
+		MatchDir:          "r2://matches/match-pg-1",
+		RecordPath:        "r2://matches/match-pg-1/record.json",
+		ResultSummaryPath: "r2://matches/match-pg-1/result-summary.json",
+		PlayerStderrPaths: map[string]string{"p1": "r2://matches/match-pg-1/p1-stderr.log"},
+		MatchStatus:       contract.StatusCompleted,
+	}
+	if err := store2.Update(ctx, record); err != nil {
+		t.Fatalf("Update(completed) error = %v", err)
+	}
+	store2.Close()
+
+	store3 := newTestPostgresQueueStore(t, ctx, dsn, false)
+	loaded, err := store3.loadRecord(ctx, submission1.SubmissionID)
+	if err != nil {
+		t.Fatalf("loadRecord() error = %v", err)
+	}
+	if loaded.State != StateCompleted {
+		t.Fatalf("loaded.State = %q, want %q", loaded.State, StateCompleted)
+	}
+	if loaded.Terminal == nil {
+		t.Fatal("loaded.Terminal = nil, want terminal summary")
+	}
+	if loaded.Terminal.RecordPath != "r2://matches/match-pg-1/record.json" {
+		t.Fatalf("loaded.Terminal.RecordPath = %q, want durable record path", loaded.Terminal.RecordPath)
+	}
+	next, err := store3.Claim(ctx, "worker-2")
+	if err != nil {
+		t.Fatalf("Claim(second) error = %v", err)
+	}
+	if next.Submission.SubmissionID != submission2.SubmissionID {
+		t.Fatalf("Claim(second) submission_id = %q, want %q", next.Submission.SubmissionID, submission2.SubmissionID)
+	}
+}
+
+func TestPostgresQueueStoreCancelQueued(t *testing.T) {
+	dsn := postgresTestDSN(t)
+	ctx := context.Background()
+	store := newTestPostgresQueueStore(t, ctx, dsn, true)
+
+	submission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
+	submission.SubmissionID = "sub-pg-cancel"
+	submission.MatchID = "match-pg-cancel"
+
+	if _, err := store.Enqueue(ctx, submission); err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+	record, err := store.CancelQueued(ctx, submission.SubmissionID)
+	if err != nil {
+		t.Fatalf("CancelQueued() error = %v", err)
+	}
+	if record.State != StateCanceled {
+		t.Fatalf("record.State = %q, want %q", record.State, StateCanceled)
+	}
+	if _, err := store.Claim(ctx, "worker-1"); err != ErrNoQueuedSubmission {
+		t.Fatalf("Claim() error = %v, want %v", err, ErrNoQueuedSubmission)
+	}
+}
+
+func newTestPostgresQueueStore(t *testing.T, ctx context.Context, dsn string, truncate bool) *PostgresQueueStore {
+	t.Helper()
+
+	store, err := NewPostgresQueueStore(ctx, dsn)
+	if err != nil {
+		t.Fatalf("NewPostgresQueueStore() error = %v", err)
+	}
+	if truncate {
+		if _, err := store.pool.Exec(ctx, "TRUNCATE service_queue_records RESTART IDENTITY;"); err != nil {
+			store.Close()
+			t.Fatalf("truncate postgres queue store: %v", err)
+		}
+	}
+	t.Cleanup(store.Close)
+	return store
+}
+
+func postgresTestDSN(t *testing.T) string {
+	t.Helper()
+
+	dsn := os.Getenv("AI_ARENA_PG_TEST_DSN")
+	if dsn == "" {
+		t.Skip("AI_ARENA_PG_TEST_DSN is not set")
+	}
+	return dsn
+}
