@@ -25,6 +25,9 @@ SQL 形式の schema を source of truth に固定したうえで、service の 
 - startup inline DDL を廃止し、service 起動前提の schema apply contract へ切り替える
 - `service_queue_records` 周辺 query を `sqlc + pgx` ベースの query layer へ移す
 - `0057` / `0058` が再利用できる query package / generated code layout を先に整える
+- Atlas 運用を 2 レーンで整理する
+  - review/deploy lane: `migrate diff` で review 対象の migration SQL を生成する
+  - test/bootstrap lane: `schema apply` で空 DB を desired schema へ揃え、e2e / integration test の初期化に使う
 
 この plan では以下を扱わない。
 
@@ -46,6 +49,17 @@ SQL 形式の schema を source of truth に固定したうえで、service の 
 - Postgres backend の初期化責務から schema bootstrap を外し、runtime は既存 schema に依存するだけであることを明記する
 - `sqlc + pgx` を使う query layer の境界と、service / worker から見える抽象境界を補足する
 
+### `docs/development/platform-service-postgres.md`
+
+- Atlas 導入後の contributor workflow として、review/deploy lane と test/bootstrap lane の使い分けを定義する
+- local/CI の Postgres harness 上で `schema apply` を使う空 DB 初期化手順を追記する
+- migration 生成は `migrate diff`、テスト用 bootstrap は `schema apply` という役割分担を明記する
+
+### `AGENTS.md`
+
+- Postgres schema/query stack の repo-local 開発運用は `docs/development/platform-service-postgres.md` を参照することを追記する
+- schema review/deploy lane と test/bootstrap lane の両方がある前提で、この repo の AI agent が導線を見落とさないようにする
+
 ### 新規または更新 spec
 
 - Postgres schema / migration / query generation の責務をまとめた spec を追加または更新する
@@ -58,6 +72,8 @@ SQL 形式の schema を source of truth に固定したうえで、service の 
 - `sqlc` config と generated query package の追加
 - `service_queue_records` write path query を `sqlc + pgx` 経由へ移行
 - migration generation / sqlc generation / integration verification 用の make target または同等の entrypoint 追加
+- `docs/development/platform-service-postgres.md` へ 2 レーン運用と test/bootstrap 手順を追加
+- `AGENTS.md` へ開発運用文書の参照を追加
 
 ## Sub-tasks
 
@@ -65,6 +81,7 @@ SQL 形式の schema を source of truth に固定したうえで、service の 
 - [ ] `service_queue_records` の current schema を Atlas 管理へ移し、baseline migration を用意する
 - [ ] `sqlc` config と package layout を決め、`pgx/v5` target で generated query surface を作る
 - [ ] Postgres queue store の write path を generated query へ移す
+- [ ] `docs/development/platform-service-postgres.md` に review/deploy lane と test/bootstrap lane の運用を書き、`AGENTS.md` からリンクする
 - [ ] local/CI で schema apply と sqlc generation を再現できる verification path を追加する
 - [ ] `0057` / `0058` が使う query extension point を明文化する
 
