@@ -50,6 +50,9 @@ entrypoint、repo-internal package、fixture/helper package も同じ comment po
 `testdata/**` を最終対象に含めるため、`make lint` の `revive` invocation は `./...` だけに依存せず、
 `./cmd/... ./games/... ./internal/... ./e2e/...` に加えて、`testdata/**` と
 `internal/platform/runtime/testdata/**` の package dir を明示的に検査しなければならない。
+checked-in generated code は comment policy の対象外としてよい。
+現時点では `internal/platform/service/postgres/sqlc/` を `revive` から外し、
+生成物の整合性は別の drift check で担保する。
 
 ## Tool Versioning
 
@@ -80,5 +83,7 @@ entrypoint、repo-internal package、fixture/helper package も同じ comment po
 - `make test` は file-backed default lane とし、`AI_ARENA_PG_TEST_DSN` を注入しない
 - `make test-postgres` は durable Postgres lane とし、Docker service container と DSN override を専用 job に閉じ込める
 - `make test`、`make test-postgres`、`make lint` は独立 job として並行に実行してよい
+- CI は checked-in generated query code に対して `make postgres-sqlc-generate` を再実行し、
+  `internal/platform/service/postgres/sqlc/` の drift がないことを確認する
 - CI は module/build/tool cache を持ってよいが、品質判定の入口は Makefile targets に揃える
 - formatter drift は test failure ではなく lint failure として扱う

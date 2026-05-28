@@ -17,6 +17,8 @@
 - Do not treat this file as the final authority for public UI, public API, or external documentation language policy.
 - See `docs/design-decisions/adr.md` for the background and decision history behind the internal documentation policy.
 - When editing GitHub Actions workflows or composite actions, use `pinact` to pin or update `uses:` references rather than hand-editing version tags.
+- Postgres schema / migration / query stack の repo-local contributor workflow は
+  `docs/development/platform-service-postgres.md` を参照する。
 
 ## Spec Writing Discipline
 

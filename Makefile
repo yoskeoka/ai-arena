@@ -1,6 +1,8 @@
 GO ?= go
 CARGO ?= cargo
 RUSTUP ?= rustup
+ATLAS_VERSION ?= 0.30.0
+SQLC_VERSION ?= 1.31.0
 CACHE_ROOT ?= /tmp/ai-arena-go-quality-gates
 GOPATH = $(CACHE_ROOT)/go
 GOMODCACHE = $(GOPATH)/pkg/mod
@@ -8,11 +10,27 @@ GOCACHE = $(CACHE_ROOT)/go-build
 CARGO_TARGET_DIR ?= $(CACHE_ROOT)/cargo-target
 RUST_WASM_TARGET ?= wasm32-wasip1
 AI_ARENA_PG_TEST_DSN ?= postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable
+AI_ARENA_PG_ATLAS_DEV_DSN ?= postgres://arena:arena@127.0.0.1:55432/postgres?sslmode=disable
+ATLAS_IMAGE ?= arigaio/atlas:$(ATLAS_VERSION)
+SQLC_IMAGE ?= sqlc/sqlc:$(SQLC_VERSION)
+ATLAS_DOCKER = docker run --rm --network host -v "$(CURDIR):/work" -w /work -v /var/run/docker.sock:/var/run/docker.sock $(ATLAS_IMAGE)
+SQLC_DOCKER = docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/work" -w /work $(SQLC_IMAGE)
+POSTGRES_SCHEMA_DIR ?= internal/platform/service/postgres/schema
+POSTGRES_MIGRATIONS_DIR ?= internal/platform/service/postgres/migrations
+POSTGRES_SQLC_CONFIG ?= sqlc.yaml
+POSTGRES_ATLAS_DEV_URL ?= $(AI_ARENA_PG_ATLAS_DEV_DSN)
+POSTGRES_MIGRATION_NAME ?=
+POSTGRES_SCHEMA_URL ?= file://$(POSTGRES_SCHEMA_DIR)
+POSTGRES_MIGRATIONS_URL ?= file://$(POSTGRES_MIGRATIONS_DIR)
 GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
 GOFILES = $(shell git ls-files -- '*.go' | while read -r file; do if [ -f "$$file" ]; then printf '%s ' "$$file"; fi; done)
 REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtime/testdata | while read -r file; do if [ -f "$$file" ] && printf '%s' "$$file" | grep -q '\.go$$'; then dirname "$$file"; fi; done | sort -u | tr '\n' ' ')
+REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
+REVIVE_PACKAGE_DIRS = $(shell $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
-.PHONY: test test-postgres postgres-up postgres-down test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-sqlc-generate test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+
+export COMPOSE_BAKE = false
 
 test:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
@@ -20,6 +38,7 @@ test:
 
 test-postgres:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	$(MAKE) postgres-schema-apply
 	AI_ARENA_PG_TEST_DSN="$(AI_ARENA_PG_TEST_DSN)" $(GO_ENV) $(GO) test ./...
 
 postgres-up:
@@ -27,6 +46,29 @@ postgres-up:
 
 postgres-down:
 	docker compose -f tools/dev/postgres-compose.yml down -v
+
+postgres-schema-apply:
+	@attempt=0; \
+	until [ "$$attempt" -ge 10 ]; do \
+		if $(ATLAS_DOCKER) schema apply --auto-approve --url "$(AI_ARENA_PG_TEST_DSN)" --to "$(POSTGRES_SCHEMA_URL)" --dev-url "$(POSTGRES_ATLAS_DEV_URL)"; then \
+			exit 0; \
+		fi; \
+		attempt="$$((attempt + 1))"; \
+		sleep 2; \
+	done; \
+	echo "postgres-schema-apply failed after $$attempt attempts"; \
+	exit 1
+
+postgres-migrate-diff:
+	@if [ -z "$(NAME)" ] && [ -z "$(POSTGRES_MIGRATION_NAME)" ]; then \
+		echo "NAME or POSTGRES_MIGRATION_NAME is required"; \
+		exit 1; \
+	fi
+	name="$${NAME:-$(POSTGRES_MIGRATION_NAME)}"; \
+	$(ATLAS_DOCKER) migrate diff "$$name" --dir "$(POSTGRES_MIGRATIONS_URL)" --to "$(POSTGRES_SCHEMA_URL)" --dev-url "$(POSTGRES_ATLAS_DEV_URL)"
+
+postgres-sqlc-generate:
+	$(SQLC_DOCKER) generate -f "$(POSTGRES_SQLC_CONFIG)"
 
 test-wasm-go:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
@@ -71,7 +113,7 @@ lint-gosec:
 
 lint-revive:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	$(GO_ENV) $(GO) tool revive -config revive.toml ./cmd/... ./games/... ./internal/... ./e2e/... $(REVIVE_TESTDATA_DIRS)
+	$(GO_ENV) $(GO) tool revive -config revive.toml $(REVIVE_PACKAGE_DIRS) $(REVIVE_TESTDATA_DIRS)
 
 build-janken-go-wasm:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
