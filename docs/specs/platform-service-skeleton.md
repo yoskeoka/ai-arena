@@ -59,6 +59,9 @@ file-backed first を default とする。
 online service infra では、同じ contract を `R2` へ差し替える。
 local CLI と CI で durable backend を検証するときは、
 production と同じ Postgres contract を満たすローカル DB を使ってよい。
+verification lane は少なくとも 2 系統に分けて扱う。
+default lane は `AI_ARENA_PG_TEST_DSN` を注入しない file-backed / in-memory baseline とし、
+durable lane は Postgres contract を検証する専用 target として分離してよい。
 
 初期の CLI adapter は operator input を `Match Submission` schema に decode して、
 service command へ渡すだけに留める。

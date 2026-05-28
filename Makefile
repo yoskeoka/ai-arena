@@ -7,6 +7,7 @@ GOMODCACHE = $(GOPATH)/pkg/mod
 GOCACHE = $(CACHE_ROOT)/go-build
 CARGO_TARGET_DIR ?= $(CACHE_ROOT)/cargo-target
 RUST_WASM_TARGET ?= wasm32-wasip1
+AI_ARENA_PG_TEST_DSN ?= postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable
 GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
 GOFILES = $(shell git ls-files -- '*.go' | while read -r file; do if [ -f "$$file" ]; then printf '%s ' "$$file"; fi; done)
 REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtime/testdata | while read -r file; do if [ -f "$$file" ] && printf '%s' "$$file" | grep -q '\.go$$'; then dirname "$$file"; fi; done | sort -u | tr '\n' ' ')
@@ -19,7 +20,7 @@ test:
 
 test-postgres:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	AI_ARENA_PG_TEST_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable $(GO_ENV) $(GO) test ./...
+	AI_ARENA_PG_TEST_DSN="$(AI_ARENA_PG_TEST_DSN)" $(GO_ENV) $(GO) test ./...
 
 postgres-up:
 	docker compose -f tools/dev/postgres-compose.yml up -d postgres

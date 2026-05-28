@@ -6,6 +6,8 @@
 
 - `make test`
   - fast default gate として `go test ./...` を実行する
+- `make test-postgres`
+  - durable Postgres lane として `AI_ARENA_PG_TEST_DSN` を付けた `go test ./...` を実行する
 - `make fmt`
   - tracked `.go` files に `goimports` を適用し、formatting と import ordering を auto fix する
 - `make lint`
@@ -74,7 +76,9 @@ entrypoint、repo-internal package、fixture/helper package も同じ comment po
 
 ## CI Contract
 
-- GitHub Actions 上の Go CI は `make test` と `make lint` を実行する
-- `make test` と `make lint` は独立 job として並行に実行してよい
+- GitHub Actions 上の Go CI は `make test`、`make test-postgres`、`make lint` を実行する
+- `make test` は file-backed default lane とし、`AI_ARENA_PG_TEST_DSN` を注入しない
+- `make test-postgres` は durable Postgres lane とし、Docker service container と DSN override を専用 job に閉じ込める
+- `make test`、`make test-postgres`、`make lint` は独立 job として並行に実行してよい
 - CI は module/build/tool cache を持ってよいが、品質判定の入口は Makefile targets に揃える
 - formatter drift は test failure ではなく lint failure として扱う
