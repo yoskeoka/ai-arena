@@ -6,7 +6,8 @@
 matchmaking 後に得た `game + players` を `submission -> admission -> queue -> worker -> runner -> terminal persist`
 で流す最小内部契約を定義する。
 
-この spec は public HTTP API ではなく、service / worker / runner 間で共有する internal contract を固定する。
+この spec は public HTTP API ではない。
+service / worker / runner 間で共有する internal contract を固定する。
 
 ## この spec の責務範囲
 
@@ -48,18 +49,30 @@ online service skeleton は、single-match runner を 1 段外側から包む or
   `submit -> worker run -> terminal persist` を通せればよい
 
 Phase 6 の first deploy target は `Cloudflare Pages + Render + Neon Postgres + Cloudflare R2` とする。
-この target では、service metadata と queue lifecycle は `Neon Postgres` に置き、large artifact と executable payload は
-`Cloudflare R2` に置く。public watch/read UI は `Cloudflare Pages` から始め、match 実行を担う service / worker の
-single logical queue authority は `Render` 上の backend process に置く。local CLI、CI、external game 開発で runner を
-直接起動する lane では file-backed first を default とし、online service infra では同じ contract を `R2` へ差し替える。
-local CLI と CI で durable backend を検証するときは、production と同じ Postgres contract を満たすローカル DB を使ってよい。
+service metadata と queue lifecycle は `Neon Postgres` に置く。
+large artifact と executable payload は `Cloudflare R2` に置く。
+public watch/read UI は `Cloudflare Pages` から始める。
+match 実行を担う service / worker の single logical queue authority は `Render` 上の backend process に置く。
 
-初期の CLI adapter は operator input を `Match Submission` schema に decode して service command へ渡すだけに留める。
-artifact locator 解決、registry lookup、sidecar manifest 互換性確認、queue write は CLI ではなく service 側の責務とする。
-local CLI invocation では、`output_dir` が local path のときだけ relative path を invocation base directory 基準へ正規化してから
-service command へ渡してよい。remote artifact prefix を使う lane では `output_dir` を opaque prefix としてそのまま扱う。
-initial acceptance 用の single-process CLI lane は、replaceable queue store の初期実装が in-memory だけであることを前提に、
-1 回の command invocation の中で queue write、queued-only cancel、または worker 実行までを閉じてよい。
+local CLI、CI、external game 開発で runner を直接起動する lane では、
+file-backed first を default とする。
+online service infra では、同じ contract を `R2` へ差し替える。
+local CLI と CI で durable backend を検証するときは、
+production と同じ Postgres contract を満たすローカル DB を使ってよい。
+
+初期の CLI adapter は operator input を `Match Submission` schema に decode して、
+service command へ渡すだけに留める。
+artifact locator 解決、registry lookup、sidecar manifest 互換性確認、queue write は
+CLI ではなく service 側の責務とする。
+
+local CLI invocation では、`output_dir` が local path のときだけ、
+relative path を invocation base directory 基準へ正規化してから service command へ渡してよい。
+remote artifact prefix を使う lane では `output_dir` を opaque prefix としてそのまま扱う。
+
+initial acceptance 用の single-process CLI lane は、
+replaceable queue store の初期実装が in-memory だけであることを前提にしてよい。
+1 回の command invocation の中で queue write、queued-only cancel、
+または worker 実行までを閉じてよい。
 
 ## Match Submission
 
