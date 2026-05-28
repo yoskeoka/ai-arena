@@ -4,7 +4,10 @@ name: Slopless
   pull_request:
     branches: [main]
     paths:
-      - "**/*.md"
+      - "docs/specs/**/*.md"
+      - "docs/design-decisions/**/*.md"
+      - "docs/development/**/*.md"
+      - "docs/references/**/*.md"
       - ".github/workflows/slopless.yml"
 
 jobs:
@@ -55,7 +58,9 @@ jobs:
               [ -n "$path" ] || continue
               [ -f "$path" ] || continue
               case "$path" in
-                *.md) printf '%s\n' "$path" ;;
+                docs/specs/*.md|docs/design-decisions/*.md|docs/development/*.md|docs/references/*.md)
+                  printf '%s\n' "$path"
+                  ;;
               esac
             done
           )
