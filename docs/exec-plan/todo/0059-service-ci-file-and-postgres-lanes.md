@@ -1,13 +1,13 @@
 # service-ci-file-and-postgres-lanes
-**Execution**: Use `/execute-task` to implement this plan.
+**Execution**: Use `/execute-task` to do this plan.
 
 ## Objective
 
-`0056` で service skeleton が file-backed default lane と Postgres durable backend lane の
-両方を持つ前提になったので、GitHub Actions 上の Go CI でもその 2 系統を job レベルで
-分離し、rerun と failure triage を lane 単位で行えるようにする。
+`0056` で service skeleton は file-backed default lane と Postgres durable backend lane の
+両方を持つ前提になった。GitHub Actions 上の Go CI でもその 2 系統を job レベルで分け、
+rerun と failure triage を lane ごとに行えるようにする。
 
-Addresses: `docs/issues/0021-service-ci-should-separate-file-backed-and-db-backed-lanes.md`
+Addresses include `docs/issues/0021-service-ci-should-separate-file-backed-and-db-backed-lanes.md`
 
 ## Context
 
@@ -24,8 +24,10 @@ Addresses: `docs/issues/0021-service-ci-should-separate-file-backed-and-db-backe
 
 - Go CI の test lane を file-backed lane と Postgres lane に分離する
 - file-backed lane では `AI_ARENA_PG_TEST_DSN` を渡さず、CLI-first / in-memory baseline を維持する
-- Postgres lane では Docker service container を使い、`make test-postgres` または同等 target で
-  durable queue verification を明示する
+- Postgres lane では Docker service container を使う
+- Postgres lane の command は `make test-postgres` を基準にする
+- `make test-postgres` は CI と local の両方で使えるよう、DSN を環境変数または Make 変数で
+  上書きできる形にそろえる
 - spec / development docs を更新し、CI 上の lane 責務分離を明文化する
 
 この plan では以下を扱わない。
@@ -42,6 +44,8 @@ Addresses: `docs/issues/0021-service-ci-should-separate-file-backed-and-db-backe
 - local CLI / CI の verification lane について、file-backed default lane と durable Postgres lane を
   別々の verification target として扱うことを明記する
 
+## Development Docs Changes
+
 ### `docs/development/go-quality-gates.md`
 
 - Go CI が `make test` と Postgres-backed lane の両方を別 job として実行することを追記する
@@ -49,20 +53,22 @@ Addresses: `docs/issues/0021-service-ci-should-separate-file-backed-and-db-backe
 ### `docs/development/platform-service-postgres.md`
 
 - CI Harness を更新し、Postgres lane が専用 job として `make test-postgres` を実行することを明記する
+- CI の DSN override 方法も明記する
 
 ## Expected Code Changes
 
 - `.github/workflows/go-ci.yml`
   - file-backed lane と Postgres lane の job 分離
   - Postgres service container と DSN 注入を durable lane のみに限定
-- 必要なら `Makefile`
-  - CI から durable lane を明示的に呼べる target 名の調整
+- `Makefile`
+  - `test-postgres` の DSN を固定値直書きではなく override 可能な変数へ寄せる
 
 ## Sub-tasks
 
 - [ ] 現在の `make test` / `make test-postgres` の責務を spec / development docs に揃える
 - [ ] `.github/workflows/go-ci.yml` の test lane を file-backed lane と Postgres lane に分離する
 - [ ] Postgres service container と `AI_ARENA_PG_TEST_DSN` を durable lane 専用に閉じ込める
+- [ ] `make test-postgres` の DSN を CI と local で切り替えられる形にする
 - [ ] lane 名から rerun / triage 意図が読めることを確認する
 - [ ] local verification と CI verification の対応関係を docs に反映する
 
@@ -81,6 +87,8 @@ Addresses: `docs/issues/0021-service-ci-should-separate-file-backed-and-db-backe
 
 - `make test` に Postgres 前提 test が紛れ込むと file-backed lane が見かけ倒しになる
   - mitigation: file-backed lane は DSN なしで実行し、Postgres test は env guard で skip されることを確認する
+- `make test-postgres` の DSN が local port 固定のままだと CI lane で再利用できない
+  - mitigation: DSN は override 可能な変数に寄せ、local default と CI override の両方を持つ
 - workflow 上だけ lane を分けても docs が追随しないと contributor が rerun target を誤認する
   - mitigation: `docs/development/go-quality-gates.md` と `docs/development/platform-service-postgres.md` を同じ PR で更新する
 - job 分離で cache key や runtime がぶれると CI 所要時間が読みにくくなる
@@ -88,6 +96,6 @@ Addresses: `docs/issues/0021-service-ci-should-separate-file-backed-and-db-backe
 
 ## Design Decisions
 
-- CI lane 分離は既存 `make test` / `make test-postgres` surface をそのまま使う最小変更を優先する
+- CI lane 分離は既存 `make test` / `make test-postgres` surface を保つ最小変更を優先する
 - file-backed lane は service skeleton の default verification target として残す
 - durable lane は Postgres contract の verification に限定し、artifact backend までは広げない
