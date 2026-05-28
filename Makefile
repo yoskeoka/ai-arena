@@ -11,11 +11,21 @@ GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
 GOFILES = $(shell git ls-files -- '*.go' | while read -r file; do if [ -f "$$file" ]; then printf '%s ' "$$file"; fi; done)
 REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtime/testdata | while read -r file; do if [ -f "$$file" ] && printf '%s' "$$file" | grep -q '\.go$$'; then dirname "$$file"; fi; done | sort -u | tr '\n' ' ')
 
-.PHONY: test test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: test test-postgres postgres-up postgres-down test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 test:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	$(GO_ENV) $(GO) test ./...
+
+test-postgres:
+	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	AI_ARENA_PG_TEST_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable $(GO_ENV) $(GO) test ./...
+
+postgres-up:
+	docker compose -f tools/dev/postgres-compose.yml up -d postgres
+
+postgres-down:
+	docker compose -f tools/dev/postgres-compose.yml down -v
 
 test-wasm-go:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"

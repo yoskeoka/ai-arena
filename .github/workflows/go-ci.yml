@@ -23,6 +23,22 @@ on:
 jobs:
   go-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: arena_service
+          POSTGRES_USER: arena
+          POSTGRES_PASSWORD: arena
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U arena -d arena_service"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      AI_ARENA_PG_TEST_DSN: postgres://arena:arena@127.0.0.1:5432/arena_service?sslmode=disable
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

@@ -6,7 +6,8 @@
 matchmaking 後に得た `game + players` を `submission -> admission -> queue -> worker -> runner -> terminal persist`
 で流す最小内部契約を定義する。
 
-この spec は public HTTP API ではなく、service / worker / runner 間で共有する internal contract を固定する。
+この spec は public HTTP API ではない。
+service / worker / runner 間で共有する internal contract を固定する。
 
 ## この spec の責務範囲
 
@@ -32,6 +33,7 @@ matchmaking 後に得た `game + players` を `submission -> admission -> queue 
 - `docs/specs/platform-common-contract.md`: metadata / record core schema の正本
 - `docs/specs/ai-runtime.md`: AI manifest / runtime kind / stderr capture の正本
 - `docs/specs/platform-game-registry.md`: registered game lookup と build 入口の正本
+- `docs/specs/platform-service-persistence.md`: service write model と artifact locator 保存単位の正本
 
 ## サービス境界
 
@@ -47,17 +49,30 @@ online service skeleton は、single-match runner を 1 段外側から包む or
   `submit -> worker run -> terminal persist` を通せればよい
 
 Phase 6 の first deploy target は `Cloudflare Pages + Render + Neon Postgres + Cloudflare R2` とする。
-この target では、service metadata と queue lifecycle は `Neon Postgres` に置き、large artifact と executable payload は
-`Cloudflare R2` に置く。public watch/read UI は `Cloudflare Pages` から始め、match 実行を担う service / worker の
-single logical queue authority は `Render` 上の backend process に置く。local CLI、CI、external game 開発で runner を
-直接起動する lane では file-backed first を default とし、online service infra では同じ contract を `R2` へ差し替える。
+service metadata と queue lifecycle は `Neon Postgres` に置く。
+large artifact と executable payload は `Cloudflare R2` に置く。
+public watch/read UI は `Cloudflare Pages` から始める。
+match 実行を担う service / worker の single logical queue authority は `Render` 上の backend process に置く。
 
-初期の CLI adapter は operator input を `Match Submission` schema に decode して service command へ渡すだけに留める。
-artifact locator 解決、registry lookup、sidecar manifest 互換性確認、queue write は CLI ではなく service 側の責務とする。
-local CLI invocation では、`output_dir` が local path のときだけ relative path を invocation base directory 基準へ正規化してから
-service command へ渡してよい。remote artifact prefix を使う lane では `output_dir` を opaque prefix としてそのまま扱う。
-initial acceptance 用の single-process CLI lane は、replaceable queue store の初期実装が in-memory だけであることを前提に、
-1 回の command invocation の中で queue write、queued-only cancel、または worker 実行までを閉じてよい。
+local CLI、CI、external game 開発で runner を直接起動する lane では、
+file-backed first を default とする。
+online service infra では、同じ contract を `R2` へ差し替える。
+local CLI と CI で durable backend を検証するときは、
+production と同じ Postgres contract を満たすローカル DB を使ってよい。
+
+初期の CLI adapter は operator input を `Match Submission` schema に decode して、
+service command へ渡すだけに留める。
+artifact locator 解決、registry lookup、sidecar manifest 互換性確認、queue write は
+CLI ではなく service 側の責務とする。
+
+local CLI invocation では、`output_dir` が local path のときだけ、
+relative path を invocation base directory 基準へ正規化してから service command へ渡してよい。
+remote artifact prefix を使う lane では `output_dir` を opaque prefix としてそのまま扱う。
+
+initial acceptance 用の single-process CLI lane は、
+replaceable queue store の初期実装が in-memory だけであることを前提にしてよい。
+1 回の command invocation の中で queue write、queued-only cancel、
+または worker 実行までを閉じてよい。
 
 ## Match Submission
 
@@ -171,6 +186,36 @@ queue / execution lifecycle は `record.json.status` と別契約である。
 - `failed` は runner invocation request を組み立てられなかった場合、runner が terminal record を返せないまま落ちた場合、または terminal persist 自体が失敗した場合に使う
 - queue record は terminal artifact 参照に加えて、runner が返した terminal match status と terminal error summary を保持してよい
 
+## Durable Write Model
+
+durable write model は、service skeleton が process 境界をまたいでも再開できる最小 lifecycle state を保持する。
+artifact 本体の source-of-truth を database に複製するのではなく、service orchestration が次に何をしてよいかを判断するための
+最小 metadata と locator だけを保持する。
+
+### 1 submission あたりに保持するもの
+
+- submission identity: `submission_id`、`match_id`
+- game compatibility metadata: `game_id`、`game_version`、`ruleset_version`
+- submitted player list と各 `artifact_ref`
+- current queue lifecycle state
+- queued 順序を再現できる ordering identity
+- 現在 lease を持つ worker identity
+- terminal persist 完了後の artifact locator 群と terminal match status / error summary
+
+### durable backend の責務
+
+- `enqueue` は submission metadata を queued state と queue ordering とともに durable に保存する
+- `claim` は最も早い queued record を 1 worker だけに lease し、その ownership を durable に残す
+- `update` は許可された lifecycle transition だけを durable record へ反映する
+- `cancel` は queued record だけを terminal `canceled` へ進め、以後の worker claim 対象から外す
+- worker / service を再起動しても、少なくとも queued / leased / running / persisting / terminal 状態と terminal locator を再読取できる
+
+### artifact 保存との境界
+
+- durable write model は `record.json` / `result-summary.json` / `history.json` / `snapshot.json` / stderr 本体を保持責務に含めない
+- durable write model が保持するのは、それらの artifact を一意に参照する locator と、operator / read model が次段で使う最小 summary だけとする
+- `output_dir` は artifact backend の base path または prefix を表すが、write model backend 自体の保存先を意味しない
+
 ### cancel 制約
 
 - cancel は `queued` 中のみ許可する
@@ -242,7 +287,8 @@ service skeleton が terminal success / failure を判断する正本は `record
 - terminal persist 完了後の queue record には、最低でも `match_dir`、`record.json` path、`result-summary.json` path、player stderr path 群、runner terminal status を残す
 
 `output_dir` は terminal persist artifact の保存先または remote artifact prefix であり、queue store の永続化責務を意味しない。
-`0049` の queue store 初期実装は in-memory のみとし、cross-process durability や queue 再起動復旧は後続 plan で扱う。
+`0049` の queue store 初期実装は in-memory のみだったが、durable backend 導入後も artifact source-of-truth と queue write model の
+責務分離は維持しなければならない。
 
 Phase 6 の first durable split では、queue / registration / locator metadata / 必要なら latest world state を
 database 側へ置き、`record.json` / `result-summary.json` / `snapshot.json` / `history.json` / stderr artifact /
