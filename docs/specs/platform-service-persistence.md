@@ -87,6 +87,24 @@ first deploy target は `Cloudflare Pages + Render + Neon Postgres + Cloudflare 
 local CLI と CI では、同じ Postgres write contract を Docker ベースの local database で検証してよい。
 artifact lane は引き続き local filesystem を default としてよい。
 
+## Schema Management Contract
+
+- durable write model の desired schema は repo 内の SQL file 群を source of truth とする
+- migration SQL は desired schema と current DB schema の差分から生成する review/apply artifact とし、
+  migration file 自体を唯一の schema 定義として扱わない
+- service runtime は startup 時に DDL を実行してはならない
+- Postgres backend を使う service / worker / test harness は、
+  起動前に target DB へ schema apply が完了していることを前提にする
+- review/deploy lane は versioned migration SQL を生成して review 対象にし、
+  test/bootstrap lane は空 DB へ desired schema を直接 apply して初期化してよい
+
+## Query Artifact Boundary
+
+- handwritten SQL schema と handwritten query SQL は人間が review する source artifact とする
+- generated query code は typed adapter artifact とし、query source を置き換える責務を持たない
+- durable queue backend の既存抽象境界は維持し、generated query code の採用は Postgres backend 内部に閉じ込める
+- `0057` / `0058` 以降の operator/read path 拡張も、同じ schema source と query package 境界を再利用してよい
+
 ## Deferred Follow-Ups
 
 - result list / match detail / locator read API

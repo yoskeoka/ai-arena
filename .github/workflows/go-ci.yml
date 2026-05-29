@@ -7,8 +7,10 @@ on:
       - "Makefile"
       - "go.mod"
       - "go.sum"
+      - "sqlc.yaml"
       - "revive.toml"
       - "**/*.go"
+      - "internal/platform/service/postgres/**"
   push:
     branches:
       - main
@@ -17,8 +19,10 @@ on:
       - "Makefile"
       - "go.mod"
       - "go.sum"
+      - "sqlc.yaml"
       - "revive.toml"
       - "**/*.go"
+      - "internal/platform/service/postgres/**"
 
 jobs:
   go-test-file-backed:
@@ -64,6 +68,7 @@ jobs:
           --health-retries 20
     env:
       AI_ARENA_PG_TEST_DSN: postgres://arena:arena@127.0.0.1:5432/arena_service?sslmode=disable
+      AI_ARENA_PG_ATLAS_DEV_DSN: postgres://arena:arena@127.0.0.1:5432/postgres?sslmode=disable
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -111,3 +116,8 @@ jobs:
 
       - name: Run lint
         run: make GOPATH=/home/runner/go GOMODCACHE=/home/runner/go/pkg/mod GOCACHE=/home/runner/.cache/go-build lint
+
+      - name: Check sqlc generated code drift
+        run: |
+          make postgres-sqlc-generate
+          git diff --exit-code -- internal/platform/service/postgres/sqlc

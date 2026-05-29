@@ -9,32 +9,18 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	servicepostgressqlc "github.com/yoskeoka/ai-arena/internal/platform/service/postgres/sqlc"
 )
 
 const postgresQueueRecordPrimaryKey = "service_queue_records_pkey"
 
-const postgresQueueStoreSchema = `
-CREATE TABLE IF NOT EXISTS service_queue_records (
-    submission_id TEXT PRIMARY KEY,
-    queue_order BIGSERIAL NOT NULL UNIQUE,
-    match_id TEXT NOT NULL,
-    game_id TEXT NOT NULL,
-    game_version TEXT NOT NULL,
-    ruleset_version TEXT NOT NULL,
-    players_json JSONB NOT NULL,
-    output_dir TEXT NOT NULL,
-    attempt_count INTEGER NOT NULL,
-    state TEXT NOT NULL,
-    worker_id TEXT,
-    terminal_json JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);`
-
 // PostgresQueueStore keeps queue state in PostgreSQL for cross-process durability.
 type PostgresQueueStore struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	queries *servicepostgressqlc.Queries
 }
 
 // NewPostgresQueueStore constructs a durable PostgreSQL-backed queue store.
@@ -47,12 +33,15 @@ func NewPostgresQueueStore(ctx context.Context, dsn string) (*PostgresQueueStore
 	if err != nil {
 		return nil, fmt.Errorf("service: open postgres queue store: %w", err)
 	}
-	if _, err := pool.Exec(ctx, postgresQueueStoreSchema); err != nil {
+	if err := validatePostgresQueueStoreSchema(ctx, pool); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("service: init postgres queue store schema: %w", err)
+		return nil, err
 	}
 
-	return &PostgresQueueStore{pool: pool}, nil
+	return &PostgresQueueStore{
+		pool:    pool,
+		queries: servicepostgressqlc.New(pool),
+	}, nil
 }
 
 // Close releases PostgreSQL connections held by the queue store.
@@ -73,33 +62,22 @@ func (s *PostgresQueueStore) Enqueue(ctx context.Context, submission MatchSubmis
 	if err != nil {
 		return QueueRecord{}, fmt.Errorf("service: marshal submitted players: %w", err)
 	}
+	attemptCount, err := postgresAttemptCount(submission.AttemptCount)
+	if err != nil {
+		return QueueRecord{}, err
+	}
 
-	const query = `
-INSERT INTO service_queue_records (
-    submission_id,
-    match_id,
-    game_id,
-    game_version,
-    ruleset_version,
-    players_json,
-    output_dir,
-    attempt_count,
-    state
-)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`
-	_, err = s.pool.Exec(
-		ctx,
-		query,
-		submission.SubmissionID,
-		submission.MatchID,
-		submission.Game.GameID,
-		submission.Game.GameVersion,
-		submission.Game.RulesetVersion,
-		playersJSON,
-		submission.OutputDir,
-		submission.AttemptCount,
-		StateQueued,
-	)
+	err = s.queries.CreateQueueRecord(ctx, servicepostgressqlc.CreateQueueRecordParams{
+		SubmissionID:   submission.SubmissionID,
+		MatchID:        submission.MatchID,
+		GameID:         submission.Game.GameID,
+		GameVersion:    submission.Game.GameVersion,
+		RulesetVersion: submission.Game.RulesetVersion,
+		PlayersJson:    playersJSON,
+		OutputDir:      submission.OutputDir,
+		AttemptCount:   attemptCount,
+		State:          string(StateQueued),
+	})
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == postgresQueueRecordPrimaryKey {
@@ -126,37 +104,32 @@ func (s *PostgresQueueStore) Claim(ctx context.Context, workerID string) (QueueR
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	const query = `
-WITH next_record AS (
-    SELECT submission_id
-    FROM service_queue_records
-    WHERE state = $1
-    ORDER BY queue_order
-    FOR UPDATE SKIP LOCKED
-    LIMIT 1
-)
-UPDATE service_queue_records AS records
-SET state = $2, worker_id = $3, updated_at = NOW()
-FROM next_record
-WHERE records.submission_id = next_record.submission_id
-RETURNING
-    records.submission_id,
-    records.match_id,
-    records.game_id,
-    records.game_version,
-    records.ruleset_version,
-    records.players_json,
-    records.output_dir,
-    records.attempt_count,
-    records.state,
-    records.worker_id,
-    records.terminal_json;`
-	record, err := scanQueueRecord(tx.QueryRow(ctx, query, StateQueued, StateLeased, workerID))
+	row, err := s.queries.WithTx(tx).ClaimNextQueueRecord(ctx, servicepostgressqlc.ClaimNextQueueRecordParams{
+		LeasedState: string(StateLeased),
+		WorkerID:    textValue(workerID),
+		QueuedState: string(StateQueued),
+	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return QueueRecord{}, ErrNoQueuedSubmission
 		}
 		return QueueRecord{}, fmt.Errorf("service: claim queued submission: %w", err)
+	}
+	record, err := queueRecordFromFields(
+		row.SubmissionID,
+		row.MatchID,
+		row.GameID,
+		row.GameVersion,
+		row.RulesetVersion,
+		row.PlayersJson,
+		row.OutputDir,
+		row.AttemptCount,
+		row.State,
+		row.WorkerID,
+		row.TerminalJson,
+	)
+	if err != nil {
+		return QueueRecord{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return QueueRecord{}, fmt.Errorf("service: commit claim tx: %w", err)
@@ -191,37 +164,24 @@ func (s *PostgresQueueStore) Update(ctx context.Context, next QueueRecord) error
 			return fmt.Errorf("service: marshal terminal artifacts: %w", err)
 		}
 	}
+	attemptCount, err := postgresAttemptCount(next.Submission.AttemptCount)
+	if err != nil {
+		return err
+	}
 
-	const query = `
-UPDATE service_queue_records
-SET
-    match_id = $2,
-    game_id = $3,
-    game_version = $4,
-    ruleset_version = $5,
-    players_json = $6,
-    output_dir = $7,
-    attempt_count = $8,
-    state = $9,
-    worker_id = $10,
-    terminal_json = $11,
-    updated_at = NOW()
-WHERE submission_id = $1;`
-	if _, err := tx.Exec(
-		ctx,
-		query,
-		next.Submission.SubmissionID,
-		next.Submission.MatchID,
-		next.Submission.Game.GameID,
-		next.Submission.Game.GameVersion,
-		next.Submission.Game.RulesetVersion,
-		playersJSON,
-		next.Submission.OutputDir,
-		next.Submission.AttemptCount,
-		next.State,
-		workerIDFromLease(next.Lease),
-		jsonOrNil(terminalJSON),
-	); err != nil {
+	if err := s.queries.WithTx(tx).UpdateQueueRecord(ctx, servicepostgressqlc.UpdateQueueRecordParams{
+		MatchID:        next.Submission.MatchID,
+		GameID:         next.Submission.Game.GameID,
+		GameVersion:    next.Submission.Game.GameVersion,
+		RulesetVersion: next.Submission.Game.RulesetVersion,
+		PlayersJson:    playersJSON,
+		OutputDir:      next.Submission.OutputDir,
+		AttemptCount:   attemptCount,
+		State:          string(next.State),
+		WorkerID:       textValueFromLease(next.Lease),
+		TerminalJson:   terminalJSON,
+		SubmissionID:   next.Submission.SubmissionID,
+	}); err != nil {
 		return fmt.Errorf("service: update queue record: %w", err)
 	}
 
@@ -254,11 +214,10 @@ func (s *PostgresQueueStore) CancelQueued(ctx context.Context, submissionID stri
 	record.Lease = nil
 	record.Terminal = nil
 
-	const query = `
-UPDATE service_queue_records
-SET state = $2, worker_id = NULL, terminal_json = NULL, updated_at = NOW()
-WHERE submission_id = $1;`
-	if _, err := tx.Exec(ctx, query, submissionID, StateCanceled); err != nil {
+	if err := s.queries.WithTx(tx).CancelQueueRecord(ctx, servicepostgressqlc.CancelQueueRecordParams{
+		State:        string(StateCanceled),
+		SubmissionID: submissionID,
+	}); err != nil {
 		return QueueRecord{}, fmt.Errorf("service: cancel queue record: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -268,30 +227,57 @@ WHERE submission_id = $1;`
 }
 
 func (s *PostgresQueueStore) loadRecord(ctx context.Context, submissionID string) (QueueRecord, error) {
-	return s.loadRecordTx(ctx, s.pool, submissionID, false)
+	return s.loadRecordTx(ctx, nil, submissionID, false)
 }
 
-func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, querier queueRecordQuerier, submissionID string, forUpdate bool) (QueueRecord, error) {
-	query := `
-SELECT
-    submission_id,
-    match_id,
-    game_id,
-    game_version,
-    ruleset_version,
-    players_json,
-    output_dir,
-    attempt_count,
-    state,
-    worker_id,
-    terminal_json
-FROM service_queue_records
-WHERE submission_id = $1`
-	if forUpdate {
-		query += " FOR UPDATE"
+func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, tx pgx.Tx, submissionID string, forUpdate bool) (QueueRecord, error) {
+	queries := s.queries
+	if tx != nil {
+		queries = queries.WithTx(tx)
 	}
-
-	record, err := scanQueueRecord(querier.QueryRow(ctx, query, submissionID))
+	var (
+		record QueueRecord
+		err    error
+	)
+	if forUpdate {
+		row, rowErr := queries.GetQueueRecordForUpdate(ctx, submissionID)
+		if rowErr != nil {
+			err = rowErr
+		} else {
+			record, err = queueRecordFromFields(
+				row.SubmissionID,
+				row.MatchID,
+				row.GameID,
+				row.GameVersion,
+				row.RulesetVersion,
+				row.PlayersJson,
+				row.OutputDir,
+				row.AttemptCount,
+				row.State,
+				row.WorkerID,
+				row.TerminalJson,
+			)
+		}
+	} else {
+		row, rowErr := queries.GetQueueRecord(ctx, submissionID)
+		if rowErr != nil {
+			err = rowErr
+		} else {
+			record, err = queueRecordFromFields(
+				row.SubmissionID,
+				row.MatchID,
+				row.GameID,
+				row.GameVersion,
+				row.RulesetVersion,
+				row.PlayersJson,
+				row.OutputDir,
+				row.AttemptCount,
+				row.State,
+				row.WorkerID,
+				row.TerminalJson,
+			)
+		}
+	}
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return QueueRecord{}, ErrQueueRecordNotFound
@@ -301,40 +287,19 @@ WHERE submission_id = $1`
 	return record, nil
 }
 
-type queueRecordQuerier interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}
-
-func scanQueueRecord(row pgx.Row) (QueueRecord, error) {
-	var (
-		submissionID   string
-		matchID        string
-		gameID         string
-		gameVersion    string
-		rulesetVersion string
-		playersJSON    []byte
-		outputDir      string
-		attemptCount   int
-		state          string
-		workerID       *string
-		terminalJSON   []byte
-	)
-	if err := row.Scan(
-		&submissionID,
-		&matchID,
-		&gameID,
-		&gameVersion,
-		&rulesetVersion,
-		&playersJSON,
-		&outputDir,
-		&attemptCount,
-		&state,
-		&workerID,
-		&terminalJSON,
-	); err != nil {
-		return QueueRecord{}, err
-	}
-
+func queueRecordFromFields(
+	submissionID string,
+	matchID string,
+	gameID string,
+	gameVersion string,
+	rulesetVersion string,
+	playersJSON []byte,
+	outputDir string,
+	attemptCount int32,
+	state string,
+	workerID pgtype.Text,
+	terminalJSON []byte,
+) (QueueRecord, error) {
 	var players []SubmittedPlayer
 	if err := json.Unmarshal(playersJSON, &players); err != nil {
 		return QueueRecord{}, fmt.Errorf("service: decode submitted players: %w", err)
@@ -345,7 +310,7 @@ func scanQueueRecord(row pgx.Row) (QueueRecord, error) {
 			SubmissionID: submissionID,
 			MatchID:      matchID,
 			OutputDir:    outputDir,
-			AttemptCount: attemptCount,
+			AttemptCount: int(attemptCount),
 			Players:      players,
 		},
 		State: LifecycleState(state),
@@ -354,8 +319,8 @@ func scanQueueRecord(row pgx.Row) (QueueRecord, error) {
 	record.Submission.Game.GameVersion = gameVersion
 	record.Submission.Game.RulesetVersion = rulesetVersion
 
-	if workerID != nil && strings.TrimSpace(*workerID) != "" {
-		record.Lease = &WorkerLease{WorkerID: *workerID}
+	if workerID.Valid && strings.TrimSpace(workerID.String) != "" {
+		record.Lease = &WorkerLease{WorkerID: workerID.String}
 	}
 	if len(terminalJSON) > 0 {
 		var terminal TerminalArtifacts
@@ -368,16 +333,31 @@ func scanQueueRecord(row pgx.Row) (QueueRecord, error) {
 	return cloneQueueRecord(record), nil
 }
 
-func workerIDFromLease(lease *WorkerLease) any {
-	if lease == nil || strings.TrimSpace(lease.WorkerID) == "" {
-		return nil
+func textValue(value string) pgtype.Text {
+	if strings.TrimSpace(value) == "" {
+		return pgtype.Text{}
 	}
-	return lease.WorkerID
+	return pgtype.Text{String: value, Valid: true}
 }
 
-func jsonOrNil(data []byte) any {
-	if len(data) == 0 {
-		return nil
+func textValueFromLease(lease *WorkerLease) pgtype.Text {
+	if lease == nil {
+		return pgtype.Text{}
 	}
-	return data
+	return textValue(lease.WorkerID)
+}
+
+func validatePostgresQueueStoreSchema(ctx context.Context, pool *pgxpool.Pool) error {
+	var marker int
+	if err := pool.QueryRow(ctx, "SELECT 1 FROM service_queue_records LIMIT 1").Scan(&marker); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("service: postgres queue store schema is not applied: %w", err)
+	}
+	return nil
+}
+
+func postgresAttemptCount(attemptCount int) (int32, error) {
+	if attemptCount < -2147483648 || attemptCount > 2147483647 {
+		return 0, fmt.Errorf("service: attempt_count %d is out of int32 range", attemptCount)
+	}
+	return int32(attemptCount), nil
 }

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
@@ -104,6 +105,16 @@ func TestPostgresQueueStoreCancelQueued(t *testing.T) {
 	}
 	if _, err := store.Claim(ctx, "worker-1"); err != ErrNoQueuedSubmission {
 		t.Fatalf("Claim() error = %v, want %v", err, ErrNoQueuedSubmission)
+	}
+}
+
+func TestPostgresAttemptCountRejectsOutOfRange(t *testing.T) {
+	t.Parallel()
+
+	if _, err := postgresAttemptCount(2147483648); err == nil {
+		t.Fatal("postgresAttemptCount() error = nil, want out-of-range error")
+	} else if !strings.Contains(err.Error(), "out of int32 range") {
+		t.Fatalf("postgresAttemptCount() error = %v, want out-of-range detail", err)
 	}
 }
 
