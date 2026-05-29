@@ -108,6 +108,57 @@ func TestPostgresQueueStoreCancelQueued(t *testing.T) {
 	}
 }
 
+func TestPostgresQueueStoreListAndGet(t *testing.T) {
+	dsn := postgresTestDSN(t)
+	ctx := context.Background()
+	store := newTestPostgresQueueStore(t, ctx, dsn, true)
+
+	submission1 := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
+	submission1.SubmissionID = "sub-pg-list-1"
+	submission1.MatchID = "match-pg-list-1"
+	submission2 := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
+	submission2.SubmissionID = "sub-pg-list-2"
+	submission2.MatchID = "match-pg-list-2"
+
+	record1, err := store.Enqueue(ctx, submission1)
+	if err != nil {
+		t.Fatalf("Enqueue(submission1) error = %v", err)
+	}
+	record2, err := store.Enqueue(ctx, submission2)
+	if err != nil {
+		t.Fatalf("Enqueue(submission2) error = %v", err)
+	}
+	record2, err = store.CancelQueued(ctx, submission2.SubmissionID)
+	if err != nil {
+		t.Fatalf("CancelQueued(submission2) error = %v", err)
+	}
+
+	records, err := store.List(ctx)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("len(records) = %d, want 2", len(records))
+	}
+	if records[0].Submission.SubmissionID != record1.Submission.SubmissionID {
+		t.Fatalf("records[0].submission_id = %q, want %q", records[0].Submission.SubmissionID, record1.Submission.SubmissionID)
+	}
+	if records[1].State != StateCanceled {
+		t.Fatalf("records[1].State = %q, want %q", records[1].State, StateCanceled)
+	}
+
+	loaded, err := store.Get(ctx, submission1.SubmissionID)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if loaded.Submission.MatchID != submission1.MatchID {
+		t.Fatalf("loaded.MatchID = %q, want %q", loaded.Submission.MatchID, submission1.MatchID)
+	}
+	if record2.Submission.SubmissionID == "" {
+		t.Fatal("canceled record should preserve submission id")
+	}
+}
+
 func TestPostgresAttemptCountRejectsOutOfRange(t *testing.T) {
 	t.Parallel()
 

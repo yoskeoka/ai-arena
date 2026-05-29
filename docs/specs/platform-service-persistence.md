@@ -27,6 +27,7 @@ operator-facing query API や replay / resume 用の read model 詳細は別 pla
 ## 参照関係
 
 - `docs/specs/platform-service-skeleton.md`: submission / admission / queue lifecycle の正本
+- `docs/specs/platform-service-read-model.md`: operator-facing read model / list / get / read contract の正本
 - `docs/specs/platform.md`: runner、artifact layout、platform core 責務の正本
 
 ## 保存単位
@@ -74,6 +75,8 @@ multi-node fairness や retry redelivery はこの spec の対象外とする。
 - durable write model は、artifact 本体を複製せず locator と最小 terminal summary だけを保持する
 - operator / replay / resume は後続 read model で locator を使って artifact backend を読む
 - write model 単体で game 固有 world state の完全再構築責務を持たない
+- operator-facing read model は、write model が持つ lifecycle / locator summary と
+  `result-summary.json` などの compact artifact を join して構築してよい
 
 ## Backend Split
 
@@ -107,7 +110,6 @@ artifact lane は引き続き local filesystem を default としてよい。
 
 ## Deferred Follow-Ups
 
-- result list / match detail / locator read API
 - replay / resume / audit input builder
 - retention / archive policy
 - multi-node retry / fairness / lease recovery policy
