@@ -189,3 +189,55 @@ func TestQueryServiceGetReportsReplayInputVerificationIssues(t *testing.T) {
 		t.Fatalf("verification issues = %v, want snapshot artifact mismatch", detail.ReplayInputs.Verification.Issues)
 	}
 }
+
+func TestQueryServiceGetKeepsReplayInputsWhenDerivedArtifactDecodeFails(t *testing.T) {
+	ctx := context.Background()
+	store := NewInMemoryQueueStore()
+	commands := newTestCommandServiceWithStore(t, store)
+	query, err := NewQueryService(store)
+	if err != nil {
+		t.Fatalf("NewQueryService() error = %v", err)
+	}
+
+	submission := testEchoSubmission(
+		t,
+		t.TempDir(),
+		"phase2-simultaneous-2turn",
+		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
+		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
+	)
+	submission.SubmissionID = "sub-decode-failure"
+	submission.MatchID = "match-decode-failure"
+	if _, err := commands.Submit(ctx, submission); err != nil {
+		t.Fatalf("Submit() error = %v", err)
+	}
+	if _, err := newTestWorker(t, store, 0).ProcessNext(ctx, "worker-1"); err != nil {
+		t.Fatalf("ProcessNext() error = %v", err)
+	}
+
+	detail, err := query.Get(ctx, submission.SubmissionID)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if detail.ReplayInputs == nil {
+		t.Fatal("detail.ReplayInputs = nil, want replay inputs")
+	}
+	if err := os.WriteFile(detail.ReplayInputs.HistoryPath, []byte(`{"broken":true}`), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	detail, err = query.Get(ctx, submission.SubmissionID)
+	if err != nil {
+		t.Fatalf("Get() after malformed history error = %v", err)
+	}
+	if detail.ReplayInputs == nil {
+		t.Fatal("detail.ReplayInputs = nil after malformed history, want replay inputs")
+	}
+	if detail.ReplayInputs.Verification.Consistent {
+		t.Fatal("verification.Consistent = true, want false after malformed history")
+	}
+	issues := strings.Join(detail.ReplayInputs.Verification.Issues, "\n")
+	if !strings.Contains(issues, "history artifact could not be loaded") {
+		t.Fatalf("verification issues = %v, want history load failure", detail.ReplayInputs.Verification.Issues)
+	}
+}

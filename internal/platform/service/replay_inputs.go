@@ -118,9 +118,8 @@ func verifyReplayResumeAuditInputs(record QueueRecord, summary *artifacts.Result
 	} else if isLocalPath(path) {
 		snapshot, snapshotErr := replay.LoadSnapshot(localPath(path))
 		if snapshotErr != nil {
-			return verification, snapshotErr
-		}
-		if !reflect.DeepEqual(snapshot, persistedRecord.Snapshot) {
+			issues = append(issues, fmt.Sprintf("snapshot artifact could not be loaded: %v", snapshotErr))
+		} else if !reflect.DeepEqual(snapshot, persistedRecord.Snapshot) {
 			issues = append(issues, "snapshot artifact does not match record.json.snapshot")
 		}
 	}
@@ -130,9 +129,8 @@ func verifyReplayResumeAuditInputs(record QueueRecord, summary *artifacts.Result
 	} else if isLocalPath(path) {
 		history, historyErr := replay.LoadHistory(localPath(path))
 		if historyErr != nil {
-			return verification, historyErr
-		}
-		if !reflect.DeepEqual(history, persistedRecord.EventLog) {
+			issues = append(issues, fmt.Sprintf("history artifact could not be loaded: %v", historyErr))
+		} else if !reflect.DeepEqual(history, persistedRecord.EventLog) {
 			issues = append(issues, "history artifact does not match record.json.event_log")
 		}
 	}
@@ -142,9 +140,8 @@ func verifyReplayResumeAuditInputs(record QueueRecord, summary *artifacts.Result
 	} else if isLocalPath(path) {
 		exportedSnapshot, exportedSnapshotErr := replay.LoadExportedSnapshot(localPath(path))
 		if exportedSnapshotErr != nil {
-			return verification, exportedSnapshotErr
-		}
-		if !reflect.DeepEqual(exportedSnapshot, persistedRecord.ExportedSnapshot) {
+			issues = append(issues, fmt.Sprintf("exported snapshot artifact could not be loaded: %v", exportedSnapshotErr))
+		} else if !reflect.DeepEqual(exportedSnapshot, persistedRecord.ExportedSnapshot) {
 			issues = append(issues, "exported snapshot artifact does not match record.json.exported_snapshot")
 		}
 	}
