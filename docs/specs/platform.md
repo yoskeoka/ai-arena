@@ -66,6 +66,13 @@ service write model が durable に保持するのは queue lifecycle と artifa
 `record.json` / `snapshot.json` / `history.json` / stderr 本体の source-of-truth は
 runner artifact backend 側に残す。
 
+service read path が replay / resume / audit input を解決するときも、この責務分離は変えない。
+service persisted state が返すのは artifact locator と metadata join までであり、
+game 固有の snapshot build や history replay 実行は引き続き registry / runner 側の責務とする。
+このとき primary source-of-truth は常に `record.json` とし、
+`snapshot.json` / `history.json` / `exported-snapshot.json` は
+同じ terminal match から導出された補助 artifact として扱う。
+
 ## 試合実行の仕組み
 
 1試合ごとに独立した試合部屋を作る。
@@ -741,6 +748,27 @@ artifact hierarchy:
 - `structured-log.ndjson` は `stdout` に流れる structured log と同じ NDJSON record を保存する
 - online service skeleton が terminal persist を行うときも、最低限この `record.json` と `result-summary.json` を正本 / summary artifact として残す
 - online service skeleton は各 player の captured stderr を `<player-id>-stderr.log` として同じ match directory へ保存してよい
+
+service persisted state から replay / resume / audit 入力を引くときの既定 locator group は次とする。
+
+- source-of-truth replay input:
+  `record.json`
+- derived resume / replay helpers:
+  `snapshot.json`、`history.json`
+- derived audit / public-state helper:
+  `exported-snapshot.json`
+
+service read path は、queue record が保持する terminal summary locator と compact artifact を使って、
+この locator group を operator が辿れる形へ解決してよい。
+local filesystem lane では、service は少なくとも次を検証できなければならない。
+
+- `record.json` の `match_id` / game metadata / player 順序が persisted submission metadata と整合すること
+- `snapshot.json` が `record.json.snapshot` と一致すること
+- `history.json` が `record.json.event_log` と一致すること
+- `exported-snapshot.json` が `record.json.exported_snapshot` と一致すること
+
+この verification は persisted artifact の正本性監査であり、
+history replay や snapshot resume そのものを service 層で実行することを意味しない。
 
 出力:
 

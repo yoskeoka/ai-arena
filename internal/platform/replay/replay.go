@@ -40,6 +40,20 @@ func LoadSnapshot(path string) (game.Snapshot, error) {
 	return snapshot, nil
 }
 
+// LoadExportedSnapshot loads a persisted exported snapshot from disk.
+func LoadExportedSnapshot(path string) (game.ExportedSnapshot, error) {
+	// #nosec G304 -- the caller explicitly selects the local debug exported snapshot input path.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return game.ExportedSnapshot{}, fmt.Errorf("read exported snapshot input %s: %w", path, err)
+	}
+	var snapshot game.ExportedSnapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return game.ExportedSnapshot{}, fmt.Errorf("decode exported snapshot input %s: %w", path, err)
+	}
+	return snapshot, nil
+}
+
 // LoadHistory loads a persisted event history from disk.
 func LoadHistory(path string) ([]match.Event, error) {
 	// #nosec G304 -- the caller explicitly selects the local debug history input path.

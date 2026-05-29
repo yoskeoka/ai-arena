@@ -141,7 +141,7 @@ func usageFor(subcommand string) string {
 	case "get":
 		return "arena-service get --submission-id <id> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "read":
-		return "arena-service read --submission-id <id> --artifact <result-summary|record|stderr:<player-id>> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+		return "arena-service read --submission-id <id> --artifact <result-summary|record|snapshot|history|exported-snapshot|stderr:<player-id>> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	default:
 		return "arena-service <submit|run-once|submit-cancel|list|get|read> ..."
 	}
@@ -333,6 +333,21 @@ func selectArtifactPath(detail service.MatchDetail, artifactKind string) (string
 			return "", fmt.Errorf("artifact record is not available")
 		}
 		return detail.RecordPath, nil
+	case artifactKind == "snapshot":
+		if detail.ReplayInputs == nil || detail.ReplayInputs.SnapshotPath == "" {
+			return "", fmt.Errorf("artifact snapshot is not available")
+		}
+		return detail.ReplayInputs.SnapshotPath, nil
+	case artifactKind == "history":
+		if detail.ReplayInputs == nil || detail.ReplayInputs.HistoryPath == "" {
+			return "", fmt.Errorf("artifact history is not available")
+		}
+		return detail.ReplayInputs.HistoryPath, nil
+	case artifactKind == "exported-snapshot":
+		if detail.ReplayInputs == nil || detail.ReplayInputs.ExportedSnapshotPath == "" {
+			return "", fmt.Errorf("artifact exported-snapshot is not available")
+		}
+		return detail.ReplayInputs.ExportedSnapshotPath, nil
 	case strings.HasPrefix(artifactKind, "stderr:"):
 		playerID := strings.TrimPrefix(artifactKind, "stderr:")
 		if playerID == "" {

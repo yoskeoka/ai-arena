@@ -318,7 +318,10 @@ detail artifact locator は queue record が保持する terminal summary から
 - artifact 確認の既定順は `result-summary.json` -> `record.json` path / stderr path 群 -> 必要なら `structured-log.ndjson` とする
 - `list` は compact row array を返し、operator が queue lifecycle と terminal result を 1 行ずつ確認できる
 - `get` は 1 submission の detail view と `match_dir` / `record_path` / `result_summary_path` / `player_stderr_paths` を返す
-- `read` は `result-summary` / `record` / player stderr の selected artifact を返してよい
+- `get` detail は replay / resume / audit 用 locator group と metadata join も返してよい。
+  最低でも `record_path`、`snapshot_path`、`history_path`、`exported_snapshot_path`、
+  `record` 正本性 / metadata join / derived artifact 一致の verification result を返せること
+- `read` は `result-summary` / `record` / `snapshot` / `history` / `exported-snapshot` / player stderr の selected artifact を返してよい
 
 ### rejection path
 
