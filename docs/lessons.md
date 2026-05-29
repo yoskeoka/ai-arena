@@ -202,3 +202,10 @@
 - **Pattern**: 「PR に追加 commit を積む」ことだけを見て、変更内容が docs-only かどうかを quality gate 判断に反映できていない
 - **Rule**: failure note や issue logging だけの docs-only follow-up では、対象 code を変えていない限り local test / lint を回し直さない。必要なら既存の verification 結果を保持したまま docs diff だけ commit する
 - **Applied**: `0056` PR follow-up での flaky CI issue 追記、今後の docs/issues 追加だけを行う review follow-up 全般
+
+## [2026-05-29] DB が責務に入る read/write path は Postgres lane で固定する
+
+- **Mistake**: `0057` の query read-path 追加で、durable queue/read model の主要検証を `InMemoryQueueStore` ベースの test に置いたまま PR を出しかけた
+- **Pattern**: interface 越しに同じ API を叩けると、storage-specific behavior を確認すべき責務まで generic in-memory test で十分だと扱ってしまう
+- **Rule**: ai-arena の service で DB が責務に入る write/read/query path は、少なくとも 1 本は `AI_ARENA_PG_TEST_DSN` を使う Docker/Postgres lane で検証する。逆に file-backed / in-memory lane だけが責務の path には Docker を持ち込まない
+- **Applied**: `internal/platform/service/query_test.go`、`internal/platform/service/store_postgres_test.go`、今後の durable queue / read model / operator query 実装全般

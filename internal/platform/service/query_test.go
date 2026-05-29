@@ -5,8 +5,10 @@ import (
 	"testing"
 )
 
-func TestQueryServiceListAndGetAcrossLifecycleStates(t *testing.T) {
-	store := NewInMemoryQueueStore()
+func TestPostgresQueryServiceListAndGetAcrossLifecycleStates(t *testing.T) {
+	dsn := postgresTestDSN(t)
+	ctx := context.Background()
+	store := newTestPostgresQueueStore(t, ctx, dsn, true)
 	commands := newTestCommandServiceWithStore(t, store)
 	query, err := NewQueryService(store)
 	if err != nil {
@@ -16,30 +18,30 @@ func TestQueryServiceListAndGetAcrossLifecycleStates(t *testing.T) {
 	runningSubmission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
 	runningSubmission.SubmissionID = "sub-running"
 	runningSubmission.MatchID = "match-running"
-	if _, err := commands.Submit(context.Background(), runningSubmission); err != nil {
+	if _, err := commands.Submit(ctx, runningSubmission); err != nil {
 		t.Fatalf("Submit(running) error = %v", err)
 	}
-	runningRecord, err := store.Claim(context.Background(), "worker-running")
+	runningRecord, err := store.Claim(ctx, "worker-running")
 	if err != nil {
 		t.Fatalf("Claim(running) error = %v", err)
 	}
 	runningRecord.State = StateRunning
-	if err := store.Update(context.Background(), runningRecord); err != nil {
+	if err := store.Update(ctx, runningRecord); err != nil {
 		t.Fatalf("Update(running) error = %v", err)
 	}
 
 	failedSubmission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
 	failedSubmission.SubmissionID = "sub-failed"
 	failedSubmission.MatchID = "match-failed"
-	if _, err := commands.Submit(context.Background(), failedSubmission); err != nil {
+	if _, err := commands.Submit(ctx, failedSubmission); err != nil {
 		t.Fatalf("Submit(failed) error = %v", err)
 	}
-	failedRecord, err := store.Claim(context.Background(), "worker-failed")
+	failedRecord, err := store.Claim(ctx, "worker-failed")
 	if err != nil {
 		t.Fatalf("Claim(failed) error = %v", err)
 	}
 	failedRecord.State = StateFailed
-	if err := store.Update(context.Background(), failedRecord); err != nil {
+	if err := store.Update(ctx, failedRecord); err != nil {
 		t.Fatalf("Update(failed) error = %v", err)
 	}
 
@@ -52,31 +54,31 @@ func TestQueryServiceListAndGetAcrossLifecycleStates(t *testing.T) {
 	)
 	completedSubmission.SubmissionID = "sub-completed"
 	completedSubmission.MatchID = "match-completed"
-	if _, err := commands.Submit(context.Background(), completedSubmission); err != nil {
+	if _, err := commands.Submit(ctx, completedSubmission); err != nil {
 		t.Fatalf("Submit(completed) error = %v", err)
 	}
-	if _, err := newTestWorker(t, store, 0).ProcessNext(context.Background(), "worker-completed"); err != nil {
+	if _, err := newTestWorker(t, store, 0).ProcessNext(ctx, "worker-completed"); err != nil {
 		t.Fatalf("ProcessNext(completed) error = %v", err)
 	}
 
 	queuedSubmission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
 	queuedSubmission.SubmissionID = "sub-queued"
 	queuedSubmission.MatchID = "match-queued"
-	if _, err := commands.Submit(context.Background(), queuedSubmission); err != nil {
+	if _, err := commands.Submit(ctx, queuedSubmission); err != nil {
 		t.Fatalf("Submit(queued) error = %v", err)
 	}
 
 	canceledSubmission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
 	canceledSubmission.SubmissionID = "sub-canceled"
 	canceledSubmission.MatchID = "match-canceled"
-	if _, err := commands.Submit(context.Background(), canceledSubmission); err != nil {
+	if _, err := commands.Submit(ctx, canceledSubmission); err != nil {
 		t.Fatalf("Submit(canceled) error = %v", err)
 	}
-	if _, err := commands.Cancel(context.Background(), canceledSubmission.SubmissionID); err != nil {
+	if _, err := commands.Cancel(ctx, canceledSubmission.SubmissionID); err != nil {
 		t.Fatalf("Cancel(canceled) error = %v", err)
 	}
 
-	items, err := query.List(context.Background())
+	items, err := query.List(ctx)
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -105,7 +107,7 @@ func TestQueryServiceListAndGetAcrossLifecycleStates(t *testing.T) {
 		t.Fatalf("items[4].LifecycleState = %q, want %q", items[4].LifecycleState, StateCanceled)
 	}
 
-	detail, err := query.Get(context.Background(), completedSubmission.SubmissionID)
+	detail, err := query.Get(ctx, completedSubmission.SubmissionID)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
