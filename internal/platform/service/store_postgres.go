@@ -62,6 +62,10 @@ func (s *PostgresQueueStore) Enqueue(ctx context.Context, submission MatchSubmis
 	if err != nil {
 		return QueueRecord{}, fmt.Errorf("service: marshal submitted players: %w", err)
 	}
+	attemptCount, err := postgresAttemptCount(submission.AttemptCount)
+	if err != nil {
+		return QueueRecord{}, err
+	}
 
 	err = s.queries.CreateQueueRecord(ctx, servicepostgressqlc.CreateQueueRecordParams{
 		SubmissionID:   submission.SubmissionID,
@@ -71,7 +75,7 @@ func (s *PostgresQueueStore) Enqueue(ctx context.Context, submission MatchSubmis
 		RulesetVersion: submission.Game.RulesetVersion,
 		PlayersJson:    playersJSON,
 		OutputDir:      submission.OutputDir,
-		AttemptCount:   postgresAttemptCount(submission.AttemptCount),
+		AttemptCount:   attemptCount,
 		State:          string(StateQueued),
 	})
 	if err != nil {
@@ -160,6 +164,10 @@ func (s *PostgresQueueStore) Update(ctx context.Context, next QueueRecord) error
 			return fmt.Errorf("service: marshal terminal artifacts: %w", err)
 		}
 	}
+	attemptCount, err := postgresAttemptCount(next.Submission.AttemptCount)
+	if err != nil {
+		return err
+	}
 
 	if err := s.queries.WithTx(tx).UpdateQueueRecord(ctx, servicepostgressqlc.UpdateQueueRecordParams{
 		MatchID:        next.Submission.MatchID,
@@ -168,7 +176,7 @@ func (s *PostgresQueueStore) Update(ctx context.Context, next QueueRecord) error
 		RulesetVersion: next.Submission.Game.RulesetVersion,
 		PlayersJson:    playersJSON,
 		OutputDir:      next.Submission.OutputDir,
-		AttemptCount:   postgresAttemptCount(next.Submission.AttemptCount),
+		AttemptCount:   attemptCount,
 		State:          string(next.State),
 		WorkerID:       textValueFromLease(next.Lease),
 		TerminalJson:   terminalJSON,
@@ -347,9 +355,9 @@ func validatePostgresQueueStoreSchema(ctx context.Context, pool *pgxpool.Pool) e
 	return nil
 }
 
-func postgresAttemptCount(attemptCount int) int32 {
-	if attemptCount != 1 {
-		return 0
+func postgresAttemptCount(attemptCount int) (int32, error) {
+	if attemptCount < -2147483648 || attemptCount > 2147483647 {
+		return 0, fmt.Errorf("service: attempt_count %d is out of int32 range", attemptCount)
 	}
-	return 1
+	return int32(attemptCount), nil
 }

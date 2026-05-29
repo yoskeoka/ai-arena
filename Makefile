@@ -54,6 +54,7 @@ postgres-schema-apply:
 			exit 0; \
 		fi; \
 		attempt="$$((attempt + 1))"; \
+		echo "postgres-schema-apply attempt $$attempt failed; retrying in 2s" >&2; \
 		sleep 2; \
 	done; \
 	echo "postgres-schema-apply failed after $$attempt attempts"; \
