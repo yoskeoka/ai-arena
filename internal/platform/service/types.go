@@ -87,6 +87,8 @@ type QueueStore interface {
 	Claim(context.Context, string) (QueueRecord, error)
 	Update(context.Context, QueueRecord) error
 	CancelQueued(context.Context, string) (QueueRecord, error)
+	Get(context.Context, string) (QueueRecord, error)
+	List(context.Context) ([]QueueRecord, error)
 }
 
 // AdmissionValidator validates a submission before queue admission.

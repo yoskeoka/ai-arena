@@ -18,6 +18,7 @@ var (
 // InMemoryQueueStore keeps queue state inside one process for the initial service skeleton.
 type InMemoryQueueStore struct {
 	mu      sync.Mutex
+	all     []string
 	order   []string
 	records map[string]QueueRecord
 }
@@ -45,6 +46,7 @@ func (s *InMemoryQueueStore) Enqueue(_ context.Context, submission MatchSubmissi
 		State:      StateQueued,
 	}
 	s.records[submission.SubmissionID] = record
+	s.all = append(s.all, submission.SubmissionID)
 	s.order = append(s.order, submission.SubmissionID)
 	return cloneQueueRecord(record), nil
 }
@@ -110,6 +112,34 @@ func (s *InMemoryQueueStore) CancelQueued(_ context.Context, submissionID string
 	s.records[submissionID] = record
 	s.removeFromOrder(submissionID)
 	return cloneQueueRecord(record), nil
+}
+
+// Get returns one existing queue record by submission id.
+func (s *InMemoryQueueStore) Get(_ context.Context, submissionID string) (QueueRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	record, ok := s.records[submissionID]
+	if !ok {
+		return QueueRecord{}, ErrQueueRecordNotFound
+	}
+	return cloneQueueRecord(record), nil
+}
+
+// List returns queue records in submission insertion order.
+func (s *InMemoryQueueStore) List(_ context.Context) ([]QueueRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	records := make([]QueueRecord, 0, len(s.all))
+	for _, submissionID := range s.all {
+		record, ok := s.records[submissionID]
+		if !ok {
+			continue
+		}
+		records = append(records, cloneQueueRecord(record))
+	}
+	return records, nil
 }
 
 func (s *InMemoryQueueStore) removeFromOrder(submissionID string) {

@@ -226,6 +226,41 @@ func (s *PostgresQueueStore) CancelQueued(ctx context.Context, submissionID stri
 	return cloneQueueRecord(record), nil
 }
 
+// Get returns one existing queue record by submission id.
+func (s *PostgresQueueStore) Get(ctx context.Context, submissionID string) (QueueRecord, error) {
+	return s.loadRecord(ctx, submissionID)
+}
+
+// List returns queue records in durable queue order.
+func (s *PostgresQueueStore) List(ctx context.Context) ([]QueueRecord, error) {
+	rows, err := s.queries.ListQueueRecords(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("service: list queue records: %w", err)
+	}
+
+	records := make([]QueueRecord, 0, len(rows))
+	for _, row := range rows {
+		record, err := queueRecordFromFields(
+			row.SubmissionID,
+			row.MatchID,
+			row.GameID,
+			row.GameVersion,
+			row.RulesetVersion,
+			row.PlayersJson,
+			row.OutputDir,
+			row.AttemptCount,
+			row.State,
+			row.WorkerID,
+			row.TerminalJson,
+		)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
 func (s *PostgresQueueStore) loadRecord(ctx context.Context, submissionID string) (QueueRecord, error) {
 	return s.loadRecordTx(ctx, nil, submissionID, false)
 }

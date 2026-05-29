@@ -246,6 +246,69 @@ func (q *Queries) GetQueueRecordForUpdate(ctx context.Context, submissionID stri
 	return i, err
 }
 
+const listQueueRecords = `-- name: ListQueueRecords :many
+SELECT
+    submission_id,
+    match_id,
+    game_id,
+    game_version,
+    ruleset_version,
+    players_json,
+    output_dir,
+    attempt_count,
+    state,
+    worker_id,
+    terminal_json
+FROM service_queue_records
+ORDER BY queue_order
+`
+
+type ListQueueRecordsRow struct {
+	SubmissionID   string
+	MatchID        string
+	GameID         string
+	GameVersion    string
+	RulesetVersion string
+	PlayersJson    []byte
+	OutputDir      string
+	AttemptCount   int32
+	State          string
+	WorkerID       pgtype.Text
+	TerminalJson   []byte
+}
+
+func (q *Queries) ListQueueRecords(ctx context.Context) ([]ListQueueRecordsRow, error) {
+	rows, err := q.db.Query(ctx, listQueueRecords)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListQueueRecordsRow
+	for rows.Next() {
+		var i ListQueueRecordsRow
+		if err := rows.Scan(
+			&i.SubmissionID,
+			&i.MatchID,
+			&i.GameID,
+			&i.GameVersion,
+			&i.RulesetVersion,
+			&i.PlayersJson,
+			&i.OutputDir,
+			&i.AttemptCount,
+			&i.State,
+			&i.WorkerID,
+			&i.TerminalJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateQueueRecord = `-- name: UpdateQueueRecord :exec
 UPDATE service_queue_records
 SET

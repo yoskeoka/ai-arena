@@ -99,6 +99,7 @@ game master sidecar については、platform と sidecar が共有してよい
 - `docs/specs/platform-common-contract.md`: metadata / action status / failure 分類 / record core schema の正本
 - `docs/specs/platform-service-skeleton.md`: online service skeleton の submission / admission / queue lifecycle 契約
 - `docs/specs/platform-service-persistence.md`: online service write model と terminal locator 保存単位の正本
+- `docs/specs/platform-service-read-model.md`: operator-facing result list / detail / artifact read contract の正本
 - `docs/specs/game-master.md`: game master 開発者向けの論理 API と transport 契約
 - `docs/specs/platform-game-registry.md`: registered game の lookup key / descriptor / build/replay 入口
 - `docs/specs/janken-game.md`: `janken` 固有 payload / validation / ranking
@@ -760,6 +761,7 @@ artifact 読取既定順:
 - local verification と AI Agent 実装時の既定読取順は `result-summary.json` -> `exported-snapshot.json` / `snapshot.json` -> `structured-log.ndjson` / `record.json` / `history.json` とする
 - `record.json.event_log` と `history.json` は source-of-truth / replay 用に保持するが、通常の結果確認では既定の最初の入口にしない
 - online service skeleton の CLI acceptance でも同じ読取順を使い、operator-facing queue record は artifact path 参照だけを返す
+- online service skeleton の operator query では、service lifecycle state と runner terminal status を別 field として見せ分ける
 
 AI metadata 読み取り:
 

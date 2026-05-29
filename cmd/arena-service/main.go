@@ -24,12 +24,18 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
+	return runWithFactory(args, stdout, stderr, newCLIApp)
+}
+
+type cliAppFactory func(baseDir string, matchTimeout time.Duration, postgresDSN string) (*cliApp, error)
+
+func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFactory) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: %s", usageFor(""))
 	}
 
 	subcommand := args[0]
-	if subcommand != "submit" && subcommand != "run-once" && subcommand != "submit-cancel" {
+	if subcommand != "submit" && subcommand != "run-once" && subcommand != "submit-cancel" && subcommand != "list" && subcommand != "get" && subcommand != "read" {
 		return fmt.Errorf("usage: %s", usageFor(""))
 	}
 
@@ -38,21 +44,22 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	var (
 		submissionPath string
+		submissionID   string
+		artifactKind   string
 		baseDir        string
 		workerID       string
 		matchTimeout   time.Duration
 		postgresDSN    string
 	)
 	fs.StringVar(&submissionPath, "submission", "", "submission JSON path or - for stdin")
+	fs.StringVar(&submissionID, "submission-id", "", "submission id for get/read")
+	fs.StringVar(&artifactKind, "artifact", "", "artifact selector for read")
 	fs.StringVar(&baseDir, "base-dir", "", "base directory for resolving local artifact refs and output_dir")
 	fs.StringVar(&workerID, "worker-id", "cli-worker", "worker identifier for run-once")
 	fs.DurationVar(&matchTimeout, "match-timeout", 0, "match timeout for run-once")
 	fs.StringVar(&postgresDSN, "postgres-dsn", "", "PostgreSQL DSN for durable queue storage")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
-	}
-	if submissionPath == "" {
-		return fmt.Errorf("--submission is required")
 	}
 	if baseDir == "" {
 		cwd, err := os.Getwd()
@@ -66,17 +73,38 @@ func run(args []string, stdout, stderr io.Writer) error {
 		postgresDSN = strings.TrimSpace(os.Getenv("ARENA_SERVICE_POSTGRES_DSN"))
 	}
 
+	app, err := factory(baseDir, matchTimeout, postgresDSN)
+	if err != nil {
+		return err
+	}
+	defer app.close()
+
+	switch subcommand {
+	case "list":
+		return app.list(context.Background(), stdout)
+	case "get":
+		if submissionID == "" {
+			return fmt.Errorf("--submission-id is required")
+		}
+		return app.get(context.Background(), submissionID, stdout)
+	case "read":
+		if submissionID == "" {
+			return fmt.Errorf("--submission-id is required")
+		}
+		if artifactKind == "" {
+			return fmt.Errorf("--artifact is required")
+		}
+		return app.read(context.Background(), submissionID, artifactKind, stdout)
+	}
+
+	if submissionPath == "" {
+		return fmt.Errorf("--submission is required")
+	}
 	submission, err := loadSubmission(submissionPath, os.Stdin)
 	if err != nil {
 		return err
 	}
 	resolveOutputDir(baseDir, &submission)
-
-	app, err := newCLIApp(baseDir, matchTimeout, postgresDSN)
-	if err != nil {
-		return err
-	}
-	defer app.close()
 
 	var record service.QueueRecord
 	switch subcommand {
@@ -108,13 +136,20 @@ func usageFor(subcommand string) string {
 		return "arena-service submit-cancel --submission <path-or-> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "submit":
 		return "arena-service submit --submission <path-or-> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+	case "list":
+		return "arena-service list [--base-dir <dir>] [--postgres-dsn <dsn>]"
+	case "get":
+		return "arena-service get --submission-id <id> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+	case "read":
+		return "arena-service read --submission-id <id> --artifact <result-summary|record|stderr:<player-id>> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	default:
-		return "arena-service <submit|run-once|submit-cancel> --submission <path-or-> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+		return "arena-service <submit|run-once|submit-cancel|list|get|read> ..."
 	}
 }
 
 type cliApp struct {
 	commands *service.CommandService
+	queries  *service.QueryService
 	queue    service.QueueStore
 	baseDir  string
 	timeout  time.Duration
@@ -139,8 +174,14 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string) (
 		closeFn()
 		return nil, err
 	}
+	queries, err := service.NewQueryService(store)
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
 	return &cliApp{
 		commands: commands,
+		queries:  queries,
 		queue:    store,
 		baseDir:  baseDir,
 		timeout:  matchTimeout,
@@ -190,6 +231,39 @@ func (a *cliApp) submitCancel(ctx context.Context, submission service.MatchSubmi
 	return a.commands.Cancel(ctx, record.Submission.SubmissionID)
 }
 
+func (a *cliApp) list(ctx context.Context, stdout io.Writer) error {
+	items, err := a.queries.List(ctx)
+	if err != nil {
+		return err
+	}
+	return encodeJSON(stdout, items)
+}
+
+func (a *cliApp) get(ctx context.Context, submissionID string, stdout io.Writer) error {
+	detail, err := a.queries.Get(ctx, submissionID)
+	if err != nil {
+		return err
+	}
+	return encodeJSON(stdout, detail)
+}
+
+func (a *cliApp) read(ctx context.Context, submissionID string, artifactKind string, stdout io.Writer) error {
+	detail, err := a.queries.Get(ctx, submissionID)
+	if err != nil {
+		return err
+	}
+	path, err := selectArtifactPath(detail, artifactKind)
+	if err != nil {
+		return err
+	}
+	data, err := readLocalArtifact(path)
+	if err != nil {
+		return err
+	}
+	_, err = stdout.Write(data)
+	return err
+}
+
 func (a *cliApp) newWorker() (*service.Worker, error) {
 	invoker, err := service.NewLocalRunnerInvoker(a.baseDir, nil, a.timeout)
 	if err != nil {
@@ -199,9 +273,13 @@ func (a *cliApp) newWorker() (*service.Worker, error) {
 }
 
 func encodeRecord(stdout io.Writer, record service.QueueRecord) error {
+	return encodeJSON(stdout, record)
+}
+
+func encodeJSON(stdout io.Writer, value any) error {
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
-	return enc.Encode(record)
+	return enc.Encode(value)
 }
 
 func resolveOutputDir(baseDir string, submission *service.MatchSubmission) {
@@ -241,4 +319,46 @@ func loadSubmission(path string, stdin io.Reader) (service.MatchSubmission, erro
 		return service.MatchSubmission{}, fmt.Errorf("decode submission: %w", err)
 	}
 	return submission, nil
+}
+
+func selectArtifactPath(detail service.MatchDetail, artifactKind string) (string, error) {
+	switch {
+	case artifactKind == "result-summary":
+		if detail.ResultSummaryPath == "" {
+			return "", fmt.Errorf("artifact result-summary is not available")
+		}
+		return detail.ResultSummaryPath, nil
+	case artifactKind == "record":
+		if detail.RecordPath == "" {
+			return "", fmt.Errorf("artifact record is not available")
+		}
+		return detail.RecordPath, nil
+	case strings.HasPrefix(artifactKind, "stderr:"):
+		playerID := strings.TrimPrefix(artifactKind, "stderr:")
+		if playerID == "" {
+			return "", fmt.Errorf("artifact stderr requires a player id")
+		}
+		path := detail.PlayerStderrPaths[playerID]
+		if path == "" {
+			return "", fmt.Errorf("artifact stderr for player %q is not available", playerID)
+		}
+		return path, nil
+	default:
+		return "", fmt.Errorf("unsupported artifact %q", artifactKind)
+	}
+}
+
+func readLocalArtifact(path string) ([]byte, error) {
+	if !isLocalArtifactPath(path) {
+		return nil, fmt.Errorf("artifact path %q is not a local file path", path)
+	}
+	return os.ReadFile(filepath.Clean(strings.TrimPrefix(path, "file://")))
+}
+
+func isLocalArtifactPath(path string) bool {
+	parsed, err := url.Parse(path)
+	if err != nil {
+		return true
+	}
+	return parsed.Scheme == "" || parsed.Scheme == "file"
 }

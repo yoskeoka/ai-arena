@@ -101,3 +101,19 @@ SELECT
 FROM service_queue_records
 WHERE submission_id = @submission_id
 FOR UPDATE;
+
+-- name: ListQueueRecords :many
+SELECT
+    submission_id,
+    match_id,
+    game_id,
+    game_version,
+    ruleset_version,
+    players_json,
+    output_dir,
+    attempt_count,
+    state,
+    worker_id,
+    terminal_json
+FROM service_queue_records
+ORDER BY queue_order;

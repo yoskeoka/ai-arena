@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	goRuntime "runtime"
 	"testing"
+	"time"
 
+	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/service"
 )
@@ -67,9 +70,92 @@ func TestRunWithoutSubcommandShowsTopLevelUsage(t *testing.T) {
 	if err == nil {
 		t.Fatal("run() returned nil error")
 	}
-	want := "usage: arena-service <submit|run-once|submit-cancel> --submission <path-or-> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+	want := "usage: arena-service <submit|run-once|submit-cancel|list|get|read> ..."
 	if err.Error() != want {
 		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestRunListGetAndReadUseQuerySurface(t *testing.T) {
+	app := newSharedTestCLIApp(t)
+
+	completed := service.MatchSubmission{
+		SubmissionID: "sub-list-completed",
+		MatchID:      "match-list-completed",
+		Game: contract.GameMetadata{
+			GameID:         "echo-count",
+			GameVersion:    "2.0.0",
+			RulesetVersion: "phase2-simultaneous-2turn",
+		},
+		Players: []service.SubmittedPlayer{
+			{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
+			{PlayerID: "p2", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
+		},
+		OutputDir:    t.TempDir(),
+		AttemptCount: 1,
+	}
+	if _, err := app.runOnce(context.Background(), completed, "worker-1"); err != nil {
+		t.Fatalf("runOnce(completed) error = %v", err)
+	}
+
+	queued := service.MatchSubmission{
+		SubmissionID: "sub-list-queued",
+		MatchID:      "match-list-queued",
+		Game: contract.GameMetadata{
+			GameID:         "echo-count",
+			GameVersion:    "2.0.0",
+			RulesetVersion: "phase2-simultaneous-2turn",
+		},
+		Players: []service.SubmittedPlayer{
+			{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
+			{PlayerID: "p2", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
+		},
+		OutputDir:    filepath.Join(t.TempDir(), "queued-output"),
+		AttemptCount: 1,
+	}
+	if _, err := app.commands.Submit(context.Background(), queued); err != nil {
+		t.Fatalf("Submit(queued) error = %v", err)
+	}
+
+	factory := func(string, time.Duration, string) (*cliApp, error) {
+		return app, nil
+	}
+
+	var listOut bytes.Buffer
+	var stderr bytes.Buffer
+	if err := runWithFactory([]string{"list"}, &listOut, &stderr, factory); err != nil {
+		t.Fatalf("runWithFactory(list) error = %v, stderr = %s", err, stderr.String())
+	}
+	var items []service.ResultListItem
+	if err := json.Unmarshal(listOut.Bytes(), &items); err != nil {
+		t.Fatalf("json.Unmarshal(list) error = %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("len(items) = %d, want 2", len(items))
+	}
+
+	var getOut bytes.Buffer
+	if err := runWithFactory([]string{"get", "--submission-id", completed.SubmissionID}, &getOut, &stderr, factory); err != nil {
+		t.Fatalf("runWithFactory(get) error = %v, stderr = %s", err, stderr.String())
+	}
+	var detail service.MatchDetail
+	if err := json.Unmarshal(getOut.Bytes(), &detail); err != nil {
+		t.Fatalf("json.Unmarshal(get) error = %v", err)
+	}
+	if detail.ResultSummary == nil {
+		t.Fatal("detail.ResultSummary = nil, want compact summary")
+	}
+
+	var readOut bytes.Buffer
+	if err := runWithFactory([]string{"read", "--submission-id", completed.SubmissionID, "--artifact", "result-summary"}, &readOut, &stderr, factory); err != nil {
+		t.Fatalf("runWithFactory(read) error = %v, stderr = %s", err, stderr.String())
+	}
+	var summary artifacts.ResultSummary
+	if err := json.Unmarshal(readOut.Bytes(), &summary); err != nil {
+		t.Fatalf("json.Unmarshal(read) error = %v", err)
+	}
+	if summary.MatchID != completed.MatchID {
+		t.Fatalf("summary.MatchID = %q, want %q", summary.MatchID, completed.MatchID)
 	}
 }
 
@@ -274,6 +360,36 @@ func writeSubmissionFile(t *testing.T, submission service.MatchSubmission) strin
 		t.Fatalf("os.WriteFile() error = %v", err)
 	}
 	return path
+}
+
+func newSharedTestCLIApp(t *testing.T) *cliApp {
+	t.Helper()
+
+	baseDir := repoRoot(t)
+	dryRun, err := service.NewLocalDryRunChecker(baseDir)
+	if err != nil {
+		t.Fatalf("NewLocalDryRunChecker() error = %v", err)
+	}
+	validator, err := service.NewDefaultAdmissionValidator(nil, dryRun)
+	if err != nil {
+		t.Fatalf("NewDefaultAdmissionValidator() error = %v", err)
+	}
+	store := service.NewInMemoryQueueStore()
+	commands, err := service.NewCommandService(store, validator)
+	if err != nil {
+		t.Fatalf("NewCommandService() error = %v", err)
+	}
+	queries, err := service.NewQueryService(store)
+	if err != nil {
+		t.Fatalf("NewQueryService() error = %v", err)
+	}
+	return &cliApp{
+		commands: commands,
+		queries:  queries,
+		queue:    store,
+		baseDir:  baseDir,
+		closeFn:  func() {},
+	}
 }
 
 func repoRoot(t *testing.T) string {
