@@ -218,6 +218,13 @@ descriptor は replay/debug のために以下を提供する。
 
 これにより replay/debug は registry 外へ game 固有 helper を漏らさずに扱う。
 
+online service skeleton が persisted match から replay / resume / audit 導線を作る場合も、
+service が担うのは `game_id` / `game_version` / `ruleset_version`、player 順序 / `artifact_ref`、
+`record` / `snapshot` / `history` / exported/public snapshot locator の join までとする。
+その read path が history replay や snapshot resume を実行するときは、
+解決済み metadata と source-of-truth `record.json` または derived helper artifact を
+runner / registry の既存 build 入口へ渡し、game 固有 rebuild を service 層へ持ち込んではならない。
+
 ただし dev-only manifest overlay の初期スコープは fresh run に限定してよい。
 この場合、resume snapshot と history replay は「overlay descriptor が未対応」として fail-fast し、
 support の追加は後続 plan で扱う。

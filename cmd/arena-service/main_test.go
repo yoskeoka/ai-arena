@@ -145,6 +145,12 @@ func TestRunListGetAndReadUseQuerySurface(t *testing.T) {
 	if detail.ResultSummary == nil {
 		t.Fatal("detail.ResultSummary = nil, want compact summary")
 	}
+	if detail.ReplayInputs == nil {
+		t.Fatal("detail.ReplayInputs = nil, want replay/resume/audit locators")
+	}
+	if !detail.ReplayInputs.Verification.Checked || !detail.ReplayInputs.Verification.Consistent {
+		t.Fatalf("detail.ReplayInputs.Verification = %+v, want checked consistent replay inputs", detail.ReplayInputs.Verification)
+	}
 
 	var readOut bytes.Buffer
 	if err := runWithFactory([]string{"read", "--submission-id", completed.SubmissionID, "--artifact", "result-summary"}, &readOut, &stderr, factory); err != nil {
@@ -156,6 +162,16 @@ func TestRunListGetAndReadUseQuerySurface(t *testing.T) {
 	}
 	if summary.MatchID != completed.MatchID {
 		t.Fatalf("summary.MatchID = %q, want %q", summary.MatchID, completed.MatchID)
+	}
+
+	for _, artifactKind := range []string{"snapshot", "history", "exported-snapshot"} {
+		readOut.Reset()
+		if err := runWithFactory([]string{"read", "--submission-id", completed.SubmissionID, "--artifact", artifactKind}, &readOut, &stderr, factory); err != nil {
+			t.Fatalf("runWithFactory(read %s) error = %v, stderr = %s", artifactKind, err, stderr.String())
+		}
+		if readOut.Len() == 0 {
+			t.Fatalf("read %s returned empty output", artifactKind)
+		}
 	}
 }
 

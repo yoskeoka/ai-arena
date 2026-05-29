@@ -38,6 +38,7 @@ type MatchDetail struct {
 	RecordPath        string                   `json:"record_path,omitempty"`
 	PlayerStderrPaths map[string]string        `json:"player_stderr_paths,omitempty"`
 	ResultSummary     *artifacts.ResultSummary `json:"result_summary,omitempty"`
+	ReplayInputs      *ReplayResumeAuditInputs `json:"replay_inputs,omitempty"`
 }
 
 // QueryService builds operator-facing read models from queue records and persisted artifacts.
@@ -92,6 +93,10 @@ func (s *QueryService) Get(ctx context.Context, submissionID string) (MatchDetai
 		if record.Terminal.PlayerStderrPaths != nil {
 			detail.PlayerStderrPaths = cloneStringMap(record.Terminal.PlayerStderrPaths)
 		}
+	}
+	detail.ReplayInputs, err = buildReplayResumeAuditInputs(record, summary)
+	if err != nil {
+		return MatchDetail{}, err
 	}
 	return detail, nil
 }
