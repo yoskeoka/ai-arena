@@ -73,8 +73,8 @@ artifact download を backend 中継ではなく remote object storage provider 
 ## Dependencies
 
 - depends on: parent/base item `0047-platform-online-foundation-03-operator-flow-and-matchmaking.md` (now retired to `docs/exec-plan/done/` after split)
-- informs: `0061-platform-online-foundation-03-02-remote-service-topology-and-polling-api.md`
-- informs: `0062-platform-online-foundation-03-03-minimal-operator-ui-and-artifact-access.md`
+- informs: `0065-platform-online-foundation-03-02-remote-service-topology-and-polling-api.md`
+- informs: `0066-platform-online-foundation-03-03-minimal-operator-ui-and-artifact-access.md`
 
 ## Risks and Mitigations
 

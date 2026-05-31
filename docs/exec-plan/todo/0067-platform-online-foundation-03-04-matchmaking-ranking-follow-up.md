@@ -59,8 +59,8 @@ general submission / game registration / matchmaking / ranking / rerun を後続
 
 ## Dependencies
 
-- depends on: `0061-platform-online-foundation-03-02-remote-service-topology-and-polling-api.md`
-- depends on: `0062-platform-online-foundation-03-03-minimal-operator-ui-and-artifact-access.md`
+- depends on: `0065-platform-online-foundation-03-02-remote-service-topology-and-polling-api.md`
+- depends on: `0066-platform-online-foundation-03-03-minimal-operator-ui-and-artifact-access.md`
 - depends on: parent/base item `0047-platform-online-foundation-03-operator-flow-and-matchmaking.md` (now retired to `docs/exec-plan/done/` after split)
 
 ## Risks and Mitigations

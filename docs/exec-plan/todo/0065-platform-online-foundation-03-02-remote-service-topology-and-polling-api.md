@@ -71,12 +71,12 @@ Phase 6 の online confirmation に必要な最小 polling API を remote で成
 
 ## Dependencies
 
-- depends on: `0060-platform-online-foundation-03-01-provider-bootstrap-and-remote-artifact-delivery.md`
+- depends on: `0064-platform-online-foundation-03-01-provider-bootstrap-and-remote-artifact-delivery.md`
 - depends on: `0057-platform-online-foundation-02-02-result-read-model-and-operator-query.md`
 - depends on: `0058-platform-online-foundation-02-03-replay-resume-audit-inputs.md`
 - depends on: parent/base item `0047-platform-online-foundation-03-operator-flow-and-matchmaking.md` (now retired to `docs/exec-plan/done/` after split)
-- blocks: `0062-platform-online-foundation-03-03-minimal-operator-ui-and-artifact-access.md`
-- informs: `0063-platform-online-foundation-03-04-matchmaking-ranking-follow-up.md`
+- blocks: `0066-platform-online-foundation-03-03-minimal-operator-ui-and-artifact-access.md`
+- informs: `0067-platform-online-foundation-03-04-matchmaking-ranking-follow-up.md`
 
 ## Risks and Mitigations
 
