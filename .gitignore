@@ -1,4 +1,5 @@
 .worktrees/
 arena-runner
 .local/
+node_modules/
 testdata/ai/janken/*.wasm
