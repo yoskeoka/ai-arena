@@ -109,9 +109,17 @@ adapter へ渡す前に、実起動時に曖昧さが残らない startable comm
 absolute path はそのまま使ってよい。path 解決や正規化に失敗した場合、runner は match loop
 開始前に fail-fast しなければならない。
 
-この manifest は fresh run 用の開発入口であり、resume / replay / history build 用 entry は
-この段階では要求しない。runner が resume / replay を要求された場合は、match loop 開始前に
-未対応として fail-fast してよい。
+この manifest 自体に replay/debug 専用の別 entry surface を追加することは、この段階では要求しない。
+resume / replay support は、同じ metadata と `runtime.command` を使って既存の game master 論理 API を
+呼び出せることを前提に扱う。
+
+- snapshot resume は `InitializeMatch.resume_snapshot` を通して扱う
+- history replay は runner が source-of-truth `history` / `record.event_log` を turn 境界まで再適用し、
+  その結果得た snapshot を使って continuation を開始する
+
+このため runner が `--game-master-manifest` と debug entrypoint を組み合わせる場合でも、
+metadata source of truth は manifest のままとする。`record` / `snapshot` が持つ metadata は
+manifest と compatibility check を通過しなければならず、CLI metadata flag へは戻さない。
 
 ### future external adapter
 

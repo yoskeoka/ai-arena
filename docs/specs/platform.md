@@ -152,8 +152,17 @@ DB-backed store の違いを意識しない。
 runner は opt-in dev entry として game master manifest file を受け取ってよい。
 manifest が与えられた場合、runner は built-in persisted record lookup の代わりに
 runner-local overlay descriptor を構築し、その descriptor を以後の build / compatibility /
-match execution へ流す。この経路は fresh run 限定で、resume / replay / history build は
-match loop 開始前に fail-fast しなければならない。
+match execution へ流す。
+
+この経路でも replay/debug entrypoint は既存 artifact contract のまま扱う。
+
+- `--snapshot-input` は manifest overlay descriptor の resume snapshot build へ流す
+- `--record-input` は `record.json` の metadata / snapshot / `event_log` を読みつつ、manifest metadata と
+  compatibility check したうえで resume / replay source として使う
+- `--history-input` は manifest metadata を source of truth にした history replay build へ流す
+
+`--game-master-manifest` は引き続き `--game` / `--game-version` / `--ruleset` とは排他的とする。
+一方で replay/debug input flag との組み合わせは許可してよい。
 
 service skeleton が runner result を file-backed first で受け取るとき、標準 artifact layout は
 `record.json`、`result-summary.json`、`snapshot.json`、`exported-snapshot.json`、`history.json`
@@ -684,6 +693,9 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--history-input <path>` は persisted final record の `event_log` を抽出した `history.json` を受け付ける
 - `--record-input <path>` は source-of-truth persisted final match-record artifact を受け付ける
 - `--target-turn <n>` は `--history-input` または `--record-input` と組み合わせて使う replay / resume の turn 境界を指定する
+- `--game-master-manifest <path>` は built-in lookup の代わりに manifest overlay descriptor を選ぶ opt-in dev entry であり、
+  `--game` / `--game-version` / `--ruleset` とは排他的だが、`--snapshot-input` / `--history-input` /
+  `--record-input` / `--target-turn` とは組み合わせてよい
 
 targeted verification の想定:
 
@@ -828,6 +840,7 @@ replay/debug entrypoint:
 - `resume-from-history-and-continue` は `--history-input <path>` または `--record-input <path>` と `--target-turn <n>` を使い、target turn 境界までの履歴を replay した後、その続きだけ新しい AI process で実行する
 - `--record-input <path>` 指定時は persisted final record の metadata / snapshot / history を source of truth とし、未指定の `--game` / `--game-version` / `--ruleset` をそこから補える
 - `--history-input <path>` は `history.json` を直接与えたい場合の補助 entrypoint であり、通常は `--record-input <path>` を優先する
+- `--game-master-manifest <path>` と replay/debug input を組み合わせる場合、manifest metadata が selected game metadata の source of truth であり、artifact 側 metadata はそれと compatibility していなければならない
 - hand-crafted snapshot file は debug entrypoint として許可するが、AI process memory continuity は保証しない
 - history replay は記録済み choice / timeout / protocol-failure を再問い合わせせず target turn 境界まで再現するが、AI process memory continuity や in-flight transport state の復元はしない
 - replay/debug path も fresh run と同じ runner log contract に従うが、log stream 自体は replay source of truth とみなさない

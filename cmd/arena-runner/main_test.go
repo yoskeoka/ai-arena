@@ -78,16 +78,84 @@ func TestRunSupportsExternalGameMasterManifestFreshRun(t *testing.T) {
 	}
 }
 
-func TestRunRejectsDebugInputsForGameMasterManifest(t *testing.T) {
+func TestRunSupportsExternalGameMasterManifestRecordResume(t *testing.T) {
 	chdirRepoRoot(t)
 
+	outputDir := t.TempDir()
+	initialMatchID := "external-echo-record-source"
 	err := run([]string{
 		"--game-master-manifest", "./testdata/game-master/external-echo/manifest.json",
-		"--target-turn", "1",
+		"--output-dir", outputDir,
+		"--match-id", initialMatchID,
+		"--log-output", "none",
 		"--player", "p1=./testdata/ai/external-echo/echo-ai",
+		"--player", "p2=./testdata/ai/external-echo/echo-ai",
 	})
-	if err == nil || !strings.Contains(err.Error(), "--game-master-manifest supports fresh run only") {
-		t.Fatalf("run error = %v, want fresh-run-only guard", err)
+	if err != nil {
+		t.Fatalf("initial run: %v", err)
+	}
+
+	resumeMatchID := "external-echo-record-resume"
+	err = run([]string{
+		"--game-master-manifest", "./testdata/game-master/external-echo/manifest.json",
+		"--record-input", filepath.Join(outputDir, initialMatchID, "record.json"),
+		"--output-dir", outputDir,
+		"--match-id", resumeMatchID,
+		"--log-output", "none",
+		"--player", "p1=./testdata/ai/external-echo/echo-ai",
+		"--player", "p2=./testdata/ai/external-echo/echo-ai",
+	})
+	if err != nil {
+		t.Fatalf("resume run: %v", err)
+	}
+
+	var summary resultSummary
+	if err := readJSONFile(filepath.Join(outputDir, resumeMatchID, "result-summary.json"), &summary); err != nil {
+		t.Fatalf("read result summary: %v", err)
+	}
+	if summary.Status != game.StatusCompleted {
+		t.Fatalf("status = %q, want %q", summary.Status, game.StatusCompleted)
+	}
+}
+
+func TestRunSupportsExternalGameMasterManifestHistoryReplay(t *testing.T) {
+	chdirRepoRoot(t)
+
+	outputDir := t.TempDir()
+	initialMatchID := "external-echo-history-source"
+	err := run([]string{
+		"--game-master-manifest", "./testdata/game-master/external-echo/manifest.json",
+		"--output-dir", outputDir,
+		"--match-id", initialMatchID,
+		"--log-output", "none",
+		"--player", "p1=./testdata/ai/external-echo/echo-ai",
+		"--player", "p2=./testdata/ai/external-echo/echo-ai",
+	})
+	if err != nil {
+		t.Fatalf("initial run: %v", err)
+	}
+
+	replayMatchID := "external-echo-history-replay"
+	err = run([]string{
+		"--game-master-manifest", "./testdata/game-master/external-echo/manifest.json",
+		"--history-input", filepath.Join(outputDir, initialMatchID, "history.json"),
+		"--target-turn", "2",
+		"--output-dir", outputDir,
+		"--match-id", replayMatchID,
+		"--log-output", "none",
+		"--player", "p1=./testdata/ai/external-echo/echo-ai",
+		"--player", "p2=./testdata/ai/external-echo/echo-ai",
+	})
+	if err != nil {
+		t.Fatalf("replay run: %v", err)
+	}
+
+	var summary resultSummary
+	if err := readJSONFile(filepath.Join(outputDir, replayMatchID, "result-summary.json"), &summary); err != nil {
+		t.Fatalf("read result summary: %v", err)
+	}
+	if summary.Status != game.StatusCompleted {
+		t.Fatalf("status = %q, want %q", summary.Status, game.StatusCompleted)
 	}
 }
 
