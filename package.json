@@ -1,0 +1,12 @@
+{
+  "packageManager": "pnpm@10.11.1",
+  "private": true,
+  "scripts": {
+    "textlint": "./tools/run-textlint.sh --all",
+    "textlint:file": "./tools/run-textlint.sh"
+  },
+  "devDependencies": {
+    "textlint": "15.7.1",
+    "textlint-rule-preset-ai-writing": "1.1.0"
+  }
+}

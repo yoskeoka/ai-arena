@@ -1,0 +1,329 @@
+name: Japanese textlint
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/**/*.md"
+      - ".github/workflows/japanese-textlint.yml"
+      - "tools/list-changed-japanese-markdown.sh"
+      - "tools/textlint-rules/**/*.js"
+      - "config/textlint/**/*.jsonl"
+      - ".textlintrc.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "tools/run-textlint.sh"
+
+jobs:
+  japanese-textlint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      NODE_VERSION: "22.19"
+      PNPM_VERSION: "10.11.1"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Fetch PR base branch
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin \
+            "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
+
+      - name: Run textlint for changed Japanese Markdown files
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          lint_output_file="$(mktemp)"
+          trap 'rm -f "$lint_output_file"' EXIT
+
+          mapfile -t files < <(./tools/list-changed-japanese-markdown.sh "$BASE_REF")
+          mapfile -t changed_paths < <(git diff --name-only --diff-filter=AMR "${BASE_REF}...HEAD")
+
+          control_files_changed=0
+          for path in "${changed_paths[@]}"; do
+            case "$path" in
+              .github/workflows/japanese-textlint.yml|tools/list-changed-japanese-markdown.sh|tools/textlint-rules/*.js|config/textlint/*.jsonl|.textlintrc.json|package.json|pnpm-lock.yaml|tools/run-textlint.sh)
+                control_files_changed=1
+                break
+                ;;
+            esac
+          done
+
+          lint_mode="no-files"
+          lint_targets=()
+          if [ "${#files[@]}" -gt 0 ]; then
+            lint_mode="changed"
+            lint_targets=("${files[@]}")
+          elif [ "$control_files_changed" -eq 1 ]; then
+            lint_mode="smoke"
+            lint_targets=("docs/development/japanese-textlint.md")
+          fi
+
+          if [ "${#files[@]}" -gt 0 ]; then
+            printf 'Changed Japanese Markdown files:\n'
+            printf '  %s\n' "${files[@]}"
+          elif [ "$control_files_changed" -eq 1 ]; then
+            echo "No changed Japanese Markdown files found; running smoke check for textlint runtime."
+          else
+            echo "No changed Japanese Markdown files found."
+            printf '[]' >"$lint_output_file"
+          fi
+
+          if [ "${#lint_targets[@]}" -gt 0 ]; then
+            npm install -g "pnpm@${PNPM_VERSION}"
+            pnpm install --frozen-lockfile
+
+            set +e
+            pnpm exec textlint --rulesdir ./tools/textlint-rules --format json "${lint_targets[@]}" >"$lint_output_file"
+            textlint_status=$?
+            set -e
+            if [ "$textlint_status" -ne 0 ] && [ "$textlint_status" -ne 1 ]; then
+              echo "textlint returned ${textlint_status} without usable JSON output" >&2
+              exit "$textlint_status"
+            fi
+          fi
+
+          GITHUB_TOKEN="${{ github.token }}" \
+          GITHUB_API_URL="${{ github.api_url }}" \
+          GITHUB_REPOSITORY="${{ github.repository }}" \
+          PR_NUMBER="${{ github.event.pull_request.number }}" \
+          python3 - "$lint_output_file" "$lint_mode" "${files[@]}" -- "${lint_targets[@]}" <<'PY'
+          import json
+          import os
+          import socket
+          import sys
+          import urllib.error
+          import urllib.request
+
+          HTTP_TIMEOUT_SECONDS = 30
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          github_token = os.environ.get("GITHUB_TOKEN")
+          github_api_url = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+          github_repository = os.environ.get("GITHUB_REPOSITORY")
+          pr_number = os.environ.get("PR_NUMBER")
+          comment_marker = "<!-- japanese-textlint-ci-comment -->"
+          lint_output_file = sys.argv[1]
+          lint_mode = sys.argv[2]
+          separator = sys.argv.index("--")
+          changed_files = sys.argv[3:separator]
+          linted_files = sys.argv[separator + 1 :]
+
+          try:
+              with open(lint_output_file, encoding="utf-8") as fh:
+                  stdout = fh.read().strip()
+          except OSError as exc:
+              raise SystemExit(f"failed to read textlint output: {exc}") from exc
+
+          if not stdout:
+              records = []
+          else:
+              try:
+                  records = json.loads(stdout)
+              except json.JSONDecodeError as exc:
+                  raise SystemExit(f"failed to parse textlint JSON: {exc}") from exc
+
+          findings = []
+          for record in records:
+              raw_file_path = record.get("filePath")
+              if not raw_file_path:
+                  continue
+
+              display_path = os.path.relpath(raw_file_path, os.getcwd())
+
+              for message in record.get("messages", []):
+                  findings.append(
+                      {
+                          "file": display_path,
+                          "line": message.get("line", 1),
+                          "column": message.get("column", 1),
+                          "rule": message.get("ruleId", "textlint"),
+                          "message": message.get("message", "textlint finding"),
+                      }
+                  )
+
+          def escape_data(value: str) -> str:
+              return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          def escape_property(value: str) -> str:
+              return escape_data(value).replace(":", "%3A").replace(",", "%2C")
+
+          for finding in findings:
+              print(
+                  "::warning file={file},line={line},col={column},title={title}::{message}".format(
+                      file=escape_property(finding["file"]),
+                      line=finding["line"],
+                      column=finding["column"],
+                      title=escape_property(finding["rule"]),
+                      message=escape_data(finding["message"]),
+                  )
+              )
+
+          def build_comment_body() -> str:
+              lines = [
+                  comment_marker,
+                  "## Japanese textlint Findings",
+                  "",
+                  f"- Files checked: {len(changed_files)}",
+                  f"- Findings: {len(findings)}",
+                  "",
+              ]
+              if findings:
+                  lines.extend(
+                      [
+                          "| File | Line | Rule | Warning |",
+                          "| --- | --- | --- | --- |",
+                      ]
+                  )
+                  for finding in findings:
+                      file_name = finding["file"].replace("|", "\\|")
+                      rule = finding["rule"].replace("|", "\\|")
+                      message = finding["message"].replace("\n", " ").replace("|", "\\|")
+                      lines.append(
+                          f"| {file_name} | {finding['line']} | {rule} | {message} |"
+                      )
+              else:
+                  lines.append("No textlint warnings.")
+              return "\n".join(lines) + "\n"
+
+          def write_summary() -> None:
+              if not summary_path:
+                  return
+              with open(summary_path, "a", encoding="utf-8") as fh:
+                  fh.write("## Japanese textlint Findings\n\n")
+                  if lint_mode == "no-files":
+                      fh.write("No changed Japanese Markdown files found.\n")
+                      return
+                  if lint_mode == "smoke":
+                      fh.write("No changed Japanese Markdown files found.\n\n")
+                      fh.write("Smoke-checked textlint runtime with:\n")
+                      for path in linted_files:
+                          fh.write(f"- `{path}`\n")
+                      fh.write("\n")
+                  else:
+                      fh.write(f"- Files checked: {len(changed_files)}\n")
+                      fh.write(f"- Findings: {len(findings)}\n\n")
+
+                  if findings:
+                      fh.write("| File | Line | Rule | Warning |\n")
+                      fh.write("| --- | --- | --- | --- |\n")
+                      for finding in findings:
+                          file_name = finding["file"].replace("|", "\\|")
+                          rule = finding["rule"].replace("|", "\\|")
+                          message = finding["message"].replace("\n", " ").replace("|", "\\|")
+                          fh.write(
+                              f"| {file_name} | {finding['line']} | {rule} | {message} |\n"
+                          )
+                  else:
+                      fh.write("No textlint warnings.\n")
+
+          def github_request(method: str, url: str, payload: dict | None = None) -> dict | list:
+              if not github_token:
+                  raise RuntimeError("GITHUB_TOKEN is required for PR comment upsert")
+              headers = {
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {github_token}",
+                  "User-Agent": "japanese-textlint-ci",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              }
+              data = None
+              if payload is not None:
+                  data = json.dumps(payload).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              request = urllib.request.Request(url, data=data, headers=headers, method=method)
+              try:
+                  with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
+                      body = response.read().decode("utf-8")
+              except urllib.error.HTTPError as exc:
+                  error_body = exc.read().decode("utf-8", errors="replace")
+                  print(error_body, file=sys.stderr)
+                  raise
+              except urllib.error.URLError as exc:
+                  if isinstance(exc.reason, socket.timeout):
+                      raise TimeoutError(
+                          f"GitHub API request timed out after {HTTP_TIMEOUT_SECONDS}s: {url}"
+                      ) from exc
+                  raise
+              return json.loads(body) if body else {}
+
+          def iter_pr_comments():
+              if not github_repository or not pr_number:
+                  return
+              page = 1
+              while True:
+                  comments_url = (
+                      f"{github_api_url}/repos/{github_repository}/issues/{pr_number}/comments"
+                      f"?per_page=100&page={page}"
+                  )
+                  comments = github_request("GET", comments_url)
+                  if not comments:
+                      return
+                  for comment in comments:
+                      yield comment
+                  if len(comments) < 100:
+                      return
+                  page += 1
+
+          def delete_pr_comment() -> None:
+              if not github_repository or not pr_number:
+                  return
+              try:
+                  for comment in iter_pr_comments():
+                      if comment_marker in comment.get("body", ""):
+                          delete_url = f"{github_api_url}/repos/{github_repository}/issues/comments/{comment['id']}"
+                          github_request("DELETE", delete_url)
+                          print(f"Deleted stale Japanese textlint PR comment: {comment['html_url']}")
+                          return
+              except urllib.error.HTTPError as exc:
+                  details = exc.reason
+                  print(
+                      f"Skipping PR comment delete due to GitHub API error {exc.code}: {details}",
+                      file=sys.stderr,
+                  )
+              except (TimeoutError, urllib.error.URLError) as exc:
+                  print(f"Skipping PR comment delete due to GitHub API timeout/error: {exc}", file=sys.stderr)
+
+          def upsert_pr_comment(body: str) -> None:
+              if not github_repository or not pr_number:
+                  print("Skipping PR comment upsert because repository or PR number is missing.")
+                  return
+              comments_url = f"{github_api_url}/repos/{github_repository}/issues/{pr_number}/comments"
+              try:
+                  for comment in iter_pr_comments():
+                      if comment_marker in comment.get("body", ""):
+                          update_url = f"{github_api_url}/repos/{github_repository}/issues/comments/{comment['id']}"
+                          github_request("PATCH", update_url, {"body": body})
+                          print(f"Updated Japanese textlint PR comment: {comment['html_url']}")
+                          return
+                  created = github_request("POST", comments_url, {"body": body})
+                  print(
+                      "Created Japanese textlint PR comment: "
+                      f"{created.get('html_url', comments_url)}"
+                  )
+              except urllib.error.HTTPError as exc:
+                  details = exc.reason
+                  print(
+                      f"Skipping PR comment upsert due to GitHub API error {exc.code}: {details}",
+                      file=sys.stderr,
+                  )
+              except (TimeoutError, urllib.error.URLError) as exc:
+                  print(f"Skipping PR comment upsert due to GitHub API timeout/error: {exc}", file=sys.stderr)
+
+          write_summary()
+          if lint_mode == "changed":
+              upsert_pr_comment(build_comment_body())
+          else:
+              delete_pr_comment()
+          PY

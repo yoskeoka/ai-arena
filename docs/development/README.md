@@ -11,6 +11,7 @@
 現時点の主要文書:
 
 - `docs/development/go-quality-gates.md`: Go module の quality gate と CI lane の運用
+- `docs/development/japanese-textlint.md`: 日本語 `docs/**/*.md` 向け textlint CI と辞書運用
 - `docs/development/github-actions-pinning.md`: GitHub Actions の `uses:` pinning 運用
 - `docs/development/platform-service-postgres.md`: durable queue backend 用 Postgres の schema/apply/query-generation workflow と local / CI harness
 - `docs/development/workflow-linter.md`: local workflow linter の maintenance 契約
