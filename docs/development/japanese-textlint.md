@@ -70,6 +70,16 @@ example:
 {"pattern":"\\btaxonomy\\b","replacement":"分類"}
 ```
 
+- `pattern` は JSON string 内に入る JavaScript regular-expression source とする
+- `\\b` は word boundary を表し、`\\btaxonomy\\b` は standalone な `taxonomy` だけに一致する
+- よく使う pattern 例:
+  - `\\bword\\b`: standalone な English word
+  - `^text$`: 行全体の完全一致
+  - `foo.*bar`: 同一行の `foo` から次の `bar` まで
+  - `[0-9]`: 1 digit
+  - `[A-Za-z0-9_-]+`: ASCII letter / digit / `_` / `-` の 1 回以上
+  - `\\.` `\\(` `\\)` `\\\\`: literal `.`, `(`, `)`, `\`
+- shell glob ではなく JavaScript regex syntax を使う
 - malformed JSONL は failure とする
 - invalid regular expression は failure とする
 - custom rule は global match 以外の flag を自動追加しない
