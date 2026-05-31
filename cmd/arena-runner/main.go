@@ -147,14 +147,12 @@ func run(args []string) error {
 		if gameName != "" || gameVersion != "" || ruleset != "" {
 			return fmt.Errorf("--game-master-manifest cannot be combined with --game, --game-version, or --ruleset")
 		}
-		if recordInput != "" || snapshotInput != "" || historyInput != "" || targetTurn > 0 {
-			return fmt.Errorf("--game-master-manifest supports fresh run only")
-		}
 	}
 
 	var (
 		recordSource   *match.Record
 		resumeSnapshot *game.Snapshot
+		metaOverride   *catalog.GameMetadata
 	)
 	if recordInput != "" {
 		record, err := replay.LoadRecord(recordInput)
@@ -188,6 +186,11 @@ func run(args []string) error {
 			return err
 		}
 		resumeSnapshot = &snapshot
+		metaOverride = ptr(catalog.GameMetadata{
+			GameID:         snapshot.GameID,
+			GameVersion:    snapshot.GameVersion,
+			RulesetVersion: snapshot.RulesetVersion,
+		})
 		if gameName == "" {
 			gameName = snapshot.GameID
 		}
@@ -230,7 +233,6 @@ func run(args []string) error {
 		}
 	}
 
-	var metaOverride *catalog.GameMetadata
 	if historyInput != "" {
 		history, err := replay.LoadHistory(historyInput)
 		if err != nil {
@@ -255,12 +257,12 @@ func run(args []string) error {
 		resumeSnapshot = &snapshot
 	} else if recordSource != nil && targetTurn > 0 {
 		spec := registry.BuildSpec{
-			GameVersion: recordSource.Game.GameVersion,
-			Ruleset:     recordSource.Game.RulesetVersion,
+			GameVersion: gameVersion,
+			Ruleset:     ruleset,
 			RNGSeed:     rngSeed,
 			Players:     append([]game.Player(nil), recordSource.Players...),
 		}
-		snapshot, err := replay.SnapshotFromHistoryWithBuildSpec(registry.Default(), recordSource.Game, spec, recordSource.EventLog, targetTurn)
+		snapshot, err := descriptor.SnapshotFromHistory(spec, recordSource.EventLog, targetTurn)
 		if err != nil {
 			return err
 		}

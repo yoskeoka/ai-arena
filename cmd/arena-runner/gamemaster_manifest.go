@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,10 +12,9 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
+	"github.com/yoskeoka/ai-arena/internal/platform/replay"
 	"github.com/yoskeoka/ai-arena/internal/platform/runtime"
 )
-
-const errGameMasterManifestFreshRunOnly = "game master manifest overlay supports fresh run only"
 
 type gameMasterManifest struct {
 	Metadata catalog.GameMetadata    `json:"metadata"`
@@ -42,7 +40,6 @@ func loadGameMasterManifestDescriptor(path string, stderrLimitBytes int) (regist
 	}
 
 	builderID := fmt.Sprintf("manifest:%s", filepath.Clean(path))
-	unsupportedFreshOnly := errors.New(errGameMasterManifestFreshRunOnly)
 	return registry.GameDescriptor{
 		RegistryKey: registry.RegistryKey{
 			GameID:           manifest.Metadata.GameID,
@@ -71,11 +68,35 @@ func loadGameMasterManifestDescriptor(path string, stderrLimitBytes int) (regist
 				StderrLimitBytes: stderrLimitBytes,
 			})
 		},
-		BuildSessionFromSnapshot: func(registry.BuildSpec, game.Snapshot) (gamemaster.Session, error) {
-			return nil, unsupportedFreshOnly
+		BuildSessionFromSnapshot: func(spec registry.BuildSpec, snapshot game.Snapshot) (gamemaster.Session, error) {
+			if err := catalog.Compatible(manifest.Metadata, catalog.GameMetadata{
+				GameID:         snapshot.GameID,
+				GameVersion:    snapshot.GameVersion,
+				RulesetVersion: snapshot.RulesetVersion,
+			}); err != nil {
+				return nil, fmt.Errorf("game master manifest metadata incompatible: %w", err)
+			}
+			return gamemaster.StartLocalSubprocess(gamemaster.LocalSubprocessConfig{
+				ExpectedMetadata: manifest.Metadata,
+				Command:          append([]string(nil), runtimeCfg.Command...),
+				Dir:              runtimeCfg.Dir,
+				Players:          append([]game.Player(nil), spec.Players...),
+				RNGSeed:          spec.RNGSeed,
+				ResumeSnapshot:   &snapshot,
+				StderrLimitBytes: stderrLimitBytes,
+			})
 		},
-		SnapshotFromHistory: func(registry.BuildSpec, []match.Event, int) (game.Snapshot, error) {
-			return game.Snapshot{}, unsupportedFreshOnly
+		SnapshotFromHistory: func(spec registry.BuildSpec, events []match.Event, targetTurn int) (game.Snapshot, error) {
+			return replay.SnapshotFromSessionHistory(func() (gamemaster.Session, error) {
+				return gamemaster.StartLocalSubprocess(gamemaster.LocalSubprocessConfig{
+					ExpectedMetadata: manifest.Metadata,
+					Command:          append([]string(nil), runtimeCfg.Command...),
+					Dir:              runtimeCfg.Dir,
+					Players:          append([]game.Player(nil), spec.Players...),
+					RNGSeed:          spec.RNGSeed,
+					StderrLimitBytes: stderrLimitBytes,
+				})
+			}, events, targetTurn)
 		},
 	}, manifest.Metadata, nil
 }

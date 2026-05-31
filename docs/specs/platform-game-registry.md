@@ -225,9 +225,17 @@ service が担うのは `game_id` / `game_version` / `ruleset_version`、player 
 解決済み metadata と source-of-truth `record.json` または derived helper artifact を
 runner / registry の既存 build 入口へ渡し、game 固有 rebuild を service 層へ持ち込んではならない。
 
-ただし dev-only manifest overlay の初期スコープは fresh run に限定してよい。
-この場合、resume snapshot と history replay は「overlay descriptor が未対応」として fail-fast し、
-support の追加は後続 plan で扱う。
+dev-only manifest overlay も、follow-up 実装後は同じ 3 入口を持たなければならない。
+
+- fresh run は manifest metadata と runtime entrypoint から local-subprocess session を起動する
+- snapshot resume は同じ manifest metadata / runtime entrypoint に `resume snapshot` を渡して session を起動する
+- history replay は manifest metadata を source of truth にした fresh session を起動し、
+  persisted `history` / `record.event_log` に記録された action status を turn 境界まで再適用して
+  snapshot を再構築する
+
+この overlay path でも service 層や caller が game 固有 rebuild helper を直に持ってはならない。
+runner / replay-debug path が扱うのは、manifest から解決した descriptor、artifact から読んだ metadata /
+snapshot / history、そして既存の game master session 論理 API だけとする。
 
 ## 採用しない案
 

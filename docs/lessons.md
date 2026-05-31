@@ -209,3 +209,10 @@
 - **Pattern**: interface 越しに同じ API を叩けると、storage-specific behavior を確認すべき責務まで generic in-memory test で十分だと扱ってしまう
 - **Rule**: ai-arena の service で DB が責務に入る write/read/query path は、少なくとも 1 本は `AI_ARENA_PG_TEST_DSN` を使う Docker/Postgres lane で検証する。逆に file-backed / in-memory lane だけが責務の path には Docker を持ち込まない
 - **Applied**: `internal/platform/service/query_test.go`、`internal/platform/service/store_postgres_test.go`、今後の durable queue / read model / operator query 実装全般
+
+## [2026-05-31] user の言語指定は途中でも即時反映する
+
+- **Mistake**: 実装作業中の途中報告を英語で続けたあと、user から「結果は日本語で」と修正されて初めて切り替える状態になった
+- **Pattern**: workflow 実行と verification に意識が寄ると、会話の出力言語もその時点の repo 既定や直前の自分の文脈で惰性運転しやすい
+- **Rule**: user が出力言語を明示したら、その時点以降の commentary/final は即時その言語へ切り替える。repo の docs 言語方針や直前の返答言語を優先しない
+- **Applied**: この workspace での execute-task handoff、review follow-up、verification 結果報告全般
