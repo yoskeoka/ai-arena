@@ -27,8 +27,10 @@ artifact download を backend 中継ではなく remote object storage provider 
   - `https://render.com/docs/outbound-bandwidth`
 - recommended contract for first landing:
   - workspace plan は `Hobby`
-  - `arena-service` は free web service ではなく paid web service instance を前提候補にする
-  - 理由: free web service は 15 分 idle で spin down し、online confirmation の常時 polling / active match 確認に向かない
+  - `arena-service` はまず free web service で first validation を行う
+  - success criteria は、UI を開いて cold start を待った後、polling 下で `queue -> run -> result` が確認できること
+  - free web service の idle spin-down や cold start が運用上支障になると確認できた場合にだけ、
+    paid web service への昇格または `runner` の別 compute 分離を次段で判断する
 - bootstrap outputs to record:
   - Render workspace
   - web service id / service URL
@@ -36,6 +38,7 @@ artifact download を backend 中継ではなく remote object storage provider 
   - environment variable names
 - notable constraints as of 2026-06-01:
   - free web service は 15 分 idle で spin down する
+  - free web service は初回アクセス時に cold start 待ちが入る
   - Render は outbound bandwidth を workspace 単位で課金対象にしうる
   - paid instance は spin down しない
 
