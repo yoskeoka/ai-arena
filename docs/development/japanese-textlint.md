@@ -50,6 +50,7 @@ tools/list-changed-japanese-markdown.sh [base-ref]
 - `.textlintrc.json` は `preset-ai-writing` を有効化する
 - workflow と local command は `--rulesdir ./tools/textlint-rules` を使う
 - repo-local dictionary rule は `config/textlint/terms.jsonl` を読む
+- `pnpm run textlint` は `git ls-files` で tracked `docs/**/*.md` を集める
 - local command は次を提供する
   - `pnpm run textlint`: tracked `docs/**/*.md` 全体を対象にする
   - `pnpm run textlint:file -- <target.md>...`: 指定 file を対象にする
@@ -82,13 +83,16 @@ example:
 - `pinact` で管理された pinned `actions/checkout` と `actions/setup-node` を使う
 - diff 前に Node runtime を用意し、PR base branch を fetch する
 - changed Japanese Markdown が 0 件なら success で終了する
+- changed Japanese Markdown が 0 件でも、workflow / helper / config / runtime file 自体が changed なら smoke check 用に repo-local 日本語 doc 1 件へ `textlint` を流す
 - 対象 file が 1 件以上あるときだけ `pnpm install --frozen-lockfile` を実行する
 - 1 回の `pnpm exec textlint --rulesdir ./tools/textlint-rules --format json <files...>` で全対象 file を lint する
 - finding を GitHub Actions warning annotation と step summary に変換する
 - stable marker 付き PR comment を upsert し、rerun や push ごとに comment を増やさない
+- changed Japanese Markdown が 0 件の rerun では、既存 marker comment があれば削除して stale findings を残さない
 - prose finding では job を fail させない
 - dependency install、dictionary parse、tool output parse は failure とする
-- PR comment upsert の GitHub API timeout/error は warning として扱い、job は継続する
+- `GITHUB_TOKEN` は dependency install と `textlint` subprocess へ渡さず、PR comment delete/upsert 用 API request にだけ渡す
+- PR comment delete/upsert の GitHub API timeout/error は warning として扱い、job は継続する
 
 ## Reporting Contract
 

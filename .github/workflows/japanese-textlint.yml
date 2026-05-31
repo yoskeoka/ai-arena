@@ -43,86 +43,96 @@ jobs:
       - name: Run textlint for changed Japanese Markdown files
         env:
           BASE_REF: origin/${{ github.base_ref }}
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_API_URL: ${{ github.api_url }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
 
-          mapfile -t files < <(./tools/list-changed-japanese-markdown.sh "$BASE_REF")
+          lint_output_file="$(mktemp)"
+          trap 'rm -f "$lint_output_file"' EXIT
 
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No changed Japanese Markdown files found."
-            exit 0
+          mapfile -t files < <(./tools/list-changed-japanese-markdown.sh "$BASE_REF")
+          mapfile -t changed_paths < <(git diff --name-only --diff-filter=AMR "${BASE_REF}...HEAD")
+
+          control_files_changed=0
+          for path in "${changed_paths[@]}"; do
+            case "$path" in
+              .github/workflows/japanese-textlint.yml|tools/list-changed-japanese-markdown.sh|tools/textlint-rules/*.js|config/textlint/*.jsonl|.textlintrc.json|package.json|pnpm-lock.yaml|tools/run-textlint.sh)
+                control_files_changed=1
+                break
+                ;;
+            esac
+          done
+
+          lint_mode="no-files"
+          lint_targets=()
+          if [ "${#files[@]}" -gt 0 ]; then
+            lint_mode="changed"
+            lint_targets=("${files[@]}")
+          elif [ "$control_files_changed" -eq 1 ]; then
+            lint_mode="smoke"
+            lint_targets=("docs/development/japanese-textlint.md")
           fi
 
-          printf 'Changed Japanese Markdown files:\n'
-          printf '  %s\n' "${files[@]}"
+          if [ "${#files[@]}" -gt 0 ]; then
+            printf 'Changed Japanese Markdown files:\n'
+            printf '  %s\n' "${files[@]}"
+          elif [ "$control_files_changed" -eq 1 ]; then
+            echo "No changed Japanese Markdown files found; running smoke check for textlint runtime."
+          else
+            echo "No changed Japanese Markdown files found."
+            printf '[]' >"$lint_output_file"
+          fi
 
-          npm install -g "pnpm@${PNPM_VERSION}"
-          pnpm install --frozen-lockfile
+          if [ "${#lint_targets[@]}" -gt 0 ]; then
+            npm install -g "pnpm@${PNPM_VERSION}"
+            pnpm install --frozen-lockfile
 
-          python3 - "${files[@]}" <<'PY'
+            set +e
+            pnpm exec textlint --rulesdir ./tools/textlint-rules --format json "${lint_targets[@]}" >"$lint_output_file"
+            textlint_status=$?
+            set -e
+            if [ "$textlint_status" -ne 0 ] && [ "$textlint_status" -ne 1 ]; then
+              echo "textlint returned ${textlint_status} without usable JSON output" >&2
+              exit "$textlint_status"
+            fi
+          fi
+
+          GITHUB_TOKEN="${{ github.token }}" \
+          GITHUB_API_URL="${{ github.api_url }}" \
+          GITHUB_REPOSITORY="${{ github.repository }}" \
+          PR_NUMBER="${{ github.event.pull_request.number }}" \
+          python3 - "$lint_output_file" "$lint_mode" "${files[@]}" -- "${lint_targets[@]}" <<'PY'
           import json
           import os
           import socket
-          import subprocess
           import sys
           import urllib.error
           import urllib.request
-          from pathlib import Path
 
-          COMMAND_TIMEOUT_SECONDS = 120
           HTTP_TIMEOUT_SECONDS = 30
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-          repo_root = Path.cwd()
           github_token = os.environ.get("GITHUB_TOKEN")
           github_api_url = os.environ.get("GITHUB_API_URL", "https://api.github.com")
           github_repository = os.environ.get("GITHUB_REPOSITORY")
           pr_number = os.environ.get("PR_NUMBER")
           comment_marker = "<!-- japanese-textlint-ci-comment -->"
+          lint_output_file = sys.argv[1]
+          lint_mode = sys.argv[2]
+          separator = sys.argv.index("--")
+          changed_files = sys.argv[3:separator]
+          linted_files = sys.argv[separator + 1 :]
 
-          linted_files = [str(Path(raw_path)) for raw_path in sys.argv[1:]]
           try:
-              proc = subprocess.run(
-                  [
-                      "pnpm",
-                      "exec",
-                      "textlint",
-                      "--rulesdir",
-                      "./tools/textlint-rules",
-                      "--format",
-                      "json",
-                      *linted_files,
-                  ],
-                  capture_output=True,
-                  text=True,
-                  timeout=COMMAND_TIMEOUT_SECONDS,
-              )
-          except subprocess.TimeoutExpired as exc:
-              raise SystemExit(
-                  f"textlint timed out after {COMMAND_TIMEOUT_SECONDS}s: {exc.cmd}"
-              ) from exc
+              with open(lint_output_file, encoding="utf-8") as fh:
+                  stdout = fh.read().strip()
+          except OSError as exc:
+              raise SystemExit(f"failed to read textlint output: {exc}") from exc
 
-          stdout = proc.stdout.strip()
-          if proc.returncode not in (0, 1):
-              if proc.stderr:
-                  sys.stderr.write(proc.stderr)
-              raise SystemExit(f"textlint returned {proc.returncode} without usable JSON output")
           if not stdout:
-              if proc.returncode == 0:
-                  records = []
-              else:
-                  if proc.stderr:
-                      sys.stderr.write(proc.stderr)
-                  raise SystemExit("textlint returned no JSON output")
+              records = []
           else:
               try:
                   records = json.loads(stdout)
               except json.JSONDecodeError as exc:
-                  if proc.stderr:
-                      sys.stderr.write(proc.stderr)
                   raise SystemExit(f"failed to parse textlint JSON: {exc}") from exc
 
           findings = []
@@ -131,11 +141,7 @@ jobs:
               if not raw_file_path:
                   continue
 
-              file_path = Path(raw_file_path)
-              try:
-                  display_path = str(file_path.resolve().relative_to(repo_root))
-              except ValueError:
-                  display_path = str(file_path)
+              display_path = os.path.relpath(raw_file_path, os.getcwd())
 
               for message in record.get("messages", []):
                   findings.append(
@@ -170,7 +176,7 @@ jobs:
                   comment_marker,
                   "## Japanese textlint Findings",
                   "",
-                  f"- Files checked: {len(linted_files)}",
+                  f"- Files checked: {len(changed_files)}",
                   f"- Findings: {len(findings)}",
                   "",
               ]
@@ -191,6 +197,37 @@ jobs:
               else:
                   lines.append("No textlint warnings.")
               return "\n".join(lines) + "\n"
+
+          def write_summary() -> None:
+              if not summary_path:
+                  return
+              with open(summary_path, "a", encoding="utf-8") as fh:
+                  fh.write("## Japanese textlint Findings\n\n")
+                  if lint_mode == "no-files":
+                      fh.write("No changed Japanese Markdown files found.\n")
+                      return
+                  if lint_mode == "smoke":
+                      fh.write("No changed Japanese Markdown files found.\n\n")
+                      fh.write("Smoke-checked textlint runtime with:\n")
+                      for path in linted_files:
+                          fh.write(f"- `{path}`\n")
+                      fh.write("\n")
+                  else:
+                      fh.write(f"- Files checked: {len(changed_files)}\n")
+                      fh.write(f"- Findings: {len(findings)}\n\n")
+
+                  if findings:
+                      fh.write("| File | Line | Rule | Warning |\n")
+                      fh.write("| --- | --- | --- | --- |\n")
+                      for finding in findings:
+                          file_name = finding["file"].replace("|", "\\|")
+                          rule = finding["rule"].replace("|", "\\|")
+                          message = finding["message"].replace("\n", " ").replace("|", "\\|")
+                          fh.write(
+                              f"| {file_name} | {finding['line']} | {rule} | {message} |\n"
+                          )
+                  else:
+                      fh.write("No textlint warnings.\n")
 
           def github_request(method: str, url: str, payload: dict | None = None) -> dict | list:
               if not github_token:
@@ -239,6 +276,25 @@ jobs:
                       return
                   page += 1
 
+          def delete_pr_comment() -> None:
+              if not github_repository or not pr_number:
+                  return
+              try:
+                  for comment in iter_pr_comments():
+                      if comment_marker in comment.get("body", ""):
+                          delete_url = f"{github_api_url}/repos/{github_repository}/issues/comments/{comment['id']}"
+                          github_request("DELETE", delete_url)
+                          print(f"Deleted stale Japanese textlint PR comment: {comment['html_url']}")
+                          return
+              except urllib.error.HTTPError as exc:
+                  details = exc.reason
+                  print(
+                      f"Skipping PR comment delete due to GitHub API error {exc.code}: {details}",
+                      file=sys.stderr,
+                  )
+              except (TimeoutError, urllib.error.URLError) as exc:
+                  print(f"Skipping PR comment delete due to GitHub API timeout/error: {exc}", file=sys.stderr)
+
           def upsert_pr_comment(body: str) -> None:
               if not github_repository or not pr_number:
                   print("Skipping PR comment upsert because repository or PR number is missing.")
@@ -265,11 +321,9 @@ jobs:
               except (TimeoutError, urllib.error.URLError) as exc:
                   print(f"Skipping PR comment upsert due to GitHub API timeout/error: {exc}", file=sys.stderr)
 
-          comment_body = build_comment_body()
-
-          if summary_path:
-              with open(summary_path, "a", encoding="utf-8") as fh:
-                  fh.write(comment_body.removeprefix(f"{comment_marker}\n"))
-
-          upsert_pr_comment(comment_body)
+          write_summary()
+          if lint_mode == "changed":
+              upsert_pr_comment(build_comment_body())
+          else:
+              delete_pr_comment()
           PY

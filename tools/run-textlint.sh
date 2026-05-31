@@ -3,7 +3,7 @@ set -euo pipefail
 
 if [ "${1:-}" = "--all" ]; then
     shift
-    mapfile -t files < <(rg --files docs -g '*.md')
+    mapfile -t files < <(git ls-files 'docs/**/*.md' 'docs/*.md')
 else
     if [ "$#" -eq 0 ]; then
         echo "usage: $0 --all | <target.md>..." >&2
