@@ -225,7 +225,7 @@ service が担うのは `game_id` / `game_version` / `ruleset_version`、player 
 解決済み metadata と source-of-truth `record.json` または derived helper artifact を
 runner / registry の既存 build 入口へ渡し、game 固有 rebuild を service 層へ持ち込んではならない。
 
-dev-only manifest overlay も、follow-up 実装後は同じ 3 入口を持たなければならない。
+dev-only manifest overlay も同じ 3 入口を持つ。
 
 - fresh run は manifest metadata と runtime entrypoint から local-subprocess session を起動する
 - snapshot resume は同じ manifest metadata / runtime entrypoint に `resume snapshot` を渡して session を起動する

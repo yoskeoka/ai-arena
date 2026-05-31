@@ -216,3 +216,10 @@
 - **Pattern**: workflow 実行と verification に意識が寄ると、会話の出力言語もその時点の repo 既定や直前の自分の文脈で惰性運転しやすい
 - **Rule**: user が出力言語を明示したら、その時点以降の commentary/final は即時その言語へ切り替える。repo の docs 言語方針や直前の返答言語を優先しない
 - **Applied**: この workspace での execute-task handoff、review follow-up、verification 結果報告全般
+
+## [2026-05-31] spec には現在の契約だけを書き、plan の達成文脈を混ぜない
+
+- **Mistake**: spec に「follow-up 実装後は」のような plan 完了前提の文言を入れ、現在の契約説明ではなく実装段階の文脈を持ち込んだ
+- **Pattern**: 直前の exec-plan の目的や実装順序を頭に置いたまま spec を書くと、最終状態の契約だけを簡潔に書くべき箇所に rollout 文脈が混ざりやすい
+- **Rule**: spec では最新の契約を現在形で直接書く。`この plan で`、`follow-up 実装後`、`初回は` のような実装順序・移行段階・milestone 文脈は plan/issue に残し、spec 本文には持ち込まない
+- **Applied**: `docs/specs/platform-game-registry.md` を含む ai-arena の spec 更新全般、今後の exec-plan 実装に伴う spec 記述全般
