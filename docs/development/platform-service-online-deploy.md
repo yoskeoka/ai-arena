@@ -200,7 +200,7 @@ Direct Upload contract:
 
 ## Provider Drift Check
 
-first landing の desired contract と、2026-06-02 時点の observed state は完全には一致していない。
+first landing の desired contract と、2026-06-02 時点の observed state を次の観点で比較する。
 
 - desired:
   - Render `Production` auto deploy = `off`
