@@ -113,7 +113,7 @@ References:
 Observed via `wrangler` on 2026-06-02:
 
 - account:
-  `Yoske95@gmail.com's Account` (`9ea0d3de35f99cc17ef3a939e2968e8b`)
+  `Cloudflare account` (`9ea0d3de35f99cc17ef3a939e2968e8b`)
 - buckets:
   - `ai-arena-stg`
   - `ai-arena-prod`
