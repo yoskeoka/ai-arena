@@ -18,7 +18,7 @@ References:
 Observed via `render` CLI on 2026-06-02:
 
 - workspace:
-  `yoskeoka's Workspace` (`tea-cspvg7ggph6c738l3mi0`)
+  `Render workspace` (`tea-cspvg7ggph6c738l3mi0`)
 - project:
   `ai-arena` (`prj-d8e6bk4p3tds73891cb0`)
 - environments:
