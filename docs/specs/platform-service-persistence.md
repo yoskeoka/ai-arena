@@ -73,6 +73,9 @@ multi-node fairness や retry redelivery はこの spec の対象外とする。
 
 - `record.json`、`result-summary.json`、`snapshot.json`、`history.json`、stderr log、本体 executable payload は artifact backend の責務とする
 - durable write model は、artifact 本体を複製せず locator と最小 terminal summary だけを保持する
+- durable write model は delegated download URL / token のような短寿命 credential を永続化してはならない
+- remote object storage lane で artifact access を外部へ委譲するときも、
+  write model が保持してよいのは stable locator と artifact kind ごとの最小 summary までである
 - operator / replay / resume は後続 read model で locator を使って artifact backend を読む
 - write model 単体で game 固有 world state の完全再構築責務を持たない
 - operator-facing read model は、write model が持つ lifecycle / locator summary と

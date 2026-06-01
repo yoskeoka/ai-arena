@@ -19,6 +19,8 @@
 - When editing GitHub Actions workflows or composite actions, use `pinact` to pin or update `uses:` references rather than hand-editing version tags.
 - Postgres schema / migration / query stack の repo-local contributor workflow は
   `docs/development/platform-service-postgres.md` を参照する。
+- online service の provider bootstrap / deploy inventory は
+  `docs/development/platform-service-online-deploy.md` を参照する。
 
 ## Spec Writing Discipline
 

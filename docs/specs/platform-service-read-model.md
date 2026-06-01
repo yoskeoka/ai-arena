@@ -102,6 +102,8 @@ detail view は少なくとも次を含む:
   player 順序、`player_id`、`artifact_ref`
 - artifact locator group:
   `match_dir`、`record_path`、`result_summary_path`、player stderr locator 群
+- delegated artifact access metadata:
+  artifact kind ごとの短寿命 download URL または同等 token、expiry、issuer
 - optional decoded compact summary:
   `result_summary`
 - replay / resume / audit input group:
@@ -112,6 +114,8 @@ detail view は少なくとも次を含む:
 initial milestone の detail は `record.json` や stderr 本文を必須で inline しない。
 operator はまず compact summary と locator を受け取り、
 必要な場合だけ `read` で個別 artifact を読む。
+remote object storage lane では、detail view が object bytes の代わりに delegated artifact access metadata を返してよい。
+この metadata は request 時に派生させる derived field であり、永続 write model の一部ではない。
 
 ## Artifact Read Contract
 
@@ -134,6 +138,10 @@ initial milestone では少なくとも次を対象にしてよい:
 
 `record.json.event_log` や `history.json` は source-of-truth / replay 入力として保持するが、
 通常の operator 結果確認では最初の入口にしない。
+
+remote object storage lane では、`read` は backend proxy を必須にしない。
+artifact locator から provider-generated の delegated download URL / token を発行し、
+client は object backend から直接取得してよい。
 
 ## Replay / Resume / Audit Input Detail
 
