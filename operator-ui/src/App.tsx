@@ -12,7 +12,7 @@ type EnqueueState = "idle" | "submitting" | "success" | "error";
 
 export default function App() {
   const [baseUrl, setBaseUrl] = useState(() => defaultBaseUrl());
-  const client = useMemo(() => new OperatorApiClient(baseUrl), [baseUrl]);
+  const client = useMemo(() => new OperatorApiClient(normalizeBaseUrl(baseUrl)), [baseUrl]);
 
   const [activeItems, setActiveItems] = useState<ResultListItem[]>([]);
   const [completedItems, setCompletedItems] = useState<ResultListItem[]>([]);
@@ -481,7 +481,7 @@ function Meta({ label, value }: { label: string; value: string }) {
 function defaultBaseUrl() {
   const envValue = import.meta.env.VITE_OPERATOR_API_BASE_URL;
   if (typeof envValue === "string" && envValue.trim() !== "") {
-    return envValue;
+    return normalizeBaseUrl(envValue);
   }
   if (typeof window !== "undefined" && window.location.hostname === "localhost") {
     return "";
@@ -506,4 +506,17 @@ function hintFor(error: string) {
     return "For local dev, start arena-service first and verify `curl http://127.0.0.1:10000/healthz` returns 200. Leaving the base URL blank uses the local Vite proxy.";
   }
   return undefined;
+}
+
+function normalizeBaseUrl(baseUrl: string) {
+  const trimmed = baseUrl.trim();
+  if (trimmed === "") {
+    return "";
+  }
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+    if (trimmed === "http://127.0.0.1:10000" || trimmed === "http://localhost:10000") {
+      return "";
+    }
+  }
+  return trimmed;
 }
