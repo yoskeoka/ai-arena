@@ -182,7 +182,7 @@ export default function App() {
                 className="rounded-2xl border border-black/15 bg-white px-4 py-3 shadow-sm outline-none transition focus:border-accent"
                 value={baseUrl}
                 onChange={(event) => setBaseUrl(event.target.value)}
-                placeholder="https://ai-arena-service.onrender.com"
+                placeholder="Leave blank for local Vite proxy, or set https://ai-arena-service.onrender.com"
               />
             </label>
           </div>
@@ -379,6 +379,7 @@ function Panel({
   error?: string;
   children: React.ReactNode;
 }) {
+  const connectionHint = error ? hintFor(error) : undefined;
   return (
     <section className="rounded-[28px] border border-black/10 bg-white/75 p-5 shadow-sm backdrop-blur">
       <div className="flex items-start justify-between gap-4">
@@ -388,7 +389,12 @@ function Panel({
         </div>
         <Badge tone={status === "error" ? "accent" : "moss"}>{status}</Badge>
       </div>
-      {error ? <p className="mt-3 rounded-2xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+      {error ? (
+        <div className="mt-3 rounded-2xl bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p>{error}</p>
+          {connectionHint ? <p className="mt-1 text-red-700/80">{connectionHint}</p> : null}
+        </div>
+      ) : null}
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -478,7 +484,7 @@ function defaultBaseUrl() {
     return envValue;
   }
   if (typeof window !== "undefined" && window.location.hostname === "localhost") {
-    return "http://127.0.0.1:10000";
+    return "";
   }
   return "";
 }
@@ -492,4 +498,12 @@ function messageOf(error: unknown) {
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+function hintFor(error: string) {
+  const normalized = error.toLowerCase();
+  if (normalized.includes("failed to fetch") || normalized.includes("err_connection_refused")) {
+    return "For local dev, start arena-service first and verify `curl http://127.0.0.1:10000/healthz` returns 200. Leaving the base URL blank uses the local Vite proxy.";
+  }
+  return undefined;
 }

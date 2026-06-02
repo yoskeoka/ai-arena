@@ -48,6 +48,14 @@ make render-start
 This starts `arena-service serve` on `http://127.0.0.1:10000`.
 For the current route surface and payload contract, use the specs under `docs/specs/` instead of treating this README as an endpoint catalog.
 
+Before opening the frontend, verify the backend is actually up:
+
+```sh
+curl http://127.0.0.1:10000/healthz
+```
+
+This should return `200 OK`.
+
 The default local Postgres harness DSN is:
 
 ```text
@@ -79,11 +87,12 @@ To verify the UI added in this task, start the local frontend dev server in a se
 ```sh
 cd operator-ui
 pnpm install
-VITE_OPERATOR_API_BASE_URL=http://127.0.0.1:10000 pnpm run dev
+pnpm run dev
 ```
 
 Then open the local Vite URL printed by the command, usually `http://127.0.0.1:5173`.
 Keep `arena-service` running while the UI is open so the polling panels and preset queue actions can talk to the local API.
+For local development, the Vite dev server proxies `/api` and `/healthz` to `http://127.0.0.1:10000`, so you can leave the UI's base URL field blank.
 
 ## Japanese textlint
 

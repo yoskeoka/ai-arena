@@ -237,3 +237,10 @@
 - **Pattern**: 実装者にとって最短の起動経路を、そのまま reviewer/operator 向けの確認手順に流用してしまい、durable backend を含む本命 lane の準備手順が欠ける
 - **Rule**: infra 導入前のローカル確認手順を書くときは、deploy-shaped lane を主導線に置く。managed service 相当をローカル harness で置き換える場合は、起動、schema apply、DSN、停止まで README から辿れるように書く。in-memory や lightweight lane は補助導線として扱う
 - **Applied**: `README.md` の `arena-service` ローカル起動案内、今後の Postgres/R2/Pages を伴う local verification runbook 全般
+
+## [2026-06-03] local frontend 検証手順では backend health check と dev proxy を先に固める
+
+- **Mistake**: `operator-ui` のローカル確認導線で backend 起動確認の 1 ステップを置かず、frontend から直接 `127.0.0.1:10000` へ fetch させたままにした
+- **Pattern**: local frontend の確認手順を書くとき、backend が未起動・別 port・一時再起動中の状態を吸収する dev proxy / health check を後回しにして、connection error をそのまま UI に露出させる
+- **Rule**: local frontend と local API を組み合わせる runbook では、少なくとも 1 つの backend health check と、同一 origin で確認できる dev proxy か明示的な base URL 指定手順を先に固定する
+- **Applied**: `operator-ui/vite.config.ts` の local proxy、`README.md` の `healthz` 確認と `pnpm run dev` 導線、今後の local UI verification 全般
