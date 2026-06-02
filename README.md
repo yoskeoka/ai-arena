@@ -42,13 +42,8 @@ PORT=10000 \
 make render-start
 ```
 
-This starts `arena-service serve` on `http://127.0.0.1:10000` with:
-
-- `GET /healthz`
-- `GET /api/v1/matches/active`
-- `GET /api/v1/matches/completed`
-- `GET /api/v1/matches/{submission_id}`
-- `POST /api/v1/preset-matches`
+This starts `arena-service serve` on `http://127.0.0.1:10000`.
+For the current route surface and payload contract, use the specs under `docs/specs/` instead of treating this README as an endpoint catalog.
 
 By default, local startup uses the in-memory queue store.
 If you want the durable Postgres-backed lane instead, set `ARENA_SERVICE_POSTGRES_DSN` before `make render-start`.
@@ -60,6 +55,19 @@ go run ./cmd/arena-service serve \
   --listen-addr 0.0.0.0:10000 \
   --preset-config ./config/platform-service/presets.example.json
 ```
+
+### Run the operator UI
+
+To verify the UI added in this task, start the local frontend dev server in a second terminal:
+
+```sh
+cd operator-ui
+pnpm install
+VITE_OPERATOR_API_BASE_URL=http://127.0.0.1:10000 pnpm run dev
+```
+
+Then open the local Vite URL printed by the command, usually `http://127.0.0.1:5173`.
+Keep `arena-service` running while the UI is open so the polling panels and preset queue actions can talk to the local API.
 
 ## Japanese textlint
 

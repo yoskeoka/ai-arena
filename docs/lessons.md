@@ -223,3 +223,10 @@
 - **Pattern**: 直前の exec-plan の目的や実装順序を頭に置いたまま spec を書くと、最終状態の契約だけを簡潔に書くべき箇所に rollout 文脈が混ざりやすい
 - **Rule**: spec では最新の契約を現在形で直接書く。`この plan で`、`follow-up 実装後`、`初回は` のような実装順序・移行段階・milestone 文脈は plan/issue に残し、spec 本文には持ち込まない
 - **Applied**: `docs/specs/platform-game-registry.md` を含む ai-arena の spec 更新全般、今後の exec-plan 実装に伴う spec 記述全般
+
+## [2026-06-03] README を API カタログ化しない
+
+- **Mistake**: `arena-service` の README 追記で、起動導線だけで足りる場面なのに個別 endpoint 一覧まで書いてしまった
+- **Pattern**: ローカル起動方法を書くタスクで、変化しやすい API surface の詳細を README に抱え込んでしまい、spec と README の二重管理を増やす
+- **Rule**: README の runtime/how-to 節は起動導線と確認手順に留める。route 一覧や payload contract のような変化しやすい API detail は `docs/specs/` を正本にし、README へ重複列挙しない
+- **Applied**: `README.md` の `arena-service` / `operator-ui` ローカル起動案内、今後の local runbook 追記全般
