@@ -70,7 +70,7 @@ func TestRunWithoutSubcommandShowsTopLevelUsage(t *testing.T) {
 	if err == nil {
 		t.Fatal("run() returned nil error")
 	}
-	want := "usage: arena-service <submit|run-once|submit-cancel|list|get|read> ..."
+	want := "usage: arena-service <submit|run-once|submit-cancel|list|get|read|serve> ..."
 	if err.Error() != want {
 		t.Fatalf("error = %q, want %q", err.Error(), want)
 	}

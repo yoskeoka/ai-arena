@@ -7,10 +7,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
+	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/service"
@@ -35,7 +39,7 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	}
 
 	subcommand := args[0]
-	if subcommand != "submit" && subcommand != "run-once" && subcommand != "submit-cancel" && subcommand != "list" && subcommand != "get" && subcommand != "read" {
+	if subcommand != "submit" && subcommand != "run-once" && subcommand != "submit-cancel" && subcommand != "list" && subcommand != "get" && subcommand != "read" && subcommand != "serve" {
 		return fmt.Errorf("usage: %s", usageFor(""))
 	}
 
@@ -48,6 +52,9 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 		artifactKind   string
 		baseDir        string
 		workerID       string
+		listenAddr     string
+		presetConfig   string
+		pollInterval   time.Duration
 		matchTimeout   time.Duration
 		postgresDSN    string
 	)
@@ -56,6 +63,9 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	fs.StringVar(&artifactKind, "artifact", "", "artifact selector for read")
 	fs.StringVar(&baseDir, "base-dir", "", "base directory for resolving local artifact refs and output_dir")
 	fs.StringVar(&workerID, "worker-id", "cli-worker", "worker identifier for run-once")
+	fs.StringVar(&listenAddr, "listen-addr", ":8080", "listen address for serve")
+	fs.StringVar(&presetConfig, "preset-config", "", "preset config JSON path for serve")
+	fs.DurationVar(&pollInterval, "worker-poll-interval", 2*time.Second, "poll interval for serve worker loop")
 	fs.DurationVar(&matchTimeout, "match-timeout", 0, "match timeout for run-once")
 	fs.StringVar(&postgresDSN, "postgres-dsn", "", "PostgreSQL DSN for durable queue storage")
 	if err := fs.Parse(args[1:]); err != nil {
@@ -78,6 +88,15 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 		return err
 	}
 	defer app.close()
+
+	if subcommand == "serve" {
+		if presetConfig == "" {
+			presetConfig = strings.TrimSpace(os.Getenv("ARENA_SERVICE_PRESET_CONFIG"))
+		}
+		serveCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return app.serve(serveCtx, listenAddr, presetConfig, workerID, pollInterval, stderr)
+	}
 
 	switch subcommand {
 	case "list":
@@ -142,8 +161,10 @@ func usageFor(subcommand string) string {
 		return "arena-service get --submission-id <id> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "read":
 		return "arena-service read --submission-id <id> --artifact <result-summary|record|snapshot|history|exported-snapshot|stderr:<player-id>> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+	case "serve":
+		return "arena-service serve [--listen-addr <addr>] [--preset-config <path>] [--worker-id <id>] [--worker-poll-interval <duration>] [--base-dir <dir>] [--match-timeout <duration>] [--postgres-dsn <dsn>]"
 	default:
-		return "arena-service <submit|run-once|submit-cancel|list|get|read> ..."
+		return "arena-service <submit|run-once|submit-cancel|list|get|read|serve> ..."
 	}
 }
 
@@ -270,6 +291,66 @@ func (a *cliApp) newWorker() (*service.Worker, error) {
 		return nil, err
 	}
 	return service.NewWorker(a.queue, invoker, service.LocalTerminalPersister{})
+}
+
+func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig string, workerID string, pollInterval time.Duration, stderr io.Writer) error {
+	presets, err := service.LoadPresetCatalog(presetConfig)
+	if err != nil {
+		return err
+	}
+	worker, err := a.newWorker()
+	if err != nil {
+		return err
+	}
+	api, err := service.NewOperatorAPI(a.commands, a.queries, presets, service.DirectArtifactAccessIssuer{})
+	if err != nil {
+		return err
+	}
+	logger := log.New(stderr, "arena-service: ", log.LstdFlags)
+	loop, err := service.NewWorkerLoop(worker, workerID, pollInterval, func(err error) {
+		logger.Printf("worker loop error: %v", err)
+	})
+	if err != nil {
+		return err
+	}
+	server := &http.Server{
+		Addr:              listenAddr,
+		Handler:           api.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	loopErrCh := make(chan error, 1)
+	go func() {
+		loopErrCh <- loop.Run(ctx)
+	}()
+
+	serverErrCh := make(chan error, 1)
+	go func() {
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			serverErrCh <- err
+			return
+		}
+		serverErrCh <- nil
+	}()
+
+	select {
+	case err := <-loopErrCh:
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
+		return err
+	case err := <-serverErrCh:
+		return err
+	case <-ctx.Done():
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return err
+	}
+	return <-loopErrCh
 }
 
 func encodeRecord(stdout io.Writer, record service.QueueRecord) error {
