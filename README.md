@@ -2,6 +2,65 @@
 An online game where human-built AIs compete under strict, fast turn limits while spectators watch matches unfold live.
 The value is a fair, exciting benchmark for real engineering skill (not prompt-only play), because success depends on robust algorithms, clear trade-offs, and observable behavior.
 
+## Local runtime commands
+
+### Run `arena-runner`
+
+Use `arena-runner` when you want to execute one match directly without the online service layer.
+The repo already includes convenience targets for the built-in sample games:
+
+- `make run-echo-simultaneous`
+- `make run-echo-sequential`
+- `make run-janken-go-wasm`
+- `make run-janken-rust-wasm-eval`
+
+Each target writes standard artifacts under a temporary output directory and prints that directory before the run starts.
+
+If you want to call the runner directly instead of using a Make target:
+
+```sh
+go run ./cmd/arena-runner \
+  --game echo-count \
+  --game-version 2.0.0 \
+  --ruleset phase2-simultaneous-3turn \
+  --match-id local-demo \
+  --output-dir ./tmp/arena-runner-output \
+  --player p1=./testdata/ai/echo/echo-ai \
+  --player p2=./testdata/ai/echo/echo-ai
+```
+
+### Run `arena-service`
+
+Use `arena-service` when you want the local online-service shape: operator HTTP API, queue store, and in-process worker loop.
+
+For the first local bring-up, build the service binary and start it with the example preset catalog:
+
+```sh
+make render-build
+ARENA_SERVICE_PRESET_CONFIG=./config/platform-service/presets.example.json \
+PORT=10000 \
+make render-start
+```
+
+This starts `arena-service serve` on `http://127.0.0.1:10000` with:
+
+- `GET /healthz`
+- `GET /api/v1/matches/active`
+- `GET /api/v1/matches/completed`
+- `GET /api/v1/matches/{submission_id}`
+- `POST /api/v1/preset-matches`
+
+By default, local startup uses the in-memory queue store.
+If you want the durable Postgres-backed lane instead, set `ARENA_SERVICE_POSTGRES_DSN` before `make render-start`.
+
+The equivalent direct command is:
+
+```sh
+go run ./cmd/arena-service serve \
+  --listen-addr 0.0.0.0:10000 \
+  --preset-config ./config/platform-service/presets.example.json
+```
+
 ## Japanese textlint
 
 This repository runs `textlint` for changed Japanese Markdown under `docs/**/*.md`.
