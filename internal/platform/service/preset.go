@@ -47,9 +47,9 @@ type PresetCatalog interface {
 
 // StaticPresetCatalog resolves requests from an in-memory preset map.
 type StaticPresetCatalog struct {
-	presets            map[string]MatchPresetDefinition
-	newSubmissionIDFn  func() string
-	newMatchIDFn       func() string
+	presets           map[string]MatchPresetDefinition
+	newSubmissionIDFn func() string
+	newMatchIDFn      func() string
 }
 
 // NewStaticPresetCatalog constructs a catalog from validated preset definitions.

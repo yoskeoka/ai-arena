@@ -71,9 +71,9 @@ func (DirectArtifactAccessIssuer) Issue(_ context.Context, detail MatchDetail) (
 
 // OperatorAPI exposes the remote operator-facing HTTP API.
 type OperatorAPI struct {
-	commands      *CommandService
-	queries       *QueryService
-	presets       PresetCatalog
+	commands       *CommandService
+	queries        *QueryService
+	presets        PresetCatalog
 	artifactAccess ArtifactAccessIssuer
 }
 
