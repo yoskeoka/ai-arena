@@ -223,8 +223,8 @@ export default function App() {
               <div className="space-y-5">
                 <div className="rounded-3xl bg-ink p-5 text-paper">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge>{detail.lifecycle_state}</Badge>
-                    {detail.terminal_status ? <Badge tone="teal">{detail.terminal_status}</Badge> : null}
+                    <Badge>service: {detail.lifecycle_state}</Badge>
+                    {detail.terminal_status ? <Badge tone="teal">match: {detail.terminal_status}</Badge> : null}
                   </div>
                   <h2 className="mt-4 text-xl font-semibold">{detail.match_id}</h2>
                   <p className="mt-1 text-sm text-paper/70">{detail.submission_id}</p>
@@ -429,8 +429,8 @@ function MatchTable({
             }`}
           >
             <div className="flex flex-wrap items-center gap-2">
-              <Badge>{item.lifecycle_state}</Badge>
-              {item.terminal_status ? <Badge tone="teal">{item.terminal_status}</Badge> : null}
+              <Badge>service: {item.lifecycle_state}</Badge>
+              {item.terminal_status ? <Badge tone="teal">match: {item.terminal_status}</Badge> : null}
             </div>
             <div className="mt-3 flex flex-col gap-1">
               <p className="font-semibold">{item.match_id}</p>
