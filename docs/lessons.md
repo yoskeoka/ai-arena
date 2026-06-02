@@ -230,3 +230,10 @@
 - **Pattern**: ローカル起動方法を書くタスクで、変化しやすい API surface の詳細を README に抱え込んでしまい、spec と README の二重管理を増やす
 - **Rule**: README の runtime/how-to 節は起動導線と確認手順に留める。route 一覧や payload contract のような変化しやすい API detail は `docs/specs/` を正本にし、README へ重複列挙しない
 - **Applied**: `README.md` の `arena-service` / `operator-ui` ローカル起動案内、今後の local runbook 追記全般
+
+## [2026-06-03] infra 前提のローカル確認手順は deploy-shaped lane を主導線にする
+
+- **Mistake**: `arena-service` の README で、infra deploy 前の人間向け確認手順なのに in-memory queue 起動を主導線に置き、`ARENA_SERVICE_POSTGRES_DSN` の取得/用意方法も省いた
+- **Pattern**: 実装者にとって最短の起動経路を、そのまま reviewer/operator 向けの確認手順に流用してしまい、durable backend を含む本命 lane の準備手順が欠ける
+- **Rule**: infra 導入前のローカル確認手順を書くときは、deploy-shaped lane を主導線に置く。managed service 相当をローカル harness で置き換える場合は、起動、schema apply、DSN、停止まで README から辿れるように書く。in-memory や lightweight lane は補助導線として扱う
+- **Applied**: `README.md` の `arena-service` ローカル起動案内、今後の Postgres/R2/Pages を伴う local verification runbook 全般

@@ -33,10 +33,13 @@ go run ./cmd/arena-runner \
 
 Use `arena-service` when you want the local online-service shape: operator HTTP API, queue store, and in-process worker loop.
 
-For the first local bring-up, build the service binary and start it with the example preset catalog:
+For infra-shape local verification, start the Docker Postgres harness first, apply the schema, and then launch the service against that DSN:
 
 ```sh
+make postgres-up
+make postgres-schema-apply
 make render-build
+ARENA_SERVICE_POSTGRES_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable \
 ARENA_SERVICE_PRESET_CONFIG=./config/platform-service/presets.example.json \
 PORT=10000 \
 make render-start
@@ -45,12 +48,25 @@ make render-start
 This starts `arena-service serve` on `http://127.0.0.1:10000`.
 For the current route surface and payload contract, use the specs under `docs/specs/` instead of treating this README as an endpoint catalog.
 
-By default, local startup uses the in-memory queue store.
-If you want the durable Postgres-backed lane instead, set `ARENA_SERVICE_POSTGRES_DSN` before `make render-start`.
+The default local Postgres harness DSN is:
+
+```text
+postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable
+```
+
+The Docker harness definition and the broader contributor workflow live in `docs/development/platform-service-postgres.md`.
+When you are done with the local DB, stop it with:
+
+```sh
+make postgres-down
+```
+
+If you explicitly want the lightweight queue-only lane instead of the deploy-shaped Postgres lane, omit `ARENA_SERVICE_POSTGRES_DSN` and start `arena-service` with the in-memory store.
 
 The equivalent direct command is:
 
 ```sh
+ARENA_SERVICE_POSTGRES_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable \
 go run ./cmd/arena-service serve \
   --listen-addr 0.0.0.0:10000 \
   --preset-config ./config/platform-service/presets.example.json
