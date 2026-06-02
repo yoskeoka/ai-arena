@@ -28,7 +28,7 @@ REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtim
 REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
 REVIVE_PACKAGE_DIRS = $(shell $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
-.PHONY: test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-sqlc-generate test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-sqlc-generate test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 export COMPOSE_BAKE = false
 
@@ -115,6 +115,15 @@ lint-gosec:
 lint-revive:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	$(GO_ENV) $(GO) tool revive -config revive.toml $(REVIVE_PACKAGE_DIRS) $(REVIVE_TESTDATA_DIRS)
+
+render-build:
+	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	$(GO_ENV) $(GO) build -tags netgo -ldflags '-s -w' -o app ./cmd/arena-service
+
+render-start:
+	./app serve \
+		--listen-addr "0.0.0.0:$${PORT:-10000}" \
+		--preset-config "$${ARENA_SERVICE_PRESET_CONFIG:-./config/platform-service/presets.example.json}"
 
 build-janken-go-wasm:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
