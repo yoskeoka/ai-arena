@@ -189,8 +189,18 @@ Current operational note:
 - Pages project は 1 つに保ち、preview / production を deployment 側で分ける
 - `main push -> staging preview`, `tag push -> production` の desired flow は、
   Git integration よりも `Direct Upload + CI` のほうが適している
-- Cloudflare Pages 側の build command / output directory は first landing では固定しない。
-  static asset build は repo CI が担い、Pages には prebuilt artifact を upload する
+- static asset build は repo CI が担い、Pages には prebuilt artifact を upload する
+- first landing の operator UI build contract は次で固定する
+  - app root:
+    `operator-ui/`
+  - install:
+    `pnpm install`
+  - build:
+    `pnpm run build`
+  - output directory:
+    `operator-ui/dist`
+- `pnpm` v11 の build-script gate により、`operator-ui/pnpm-workspace.yaml` で
+  `esbuild` build script を明示許可する
 - Pages 側 environment variable 名は未使用でよい。Pages Functions 導入が必要になったら追記する
 
 Direct Upload contract:

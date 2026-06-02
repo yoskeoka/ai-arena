@@ -223,3 +223,24 @@
 - **Pattern**: 直前の exec-plan の目的や実装順序を頭に置いたまま spec を書くと、最終状態の契約だけを簡潔に書くべき箇所に rollout 文脈が混ざりやすい
 - **Rule**: spec では最新の契約を現在形で直接書く。`この plan で`、`follow-up 実装後`、`初回は` のような実装順序・移行段階・milestone 文脈は plan/issue に残し、spec 本文には持ち込まない
 - **Applied**: `docs/specs/platform-game-registry.md` を含む ai-arena の spec 更新全般、今後の exec-plan 実装に伴う spec 記述全般
+
+## [2026-06-03] README を API カタログ化しない
+
+- **Mistake**: `arena-service` の README 追記で、起動導線だけで足りる場面なのに個別 endpoint 一覧まで書いてしまった
+- **Pattern**: ローカル起動方法を書くタスクで、変化しやすい API surface の詳細を README に抱え込んでしまい、spec と README の二重管理を増やす
+- **Rule**: README の runtime/how-to 節は起動導線と確認手順に留める。route 一覧や payload contract のような変化しやすい API detail は `docs/specs/` を正本にし、README へ重複列挙しない
+- **Applied**: `README.md` の `arena-service` / `operator-ui` ローカル起動案内、今後の local runbook 追記全般
+
+## [2026-06-03] infra 前提のローカル確認手順は deploy-shaped lane を主導線にする
+
+- **Mistake**: `arena-service` の README で、infra deploy 前の人間向け確認手順なのに in-memory queue 起動を主導線に置き、`ARENA_SERVICE_POSTGRES_DSN` の取得/用意方法も省いた
+- **Pattern**: 実装者にとって最短の起動経路を、そのまま reviewer/operator 向けの確認手順に流用してしまい、durable backend を含む本命 lane の準備手順が欠ける
+- **Rule**: infra 導入前のローカル確認手順を書くときは、deploy-shaped lane を主導線に置く。managed service 相当をローカル harness で置き換える場合は、起動、schema apply、DSN、停止まで README から辿れるように書く。in-memory や lightweight lane は補助導線として扱う
+- **Applied**: `README.md` の `arena-service` ローカル起動案内、今後の Postgres/R2/Pages を伴う local verification runbook 全般
+
+## [2026-06-03] local frontend 検証手順では backend health check と dev proxy を先に固める
+
+- **Mistake**: `operator-ui` のローカル確認導線で backend 起動確認の 1 ステップを置かず、frontend から直接 `127.0.0.1:10000` へ fetch させたままにした
+- **Pattern**: local frontend の確認手順を書くとき、backend が未起動・別 port・一時再起動中の状態を吸収する dev proxy / health check を後回しにして、connection error をそのまま UI に露出させる
+- **Rule**: local frontend と local API を組み合わせる runbook では、少なくとも 1 つの backend health check と、同一 origin で確認できる dev proxy か明示的な base URL 指定手順を先に固定する
+- **Applied**: `operator-ui/vite.config.ts` の local proxy、`README.md` の `healthz` 確認と `pnpm run dev` 導線、今後の local UI verification 全般

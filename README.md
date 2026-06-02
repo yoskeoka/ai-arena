@@ -2,6 +2,98 @@
 An online game where human-built AIs compete under strict, fast turn limits while spectators watch matches unfold live.
 The value is a fair, exciting benchmark for real engineering skill (not prompt-only play), because success depends on robust algorithms, clear trade-offs, and observable behavior.
 
+## Local runtime commands
+
+### Run `arena-runner`
+
+Use `arena-runner` when you want to execute one match directly without the online service layer.
+The repo already includes convenience targets for the built-in sample games:
+
+- `make run-echo-simultaneous`
+- `make run-echo-sequential`
+- `make run-janken-go-wasm`
+- `make run-janken-rust-wasm-eval`
+
+Each target writes standard artifacts under a temporary output directory and prints that directory before the run starts.
+
+If you want to call the runner directly instead of using a Make target:
+
+```sh
+go run ./cmd/arena-runner \
+  --game echo-count \
+  --game-version 2.0.0 \
+  --ruleset phase2-simultaneous-3turn \
+  --match-id local-demo \
+  --output-dir ./tmp/arena-runner-output \
+  --player p1=./testdata/ai/echo/echo-ai \
+  --player p2=./testdata/ai/echo/echo-ai
+```
+
+### Run `arena-service`
+
+Use `arena-service` when you want the local online-service shape: operator HTTP API, queue store, and in-process worker loop.
+
+For infra-shape local verification, start the Docker Postgres harness first, apply the schema, and then launch the service against that DSN:
+
+```sh
+make postgres-up
+make postgres-schema-apply
+make render-build
+ARENA_SERVICE_POSTGRES_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable \
+ARENA_SERVICE_PRESET_CONFIG=./config/platform-service/presets.example.json \
+PORT=10000 \
+make render-start
+```
+
+This starts `arena-service serve` on `http://127.0.0.1:10000`.
+For the current route surface and payload contract, use the specs under `docs/specs/` instead of treating this README as an endpoint catalog.
+
+Before opening the frontend, verify the backend is actually up:
+
+```sh
+curl http://127.0.0.1:10000/healthz
+```
+
+This should return `200 OK`.
+
+The default local Postgres harness DSN is:
+
+```text
+postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable
+```
+
+The Docker harness definition and the broader contributor workflow live in `docs/development/platform-service-postgres.md`.
+When you are done with the local DB, stop it with:
+
+```sh
+make postgres-down
+```
+
+If you explicitly want the lightweight queue-only lane instead of the deploy-shaped Postgres lane, omit `ARENA_SERVICE_POSTGRES_DSN` and start `arena-service` with the in-memory store.
+
+The equivalent direct command is:
+
+```sh
+ARENA_SERVICE_POSTGRES_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable \
+go run ./cmd/arena-service serve \
+  --listen-addr 0.0.0.0:10000 \
+  --preset-config ./config/platform-service/presets.example.json
+```
+
+### Run the operator UI
+
+To verify the UI added in this task, start the local frontend dev server in a second terminal:
+
+```sh
+cd operator-ui
+pnpm install
+pnpm run dev
+```
+
+Then open the local Vite URL printed by the command, usually `http://127.0.0.1:5173`.
+Keep `arena-service` running while the UI is open so the polling panels and preset queue actions can talk to the local API.
+For local development, the Vite dev server proxies `/api` and `/healthz` to `http://127.0.0.1:10000`, so you can leave the UI's base URL field blank.
+
 ## Japanese textlint
 
 This repository runs `textlint` for changed Japanese Markdown under `docs/**/*.md`.
