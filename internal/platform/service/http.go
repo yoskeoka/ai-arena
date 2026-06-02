@@ -225,9 +225,9 @@ func statusCodeForServiceError(err error) int {
 	switch {
 	case errors.Is(err, ErrQueueRecordNotFound), errors.Is(err, ErrPresetNotFound):
 		return http.StatusNotFound
-	case strings.Contains(err.Error(), "already exists"):
+	case errors.Is(err, ErrConflict):
 		return http.StatusConflict
-	case strings.HasPrefix(err.Error(), "service:"):
+	case errors.Is(err, ErrBadRequest):
 		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError

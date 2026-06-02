@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 )
 
 // CommandService orchestrates submission admission and queued-only cancellation.
@@ -28,9 +30,19 @@ func NewCommandService(queue QueueStore, validator AdmissionValidator) (*Command
 // Submit validates a match submission and enqueues it when admission passes.
 func (s *CommandService) Submit(ctx context.Context, submission MatchSubmission) (QueueRecord, error) {
 	if err := s.validator.Validate(ctx, submission); err != nil {
+		return QueueRecord{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
+	}
+	record, err := s.queue.Enqueue(ctx, submission)
+	if err == nil {
+		return record, nil
+	}
+	if strings.Contains(err.Error(), "already exists") {
+		return QueueRecord{}, fmt.Errorf("%w: %w", ErrConflict, err)
+	}
+	if errors.Is(err, ErrBadRequest) || errors.Is(err, ErrConflict) {
 		return QueueRecord{}, err
 	}
-	return s.queue.Enqueue(ctx, submission)
+	return QueueRecord{}, err
 }
 
 // Cancel transitions one queued submission into canceled.

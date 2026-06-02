@@ -294,7 +294,7 @@ func (a *cliApp) newWorker() (*service.Worker, error) {
 }
 
 func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig string, workerID string, pollInterval time.Duration, stderr io.Writer) error {
-	presets, err := service.LoadPresetCatalog(presetConfig)
+	presets, err := service.LoadPresetCatalog(resolveBaseDirPath(a.baseDir, presetConfig))
 	if err != nil {
 		return err
 	}
@@ -302,7 +302,10 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	if err != nil {
 		return err
 	}
-	api, err := service.NewOperatorAPI(a.commands, a.queries, presets, service.DirectArtifactAccessIssuer{})
+	api, err := service.NewOperatorAPI(a.commands, a.queries, resolvingPresetCatalog{
+		baseDir: a.baseDir,
+		next:    presets,
+	}, service.DirectArtifactAccessIssuer{})
 	if err != nil {
 		return err
 	}
@@ -353,6 +356,20 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	return <-loopErrCh
 }
 
+type resolvingPresetCatalog struct {
+	baseDir string
+	next    service.PresetCatalog
+}
+
+func (c resolvingPresetCatalog) Build(ctx context.Context, req service.PresetMatchRequest) (service.MatchSubmission, error) {
+	submission, err := c.next.Build(ctx, req)
+	if err != nil {
+		return service.MatchSubmission{}, err
+	}
+	resolveOutputDir(c.baseDir, &submission)
+	return submission, nil
+}
+
 func encodeRecord(stdout io.Writer, record service.QueueRecord) error {
 	return encodeJSON(stdout, record)
 }
@@ -376,6 +393,20 @@ func resolveOutputDir(baseDir string, submission *service.MatchSubmission) {
 		return
 	}
 	submission.OutputDir = filepath.Join(baseDir, filepath.Clean(submission.OutputDir))
+}
+
+func resolveBaseDirPath(baseDir, value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err == nil && parsed.Scheme != "" {
+		return value
+	}
+	if filepath.IsAbs(value) {
+		return filepath.Clean(value)
+	}
+	return filepath.Join(baseDir, filepath.Clean(value))
 }
 
 func loadSubmission(path string, stdin io.Reader) (service.MatchSubmission, error) {

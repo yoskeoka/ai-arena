@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -170,5 +172,26 @@ func TestOperatorAPIRejectsUnknownPreset(t *testing.T) {
 	api.Handler().ServeHTTP(resp, req)
 	if resp.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, body = %s, want %d", resp.Code, resp.Body.String(), http.StatusNotFound)
+	}
+}
+
+func TestStatusCodeForServiceError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "not found", err: ErrQueueRecordNotFound, want: http.StatusNotFound},
+		{name: "bad request", err: fmt.Errorf("%w: %w", ErrBadRequest, errors.New("service: output_dir is required")), want: http.StatusBadRequest},
+		{name: "conflict", err: fmt.Errorf("%w: %w", ErrConflict, errors.New("service: submission_id already exists")), want: http.StatusConflict},
+		{name: "internal prefixed error stays internal", err: errors.New("service: enqueue submission: connection reset"), want: http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := statusCodeForServiceError(tt.err); got != tt.want {
+				t.Fatalf("statusCodeForServiceError(%v) = %d, want %d", tt.err, got, tt.want)
+			}
+		})
 	}
 }
