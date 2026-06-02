@@ -114,19 +114,43 @@ export class OperatorApiClient {
   }
 
   private async decodeJSON<T>(response: Response): Promise<T> {
-    const payload = (await response.json()) as T | { error?: string };
+    const payload = await decodeResponseBody<T>(response);
     if (!response.ok) {
       const message =
         typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string"
           ? payload.error
-          : `request failed with status ${response.status}`;
+          : typeof payload === "string" && payload.trim() !== ""
+            ? payload
+            : `request failed with status ${response.status}`;
       throw new Error(message);
     }
     return payload as T;
   }
 
   private url(pathname: string): string {
-    const base = this.baseUrl.endsWith("/") ? this.baseUrl.slice(0, -1) : this.baseUrl;
+    const trimmed = this.baseUrl.trim();
+    if (trimmed === "") {
+      return pathname;
+    }
+    const base = trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
     return `${base}${pathname}`;
+  }
+}
+
+async function decodeResponseBody<T>(response: Response): Promise<T | { error?: string } | string> {
+  const body = await response.text();
+  if (body.trim() === "") {
+    return "";
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return JSON.parse(body) as T | { error?: string };
+  }
+
+  try {
+    return JSON.parse(body) as T | { error?: string };
+  } catch {
+    return body;
   }
 }

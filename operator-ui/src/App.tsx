@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { MatchDetailResponse, OperatorApiClient, ResultListItem } from "./api";
 import { presetCatalog } from "./presets";
@@ -27,6 +27,7 @@ export default function App() {
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>();
   const [detail, setDetail] = useState<MatchDetailResponse>();
   const [detailReloadToken, setDetailReloadToken] = useState(0);
+  const detailRequestSequence = useRef(0);
 
   useEffect(() => {
     let canceled = false;
@@ -74,7 +75,7 @@ export default function App() {
         setCompletedState("ready");
         setCompletedError(undefined);
         setSelectedSubmissionId((current) => {
-          if (current && items.some((item) => item.submission_id === current)) {
+          if (current) {
             return current;
           }
           return items[0]?.submission_id;
@@ -107,19 +108,25 @@ export default function App() {
     }
 
     let canceled = false;
+    let inFlightController: AbortController | undefined;
 
     const load = async () => {
+      inFlightController?.abort();
+      const controller = new AbortController();
+      const requestSequence = detailRequestSequence.current + 1;
+      detailRequestSequence.current = requestSequence;
+      inFlightController = controller;
       setDetailState((current) => (current === "ready" ? current : "loading"));
       try {
-        const response = await client.getMatchDetail(selectedSubmissionId);
-        if (canceled) {
+        const response = await client.getMatchDetail(selectedSubmissionId, controller.signal);
+        if (canceled || requestSequence !== detailRequestSequence.current) {
           return;
         }
         setDetail(response);
         setDetailState("ready");
         setDetailError(undefined);
       } catch (error) {
-        if (canceled) {
+        if (canceled || isAbortError(error) || requestSequence !== detailRequestSequence.current) {
           return;
         }
         setDetailState("error");
@@ -133,6 +140,7 @@ export default function App() {
     }, DETAIL_POLL_MS);
     return () => {
       canceled = true;
+      inFlightController?.abort();
       window.clearInterval(timer);
     };
   }, [client, detailReloadToken, selectedSubmissionId]);
@@ -297,7 +305,7 @@ export default function App() {
                               className="mt-3 inline-flex rounded-full bg-teal px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white no-underline transition hover:bg-ink"
                               href={artifact.download_url}
                               target="_blank"
-                              rel="noreferrer"
+                              rel="noopener noreferrer"
                             >
                               open delegated download
                             </a>
@@ -480,4 +488,8 @@ function messageOf(error: unknown) {
     return error.message;
   }
   return "unknown error";
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
