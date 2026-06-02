@@ -23,6 +23,7 @@ compact view と detail view の責務分離だけを固定する。
 この spec が定義しないもの:
 
 - public HTTP API
+- preset enqueue mutation route
 - spectator 向け public state delivery
 - ranking / matchmaking 集計
 - retention / pagination / free-text search
@@ -32,6 +33,7 @@ compact view と detail view の責務分離だけを固定する。
 - `docs/specs/platform-service-skeleton.md`: submission / lifecycle / worker orchestration の正本
 - `docs/specs/platform-service-persistence.md`: durable write model と artifact locator 保存単位の正本
 - `docs/specs/platform.md`: runner artifact layout と compact artifact 読取順の正本
+- `docs/specs/platform-service-operator-api.md`: operator-facing HTTP route の正本
 
 ## Query Surface
 
@@ -47,6 +49,8 @@ operator-facing query surface は submission identity を主キーにした
 
 initial milestone では CLI adapter がこの query surface を expose し、
 store backend や transport 差分を operator へ漏らさない。
+first remote lane では、HTTP adapter が `active` / `completed` / `detail` route から
+同じ compact row / detail view を expose してよい。
 
 ## Lifecycle と Terminal Status の分離
 
@@ -116,6 +120,8 @@ operator はまず compact summary と locator を受け取り、
 必要な場合だけ `read` で個別 artifact を読む。
 remote object storage lane では、detail view が object bytes の代わりに delegated artifact access metadata を返してよい。
 この metadata は request 時に派生させる derived field であり、永続 write model の一部ではない。
+provider-specific delegated metadata を発行できない artifact kind がある場合も、
+detail view 自体は stable locator を返し続けなければならない。
 
 ## Artifact Read Contract
 

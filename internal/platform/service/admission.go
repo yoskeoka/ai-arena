@@ -178,6 +178,7 @@ func ensureCommandTargetExists(baseDir, target string) error {
 }
 
 func ensurePathExists(path string) error {
+	// #nosec G703 -- admission only probes operator-selected local paths after prior path/URI validation.
 	if _, err := os.Stat(path); err != nil {
 		return err
 	}

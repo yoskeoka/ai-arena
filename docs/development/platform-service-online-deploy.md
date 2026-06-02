@@ -54,6 +54,8 @@ Current operational note:
 Service-level env / secret contract:
 
 - `ARENA_SERVICE_POSTGRES_DSN`
+- `ARENA_SERVICE_PRESET_CONFIG`
+  - `arena-service serve` が読む server-known preset catalog の JSON path
 - `ARENA_SERVICE_ARTIFACT_BACKEND`
   - `filesystem` or `r2`
 - `ARENA_SERVICE_ARTIFACT_R2_ACCOUNT_ID`
@@ -212,3 +214,25 @@ first landing の desired contract と、2026-06-02 時点の observed state を
   - Render `Production` は desired 通り
   - R2 buckets は desired 通り
   - Pages project は desired 通り
+
+## Repo-local startup contract
+
+- backend process の first landing command:
+  - `make render-build`
+  - `make render-start`
+- desired Render build/start command for the first remote lane:
+  - build:
+    `make render-build`
+  - start:
+    `make render-start`
+- real remote lane では `presets.example.json` をそのまま使わず、
+  Render service へ mount / bake / secret-managed path した preset catalog を `ARENA_SERVICE_PRESET_CONFIG` で指定する
+- `make render-start` は Render の `PORT` を優先して
+  `0.0.0.0:$PORT` へ bind する。`PORT` 未設定時だけ `10000` を fallback に使う
+- preset catalog は server-known participant set のみを持ち、
+  operator request は `preset_id` と optional `submission_id` / `match_id` / `output_dir` override までに留める
+- 2026-06-02 の `render services --confirm -o json` 観測では、
+  `ai-arena-service` / `ai-arena-stg` ともに build command は `go build -tags netgo -ldflags '-s -w' -o app`、
+  start command は `./app` のままだった。
+  Render 設定更新後は `make render-build` / `make render-start` へ寄せる
+  remote polling API を出す前に service command を上記 desired shape へ更新する必要がある
