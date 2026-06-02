@@ -3,4 +3,7 @@ arena-runner
 /app
 .local/
 node_modules/
+operator-ui/node_modules/
+operator-ui/dist/
+operator-ui/*.tsbuildinfo
 testdata/ai/janken/*.wasm

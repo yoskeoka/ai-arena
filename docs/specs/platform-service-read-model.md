@@ -51,6 +51,7 @@ initial milestone では CLI adapter がこの query surface を expose し、
 store backend や transport 差分を operator へ漏らさない。
 first remote lane では、HTTP adapter が `active` / `completed` / `detail` route から
 同じ compact row / detail view を expose してよい。
+minimal operator UI は、この read model をそのまま client polling で消費してよい。
 
 ## Lifecycle と Terminal Status の分離
 
@@ -122,6 +123,9 @@ remote object storage lane では、detail view が object bytes の代わりに
 この metadata は request 時に派生させる derived field であり、永続 write model の一部ではない。
 provider-specific delegated metadata を発行できない artifact kind がある場合も、
 detail view 自体は stable locator を返し続けなければならない。
+minimal operator UI は detail response を受けた時点で、
+`result-summary` を primary observation entry として先頭表示し、
+残りの artifact access は secondary action として表示してよい。
 
 ## Artifact Read Contract
 
