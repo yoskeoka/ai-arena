@@ -94,6 +94,19 @@ Then open the local Vite URL printed by the command, usually `http://127.0.0.1:5
 Keep `arena-service` running while the UI is open so the polling panels and preset queue actions can talk to the local API.
 For local development, the Vite dev server proxies `/api` and `/healthz` to `http://127.0.0.1:10000`, so you can leave the UI's base URL field blank.
 
+For the repo-owned local browser verification lane, use the Playwright harness instead of a manual browser loop:
+
+```sh
+cd operator-ui
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+pnpm run verify:local
+```
+
+This command starts a Go fixture backend, starts the local Vite frontend, and verifies
+the preset queue / active matches / completed detail / artifact access surface automatically.
+The detailed runbook lives in `docs/development/operator-ui-local-verification.md`.
+
 ## Japanese textlint
 
 This repository runs `textlint` for changed Japanese Markdown under `docs/**/*.md`.
