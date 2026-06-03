@@ -244,3 +244,10 @@
 - **Pattern**: local frontend の確認手順を書くとき、backend が未起動・別 port・一時再起動中の状態を吸収する dev proxy / health check を後回しにして、connection error をそのまま UI に露出させる
 - **Rule**: local frontend と local API を組み合わせる runbook では、少なくとも 1 つの backend health check と、同一 origin で確認できる dev proxy か明示的な base URL 指定手順を先に固定する
 - **Applied**: `operator-ui/vite.config.ts` の local proxy、`README.md` の `healthz` 確認と `pnpm run dev` 導線、今後の local UI verification 全般
+
+## [2026-06-04] browser harness の plan では regression lane と実環境調査 lane を分けて書く
+
+- **Mistake**: `operator-ui` の Playwright foundation を計画・実装するとき、deterministic regression lane の整備をそのまま browser harness 全体の到達点として扱い、user が期待していた real local `arena-service` + `operator-ui` の調査/証跡 lane を plan に切り出さなかった
+- **Pattern**: Playwright や browser automation を導入すると、「壊れにくい fixture regression」を先に作る判断自体は妥当でも、実装確認・調査・screenshot capture の実運用 lane を同じ言葉で吸収したつもりになりやすい
+- **Rule**: UI/browser harness を計画するときは、少なくとも `deterministic regression lane` と `real local inspection/capture lane` を分けて要件確認する。user が「人間の代わりの確認」「調査の目と手」「PR 用 screenshot」を期待しているなら、fixture lane だけで満たしたと解釈しない
+- **Applied**: `0068` / `0069` 後続の operator UI browser verification planning、今後の ai-arena local browser harness / Playwright / MCP 導入全般

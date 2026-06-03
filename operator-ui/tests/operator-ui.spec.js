@@ -19,12 +19,13 @@ test("local operator UI browser lane covers queue, active, completed detail, and
   await expect(activePanel.getByTestId("match-row-sub-active-queued")).toBeVisible();
   await expect(completedPanel.getByTestId("match-row-sub-completed-local")).toBeVisible();
   await expect(detail).toBeVisible();
-  await expect(detail.getByText("match-completed-local")).toBeVisible();
-  await expect(detail.getByText("sub-completed-local")).toBeVisible();
-  await expect(detail.getByText("Status")).toBeVisible();
-  await expect(detail.getByText("completed")).toBeVisible();
-  await expect(detail.getByTestId("artifact-entry-result-summary")).toBeVisible();
-  await expect(detail.getByRole("link", { name: "open delegated download" })).toHaveAttribute(
+  await expect(detail.getByRole("heading", { name: "match-completed-local", exact: true })).toBeVisible();
+  await expect(detail.getByText("sub-completed-local", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Status", { exact: true })).toBeVisible();
+  await expect(detail.getByText("completed", { exact: true })).toBeVisible();
+  const resultSummaryArtifact = detail.getByTestId("artifact-entry-result-summary");
+  await expect(resultSummaryArtifact).toBeVisible();
+  await expect(resultSummaryArtifact.getByRole("link", { name: "open delegated download" })).toHaveAttribute(
     "href",
     "http://127.0.0.1:10000/fixture-artifacts/result-summary.json",
   );
