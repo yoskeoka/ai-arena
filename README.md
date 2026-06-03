@@ -106,6 +106,8 @@ pnpm run verify:local
 This command starts a Go fixture backend, starts the local Vite frontend, and verifies
 the preset queue / active matches / completed detail / artifact access surface automatically.
 The detailed runbook lives in `docs/development/operator-ui-local-verification.md`.
+On Debian/Ubuntu systems that also need host libraries, `pnpm exec playwright install --with-deps chromium`
+is the faster setup path.
 
 ## Japanese textlint
 

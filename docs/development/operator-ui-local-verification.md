@@ -31,6 +31,9 @@ pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
 ```
 
+Debian/Ubuntu 系で host library もまとめて入れるなら、`pnpm exec playwright install --with-deps chromium`
+を使ってよい。
+
 以後の local verification は次でよい。
 
 ```sh
@@ -41,7 +44,7 @@ pnpm run verify:local
 この command は次を自動で行う。
 
 - `go run ./cmd/operator-ui-fixture --listen-addr 127.0.0.1:10000`
-- `pnpm run dev -- --host 127.0.0.1 --port 4173`
+- `pnpm exec vite --host 127.0.0.1 --port 4173 --strictPort`
 - Playwright browser verification
 
 fixture backend は repo 内の Go service package を使い、次の状態を seed する。

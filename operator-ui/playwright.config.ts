@@ -25,7 +25,7 @@ export default defineConfig({
       url: "http://127.0.0.1:10000/healthz",
     },
     {
-      command: "pnpm exec vite --host 127.0.0.1 --port 4173",
+      command: "pnpm exec vite --host 127.0.0.1 --port 4173 --strictPort",
       cwd: ".",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

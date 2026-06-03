@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -33,7 +34,7 @@ func main() {
 		Handler:           backend.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	if err := server.ListenAndServe(); err != nil {
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 }
@@ -76,10 +77,10 @@ func newFixtureBackend(listenAddr string) (*fixtureBackend, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := seedActiveRecord(store, filepath.Join(outputDir, "active")); err != nil {
+	if err := seedCompletedRecord(store, summaryPath); err != nil {
 		return nil, err
 	}
-	if err := seedCompletedRecord(store, summaryPath); err != nil {
+	if err := seedActiveRecord(store, filepath.Join(outputDir, "active")); err != nil {
 		return nil, err
 	}
 
@@ -133,7 +134,7 @@ func (i fixtureArtifactAccessIssuer) Issue(ctx context.Context, detail service.M
 	entry.DownloadURL = i.downloadURL
 	entry.Issuer = "fixture-direct"
 	entry.Status = "delegated"
-	expiresAt := time.Date(2026, time.June, 3, 18, 30, 0, 0, time.UTC)
+	expiresAt := time.Now().UTC().Add(30 * time.Minute)
 	entry.ExpiresAt = &expiresAt
 	metadata["result-summary"] = entry
 	return metadata, nil
