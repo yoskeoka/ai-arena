@@ -6,7 +6,7 @@
 `operator-ui/` の local verification を human manual check 依存から外し、
 AI Agent が local backend/frontend を起動して browser automation で自己検証できる
 最小 lane を整える。
-最初のゴールは、preset queue / active-completed visibility / completed detail /
+最初のゴールは、preset queue / active/completed visibility / completed detail /
 artifact access entry の回帰を、repo に置いた再利用可能な Playwright-based harness で
 確認できる状態にすることに置く。
 
@@ -62,7 +62,7 @@ artifact access entry の回帰を、repo に置いた再利用可能な Playwri
 
 ## Sub-tasks
 
-- [ ] browser automation 候補を比較し、repo canonical harness を 1 つに固定する
+- [ ] Playwright 系 harness 前提で、repo canonical な browser verification command / helper を固定する
 - [ ] operator UI の QA inventory を作り、first coverage を明文化する
 - [ ] UI observation seam を追加し、selector strategy を固定する
 - [ ] local backend/frontend/browser verification の起動 helper を整える
