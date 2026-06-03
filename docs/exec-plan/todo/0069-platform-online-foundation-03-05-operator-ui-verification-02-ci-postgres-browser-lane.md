@@ -24,6 +24,7 @@ GitHub Actions で継続実行できる lane として整える。
 - `0068` の Playwright harness / selector strategy / scenario を再利用する
 - schema apply、fixture seed、service/frontend 起動、browser verification、artifact upload を GitHub Actions に載せる
 - failure 時の trace / screenshot / backend log を reviewer が読める形で残す
+- OpenAI `playwright-interactive` skill や `js_repl` 前提は CI lane に持ち込まない
 
 この plan では以下を扱わない。
 
@@ -93,3 +94,4 @@ GitHub Actions で継続実行できる lane として整える。
 - operator UI browser verification は default gate へ直結せず、dedicated durable lane として扱う
 - CI lane は local lane を置き換えるのではなく、`0068` の foundation を production-shape backend に延長する
 - browser automation stack は local lane と同一の Playwright foundation を再利用する
+- CI lane は ordinary Playwright CLI / test runner だけで成立させ、agent-specific skill 依存を持ち込まない

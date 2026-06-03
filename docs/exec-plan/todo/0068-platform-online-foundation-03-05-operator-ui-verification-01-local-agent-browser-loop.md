@@ -32,6 +32,7 @@ artifact access entry の回帰を、repo に置いた再利用可能な Playwri
 - GitHub Actions 上の durable browser verification lane
 - Postgres-backed CI orchestration
 - operator UI の責務分割 refactor 自体
+- `playwright-interactive` skill 自体の repo 導入や contributor 前提化
 
 ## Spec Changes
 
@@ -51,6 +52,8 @@ artifact access entry の回帰を、repo に置いた再利用可能な Playwri
 
 - `README.md` または `docs/development/*` に local operator UI verification runbook を追加する
 - browser automation の起動方法、backend/frontend の前提、失敗時の観測 artifact を記録する
+- OpenAI `playwright-interactive` skill は optional tactic として脚注してよいが、
+  repo canonical 手順としては扱わない
 
 ## Expected Code Changes
 
@@ -87,6 +90,8 @@ artifact access entry の回帰を、repo に置いた再利用可能な Playwri
 
 - Codex 固有の interactive skill に寄せすぎると、agent/runtime drift で repo の verification が壊れやすい
   - mitigation: repo contract は Playwright harness を正本とし、interactive browser session はその上位利用に留める
+- `playwright-interactive` は `js_repl` と `danger-full-access` 前提が強く、repo contributor contract にしにくい
+  - mitigation: skill の導入有無と無関係に動く Playwright command / helper を canonical path にする
 - selector が styling や文言に密結合すると、見た目変更だけで tests が壊れやすい
   - mitigation: role/text 優先 + 必要最小限の machine-readable hook を spec で固定する
 - local bootstrap が重すぎると AI Agent が再利用しなくなる
@@ -97,4 +102,5 @@ artifact access entry の回帰を、repo に置いた再利用可能な Playwri
 - browser automation の canonical foundation は Playwright 系に一本化する
 - repo に残す contract は ordinary Playwright 実行で再現できるものとし、
   agent-specific interactive tooling は optional execution tactic として扱う
+- OpenAI `playwright-interactive` skill は採用必須にしない。使う場合も local 自己検証の補助手段に限る
 - `0026` の UI component/state refactor は、この local verification seam ができてから着手する
