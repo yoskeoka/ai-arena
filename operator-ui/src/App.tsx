@@ -194,12 +194,14 @@ export default function App() {
             subtitle="One-click enqueue against server-known presets."
             status={enqueueState}
             error={enqueueError}
+            testId="operator-panel-preset-queue"
           >
             <div className="grid gap-3">
               {presetCatalog.map((preset) => (
                 <button
                   key={preset.presetId}
                   type="button"
+                  data-testid={`preset-queue-action-${preset.presetId}`}
                   className="rounded-3xl border border-black/10 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-accent hover:shadow-md disabled:cursor-wait disabled:opacity-70"
                   onClick={() => void handleEnqueue(preset.presetId)}
                   disabled={enqueueState === "submitting"}
@@ -218,9 +220,15 @@ export default function App() {
             </div>
           </Panel>
 
-          <Panel title="Completed Detail" subtitle="Result-summary first, delegated artifacts second." status={detailState} error={detailError}>
+          <Panel
+            title="Completed Detail"
+            subtitle="Result-summary first, delegated artifacts second."
+            status={detailState}
+            error={detailError}
+            testId="operator-panel-completed-detail"
+          >
             {detail ? (
-              <div className="space-y-5">
+              <div className="space-y-5" data-testid={`match-detail-${detail.submission_id}`}>
                 <div className="rounded-3xl bg-ink p-5 text-paper">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge>service: {detail.lifecycle_state}</Badge>
@@ -290,7 +298,7 @@ export default function App() {
                       <p className="text-sm text-black/60">No artifact access metadata returned yet.</p>
                     ) : (
                       artifactEntries.map(([kind, artifact]) => (
-                        <article key={kind} className="rounded-2xl bg-paper p-3 text-sm">
+                        <article key={kind} className="rounded-2xl bg-paper p-3 text-sm" data-testid={`artifact-entry-${kind}`}>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-semibold">{kind}</span>
                             <Badge tone={artifact.download_url ? "teal" : "moss"}>{artifact.status ?? "unknown"}</Badge>
@@ -343,7 +351,13 @@ export default function App() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
-          <Panel title="Active Matches" subtitle="Polled every 5 seconds." status={activeState} error={activeError}>
+          <Panel
+            title="Active Matches"
+            subtitle="Polled every 5 seconds."
+            status={activeState}
+            error={activeError}
+            testId="operator-panel-active-matches"
+          >
             <MatchTable
               items={activeItems}
               emptyMessage="No active submissions are currently queued or running."
@@ -352,7 +366,13 @@ export default function App() {
             />
           </Panel>
 
-          <Panel title="Completed Matches" subtitle="Polled every 10 seconds." status={completedState} error={completedError}>
+          <Panel
+            title="Completed Matches"
+            subtitle="Polled every 10 seconds."
+            status={completedState}
+            error={completedError}
+            testId="operator-panel-completed-matches"
+          >
             <MatchTable
               items={completedItems}
               emptyMessage="No completed submissions yet."
@@ -372,16 +392,18 @@ function Panel({
   status,
   error,
   children,
+  testId,
 }: {
   title: string;
   subtitle: string;
   status: LoadState | EnqueueState;
   error?: string;
   children: React.ReactNode;
+  testId: string;
 }) {
   const connectionHint = error ? hintFor(error) : undefined;
   return (
-    <section className="rounded-[28px] border border-black/10 bg-white/75 p-5 shadow-sm backdrop-blur">
+    <section className="rounded-[28px] border border-black/10 bg-white/75 p-5 shadow-sm backdrop-blur" data-testid={testId}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">{title}</h2>
@@ -424,6 +446,7 @@ function MatchTable({
             key={item.submission_id}
             type="button"
             onClick={() => onSelect(item)}
+            data-testid={`match-row-${item.submission_id}`}
             className={`w-full rounded-3xl border p-4 text-left shadow-sm transition ${
               selected ? "border-accent bg-accent/10" : "border-black/10 bg-paper hover:border-black/25"
             }`}
