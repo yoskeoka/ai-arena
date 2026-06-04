@@ -68,11 +68,17 @@ separate worker service や external queue broker を support 済みとは扱わ
 local CLI、CI、external game 開発で runner を直接起動する lane では、
 file-backed first を default とする。
 online service infra では、同じ contract を `R2` へ差し替える。
+local の deploy-shaped verification lane では、
+同じ S3-compatible env contract を `SeaweedFS` へ向けて再利用してよい。
 local CLI と CI で durable backend を検証するときは、
 production と同じ Postgres contract を満たすローカル DB を使ってよい。
 verification lane は少なくとも 2 系統に分けて扱う。
 default lane は `AI_ARENA_PG_TEST_DSN` を注入しない file-backed / in-memory baseline とし、
 durable lane は Postgres contract を検証する専用 target として分離してよい。
+artifact lane も同様に分けてよい。
+default artifact lane は local filesystem を使う軽量 lane とし、
+deploy-shaped artifact verification lane は
+Postgres metadata backend と S3-compatible object storage backend を組み合わせてよい。
 durable lane が Postgres backend を起動するとき、schema bootstrap は runtime の責務ではない。
 target DB は service/worker 起動前に schema apply 済みでなければならない。
 

@@ -31,7 +31,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	return runWithFactory(args, stdout, stderr, newCLIApp)
 }
 
-type cliAppFactory func(baseDir string, matchTimeout time.Duration, postgresDSN string) (*cliApp, error)
+type cliAppFactory func(baseDir string, matchTimeout time.Duration, postgresDSN string, artifactRuntime artifactRuntimeConfig) (*cliApp, error)
 
 func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFactory) error {
 	if len(args) == 0 {
@@ -82,8 +82,12 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	if postgresDSN == "" {
 		postgresDSN = strings.TrimSpace(os.Getenv("ARENA_SERVICE_POSTGRES_DSN"))
 	}
+	artifactRuntime, err := loadArtifactRuntimeFromEnv()
+	if err != nil {
+		return err
+	}
 
-	app, err := factory(baseDir, matchTimeout, postgresDSN)
+	app, err := factory(baseDir, matchTimeout, postgresDSN, artifactRuntime)
 	if err != nil {
 		return err
 	}
@@ -123,7 +127,7 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	if err != nil {
 		return err
 	}
-	resolveOutputDir(baseDir, &submission)
+	resolveOutputDir(baseDir, artifactRuntime.usesOpaqueOutputDir(), &submission)
 
 	var record service.QueueRecord
 	switch subcommand {
@@ -169,15 +173,30 @@ func usageFor(subcommand string) string {
 }
 
 type cliApp struct {
-	commands *service.CommandService
-	queries  *service.QueryService
-	queue    service.QueueStore
-	baseDir  string
-	timeout  time.Duration
-	closeFn  func()
+	commands       *service.CommandService
+	queries        *service.QueryService
+	queue          service.QueueStore
+	reader         service.ArtifactReader
+	artifactAccess service.ArtifactAccessIssuer
+	persister      service.TerminalPersister
+	baseDir        string
+	timeout        time.Duration
+	closeFn        func()
 }
 
-func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string) (*cliApp, error) {
+type artifactRuntimeConfig struct {
+	backend           string
+	r2Bucket          string
+	r2Endpoint        string
+	r2AccessKeyID     string
+	r2SecretAccessKey string
+}
+
+func (c artifactRuntimeConfig) usesOpaqueOutputDir() bool {
+	return c.backend == "r2"
+}
+
+func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, artifactRuntime artifactRuntimeConfig) (*cliApp, error) {
 	dryRun, err := service.NewLocalDryRunChecker(baseDir)
 	if err != nil {
 		return nil, err
@@ -195,18 +214,26 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string) (
 		closeFn()
 		return nil, err
 	}
-	queries, err := service.NewQueryService(store)
+	reader, artifactAccess, persister, err := newArtifactRuntime(context.Background(), artifactRuntime)
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
+	queries, err := service.NewQueryService(store, reader)
 	if err != nil {
 		closeFn()
 		return nil, err
 	}
 	return &cliApp{
-		commands: commands,
-		queries:  queries,
-		queue:    store,
-		baseDir:  baseDir,
-		timeout:  matchTimeout,
-		closeFn:  closeFn,
+		commands:       commands,
+		queries:        queries,
+		queue:          store,
+		reader:         reader,
+		artifactAccess: artifactAccess,
+		persister:      persister,
+		baseDir:        baseDir,
+		timeout:        matchTimeout,
+		closeFn:        closeFn,
 	}, nil
 }
 
@@ -277,7 +304,7 @@ func (a *cliApp) read(ctx context.Context, submissionID string, artifactKind str
 	if err != nil {
 		return err
 	}
-	data, err := readLocalArtifact(path)
+	data, err := a.reader.Read(ctx, path)
 	if err != nil {
 		return err
 	}
@@ -290,7 +317,7 @@ func (a *cliApp) newWorker() (*service.Worker, error) {
 	if err != nil {
 		return nil, err
 	}
-	return service.NewWorker(a.queue, invoker, service.LocalTerminalPersister{})
+	return service.NewWorker(a.queue, invoker, a.persister)
 }
 
 func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig string, workerID string, pollInterval time.Duration, stderr io.Writer) error {
@@ -304,8 +331,9 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	}
 	api, err := service.NewOperatorAPI(a.commands, a.queries, resolvingPresetCatalog{
 		baseDir: a.baseDir,
+		opaque:  isOpaqueArtifactBackend(a.persister),
 		next:    presets,
-	}, service.DirectArtifactAccessIssuer{})
+	}, a.artifactAccess)
 	if err != nil {
 		return err
 	}
@@ -358,6 +386,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 
 type resolvingPresetCatalog struct {
 	baseDir string
+	opaque  bool
 	next    service.PresetCatalog
 }
 
@@ -366,7 +395,7 @@ func (c resolvingPresetCatalog) Build(ctx context.Context, req service.PresetMat
 	if err != nil {
 		return service.MatchSubmission{}, err
 	}
-	resolveOutputDir(c.baseDir, &submission)
+	resolveOutputDir(c.baseDir, c.opaque, &submission)
 	return submission, nil
 }
 
@@ -380,8 +409,11 @@ func encodeJSON(stdout io.Writer, value any) error {
 	return enc.Encode(value)
 }
 
-func resolveOutputDir(baseDir string, submission *service.MatchSubmission) {
+func resolveOutputDir(baseDir string, opaque bool, submission *service.MatchSubmission) {
 	if submission == nil || submission.OutputDir == "" {
+		return
+	}
+	if opaque {
 		return
 	}
 	parsed, err := url.Parse(submission.OutputDir)
@@ -407,6 +439,61 @@ func resolveBaseDirPath(baseDir, value string) string {
 		return filepath.Clean(value)
 	}
 	return filepath.Join(baseDir, filepath.Clean(value))
+}
+
+func loadArtifactRuntimeFromEnv() (artifactRuntimeConfig, error) {
+	cfg := artifactRuntimeConfig{
+		backend:           strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_BACKEND")),
+		r2Bucket:          strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_BUCKET")),
+		r2Endpoint:        strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT")),
+		r2AccessKeyID:     strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID")),
+		r2SecretAccessKey: strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY")),
+	}
+	if cfg.backend == "" {
+		cfg.backend = "filesystem"
+	}
+	switch cfg.backend {
+	case "filesystem":
+		return cfg, nil
+	case "r2":
+		if cfg.r2Bucket == "" || cfg.r2Endpoint == "" || cfg.r2AccessKeyID == "" || cfg.r2SecretAccessKey == "" {
+			return artifactRuntimeConfig{}, fmt.Errorf("ARENA_SERVICE_ARTIFACT_R2_BUCKET, ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT, ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID, and ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY are required when ARENA_SERVICE_ARTIFACT_BACKEND=r2")
+		}
+		return cfg, nil
+	default:
+		return artifactRuntimeConfig{}, fmt.Errorf("unsupported ARENA_SERVICE_ARTIFACT_BACKEND %q", cfg.backend)
+	}
+}
+
+func newArtifactRuntime(ctx context.Context, cfg artifactRuntimeConfig) (service.ArtifactReader, service.ArtifactAccessIssuer, service.TerminalPersister, error) {
+	switch cfg.backend {
+	case "", "filesystem":
+		reader := service.NewDefaultArtifactReader(nil)
+		return reader, service.DirectArtifactAccessIssuer{}, service.LocalTerminalPersister{}, nil
+	case "r2":
+		store, err := service.NewS3ArtifactStore(ctx, service.S3ArtifactConfig{
+			Bucket:          cfg.r2Bucket,
+			Endpoint:        cfg.r2Endpoint,
+			AccessKeyID:     cfg.r2AccessKeyID,
+			SecretAccessKey: cfg.r2SecretAccessKey,
+		})
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		persister, err := service.NewS3TerminalPersister(store)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		reader := service.NewDefaultArtifactReader(store)
+		return reader, service.NewS3ArtifactAccessIssuer(store), persister, nil
+	default:
+		return nil, nil, nil, fmt.Errorf("unsupported artifact backend %q", cfg.backend)
+	}
+}
+
+func isOpaqueArtifactBackend(persister service.TerminalPersister) bool {
+	_, ok := persister.(*service.S3TerminalPersister)
+	return ok
 }
 
 func loadSubmission(path string, stdin io.Reader) (service.MatchSubmission, error) {
@@ -473,19 +560,4 @@ func selectArtifactPath(detail service.MatchDetail, artifactKind string) (string
 	default:
 		return "", fmt.Errorf("unsupported artifact %q", artifactKind)
 	}
-}
-
-func readLocalArtifact(path string) ([]byte, error) {
-	if !isLocalArtifactPath(path) {
-		return nil, fmt.Errorf("artifact path %q is not a local file path", path)
-	}
-	return os.ReadFile(filepath.Clean(strings.TrimPrefix(path, "file://")))
-}
-
-func isLocalArtifactPath(path string) bool {
-	parsed, err := url.Parse(path)
-	if err != nil {
-		return true
-	}
-	return parsed.Scheme == "" || parsed.Scheme == "file"
 }

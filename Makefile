@@ -11,6 +11,11 @@ CARGO_TARGET_DIR ?= $(CACHE_ROOT)/cargo-target
 RUST_WASM_TARGET ?= wasm32-wasip1
 AI_ARENA_PG_TEST_DSN ?= postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable
 AI_ARENA_PG_ATLAS_DEV_DSN ?= postgres://arena:arena@127.0.0.1:55432/postgres?sslmode=disable
+SEAWEED_DATA_DIR ?= $(CURDIR)/.local/seaweed
+SEAWEED_COMPOSE_FILE ?= tools/dev/seaweed-compose.yml
+SEAWEED_BUCKET ?= ai-arena-local
+SEAWEED_ENDPOINT ?= http://127.0.0.1:8333
+AWS_CLI_IMAGE ?= amazon/aws-cli:latest
 ATLAS_IMAGE ?= arigaio/atlas:$(ATLAS_VERSION)
 SQLC_IMAGE ?= sqlc/sqlc:$(SQLC_VERSION)
 ATLAS_DOCKER = docker run --rm --network host -v "$(CURDIR):/work" -w /work -v /var/run/docker.sock:/var/run/docker.sock $(ATLAS_IMAGE)
@@ -28,7 +33,7 @@ REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtim
 REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
 REVIVE_PACKAGE_DIRS = $(shell $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
-.PHONY: test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-sqlc-generate test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 export COMPOSE_BAKE = false
 
@@ -46,6 +51,20 @@ postgres-up:
 
 postgres-down:
 	docker compose -f tools/dev/postgres-compose.yml down -v
+
+seaweed-up:
+	mkdir -p "$(SEAWEED_DATA_DIR)"
+	SEAWEED_DATA_DIR="$(SEAWEED_DATA_DIR)" docker compose -f "$(SEAWEED_COMPOSE_FILE)" up -d seaweed
+
+seaweed-down:
+	SEAWEED_DATA_DIR="$(SEAWEED_DATA_DIR)" docker compose -f "$(SEAWEED_COMPOSE_FILE)" down -v
+
+seaweed-bootstrap:
+	SEAWEED_DATA_DIR="$(SEAWEED_DATA_DIR)" SEAWEED_BUCKET="$(SEAWEED_BUCKET)" SEAWEED_ENDPOINT="$(SEAWEED_ENDPOINT)" AWS_CLI_IMAGE="$(AWS_CLI_IMAGE)" ./tools/dev/seaweed-bootstrap.sh
+
+verify-local-object-storage:
+	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	ARENA_SERVICE_BASE_URL="http://127.0.0.1:$${PORT:-10000}" $(GO_ENV) $(GO) run ./tools/dev/verify-local-object-storage.go
 
 postgres-schema-apply:
 	@attempt=0; \

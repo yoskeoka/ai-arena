@@ -165,6 +165,14 @@ Artifact delivery contract:
 - download URL や delegated token は request 時に発行する derived metadata とし、永続化しない
 - completed artifact download で object bytes を `arena-service` が proxy しない
 
+Local verification note:
+
+- local contributor verification では、
+  同じ `ARENA_SERVICE_ARTIFACT_BACKEND=r2` / `ARENA_SERVICE_ARTIFACT_R2_*` env contract を
+  `SeaweedFS` の local S3-compatible endpoint へ向けて再利用してよい
+- この harness は `Cloudflare R2` 自体の代替ではなく、
+  deploy-shaped artifact write / locator / delegated download flow を local で確認する lane として扱う
+
 ## Cloudflare Pages
 
 References:

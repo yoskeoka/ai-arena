@@ -3,10 +3,9 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
@@ -43,15 +42,20 @@ type MatchDetail struct {
 
 // QueryService builds operator-facing read models from queue records and persisted artifacts.
 type QueryService struct {
-	queue QueueStore
+	queue  QueueStore
+	reader ArtifactReader
 }
 
 // NewQueryService constructs the read-side query service.
-func NewQueryService(queue QueueStore) (*QueryService, error) {
+func NewQueryService(queue QueueStore, readers ...ArtifactReader) (*QueryService, error) {
 	if queue == nil {
 		return nil, fmt.Errorf("service: queue store is required")
 	}
-	return &QueryService{queue: queue}, nil
+	reader := ArtifactReader(NewDefaultArtifactReader(nil))
+	if len(readers) > 0 && readers[0] != nil {
+		reader = readers[0]
+	}
+	return &QueryService{queue: queue, reader: reader}, nil
 }
 
 // List returns compact operator-facing rows for all known submissions.
@@ -62,7 +66,7 @@ func (s *QueryService) List(ctx context.Context) ([]ResultListItem, error) {
 	}
 	items := make([]ResultListItem, 0, len(records))
 	for _, record := range records {
-		item, _, err := buildResultListItem(record)
+		item, _, err := buildResultListItem(ctx, record, s.reader)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +81,7 @@ func (s *QueryService) Get(ctx context.Context, submissionID string) (MatchDetai
 	if err != nil {
 		return MatchDetail{}, err
 	}
-	item, summary, err := buildResultListItem(record)
+	item, summary, err := buildResultListItem(ctx, record, s.reader)
 	if err != nil {
 		return MatchDetail{}, err
 	}
@@ -94,14 +98,14 @@ func (s *QueryService) Get(ctx context.Context, submissionID string) (MatchDetai
 			detail.PlayerStderrPaths = cloneStringMap(record.Terminal.PlayerStderrPaths)
 		}
 	}
-	detail.ReplayInputs, err = buildReplayResumeAuditInputs(record, summary)
+	detail.ReplayInputs, err = buildReplayResumeAuditInputs(ctx, record, summary, s.reader)
 	if err != nil {
 		return MatchDetail{}, err
 	}
 	return detail, nil
 }
 
-func buildResultListItem(record QueueRecord) (ResultListItem, *artifacts.ResultSummary, error) {
+func buildResultListItem(ctx context.Context, record QueueRecord, reader ArtifactReader) (ResultListItem, *artifacts.ResultSummary, error) {
 	item := ResultListItem{
 		SubmissionID:   record.Submission.SubmissionID,
 		MatchID:        record.Submission.MatchID,
@@ -124,7 +128,7 @@ func buildResultListItem(record QueueRecord) (ResultListItem, *artifacts.ResultS
 	}
 	item.Error = record.Terminal.Error
 
-	summary, err := readResultSummary(record.Terminal.ResultSummaryPath)
+	summary, err := readResultSummary(ctx, reader, record.Terminal.ResultSummaryPath)
 	if err != nil {
 		return ResultListItem{}, nil, err
 	}
@@ -141,30 +145,22 @@ func buildResultListItem(record QueueRecord) (ResultListItem, *artifacts.ResultS
 	return item, summary, nil
 }
 
-func readResultSummary(path string) (*artifacts.ResultSummary, error) {
-	if path == "" || !isLocalPath(path) {
+func readResultSummary(ctx context.Context, reader ArtifactReader, locator string) (*artifacts.ResultSummary, error) {
+	if strings.TrimSpace(locator) == "" {
 		return nil, nil
 	}
-	data, err := os.ReadFile(filepath.Clean(strings.TrimPrefix(path, "file://")))
+	data, err := reader.Read(ctx, locator)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("service: read result summary %s: %w", path, err)
+		return nil, fmt.Errorf("service: read result summary %s: %w", locator, err)
 	}
 	var summary artifacts.ResultSummary
 	if err := json.Unmarshal(data, &summary); err != nil {
-		return nil, fmt.Errorf("service: decode result summary %s: %w", path, err)
+		return nil, fmt.Errorf("service: decode result summary %s: %w", locator, err)
 	}
 	return &summary, nil
-}
-
-func isLocalPath(path string) bool {
-	parsed, err := url.Parse(path)
-	if err != nil {
-		return true
-	}
-	return parsed.Scheme == "" || parsed.Scheme == "file"
 }
 
 func cloneStringMap(src map[string]string) map[string]string {

@@ -134,7 +134,7 @@ func (a *OperatorAPI) handlePresetMatches(w http.ResponseWriter, r *http.Request
 		writeError(w, statusCodeForServiceError(err), err)
 		return
 	}
-	item, _, err := buildResultListItem(record)
+	item, _, err := buildResultListItem(r.Context(), record, a.queries.reader)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

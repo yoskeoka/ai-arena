@@ -126,6 +126,8 @@ detail view 自体は stable locator を返し続けなければならない。
 minimal operator UI は detail response を受けた時点で、
 `result-summary` を primary observation entry として先頭表示し、
 残りの artifact access は secondary action として表示してよい。
+local の S3-compatible verification lane でも、
+同じ detail contract を使って stable locator と delegated download URL を確認してよい。
 
 ## Artifact Read Contract
 
@@ -152,6 +154,9 @@ initial milestone では少なくとも次を対象にしてよい:
 remote object storage lane では、`read` は backend proxy を必須にしない。
 artifact locator から provider-generated の delegated download URL / token を発行し、
 client は object backend から直接取得してよい。
+local の S3-compatible verification lane では、
+repo-owned query/read helper が object bytes を直接読めてもよいが、
+operator-facing confirmation は delegated download URL を優先して確認してよい。
 
 ## Replay / Resume / Audit Input Detail
 

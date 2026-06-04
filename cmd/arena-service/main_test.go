@@ -85,6 +85,7 @@ func TestResolvingPresetCatalogResolvesRelativeOutputDirAgainstBaseDir(t *testin
 
 	submission, err := resolvingPresetCatalog{
 		baseDir: baseDir,
+		opaque:  false,
 		next:    presets,
 	}.Build(context.Background(), service.PresetMatchRequest{PresetID: "echo-reference"})
 	if err != nil {
@@ -94,6 +95,14 @@ func TestResolvingPresetCatalogResolvesRelativeOutputDirAgainstBaseDir(t *testin
 	want := filepath.Join(baseDir, "arena-service-output")
 	if submission.OutputDir != want {
 		t.Fatalf("output_dir = %q, want %q", submission.OutputDir, want)
+	}
+}
+
+func TestResolveOutputDirKeepsOpaquePrefixForR2Lane(t *testing.T) {
+	submission := service.MatchSubmission{OutputDir: "arena-service-output"}
+	resolveOutputDir("/tmp/base", true, &submission)
+	if submission.OutputDir != "arena-service-output" {
+		t.Fatalf("output_dir = %q, want opaque prefix preserved", submission.OutputDir)
 	}
 }
 
@@ -152,7 +161,7 @@ func TestRunListGetAndReadUseQuerySurface(t *testing.T) {
 		t.Fatalf("Submit(queued) error = %v", err)
 	}
 
-	factory := func(string, time.Duration, string) (*cliApp, error) {
+	factory := func(string, time.Duration, string, artifactRuntimeConfig) (*cliApp, error) {
 		return app, nil
 	}
 
@@ -434,12 +443,16 @@ func newSharedTestCLIApp(t *testing.T) *cliApp {
 	if err != nil {
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
+	reader := service.NewDefaultArtifactReader(nil)
 	return &cliApp{
-		commands: commands,
-		queries:  queries,
-		queue:    store,
-		baseDir:  baseDir,
-		closeFn:  func() {},
+		commands:       commands,
+		queries:        queries,
+		queue:          store,
+		reader:         reader,
+		artifactAccess: service.DirectArtifactAccessIssuer{},
+		persister:      service.LocalTerminalPersister{},
+		baseDir:        baseDir,
+		closeFn:        func() {},
 	}
 }
 

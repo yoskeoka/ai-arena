@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"path"
@@ -12,7 +14,6 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
-	"github.com/yoskeoka/ai-arena/internal/platform/replay"
 )
 
 // ReplayResumeAuditInputs exposes the persisted inputs needed to replay, resume, or audit one match.
@@ -33,7 +34,7 @@ type ReplayInputVerification struct {
 	Issues     []string `json:"issues,omitempty"`
 }
 
-func buildReplayResumeAuditInputs(record QueueRecord, summary *artifacts.ResultSummary) (*ReplayResumeAuditInputs, error) {
+func buildReplayResumeAuditInputs(ctx context.Context, record QueueRecord, summary *artifacts.ResultSummary, reader ArtifactReader) (*ReplayResumeAuditInputs, error) {
 	if record.Terminal == nil || strings.TrimSpace(record.Terminal.RecordPath) == "" {
 		return nil, nil
 	}
@@ -49,7 +50,7 @@ func buildReplayResumeAuditInputs(record QueueRecord, summary *artifacts.ResultS
 		inputs.ExportedSnapshotPath = joinArtifactLocator(record.Terminal.MatchDir, artifactRef(summary, summaryPathExportedSnapshot, "exported-snapshot.json"))
 	}
 
-	verification, err := verifyReplayResumeAuditInputs(record, summary, inputs)
+	verification, err := verifyReplayResumeAuditInputs(ctx, record, summary, inputs, reader)
 	if err != nil {
 		return nil, err
 	}
@@ -86,15 +87,14 @@ func artifactRef(summary *artifacts.ResultSummary, kind summaryPathKind, fallbac
 	return fallback
 }
 
-func verifyReplayResumeAuditInputs(record QueueRecord, summary *artifacts.ResultSummary, inputs *ReplayResumeAuditInputs) (ReplayInputVerification, error) {
+func verifyReplayResumeAuditInputs(ctx context.Context, record QueueRecord, summary *artifacts.ResultSummary, inputs *ReplayResumeAuditInputs, reader ArtifactReader) (ReplayInputVerification, error) {
 	verification := ReplayInputVerification{}
-	if inputs == nil || strings.TrimSpace(inputs.RecordPath) == "" || !isLocalPath(inputs.RecordPath) {
+	if inputs == nil || strings.TrimSpace(inputs.RecordPath) == "" {
 		return verification, nil
 	}
 
 	verification.Checked = true
-	recordPath := localPath(inputs.RecordPath)
-	persistedRecord, err := replay.LoadRecord(recordPath)
+	persistedRecord, err := loadRecordFromLocator(ctx, reader, inputs.RecordPath)
 	if err != nil {
 		return verification, err
 	}
@@ -115,8 +115,8 @@ func verifyReplayResumeAuditInputs(record QueueRecord, summary *artifacts.Result
 
 	if path := strings.TrimSpace(inputs.SnapshotPath); path == "" {
 		issues = append(issues, "snapshot locator is not available")
-	} else if isLocalPath(path) {
-		snapshot, snapshotErr := replay.LoadSnapshot(localPath(path))
+	} else {
+		snapshot, snapshotErr := loadSnapshotFromLocator(ctx, reader, path)
 		if snapshotErr != nil {
 			issues = append(issues, fmt.Sprintf("snapshot artifact could not be loaded: %v", snapshotErr))
 		} else if !reflect.DeepEqual(snapshot, persistedRecord.Snapshot) {
@@ -126,8 +126,8 @@ func verifyReplayResumeAuditInputs(record QueueRecord, summary *artifacts.Result
 
 	if path := strings.TrimSpace(inputs.HistoryPath); path == "" {
 		issues = append(issues, "history locator is not available")
-	} else if isLocalPath(path) {
-		history, historyErr := replay.LoadHistory(localPath(path))
+	} else {
+		history, historyErr := loadHistoryFromLocator(ctx, reader, path)
 		if historyErr != nil {
 			issues = append(issues, fmt.Sprintf("history artifact could not be loaded: %v", historyErr))
 		} else if !reflect.DeepEqual(history, persistedRecord.EventLog) {
@@ -137,8 +137,8 @@ func verifyReplayResumeAuditInputs(record QueueRecord, summary *artifacts.Result
 
 	if path := strings.TrimSpace(inputs.ExportedSnapshotPath); path == "" {
 		issues = append(issues, "exported snapshot locator is not available")
-	} else if isLocalPath(path) {
-		exportedSnapshot, exportedSnapshotErr := replay.LoadExportedSnapshot(localPath(path))
+	} else {
+		exportedSnapshot, exportedSnapshotErr := loadExportedSnapshotFromLocator(ctx, reader, path)
 		if exportedSnapshotErr != nil {
 			issues = append(issues, fmt.Sprintf("exported snapshot artifact could not be loaded: %v", exportedSnapshotErr))
 		} else if !reflect.DeepEqual(exportedSnapshot, persistedRecord.ExportedSnapshot) {
@@ -235,4 +235,47 @@ func locatorBase(value string) string {
 		return path.Base(value)
 	}
 	return path.Base(parsed.Path)
+}
+
+func loadRecordFromLocator(ctx context.Context, reader ArtifactReader, locator string) (match.Record, error) {
+	var record match.Record
+	if err := readJSONArtifact(ctx, reader, locator, &record); err != nil {
+		return match.Record{}, err
+	}
+	return record, nil
+}
+
+func loadSnapshotFromLocator(ctx context.Context, reader ArtifactReader, locator string) (game.Snapshot, error) {
+	var snapshot game.Snapshot
+	if err := readJSONArtifact(ctx, reader, locator, &snapshot); err != nil {
+		return game.Snapshot{}, err
+	}
+	return snapshot, nil
+}
+
+func loadExportedSnapshotFromLocator(ctx context.Context, reader ArtifactReader, locator string) (game.ExportedSnapshot, error) {
+	var snapshot game.ExportedSnapshot
+	if err := readJSONArtifact(ctx, reader, locator, &snapshot); err != nil {
+		return game.ExportedSnapshot{}, err
+	}
+	return snapshot, nil
+}
+
+func loadHistoryFromLocator(ctx context.Context, reader ArtifactReader, locator string) ([]match.Event, error) {
+	var events []match.Event
+	if err := readJSONArtifact(ctx, reader, locator, &events); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func readJSONArtifact(ctx context.Context, reader ArtifactReader, locator string, target any) error {
+	data, err := reader.Read(ctx, locator)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("decode artifact %s: %w", locator, err)
+	}
+	return nil
 }

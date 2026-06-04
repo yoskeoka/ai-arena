@@ -1,0 +1,13 @@
+services:
+  seaweed:
+    image: chrislusf/seaweedfs:4.31
+    command: "mini -dir=/data"
+    environment:
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: secret
+    ports:
+      - "8333:8333"
+      - "8888:8888"
+      - "9333:9333"
+    volumes:
+      - ${SEAWEED_DATA_DIR:?set SEAWEED_DATA_DIR}:/data
