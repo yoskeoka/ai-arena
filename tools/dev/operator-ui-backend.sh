@@ -27,7 +27,6 @@ case "$mode" in
     export ARENA_SERVICE_PRESET_CONFIG="${ARENA_SERVICE_PRESET_CONFIG:-./config/platform-service/presets.operator-ui-file-backed.json}"
     ;;
   postgres)
-    rm -rf "$repo_root/.local/seaweed"
     export AI_ARENA_PG_TEST_DSN="${AI_ARENA_PG_TEST_DSN:-postgres://arena:arena@127.0.0.1:5432/arena_service?sslmode=disable}"
     export AI_ARENA_PG_ATLAS_DEV_DSN="${AI_ARENA_PG_ATLAS_DEV_DSN:-postgres://arena:arena@127.0.0.1:5432/postgres?sslmode=disable}"
     export ARENA_SERVICE_POSTGRES_DSN="${ARENA_SERVICE_POSTGRES_DSN:-$AI_ARENA_PG_TEST_DSN}"
@@ -38,6 +37,9 @@ case "$mode" in
     export ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID="${ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID:-admin}"
     export ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY="${ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY:-secret}"
     export SEAWEED_MANAGED="${SEAWEED_MANAGED:-compose}"
+    if [ "$SEAWEED_MANAGED" = "compose" ]; then
+      rm -rf "$repo_root/.local/seaweed"
+    fi
     make postgres-schema-apply
     make seaweed-bootstrap
     ;;
