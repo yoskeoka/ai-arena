@@ -55,6 +55,10 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: operator-ui
 
+      - name: Install Playwright ffmpeg helper
+        run: pnpm exec playwright install ffmpeg
+        working-directory: operator-ui
+
       - name: Run file-backed browser lane
         run: pnpm run verify:ci:file-backed
         working-directory: operator-ui
@@ -115,6 +119,13 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: operator-ui
 
+      - name: Install Playwright ffmpeg helper
+        run: pnpm exec playwright install ffmpeg
+        working-directory: operator-ui
+
+      - name: Start SeaweedFS harness
+        run: make seaweed-up
+
       - name: Run Postgres browser lane
         run: pnpm run verify:ci:postgres
         working-directory: operator-ui
@@ -125,6 +136,7 @@ jobs:
           OPERATOR_UI_BROWSER_CHANNEL: chrome
           OPERATOR_UI_ARTIFACT_DIR: ./test-results/postgres
           OPERATOR_UI_REPORT_DIR: ./playwright-report/postgres
+          SEAWEED_MANAGED: external
 
       - name: Upload Postgres browser artifacts
         if: failure()

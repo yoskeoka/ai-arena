@@ -6,19 +6,30 @@ data_dir=${SEAWEED_DATA_DIR:-"$repo_root/.local/seaweed"}
 bucket=${SEAWEED_BUCKET:-ai-arena-local}
 endpoint=${SEAWEED_ENDPOINT:-http://127.0.0.1:8333}
 aws_cli_image=${AWS_CLI_IMAGE:-amazon/aws-cli:2}
+seaweed_managed=${SEAWEED_MANAGED:-compose}
 
-case "$data_dir" in
-  ""|"/")
-    echo "refusing to reset unsafe SEAWEED_DATA_DIR: $data_dir" >&2
+case "$seaweed_managed" in
+  compose)
+    case "$data_dir" in
+      ""|"/")
+        echo "refusing to reset unsafe SEAWEED_DATA_DIR: $data_dir" >&2
+        exit 1
+        ;;
+    esac
+
+    SEAWEED_DATA_DIR="$data_dir" docker compose -f "$repo_root/tools/dev/seaweed-compose.yml" down -v >/dev/null 2>&1 || true
+    rm -rf "$data_dir"
+    mkdir -p "$data_dir"
+
+    SEAWEED_DATA_DIR="$data_dir" docker compose -f "$repo_root/tools/dev/seaweed-compose.yml" up -d seaweed
+    ;;
+  external)
+    ;;
+  *)
+    echo "unsupported SEAWEED_MANAGED mode: $seaweed_managed" >&2
     exit 1
     ;;
 esac
-
-SEAWEED_DATA_DIR="$data_dir" docker compose -f "$repo_root/tools/dev/seaweed-compose.yml" down -v >/dev/null 2>&1 || true
-rm -rf "$data_dir"
-mkdir -p "$data_dir"
-
-SEAWEED_DATA_DIR="$data_dir" docker compose -f "$repo_root/tools/dev/seaweed-compose.yml" up -d seaweed
 
 attempt=0
 until curl -sS -o /dev/null "$endpoint/"; do
@@ -30,14 +41,23 @@ until curl -sS -o /dev/null "$endpoint/"; do
   sleep 1
 done
 
-docker run --rm --network host \
+if ! docker run --rm --network host \
   -e AWS_ACCESS_KEY_ID=admin \
   -e AWS_SECRET_ACCESS_KEY=secret \
   "$aws_cli_image" \
-  s3api create-bucket \
+  s3api head-bucket \
   --bucket "$bucket" \
   --endpoint-url "$endpoint" \
-  --region us-east-1 >/dev/null
+  --region us-east-1 >/dev/null 2>&1; then
+  docker run --rm --network host \
+    -e AWS_ACCESS_KEY_ID=admin \
+    -e AWS_SECRET_ACCESS_KEY=secret \
+    "$aws_cli_image" \
+    s3api create-bucket \
+    --bucket "$bucket" \
+    --endpoint-url "$endpoint" \
+    --region us-east-1 >/dev/null
+fi
 
 if [ "${SEAWEED_SEED_FILE:-}" != "" ] && [ "${SEAWEED_SEED_KEY:-}" != "" ]; then
   docker run --rm --network host \
