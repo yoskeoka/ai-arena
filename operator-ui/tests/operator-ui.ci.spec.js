@@ -1,12 +1,23 @@
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 const backendBaseURL = `http://127.0.0.1:${process.env.OPERATOR_UI_BACKEND_PORT ?? "10000"}`;
 const presetId = process.env.OPERATOR_UI_PRESET_ID ?? "echo-reference";
-const expectsDelegatedDownload = process.env.OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD === "1";
+const delegatedDownloadExpectation = process.env.OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD ?? "0";
+const captureArtifacts = process.env.OPERATOR_UI_CAPTURE_ARTIFACTS === "1";
+const artifactDir = process.env.OPERATOR_UI_ARTIFACT_DIR ?? "./test-results";
 
 test.setTimeout(90_000);
 
-test("ci operator UI browser lane covers queue, active, completed detail, and artifact access", async ({ page, request }) => {
+test("service-backed operator UI browser lane covers queue, active, completed detail, and artifact access", async ({
+  context,
+  page,
+  request,
+}) => {
+  if (captureArtifacts) {
+    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+  }
+
   const health = await request.get(`${backendBaseURL}/healthz`);
   expect(health.ok()).toBeTruthy();
 
@@ -65,11 +76,23 @@ test("ci operator UI browser lane covers queue, active, completed detail, and ar
   await expect(resultSummaryArtifact.getByText(completedRecord.result_summary_path ?? "", { exact: true })).toBeVisible();
 
   const downloadLink = resultSummaryArtifact.getByRole("link", { name: "open delegated download" });
+  const expectsDelegatedDownload =
+    delegatedDownloadExpectation === "auto"
+      ? (completedRecord.result_summary_path ?? "").startsWith("s3://")
+      : delegatedDownloadExpectation === "1";
   if (expectsDelegatedDownload) {
     await expect(downloadLink).toBeVisible();
     await expect(downloadLink).toHaveAttribute("href", /http:\/\//);
   } else {
     await expect(downloadLink).toHaveCount(0);
+  }
+
+  if (captureArtifacts) {
+    await page.screenshot({
+      fullPage: true,
+      path: path.join(artifactDir, "completed-detail.png"),
+    });
+    await context.tracing.stop({ path: path.join(artifactDir, "operator-ui-flow.zip") });
   }
 });
 

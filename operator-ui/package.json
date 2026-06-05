@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:e2e": "NODE_OPTIONS=--disable-warning=DEP0205 playwright test",
     "verify:local": "OPERATOR_UI_TEST_SCENARIO=local NODE_OPTIONS=--disable-warning=DEP0205 playwright test",
+    "verify:local:real": "OPERATOR_UI_TEST_SCENARIO=real-local OPERATOR_UI_BACKEND_MODE=real-local OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD=auto OPERATOR_UI_CAPTURE_ARTIFACTS=1 OPERATOR_UI_ARTIFACT_DIR=./test-results/real-local OPERATOR_UI_REPORT_DIR=./playwright-report/real-local NODE_OPTIONS=--disable-warning=DEP0205 playwright test",
     "verify:ci:file-backed": "OPERATOR_UI_TEST_SCENARIO=ci OPERATOR_UI_BACKEND_MODE=file-backed OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD=0 NODE_OPTIONS=--disable-warning=DEP0205 playwright test",
     "verify:ci:postgres": "OPERATOR_UI_TEST_SCENARIO=ci OPERATOR_UI_BACKEND_MODE=postgres OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD=1 NODE_OPTIONS=--disable-warning=DEP0205 playwright test"
   },
