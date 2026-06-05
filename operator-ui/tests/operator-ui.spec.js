@@ -14,10 +14,13 @@ test("local operator UI browser lane covers queue, active, completed detail, and
 
   const activePanel = page.getByTestId("operator-panel-active-matches");
   const completedPanel = page.getByTestId("operator-panel-completed-matches");
-  const detail = page.getByTestId("match-detail-sub-completed-local");
+  const completedRow = completedPanel.getByTestId("match-row-sub-completed-local");
 
   await expect(activePanel.getByTestId("match-row-sub-active-queued")).toBeVisible();
-  await expect(completedPanel.getByTestId("match-row-sub-completed-local")).toBeVisible();
+  await expect(completedRow).toBeVisible();
+  await completedRow.click();
+
+  const detail = page.getByTestId("match-detail-sub-completed-local");
   await expect(detail).toBeVisible();
   await expect(detail.getByRole("heading", { name: "match-completed-local", exact: true })).toBeVisible();
   await expect(detail.getByText("sub-completed-local", { exact: true })).toBeVisible();

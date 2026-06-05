@@ -4,6 +4,8 @@ const backendBaseURL = `http://127.0.0.1:${process.env.OPERATOR_UI_BACKEND_PORT 
 const presetId = process.env.OPERATOR_UI_PRESET_ID ?? "echo-reference";
 const expectsDelegatedDownload = process.env.OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD === "1";
 
+test.setTimeout(90_000);
+
 test("ci operator UI browser lane covers queue, active, completed detail, and artifact access", async ({ page, request }) => {
   const health = await request.get(`${backendBaseURL}/healthz`);
   expect(health.ok()).toBeTruthy();

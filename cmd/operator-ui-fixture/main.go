@@ -179,13 +179,7 @@ func seedCompletedRecord(store *service.InMemoryQueueStore, summaryPath string) 
 	}
 	record.State = service.StateCompleted
 	record.Terminal = &service.TerminalArtifacts{
-		MatchDir:          "https://fixture.local/artifacts/match-completed-local",
-		RecordPath:        "https://fixture.local/artifacts/match-completed-local/record.json",
 		ResultSummaryPath: summaryPath,
-		PlayerStderrPaths: map[string]string{
-			"p1": "https://fixture.local/artifacts/match-completed-local/stderr-p1.log",
-			"p2": "https://fixture.local/artifacts/match-completed-local/stderr-p2.log",
-		},
 		MatchStatus: game.StatusCompleted,
 	}
 	return store.Update(ctx, record)

@@ -5,6 +5,7 @@ const artifactDir = process.env.OPERATOR_UI_ARTIFACT_DIR ?? "./test-results";
 const reportDir = process.env.OPERATOR_UI_REPORT_DIR ?? "./playwright-report";
 const backendPort = process.env.OPERATOR_UI_BACKEND_PORT ?? "10000";
 const frontendPort = process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173";
+const browserChannel = testScenario === "ci" ? process.env.OPERATOR_UI_BROWSER_CHANNEL ?? "chrome" : undefined;
 
 export default defineConfig({
   testDir: "./tests",
@@ -20,7 +21,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], ...(browserChannel ? { channel: browserChannel } : {}) },
     },
   ],
   webServer: [
@@ -39,7 +40,7 @@ export default defineConfig({
         testScenario === "ci"
           ? "./tools/dev/operator-ui-frontend.sh"
           : `pnpm_config_store_dir=/tmp/pnpm-store-ai-arena pnpm exec vite --host 127.0.0.1 --port ${frontendPort} --strictPort`,
-      cwd: "..",
+      cwd: testScenario === "ci" ? ".." : ".",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       url: `http://127.0.0.1:${frontendPort}`,

@@ -24,6 +24,9 @@ on:
       - "operator-ui/**"
       - "tools/dev/**"
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   operator-ui-browser-file-backed:
     runs-on: ubuntu-latest
@@ -52,15 +55,12 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: operator-ui
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-        working-directory: operator-ui
-
       - name: Run file-backed browser lane
         run: pnpm run verify:ci:file-backed
         working-directory: operator-ui
         env:
           CI: "true"
+          OPERATOR_UI_BROWSER_CHANNEL: chrome
           OPERATOR_UI_ARTIFACT_DIR: ./test-results/file-backed
           OPERATOR_UI_REPORT_DIR: ./playwright-report/file-backed
 
@@ -115,10 +115,6 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: operator-ui
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-        working-directory: operator-ui
-
       - name: Run Postgres browser lane
         run: pnpm run verify:ci:postgres
         working-directory: operator-ui
@@ -126,6 +122,7 @@ jobs:
           CI: "true"
           AI_ARENA_PG_TEST_DSN: postgres://arena:arena@127.0.0.1:5432/arena_service?sslmode=disable
           AI_ARENA_PG_ATLAS_DEV_DSN: postgres://arena:arena@127.0.0.1:5432/postgres?sslmode=disable
+          OPERATOR_UI_BROWSER_CHANNEL: chrome
           OPERATOR_UI_ARTIFACT_DIR: ./test-results/postgres
           OPERATOR_UI_REPORT_DIR: ./playwright-report/postgres
 
