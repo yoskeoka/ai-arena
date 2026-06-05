@@ -185,11 +185,11 @@ type cliApp struct {
 }
 
 type artifactRuntimeConfig struct {
-	backend           string
-	r2Bucket          string
-	r2Endpoint        string
-	r2AccessKeyID     string
-	r2SecretAccessKey string
+	backend         string
+	bucket          string
+	endpoint        string
+	accessKeyID     string
+	secretAccessKey string
 }
 
 func (c artifactRuntimeConfig) usesOpaqueOutputDir() bool {
@@ -443,11 +443,11 @@ func resolveBaseDirPath(baseDir, value string) string {
 
 func loadArtifactRuntimeFromEnv() (artifactRuntimeConfig, error) {
 	cfg := artifactRuntimeConfig{
-		backend:           strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_BACKEND")),
-		r2Bucket:          strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_BUCKET")),
-		r2Endpoint:        strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT")),
-		r2AccessKeyID:     strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID")),
-		r2SecretAccessKey: strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY")),
+		backend:         strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_BACKEND")),
+		bucket:          strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_BUCKET")),
+		endpoint:        strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT")),
+		accessKeyID:     strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID")),
+		secretAccessKey: strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY")),
 	}
 	if cfg.backend == "" {
 		cfg.backend = "filesystem"
@@ -456,7 +456,7 @@ func loadArtifactRuntimeFromEnv() (artifactRuntimeConfig, error) {
 	case "filesystem":
 		return cfg, nil
 	case "r2":
-		if cfg.r2Bucket == "" || cfg.r2Endpoint == "" || cfg.r2AccessKeyID == "" || cfg.r2SecretAccessKey == "" {
+		if cfg.bucket == "" || cfg.endpoint == "" || cfg.accessKeyID == "" || cfg.secretAccessKey == "" {
 			return artifactRuntimeConfig{}, fmt.Errorf("ARENA_SERVICE_ARTIFACT_R2_BUCKET, ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT, ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID, and ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY are required when ARENA_SERVICE_ARTIFACT_BACKEND=r2")
 		}
 		return cfg, nil
@@ -472,10 +472,10 @@ func newArtifactRuntime(ctx context.Context, cfg artifactRuntimeConfig) (service
 		return reader, service.DirectArtifactAccessIssuer{}, service.LocalTerminalPersister{}, nil
 	case "r2":
 		store, err := service.NewS3ArtifactStore(ctx, service.S3ArtifactConfig{
-			Bucket:          cfg.r2Bucket,
-			Endpoint:        cfg.r2Endpoint,
-			AccessKeyID:     cfg.r2AccessKeyID,
-			SecretAccessKey: cfg.r2SecretAccessKey,
+			Bucket:          cfg.bucket,
+			Endpoint:        cfg.endpoint,
+			AccessKeyID:     cfg.accessKeyID,
+			SecretAccessKey: cfg.secretAccessKey,
 		})
 		if err != nil {
 			return nil, nil, nil, err
