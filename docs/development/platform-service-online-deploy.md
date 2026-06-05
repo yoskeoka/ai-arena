@@ -210,6 +210,9 @@ Current operational note:
 - `pnpm` v11 の build-script gate により、`operator-ui/pnpm-workspace.yaml` で
   `esbuild` build script を明示許可する
 - Pages 側 environment variable 名は未使用でよい。Pages Functions 導入が必要になったら追記する
+- dedicated browser CI lane も同じ app root / install / build contract を共有してよい。
+  Pages deploy lane が drift しないよう、browser verification で使う frontend install/build command は
+  `operator-ui/` の canonical `pnpm` surface に揃える
 
 Direct Upload contract:
 

@@ -87,3 +87,12 @@ checked-in generated code は comment policy の対象外としてよい。
   `internal/platform/service/postgres/sqlc/` の drift がないことを確認する
 - CI は module/build/tool cache を持ってよいが、品質判定の入口は Makefile targets に揃える
 - formatter drift は test failure ではなく lint failure として扱う
+
+## Dedicated Browser Verification
+
+- `operator-ui` の browser verification は default `go-ci` workflow へ入れない
+- file-backed browser lane と Postgres + S3-compatible browser lane は dedicated GitHub Actions workflow/job に分離する
+- dedicated browser lane は `make test` / `make test-postgres` の代替ではなく、operator UI regression を補足する追加 gate として扱う
+- file-backed browser lane は actual `arena-service` を filesystem artifact backend + in-memory queue store で起動してよい
+- durable browser lane は actual `arena-service` を Postgres metadata backend + S3-compatible artifact backend で起動し、schema apply と object-storage bootstrap を browser run 前に完了しなければならない
+- dedicated browser lane の canonical frontend command は `operator-ui/` の `pnpm` scripts とし、failure artifact は Playwright output と backend/frontend logs を upload する
