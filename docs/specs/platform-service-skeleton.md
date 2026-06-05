@@ -87,8 +87,19 @@ operator UI verification も同じく lane を分けて扱う。
 - local browser lane:
   contributor または AI agent が同一環境で backend、frontend、browser automation を起動してよい。
   この lane は file-backed / in-memory baseline を default としてよい
+- file-backed browser CI lane:
+  repo-owned browser automation command が actual `arena-service` と `operator-ui` を起動し、
+  file-backed / in-memory backend shape で minimal operator regression を継続実行してよい
 - durable browser lane:
-  Postgres-backed backend と CI orchestration を伴う follow-up lane として分離してよい
+  Postgres-backed metadata backend と S3-compatible artifact backend を起動し、
+  file-backed lane と同じ acceptance scenario を dedicated CI job で再利用してよい
+
+browser CI lane 群は default `go-ci` gate と分離した dedicated workflow/job 名で扱う。
+`make test`、`make test-postgres`、`make lint` の fast gate に browser 起動を直結してはならない。
+CI の browser lane は actual `arena-service` を起動してよく、
+fixture-only backend を production-shape verification の正本にしてはならない。
+schema apply、object storage bootstrap、backend/frontend の起動、browser verification、
+failure artifact upload の責務境界は workflow helper 側で固定してよい。
 
 local browser lane の canonical contract は ordinary Playwright harness のような
 repo-owned browser automation command とする。

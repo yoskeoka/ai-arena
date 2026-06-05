@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test:e2e": "NODE_OPTIONS=--disable-warning=DEP0205 playwright test",
-    "verify:local": "NODE_OPTIONS=--disable-warning=DEP0205 playwright test"
+    "verify:local": "OPERATOR_UI_TEST_SCENARIO=local NODE_OPTIONS=--disable-warning=DEP0205 playwright test",
+    "verify:ci:file-backed": "OPERATOR_UI_TEST_SCENARIO=ci OPERATOR_UI_BACKEND_MODE=file-backed OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD=0 NODE_OPTIONS=--disable-warning=DEP0205 playwright test",
+    "verify:ci:postgres": "OPERATOR_UI_TEST_SCENARIO=ci OPERATOR_UI_BACKEND_MODE=postgres OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD=1 NODE_OPTIONS=--disable-warning=DEP0205 playwright test"
   },
   "dependencies": {
     "react": "19.1.0",

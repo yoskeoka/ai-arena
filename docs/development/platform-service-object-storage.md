@@ -86,3 +86,5 @@ seed object が必要な場合も、
 必ず S3-compatible API client 経由で投入する。
 
 repo-local helper は `tools/dev/seaweed-bootstrap.sh` を正本にする。
+bootstrap helper が Dockerized AWS CLI を使う場合は、AWS 公式が推奨する
+`public.ecr.aws/aws-cli/aws-cli:latest` を default image にしてよい。

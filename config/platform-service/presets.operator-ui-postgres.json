@@ -1,0 +1,23 @@
+{
+  "presets": [
+    {
+      "preset_id": "echo-reference",
+      "game": {
+        "game_id": "echo-count",
+        "game_version": "2.0.0",
+        "ruleset_version": "phase2-simultaneous-2turn"
+      },
+      "players": [
+        {
+          "player_id": "p1",
+          "artifact_ref": "./testdata/ai/echo/echo-ai-2turn"
+        },
+        {
+          "player_id": "p2",
+          "artifact_ref": "./testdata/ai/echo/echo-ai-2turn"
+        }
+      ],
+      "output_dir": "./tmp/operator-ui-browser-postgres"
+    }
+  ]
+}
