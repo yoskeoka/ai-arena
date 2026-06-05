@@ -7,6 +7,13 @@ bucket=${SEAWEED_BUCKET:-ai-arena-local}
 endpoint=${SEAWEED_ENDPOINT:-http://127.0.0.1:8333}
 aws_cli_image=${AWS_CLI_IMAGE:-amazon/aws-cli:2}
 
+case "$data_dir" in
+  ""|"/")
+    echo "refusing to reset unsafe SEAWEED_DATA_DIR: $data_dir" >&2
+    exit 1
+    ;;
+esac
+
 SEAWEED_DATA_DIR="$data_dir" docker compose -f "$repo_root/tools/dev/seaweed-compose.yml" down -v >/dev/null 2>&1 || true
 rm -rf "$data_dir"
 mkdir -p "$data_dir"

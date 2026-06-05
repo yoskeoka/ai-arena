@@ -27,7 +27,8 @@ type resultSummary struct {
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	baseURL := strings.TrimRight(os.Getenv("ARENA_SERVICE_BASE_URL"), "/")
 	if baseURL == "" {
 		baseURL = "http://127.0.0.1:10000"
@@ -45,8 +46,7 @@ func main() {
 		exitf("enqueue preset match: %v", err)
 	}
 
-	deadline := time.Now().Add(30 * time.Second)
-	for time.Now().Before(deadline) {
+	for ctx.Err() == nil {
 		detail, err := fetchDetail(ctx, baseURL, submissionID)
 		if err == nil && detail.SubmissionID == submissionID {
 			access, ok := detail.ArtifactAccess["result-summary"]

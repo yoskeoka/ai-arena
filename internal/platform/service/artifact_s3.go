@@ -167,7 +167,11 @@ func NewS3ArtifactAccessIssuer(store *S3ArtifactStore) *S3ArtifactAccessIssuer {
 
 // Issue derives artifact access metadata for the known locators.
 func (i *S3ArtifactAccessIssuer) Issue(ctx context.Context, detail MatchDetail) (map[string]ArtifactAccessMetadata, error) {
-	base, err := i.fallback.Issue(ctx, detail)
+	fallback := ArtifactAccessIssuer(DirectArtifactAccessIssuer{})
+	if i != nil && i.fallback != nil {
+		fallback = i.fallback
+	}
+	base, err := fallback.Issue(ctx, detail)
 	if err != nil {
 		return nil, err
 	}
