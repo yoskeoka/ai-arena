@@ -208,7 +208,7 @@ func readStdout(stdout io.Reader, incoming chan<- Message, done chan<- struct{})
 	for {
 		resp, err := dec.DecodeResponse()
 		if err != nil {
-			if errors.Is(err, io.EOF) {
+			if errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed) {
 				return
 			}
 			incoming <- Message{Err: err}

@@ -186,6 +186,7 @@ func TestHelperProcess(t *testing.T) {
 	case "runtime-echo":
 		fmt.Fprintln(os.Stderr, "runtime stderr")
 		fmt.Println(`{"jsonrpc":"2.0","id":"boot","result":{"ready":true}}`)
+		time.Sleep(10 * time.Millisecond)
 	case "runtime-hang":
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, os.Interrupt)
