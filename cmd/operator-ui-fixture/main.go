@@ -180,7 +180,7 @@ func seedCompletedRecord(store *service.InMemoryQueueStore, summaryPath string) 
 	record.State = service.StateCompleted
 	record.Terminal = &service.TerminalArtifacts{
 		ResultSummaryPath: summaryPath,
-		MatchStatus: game.StatusCompleted,
+		MatchStatus:       game.StatusCompleted,
 	}
 	return store.Update(ctx, record)
 }
