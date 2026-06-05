@@ -5,9 +5,17 @@
 `preset queue`、`active/completed visibility`、`completed detail`、`artifact access entry`
 の回帰を自己確認できるようにすることにある。
 
+local verification は 2 lane で扱う。
+
+- fixture local regression lane:
+  `0068` の軽量 lane。fixture backend を起動し、最小回帰を素早く確認する
+- real local inspection/capture lane:
+  `0070` の実運用寄り lane。actual `arena-service` と actual `operator-ui` を起動し、
+  preset queue から completed detail までを確認し、review artifact を保存する
+
 ## Scope
 
-この local lane が確認するもの:
+この local verification が確認するもの:
 
 - backend の `/healthz` 応答
 - preset queue panel が visible で、1 action で enqueue できること
@@ -15,13 +23,13 @@
 - completed matches panel と completed detail が visible であること
 - completed detail の `result_summary` と delegated artifact access entry が表示されること
 
-この local lane が確認しないもの:
+この local verification が確認しないもの:
 
 - Postgres-backed durable backend
 - GitHub Actions 上の browser CI orchestration
 - production/staging deploy 済み service との疎通
 
-## Canonical command
+## Fixture local regression lane
 
 初回だけ Playwright browser を install する。
 
@@ -34,7 +42,7 @@ pnpm exec playwright install chromium
 Debian/Ubuntu 系で host library もまとめて入れるなら、`pnpm exec playwright install --with-deps chromium`
 を使ってよい。
 
-以後の local verification は次でよい。
+以後の fixture local verification は次でよい。
 
 ```sh
 cd operator-ui
@@ -56,6 +64,42 @@ fixture backend は repo 内の Go service package を使い、次の状態を s
 つまり、この lane は local backend/frontend/browser を同一環境で起動するが、
 durable Postgres lane までは持ち込まない。
 
+## Real local inspection/capture lane
+
+Postgres harness と `SeaweedFS` が使える local 環境では、`0070` lane を次で起動してよい。
+
+```sh
+make postgres-up
+cd operator-ui
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+pnpm run verify:local:real
+```
+
+この command は次を自動で行う。
+
+- local compose 管理の Postgres を reset-first で張り直す
+- `make postgres-up`
+- `make postgres-schema-apply`
+- local object storage が bootstrap できるなら `make seaweed-bootstrap`
+- `make render-build`
+- `PORT=10000 make render-start`
+- `pnpm exec vite --host 127.0.0.1 --port 4173 --strictPort`
+- Playwright browser verification
+
+queue/state backend は Postgres を正本にする。
+artifact backend は local object storage を優先する。
+`SeaweedFS` bootstrap ができない環境では、artifact backend だけ file-backed fallback を使ってよい。
+
+default DSN は local compose harness に合わせて次を使う。
+
+```text
+postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable
+```
+
+CI と同じ 5432 port の外部 Postgres を使いたい場合は、
+`AI_ARENA_PG_TEST_DSN` と `AI_ARENA_PG_ATLAS_DEV_DSN` を override してよい。
+
 ## Observation hooks
 
 browser automation は role / visible text を第一選択とする。
@@ -70,9 +114,9 @@ browser automation は role / visible text を第一選択とする。
 - `match-detail-<submission-id>`
 - `artifact-entry-<artifact-kind>`
 
-## Failure artifacts
+## Artifact paths
 
-Playwright の failure artifact は `operator-ui/` 配下に出す。
+fixture local lane の failure artifact は `operator-ui/` 配下に出す。
 
 - screenshots:
   `operator-ui/test-results/`
@@ -81,7 +125,21 @@ Playwright の failure artifact は `operator-ui/` 配下に出す。
 - HTML report:
   `operator-ui/playwright-report/`
 
+real local inspection/capture lane は success 時にも review artifact を保存する。
+
+- completed detail screenshot:
+  `operator-ui/test-results/real-local/completed-detail.png`
+- Playwright trace:
+  `operator-ui/test-results/real-local/operator-ui-flow.zip`
+- backend log:
+  `operator-ui/test-results/real-local/backend.log`
+- frontend log:
+  `operator-ui/test-results/real-local/frontend.log`
+- HTML report:
+  `operator-ui/playwright-report/real-local/`
+
 artifact は git へ commit しない。
+PR review へ添付する screenshot / trace / log は、まずこの path 群から取る。
 
 ## Optional agent tactic
 
