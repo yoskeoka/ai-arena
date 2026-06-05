@@ -54,10 +54,6 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: operator-ui
 
-      - name: Install Playwright ffmpeg helper
-        run: pnpm exec playwright install ffmpeg
-        working-directory: operator-ui
-
       - name: Run file-backed browser lane
         run: pnpm run verify:ci:file-backed
         working-directory: operator-ui
@@ -115,10 +111,6 @@ jobs:
 
       - name: Install operator UI dependencies
         run: pnpm install --frozen-lockfile
-        working-directory: operator-ui
-
-      - name: Install Playwright ffmpeg helper
-        run: pnpm exec playwright install ffmpeg
         working-directory: operator-ui
 
       - name: Start SeaweedFS harness
