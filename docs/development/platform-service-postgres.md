@@ -103,3 +103,6 @@ file-backed default lane の `make test` job には Postgres DSN を注入しな
 
 artifact lane は引き続き local filesystem を使う。
 この harness が追加しているのは、service write model の durable metadata backend だけである。
+
+deploy-shaped artifact verification を併用するときは、
+`docs/development/platform-service-object-storage.md` の `SeaweedFS` harness を組み合わせる。

@@ -92,6 +92,11 @@ first deploy target は `Cloudflare Pages + Render + Neon Postgres + Cloudflare 
 
 local CLI と CI では、同じ Postgres write contract を Docker ベースの local database で検証してよい。
 artifact lane は引き続き local filesystem を default としてよい。
+deploy-shaped local verification では、
+artifact lane に `SeaweedFS` のような S3-compatible object storage を使ってよい。
+この lane の目的は provider-specific 完全互換の証明ではなく、
+write model が保持する stable locator と、
+request 時に派生する delegated download metadata の repo contract を確認することに置く。
 
 ## Schema Management Contract
 
