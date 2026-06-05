@@ -51,9 +51,9 @@ case "$mode" in
   real-local)
     export POSTGRES_MANAGED="${POSTGRES_MANAGED:-compose}"
     if [ "$POSTGRES_MANAGED" = "compose" ]; then
-      make postgres-down
+      make postgres-down || true
+      make postgres-up
     fi
-    make postgres-up
     export AI_ARENA_PG_TEST_DSN="${AI_ARENA_PG_TEST_DSN:-postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable}"
     export AI_ARENA_PG_ATLAS_DEV_DSN="${AI_ARENA_PG_ATLAS_DEV_DSN:-postgres://arena:arena@127.0.0.1:55432/postgres?sslmode=disable}"
     export ARENA_SERVICE_POSTGRES_DSN="${ARENA_SERVICE_POSTGRES_DSN:-$AI_ARENA_PG_TEST_DSN}"
