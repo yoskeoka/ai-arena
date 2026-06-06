@@ -50,9 +50,11 @@ export function CompletedDetailPanel({
               <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-teal">Summary</h3>
               {detail.result_summary ? (
                 <div className="mt-3 space-y-3 text-sm">
-                  <Meta label="Status" value={detail.result_summary.status} />
-                  <Meta label="Turn" value={String(detail.result_summary.turn)} />
-                  <Meta label="Error" value={detail.result_summary.error ?? "none"} />
+                  <dl className="grid gap-3">
+                    <Meta label="Status" value={detail.result_summary.status} />
+                    <Meta label="Turn" value={String(detail.result_summary.turn)} />
+                    <Meta label="Error" value={detail.result_summary.error ?? "none"} />
+                  </dl>
                   <div>
                     <p className="font-medium">Placements</p>
                     <ul className="mt-2 space-y-2">
