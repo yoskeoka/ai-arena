@@ -78,7 +78,7 @@ current `operator-ui` を route-first / page-local state / shared-minimal の形
 - depends on: `0068-platform-online-foundation-03-05-operator-ui-verification-01-local-agent-browser-loop.md`
 - depends on: `0069-platform-online-foundation-03-05-operator-ui-verification-02-ci-postgres-browser-lane.md`
 - depends on: `0070-platform-online-foundation-03-05-operator-ui-verification-03-real-local-browser-operator-lane.md`
-- may inform: `0067-platform-online-foundation-03-04-matchmaking-ranking-follow-up.md`
+- informs: `0067-platform-online-foundation-03-04-matchmaking-ranking-follow-up.md`
 
 ## Risks and Mitigations
 
