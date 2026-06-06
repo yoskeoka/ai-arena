@@ -32,6 +32,7 @@ artifact access の扱いだけを定義する。
 
 ## 参照関係
 
+- `docs/specs/platform-frontend-architecture.md`: broader frontend の route / shared / API / auth boundary の正本
 - `docs/specs/platform-service-operator-api.md`: operator-facing HTTP route の正本
 - `docs/specs/platform-service-read-model.md`: compact row / detail view の正本
 - `docs/specs/platform-service-skeleton.md`: first landing topology と Pages 配置方針の正本
@@ -40,10 +41,14 @@ artifact access の扱いだけを定義する。
 
 first landing の operator UI は `Cloudflare Pages` から配信する static app とする。
 
+この surface は broader frontend の `operator` page family に属する 1 route / 1 page として扱う。
+
 - rendering は browser 上の client-side application で完結してよい
 - data fetch は operator-facing HTTP API へ直接行う
 - server-side rendering、Server Components、Pages Functions は前提にしない
 - implementation は後続 task の view 拡張を見越して component-based UI を採用してよい
+- broader frontend の route-first rule に従い、page-specific state、polling、presentation は
+  `operator` page 配下へ閉じてよい
 
 ## Screen Model
 
