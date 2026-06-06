@@ -1,5 +1,15 @@
 import { expect, test } from "@playwright/test";
 
+test("operator route alias serves the same operator surface", async ({ page }) => {
+  await page.goto("/operator");
+
+  await expect(page.getByRole("heading", { name: "AI Arena Minimal Operator UI" })).toBeVisible();
+  await expect(page.getByTestId("operator-panel-preset-queue")).toBeVisible();
+  await expect(page.getByTestId("operator-panel-active-matches")).toBeVisible();
+  await expect(page.getByTestId("operator-panel-completed-matches")).toBeVisible();
+  await expect(page.getByTestId("operator-panel-completed-detail")).toBeVisible();
+});
+
 test("local operator UI browser lane covers queue, active, completed detail, and artifact access", async ({ page, request }) => {
   const health = await request.get("http://127.0.0.1:10000/healthz");
   expect(health.ok()).toBeTruthy();
