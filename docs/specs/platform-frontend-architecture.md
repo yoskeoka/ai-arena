@@ -65,6 +65,23 @@ frontend の第一選択は route-first structure とする。
 `shared/ui` は primitive に限定する。
 `operator` 専用 panel や `leaderboard` 専用 row のように route 文脈を前提にする UI は置かない。
 
+## Import And Export Rule
+
+module 境界は、implementation jump のしやすさを優先する。
+
+- `index.ts` / `index.tsx` は必須にしない
+- barrel export は default にしない
+- import は原則 direct import とする
+- reusable module は named export を基本にする
+- default export は framework 的に entry として自然な file に限定してよい
+
+barrel export や re-export hub は、
+public package API を整える必要がある場合の convenience としては使えるが、
+`ai-arena` frontend では jump cost と依存追跡性を優先する。
+
+したがって、単に import path を短く見せる目的だけで
+`routes/<page>/index.ts` や `shared/*/index.ts` を増やしてはならない。
+
 ## Feature Module Rule
 
 default は route-first であり、最初から `features/<domain>/` を必須にしない。
