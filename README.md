@@ -132,16 +132,13 @@ For the Phase 6 online-service lane, the required release path is:
    - frontend: verify the operator UI with `pnpm run verify:local:real` or the equivalent local runbook
 2. Merge the PR only after the required CI lanes are green.
    - at minimum, confirm `go-ci` and `operator-ui-browser`
-3. After the PR is merged, deploy the merged commit SHA to staging.
-   - run GitHub Actions workflow `online-release-staging.yml`
-4. Verify the same commit SHA on staging.
-   - run `online-release-staging-verify.yml`
-   - use the staging frontend/backend default URLs unless you intentionally overrode them
-5. Release that same verified commit SHA to production.
-   - run `online-release-production.yml`
-   - pass the staging verification workflow run URL as `staging_verification_run_url`
+3. After the PR is merged, wait for the merged commit SHA to pass the push-triggered CI workflows on `main`.
+   - once they are all green, `online-release-staging.yml` and `online-release-staging-verify.yml` run automatically for that same SHA
+4. Release that same verified commit SHA to production by creating a GitHub Release or otherwise pushing a tag for it.
+   - `online-release-production.yml` runs automatically for the tag SHA
+   - the tag must point to a commit that is already in `origin/main`
 
-Do not promote a SHA to production unless the staging verification workflow passed for that same SHA.
+Do not create the production tag unless the automatic staging verification workflow passed for that same SHA.
 The detailed dispatch, rollback, and evidence rules live in `docs/development/platform-service-online-deploy.md`.
 
 ## Japanese textlint
