@@ -22,21 +22,61 @@ on:
         required: false
         default: echo-reference
         type: string
+  workflow_run:
+    workflows:
+      - online-release-staging
+    types:
+      - completed
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      should_verify: ${{ steps.prepare.outputs.should_verify }}
+      target_sha: ${{ steps.prepare.outputs.target_sha }}
+      frontend_url: ${{ steps.prepare.outputs.frontend_url }}
+      backend_url: ${{ steps.prepare.outputs.backend_url }}
+      preset_id: ${{ steps.prepare.outputs.preset_id }}
+    steps:
+      - name: Evaluate staging verification trigger
+        id: prepare
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_verify=true" >> "$GITHUB_OUTPUT"
+            echo "target_sha=${{ inputs.commit_sha }}" >> "$GITHUB_OUTPUT"
+            echo "frontend_url=${{ inputs.frontend_url }}" >> "$GITHUB_OUTPUT"
+            echo "backend_url=${{ inputs.backend_url }}" >> "$GITHUB_OUTPUT"
+            echo "preset_id=${{ inputs.preset_id }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "should_verify=false" >> "$GITHUB_OUTPUT"
+            echo "target_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_verify=true" >> "$GITHUB_OUTPUT"
+          echo "target_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          echo "frontend_url=https://staging.ai-arena.pages.dev" >> "$GITHUB_OUTPUT"
+          echo "backend_url=https://ai-arena-staging-p4ml.onrender.com" >> "$GITHUB_OUTPUT"
+          echo "preset_id=echo-reference" >> "$GITHUB_OUTPUT"
+
   verify-staging:
+    needs: prepare
+    if: needs.prepare.outputs.should_verify == 'true'
     runs-on: ubuntu-latest
     concurrency:
-      group: online-release-staging-verify
+      group: online-release-staging-verify-${{ needs.prepare.outputs.target_sha }}
       cancel-in-progress: false
     steps:
       - name: Checkout target commit
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.commit_sha }}
+          ref: ${{ needs.prepare.outputs.target_sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -63,9 +103,9 @@ jobs:
         working-directory: operator-ui
         env:
           CI: "true"
-          OPERATOR_UI_BASE_URL: ${{ inputs.frontend_url }}
-          OPERATOR_UI_BACKEND_BASE_URL: ${{ inputs.backend_url }}
-          OPERATOR_UI_PRESET_ID: ${{ inputs.preset_id }}
+          OPERATOR_UI_BASE_URL: ${{ needs.prepare.outputs.frontend_url }}
+          OPERATOR_UI_BACKEND_BASE_URL: ${{ needs.prepare.outputs.backend_url }}
+          OPERATOR_UI_PRESET_ID: ${{ needs.prepare.outputs.preset_id }}
 
       - name: Upload staging verification artifacts
         if: always()
@@ -89,6 +129,6 @@ jobs:
             echo "- Artifact: GitHub Actions artifact \`online-release-staging-verify\`"
           } >> "$GITHUB_STEP_SUMMARY"
         env:
-          TARGET_SHA: ${{ inputs.commit_sha }}
-          FRONTEND_URL: ${{ inputs.frontend_url }}
-          BACKEND_URL: ${{ inputs.backend_url }}
+          TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
+          FRONTEND_URL: ${{ needs.prepare.outputs.frontend_url }}
+          BACKEND_URL: ${{ needs.prepare.outputs.backend_url }}

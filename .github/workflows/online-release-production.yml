@@ -9,8 +9,11 @@ on:
         type: string
       staging_verification_run_url:
         description: URL of the staging verification workflow run
-        required: true
+        required: false
         type: string
+  push:
+    tags:
+      - "*"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -19,16 +22,44 @@ env:
   PRODUCTION_BACKEND_URL: https://ai-arena-service.onrender.com
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      target_sha: ${{ steps.prepare.outputs.target_sha }}
+      verification_url: ${{ steps.prepare.outputs.verification_url }}
+      tag_name: ${{ steps.prepare.outputs.tag_name }}
+    steps:
+      - name: Prepare production release inputs
+        id: prepare
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "target_sha=${{ inputs.commit_sha }}" >> "$GITHUB_OUTPUT"
+            echo "verification_url=${{ inputs.staging_verification_run_url }}" >> "$GITHUB_OUTPUT"
+            echo "tag_name=" >> "$GITHUB_OUTPUT"
+          else
+            echo "target_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "verification_url=" >> "$GITHUB_OUTPUT"
+            echo "tag_name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
   release-production:
+    needs: prepare
     runs-on: ubuntu-latest
     concurrency:
-      group: online-release-production
+      group: online-release-production-${{ needs.prepare.outputs.target_sha }}
       cancel-in-progress: false
     steps:
       - name: Checkout target commit
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.commit_sha }}
+          ref: ${{ needs.prepare.outputs.target_sha }}
+
+      - name: Confirm target commit is on origin/main
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${TARGET_SHA}" origin/main
+        env:
+          TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -66,7 +97,7 @@ jobs:
           curl --fail --silent --show-error --request POST "${deploy_url}"
         env:
           RENDER_PRODUCTION_DEPLOY_HOOK_URL: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK_URL }}
-          TARGET_SHA: ${{ inputs.commit_sha }}
+          TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
 
       - name: Write workflow summary
         run: |
@@ -74,11 +105,17 @@ jobs:
             echo "## Production release"
             echo
             echo "- Promoted commit SHA: \`${TARGET_SHA}\`"
-            echo "- Staging verification: ${STAGING_VERIFICATION_RUN_URL}"
+            if [ -n "${TAG_NAME}" ]; then
+              echo "- Trigger tag: \`${TAG_NAME}\`"
+            fi
+            if [ -n "${STAGING_VERIFICATION_RUN_URL}" ]; then
+              echo "- Staging verification: ${STAGING_VERIFICATION_RUN_URL}"
+            fi
             echo "- Frontend URL: ${PRODUCTION_FRONTEND_URL}"
             echo "- Backend URL: ${PRODUCTION_BACKEND_URL}"
             echo "- Rollback: rerun this workflow with the previous known-good SHA"
           } >> "$GITHUB_STEP_SUMMARY"
         env:
-          TARGET_SHA: ${{ inputs.commit_sha }}
-          STAGING_VERIFICATION_RUN_URL: ${{ inputs.staging_verification_run_url }}
+          TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
+          STAGING_VERIFICATION_RUN_URL: ${{ needs.prepare.outputs.verification_url }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
