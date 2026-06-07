@@ -9,6 +9,11 @@ const browserChannel = testScenario === "ci" ? process.env.OPERATOR_UI_BROWSER_C
 const usesFixtureBackend = testScenario === "local";
 const usesManagedBackend = !usesFixtureBackend;
 const usesRemoteServers = testScenario === "remote";
+const remoteBaseURL = process.env.OPERATOR_UI_BASE_URL;
+
+if (usesRemoteServers && !remoteBaseURL) {
+  throw new Error("OPERATOR_UI_BASE_URL is required when OPERATOR_UI_TEST_SCENARIO=remote");
+}
 
 export default defineConfig({
   testDir: "./tests",
@@ -16,9 +21,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never", outputFolder: reportDir }]],
   testMatch: usesFixtureBackend ? /^(?!.*\.ci\.spec\.js$).*\.spec\.js$/ : /.*\.ci\.spec\.js/,
   use: {
-    baseURL: usesRemoteServers
-      ? process.env.OPERATOR_UI_BASE_URL
-      : `http://127.0.0.1:${frontendPort}`,
+    baseURL: usesRemoteServers ? remoteBaseURL : `http://127.0.0.1:${frontendPort}`,
     screenshot: "only-on-failure",
     trace: testScenario === "real-local" ? "off" : "retain-on-failure",
     video: usesManagedBackend ? "off" : "retain-on-failure",

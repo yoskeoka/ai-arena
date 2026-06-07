@@ -58,7 +58,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Trigger production Render deploy
-        run: curl --fail --silent --show-error "${RENDER_PRODUCTION_DEPLOY_HOOK_URL}?ref=${TARGET_SHA}"
+        run: |
+          case "${RENDER_PRODUCTION_DEPLOY_HOOK_URL}" in
+            *\?*) deploy_url="${RENDER_PRODUCTION_DEPLOY_HOOK_URL}&ref=${TARGET_SHA}" ;;
+            *) deploy_url="${RENDER_PRODUCTION_DEPLOY_HOOK_URL}?ref=${TARGET_SHA}" ;;
+          esac
+          curl --fail --silent --show-error --request POST "${deploy_url}"
         env:
           RENDER_PRODUCTION_DEPLOY_HOOK_URL: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK_URL }}
           TARGET_SHA: ${{ inputs.commit_sha }}

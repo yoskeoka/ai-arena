@@ -63,7 +63,6 @@ jobs:
         working-directory: operator-ui
         env:
           CI: "true"
-          OPERATOR_UI_BROWSER_CHANNEL: chrome
           OPERATOR_UI_BASE_URL: ${{ inputs.frontend_url }}
           OPERATOR_UI_BACKEND_BASE_URL: ${{ inputs.backend_url }}
           OPERATOR_UI_PRESET_ID: ${{ inputs.preset_id }}
