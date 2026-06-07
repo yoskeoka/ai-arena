@@ -133,9 +133,9 @@ For the Phase 6 online-service lane, the required release path is:
 2. Merge the PR only after the required CI lanes are green.
    - at minimum, confirm `go-ci` and `operator-ui-browser`
 3. After the PR is merged, wait for the merged commit SHA to pass the push-triggered CI workflows on `main`.
-   - once they are all green, `online-release-staging.yml` and `online-release-staging-verify.yml` run automatically for that same SHA
+   - once they are all green, the repo-owned staging deploy and staging verification automation runs for that same SHA
 4. Release that same verified commit SHA to production by creating a GitHub Release or otherwise pushing a tag for it.
-   - `online-release-production.yml` runs automatically for the tag SHA
+   - the repo-owned production release automation runs for the tag SHA
    - the tag must point to a commit that is already in `origin/main`
 
 Do not create the production tag unless the automatic staging verification workflow passed for that same SHA.
