@@ -13,6 +13,11 @@ References:
 
 - https://render.com/docs/cli-reference
 - https://render.com/docs/deploys
+- https://render.com/docs/custom-domains
+- https://render.com/docs/free
+- https://render.com/docs/tls
+- https://render.com/docs/inbound-ip-rules
+- https://render.com/pricing
 - https://api-docs.render.com/reference/update-service
 
 Observed via `render` CLI on 2026-06-02:
@@ -50,6 +55,17 @@ Current operational note:
   `https://ai-arena-service.onrender.com` を使う
 - custom domain は当面導入しない。収益化や外部公開要件が固まった後に再検討する
 - 2026-06-02 時点の desired deploy policy は observed state と一致している
+
+Custom domain / network protection research note:
+
+- Render docs 上は free web service でも custom domain を設定できる
+- Hobby workspace pricing では custom domains は 2 included とされている
+- TLS は Render-managed certificate を自動で使える
+- ただし inbound IP rule は web service では `Scale or Enterprise` 前提であり、
+  free/Hobby current path では backend を IP allowlist で閉じる案は採らない
+- この repo の current decision は custom domain なしで進めることであり、
+  `onrender.com` default domain を staging / production backend URL として使う
+- custom domain は deferred option として plan を残し、auth / Access / naming が固まった時点で再判断する
 
 Service-level env / secret contract:
 
@@ -182,6 +198,11 @@ References:
 - https://developers.cloudflare.com/pages/get-started/direct-upload/
 - https://developers.cloudflare.com/pages/configuration/preview-deployments/
 - https://developers.cloudflare.com/pages/configuration/branch-build-controls/
+- https://developers.cloudflare.com/pages/platform/known-issues/
+- https://developers.cloudflare.com/cloudflare-one/access-controls/policies/
+- https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/
+- https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/cloudflare/
+- https://www.cloudflare.com/plans/zero-trust-services/
 
 Observed via `wrangler` on 2026-06-02:
 
@@ -221,6 +242,23 @@ Direct Upload contract:
 - production deploy は tag/release lane の CI から明示的に publish する
 - Pages 単体の branch control には依存せず、deploy trigger は repo workflow が握る
 
+Cloudflare Access research note:
+
+- Pages preview deployment は default public であり、preview protection を有効にする場合は
+  Access policy を別途設定する
+- Access policy では少なくとも email、email domain、IP range、country、
+  login method、identity provider group、Cloudflare account member、service token、
+  mTLS client cert といった制約を組み合わせられる
+- first internal-use candidate としては `One-time PIN + allowlisted email addresses` か
+  `Cloudflare account member only` が現実的である
+- Zero Trust free plan は小規模 internal use では候補になるが、
+  user-cap を踏まえると public GA 後の product auth 代替にはしない
+- したがって current decision は、
+  Cloudflare Access を staging / internal operator surface protection 候補として扱い、
+  public-facing auth は別 child plan で product contract として扱うことである
+- Pages preview を Access で閉じても `onrender.com` backend direct access 問題は別論点として残る
+  ため、backend protection を達成したと誤認しない
+
 ## Provider Drift Check
 
 first landing の desired contract と、2026-06-02 時点の observed state を次の観点で比較する。
@@ -235,6 +273,81 @@ first landing の desired contract と、2026-06-02 時点の observed state を
   - Render `Production` は desired 通り
   - R2 buckets は desired 通り
   - Pages project は desired 通り
+
+## Release Flow Decision
+
+Phase 6 closure では、online confirmation を次の release flow として閉じる。
+
+1. local verification
+   - browser / backend / artifact lane を local で起動し、
+     `preset queue -> active/completed visibility -> completed detail` を確認する
+2. CI
+   - file-backed browser lane、Postgres-backed browser lane、
+     既存 Go quality gate を通す
+3. staging deploy
+   - Pages preview と Render staging service を更新する
+   - staging backend / UI の URL、deploy SHA、関連 artifact を記録する
+4. staging verification
+   - local / CI と同じ acceptance surface で remote staging を確認する
+   - verification artifact を review 用に残す
+5. production release
+   - staging で確認済みの commit SHA だけを明示昇格する
+   - Production backend は auto deploy `off` を維持する
+
+この release flow が repo-owned workflow / runbook として固定されるまでは、
+Phase 6 は completed とみなさない。
+
+## Developer Access Inventory
+
+repo に残してよいのは inventory と issuance path だけであり、secret value 自体は残さない。
+
+残してよいもの:
+
+- staging / production URL
+- Render workspace / project / environment / service ID
+- Neon organization / project / branch ID
+- R2 account ID / bucket 名 / endpoint
+- Pages project 名と production URL
+- Access policy 名、適用対象 hostname、想定 login method
+- credential / token / password をどこで発行するかの runbook
+
+repo に残さないもの:
+
+- password 本文
+- session token
+- API key
+- DSN 実値
+- R2 secret access key
+- Access service token secret
+
+current path では、staging / production へ開発者が到達するための追加 secret は
+provider dashboard、secret manager、または Access issuance flow にだけ置く。
+
+## Custom Domain Deferred Option
+
+current path では custom domain を導入しない。
+ただし deferred option として、次の事実を記録する。
+
+- References:
+  - https://www.cloudflare.com/products/registrar/
+  - https://developers.cloudflare.com/registrar/
+  - https://developers.cloudflare.com/registrar/get-started/register-domain/
+- Render free/Hobby でも custom domain 自体は設定できる
+- custom domain を 1-2 個使うだけなら Render 側追加コストは current pricing では発生しにくい
+- Cloudflare Registrar は TLD ごとの registry / ICANN cost ベースで扱われ、
+  固定の単一価格ではない
+- domain 自体の維持費は TLD 依存であり、購入前に `.com` / `.net` / `.dev` の
+  実際の登録 / 更新額を確認する
+- 初年度だけ安く更新で跳ねる TLD より、継続更新価格を優先して選ぶ
+- naming 候補は `ai-arena` そのもの、あるいは operator/admin/public の役割が読める
+  prefix / subdomain を含めて評価する
+- auth を product 側で実装した結果、custom domain 不要判断に戻る可能性もある
+
+後続で custom domain を採る条件:
+
+- backend も Cloudflare 管理下 hostname へ寄せて Access で守りたい
+- public-facing naming / branding を整えたい
+- production / staging / operator surface を host 単位でより明確に分けたい
 
 ## Repo-local startup contract
 

@@ -15,4 +15,5 @@
 - `docs/development/github-actions-pinning.md`: GitHub Actions の `uses:` pinning 運用
 - `docs/development/operator-ui-local-verification.md`: operator UI local browser verification の canonical Playwright lane
 - `docs/development/platform-service-postgres.md`: durable queue backend 用 Postgres の schema/apply/query-generation workflow と local / CI harness
+- `docs/development/platform-service-online-deploy.md`: provider inventory、staging / production release flow、internal surface protection、developer access inventory
 - `docs/development/workflow-linter.md`: local workflow linter の maintenance 契約
