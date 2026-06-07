@@ -49,6 +49,9 @@ first landing の operator UI は `Cloudflare Pages` から配信する static a
 - implementation は後続 task の view 拡張を見越して component-based UI を採用してよい
 - broader frontend の route-first rule に従い、page-specific state、polling、presentation は
   `operator` page 配下へ閉じてよい
+- concrete router library は first landing contract に含めない
+- first route seam は current `/` entry から same observation surface を提供しつつ、
+  `operator` page family を app shell 配下へ収められればよい
 
 ## Screen Model
 
@@ -225,7 +228,7 @@ first landing の UI は minimal operator surface に限定する。
 ## Deferred Follow-Ups
 
 - server-driven preset catalog
-- routing / deep-linking
+- routing / deep-linking / router library choice
 - pagination、search、filter
 - authentication / authorization
 - replay viewer と ranking / tournament view
