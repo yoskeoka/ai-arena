@@ -17,3 +17,6 @@
 - `docs/development/platform-service-postgres.md`: durable queue backend 用 Postgres の schema/apply/query-generation workflow と local / CI harness
 - `docs/development/platform-service-online-deploy.md`: provider inventory、staging / production release flow、internal surface protection、developer access inventory
 - `docs/development/workflow-linter.md`: local workflow linter の maintenance 契約
+
+online release workflow の dispatch / verification / rollback runbook も
+`docs/development/platform-service-online-deploy.md` を正本とする。

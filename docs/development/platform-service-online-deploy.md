@@ -297,6 +297,107 @@ Phase 6 closure では、online confirmation を次の release flow として閉
 この release flow が repo-owned workflow / runbook として固定されるまでは、
 Phase 6 は completed とみなさない。
 
+## Repo-owned Release Workflow
+
+repo で使う canonical workflow 名は次で固定する。
+
+- staging deploy:
+  `.github/workflows/online-release-staging.yml`
+- staging verification:
+  `.github/workflows/online-release-staging-verify.yml`
+- production release:
+  `.github/workflows/online-release-production.yml`
+
+staging / production ともに auto trigger へは戻さず、workflow dispatch で明示起動する。
+required input は commit SHA とし、Phase 6 の release gate は
+`main latest` ではなく `verified commit` を主語にする。
+
+### Staging Deploy Contract
+
+staging deploy workflow は次を 1 run にまとめる。
+
+1. target commit SHA を checkout する
+2. `operator-ui/` を canonical `pnpm install` / `pnpm run build` で build する
+3. `Cloudflare Pages` preview へ `staging` branch alias で direct upload する
+4. `Render staging` を同じ commit SHA で deploy hook 起動する
+5. workflow summary に backend / frontend URL と commit SHA を残す
+
+staging frontend URL は current project shape では次を正本とする。
+
+- `https://staging.ai-arena.pages.dev`
+
+staging backend URL は current service inventory では次を正本とする。
+
+- `https://ai-arena-staging-p4ml.onrender.com`
+
+repo に必要な GitHub secret 名:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `RENDER_STAGING_DEPLOY_HOOK_URL`
+
+deploy hook secret は value 自体を repo に残さず、
+Render Dashboard の service settings から再発行できる issuance path だけを共有する。
+
+### Staging Verification Contract
+
+staging verification workflow は local / CI lane と acceptance surface をそろえるため、
+`operator-ui` の Playwright managed-backend lane を remote URL 相手に再利用する。
+
+確認対象:
+
+- backend `GET /healthz`
+- `POST /api/v1/preset-matches`
+- `GET /api/v1/matches/active`
+- `GET /api/v1/matches/completed`
+- `GET /api/v1/matches/{submission_id}`
+- frontend operator surface の queue / active / completed / detail 操作
+- delegated artifact download link の有無
+
+staging verification workflow は少なくとも次を artifact として残す。
+
+- Playwright trace zip
+- screenshot
+- HTML report
+
+verification 成功後、workflow summary には次を明記する。
+
+- verified commit SHA
+- verified staging frontend URL
+- verified staging backend URL
+- artifact location
+
+### Production Release Contract
+
+production release workflow は次を守る。
+
+- input は staging で確認済みの commit SHA に限定する
+- backend deploy は `Render Production auto deploy = off` を維持したまま、
+  deploy hook で明示起動する
+- frontend deploy は `Cloudflare Pages` production へ同じ commit build artifact を upload する
+- workflow summary に promoted commit SHA と staging verification evidence URL を残す
+
+repo に必要な GitHub secret 名:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `RENDER_PRODUCTION_DEPLOY_HOOK_URL`
+
+production workflow では human operator が staging verification run URL を input として添える。
+repo workflow はその evidence link を promotion decision の最小記録として扱う。
+
+### Rollback Contract
+
+rollback は「前回の known-good commit SHA を staging / production workflow に再入力する」形を canonical とする。
+
+- staging rollback:
+  `online-release-staging.yml` に previous good SHA を渡して再実行する
+- production rollback:
+  `online-release-production.yml` に previous good SHA と元の staging verification evidence を渡して再実行する
+
+Phase 6 では DB schema rollback や object migration rollback の自動化までは扱わない。
+この line の rollback は backend/frontend process を known-good SHA に戻すところまでを正本とする。
+
 ## Developer Access Inventory
 
 repo に残してよいのは inventory と issuance path だけであり、secret value 自体は残さない。
@@ -370,3 +471,37 @@ current path では custom domain を導入しない。
   start command は `./app` のままだった。
   Render 設定更新後は `make render-build` / `make render-start` へ寄せる
   remote polling API を出す前に service command を上記 desired shape へ更新する必要がある
+
+## Workflow Dispatch Runbook
+
+release operator は次の順で実行する。
+
+1. local verification
+   - `docs/development/operator-ui-local-verification.md` の real-local lane を通す
+2. CI confirmation
+   - target commit SHA で `go-ci` と `operator-ui-browser` が green であることを確認する
+3. staging deploy
+   - `online-release-staging.yml` を target commit SHA で dispatch する
+4. staging verification
+   - `online-release-staging-verify.yml` を同じ commit SHA で dispatch する
+   - target URL は default の staging URL を使ってよい
+5. production release
+   - `online-release-production.yml` を同じ commit SHA で dispatch する
+   - `staging_verification_run_url` へ直前 verification run を添える
+
+staging verification が failed の間は production release へ進まない。
+
+## Required Evidence
+
+PR review や release handoff で最低限残す evidence は次で固定する。
+
+- local:
+  representative screenshot または Playwright artifact
+- CI:
+  `go-ci` と `operator-ui-browser` の成功 run
+- staging deploy:
+  workflow summary 上の frontend/backend URL と commit SHA
+- staging verification:
+  Playwright artifact と workflow summary
+- production release:
+  workflow summary 上の promoted SHA と staging verification run URL
