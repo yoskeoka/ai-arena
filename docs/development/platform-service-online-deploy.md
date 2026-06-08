@@ -325,6 +325,8 @@ staging deploy workflow は次を 1 run にまとめる。
 
 1. target commit SHA を checkout する
 2. `operator-ui/` を canonical `pnpm install` / `pnpm run build` で build する
+   - build-time に `VITE_OPERATOR_API_BASE_URL=${STAGING_BACKEND_URL}` を渡し、
+     preview frontend が staging backend URL を直接参照できるようにする
 3. `Cloudflare Pages` preview へ `staging` branch alias で direct upload する
 4. `Render staging` を同じ commit SHA で deploy hook 起動する
 5. workflow summary に backend / frontend URL と commit SHA を残す
@@ -352,6 +354,10 @@ repo に必要な GitHub secret 名:
 
 deploy hook secret は value 自体を repo に残さず、
 Render Dashboard の service settings から再発行できる issuance path だけを共有する。
+
+staging preview は static Pages deploy なので、current shape では repo-owned proxy を持たない。
+したがって preview frontend は same-origin `/api` fallback に依存してはならない。
+backend 側も `https://staging.ai-arena.pages.dev` からの cross-origin fetch を受け付けなければならない。
 
 ### Staging Verification Contract
 
@@ -397,6 +403,8 @@ production release workflow は次を守る。
 - backend deploy は `Render Production auto deploy = off` を維持したまま、
   deploy hook で明示起動する
 - frontend deploy は `Cloudflare Pages` production へ同じ commit build artifact を upload する
+  - build-time に `VITE_OPERATOR_API_BASE_URL=${PRODUCTION_BACKEND_URL}` を渡す
+- backend は `https://ai-arena.pages.dev` からの cross-origin fetch を受け付けなければならない
 - workflow summary に promoted commit SHA と trigger tag を残す
 
 repo に必要な GitHub secret 名:

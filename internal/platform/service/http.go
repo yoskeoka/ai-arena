@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+var allowedOperatorOrigins = map[string]struct{}{
+	"https://staging.ai-arena.pages.dev": {},
+	"https://ai-arena.pages.dev":         {},
+}
+
 // ArtifactAccessMetadata is derived, non-durable access info for one artifact.
 type ArtifactAccessMetadata struct {
 	Locator     string     `json:"locator"`
@@ -107,7 +112,7 @@ func (a *OperatorAPI) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/matches/active", a.handleActiveMatches)
 	mux.HandleFunc("GET /api/v1/matches/completed", a.handleCompletedMatches)
 	mux.HandleFunc("GET /api/v1/matches/{submission_id}", a.handleMatchDetail)
-	return mux
+	return withOperatorCORS(mux)
 }
 
 func (a *OperatorAPI) handleHealthz(w http.ResponseWriter, _ *http.Request) {
@@ -232,6 +237,31 @@ func statusCodeForServiceError(err error) int {
 	default:
 		return http.StatusInternalServerError
 	}
+}
+
+func withOperatorCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		applyOperatorCORSHeaders(w, r)
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func applyOperatorCORSHeaders(w http.ResponseWriter, r *http.Request) {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return
+	}
+	if _, ok := allowedOperatorOrigins[origin]; !ok {
+		return
+	}
+	w.Header().Add("Vary", "Origin")
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 
 func addArtifactPath(artifacts map[string]string, kind, path string) {

@@ -119,4 +119,13 @@ N/A
 
 ## Screenshots / Logs
 
-<!-- Attach verification artifacts if applicable (test output, screenshots, before/after metrics). Delete this section if not applicable. -->
+<!--
+Attach verification artifacts if applicable (test output, screenshots, before/after metrics).
+If you mention a screenshot, put the actual image in the PR body so it renders inline for reviewers.
+Do not leave reviewers with only a local filesystem path.
+Use PR comments for screenshots only when responding to human review feedback or adding follow-up
+explanations after the initial PR body is already in place.
+If you cannot use a GitHub-hosted upload, reference a repo-hosted image URL that renders inline in
+the PR body.
+Delete this section if not applicable.
+-->

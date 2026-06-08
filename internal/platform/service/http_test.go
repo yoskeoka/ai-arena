@@ -175,6 +175,101 @@ func TestOperatorAPIRejectsUnknownPreset(t *testing.T) {
 	}
 }
 
+func TestOperatorAPIAllowsConfiguredCORSOrigins(t *testing.T) {
+	commands := newTestCommandService(t)
+	queries, err := NewQueryService(NewInMemoryQueueStore())
+	if err != nil {
+		t.Fatalf("NewQueryService() error = %v", err)
+	}
+	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
+		{
+			PresetID: "echo-reference",
+			Game: contract.GameMetadata{
+				GameID:         "echo-count",
+				GameVersion:    "2.0.0",
+				RulesetVersion: "phase2-simultaneous-2turn",
+			},
+			Players: []SubmittedPlayer{
+				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
+			},
+			OutputDir: t.TempDir(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
+	}
+	api, err := NewOperatorAPI(commands, queries, presets, DirectArtifactAccessIssuer{})
+	if err != nil {
+		t.Fatalf("NewOperatorAPI() error = %v", err)
+	}
+	handler := api.Handler()
+
+	getReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/matches/active", nil)
+	getReq.Header.Set("Origin", "https://staging.ai-arena.pages.dev")
+	getResp := httptest.NewRecorder()
+	handler.ServeHTTP(getResp, getReq)
+	if got := getResp.Header().Get("Access-Control-Allow-Origin"); got != "https://staging.ai-arena.pages.dev" {
+		t.Fatalf("GET allow-origin = %q, want staging Pages origin", got)
+	}
+	if got := getResp.Header().Get("Vary"); got != "Origin" {
+		t.Fatalf("GET vary = %q, want Origin", got)
+	}
+
+	optionsReq := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/api/v1/preset-matches", nil)
+	optionsReq.Header.Set("Origin", "https://ai-arena.pages.dev")
+	optionsResp := httptest.NewRecorder()
+	handler.ServeHTTP(optionsResp, optionsReq)
+	if optionsResp.Code != http.StatusNoContent {
+		t.Fatalf("OPTIONS /api/v1/preset-matches status = %d, want %d", optionsResp.Code, http.StatusNoContent)
+	}
+	if got := optionsResp.Header().Get("Access-Control-Allow-Origin"); got != "https://ai-arena.pages.dev" {
+		t.Fatalf("OPTIONS allow-origin = %q, want production Pages origin", got)
+	}
+	if got := optionsResp.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
+		t.Fatalf("OPTIONS allow-methods = %q, want %q", got, "GET, POST, OPTIONS")
+	}
+	if got := optionsResp.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type" {
+		t.Fatalf("OPTIONS allow-headers = %q, want Content-Type", got)
+	}
+}
+
+func TestOperatorAPIDoesNotAllowUnknownCORSOrigin(t *testing.T) {
+	commands := newTestCommandService(t)
+	queries, err := NewQueryService(NewInMemoryQueueStore())
+	if err != nil {
+		t.Fatalf("NewQueryService() error = %v", err)
+	}
+	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
+		{
+			PresetID: "echo-reference",
+			Game: contract.GameMetadata{
+				GameID:         "echo-count",
+				GameVersion:    "2.0.0",
+				RulesetVersion: "phase2-simultaneous-2turn",
+			},
+			Players: []SubmittedPlayer{
+				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
+			},
+			OutputDir: t.TempDir(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
+	}
+	api, err := NewOperatorAPI(commands, queries, presets, DirectArtifactAccessIssuer{})
+	if err != nil {
+		t.Fatalf("NewOperatorAPI() error = %v", err)
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/matches/active", nil)
+	req.Header.Set("Origin", "https://example.com")
+	resp := httptest.NewRecorder()
+	api.Handler().ServeHTTP(resp, req)
+	if got := resp.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("allow-origin = %q, want empty", got)
+	}
+}
+
 func TestStatusCodeForServiceError(t *testing.T) {
 	tests := []struct {
 		name string
