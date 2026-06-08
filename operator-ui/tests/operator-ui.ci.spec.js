@@ -1,7 +1,12 @@
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 
-const backendBaseURL = `http://127.0.0.1:${process.env.OPERATOR_UI_BACKEND_PORT ?? "10000"}`;
+if (process.env.OPERATOR_UI_TEST_SCENARIO === "remote" && !process.env.OPERATOR_UI_BACKEND_BASE_URL) {
+  throw new Error("OPERATOR_UI_BACKEND_BASE_URL is required when OPERATOR_UI_TEST_SCENARIO=remote");
+}
+
+const backendBaseURL =
+  process.env.OPERATOR_UI_BACKEND_BASE_URL ?? `http://127.0.0.1:${process.env.OPERATOR_UI_BACKEND_PORT ?? "10000"}`;
 const presetId = process.env.OPERATOR_UI_PRESET_ID ?? "echo-reference";
 const delegatedDownloadExpectation = process.env.OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD ?? "0";
 const captureArtifacts = process.env.OPERATOR_UI_CAPTURE_ARTIFACTS === "1";

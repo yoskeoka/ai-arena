@@ -1,0 +1,134 @@
+name: online-release-staging-verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Commit SHA whose staging deploy should be verified
+        required: true
+        type: string
+      frontend_url:
+        description: Staging frontend URL
+        required: false
+        default: https://staging.ai-arena.pages.dev
+        type: string
+      backend_url:
+        description: Staging backend URL
+        required: false
+        default: https://ai-arena-staging-p4ml.onrender.com
+        type: string
+      preset_id:
+        description: Preset ID to enqueue during verification
+        required: false
+        default: echo-reference
+        type: string
+  workflow_run:
+    workflows:
+      - online-release-staging
+    types:
+      - completed
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      should_verify: ${{ steps.prepare.outputs.should_verify }}
+      target_sha: ${{ steps.prepare.outputs.target_sha }}
+      frontend_url: ${{ steps.prepare.outputs.frontend_url }}
+      backend_url: ${{ steps.prepare.outputs.backend_url }}
+      preset_id: ${{ steps.prepare.outputs.preset_id }}
+    steps:
+      - name: Evaluate staging verification trigger
+        id: prepare
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_verify=true" >> "$GITHUB_OUTPUT"
+            echo "target_sha=${{ inputs.commit_sha }}" >> "$GITHUB_OUTPUT"
+            echo "frontend_url=${{ inputs.frontend_url }}" >> "$GITHUB_OUTPUT"
+            echo "backend_url=${{ inputs.backend_url }}" >> "$GITHUB_OUTPUT"
+            echo "preset_id=${{ inputs.preset_id }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "should_verify=false" >> "$GITHUB_OUTPUT"
+            echo "target_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_verify=true" >> "$GITHUB_OUTPUT"
+          echo "target_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          echo "frontend_url=https://staging.ai-arena.pages.dev" >> "$GITHUB_OUTPUT"
+          echo "backend_url=https://ai-arena-staging-p4ml.onrender.com" >> "$GITHUB_OUTPUT"
+          echo "preset_id=echo-reference" >> "$GITHUB_OUTPUT"
+
+  verify-staging:
+    needs: prepare
+    if: needs.prepare.outputs.should_verify == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: online-release-staging-verify-${{ needs.prepare.outputs.target_sha }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout target commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.target_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: operator-ui/pnpm-lock.yaml
+
+      - name: Install operator UI dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: operator-ui
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: operator-ui
+
+      - name: Verify remote staging operator flow
+        run: pnpm run verify:remote
+        working-directory: operator-ui
+        env:
+          CI: "true"
+          OPERATOR_UI_BASE_URL: ${{ needs.prepare.outputs.frontend_url }}
+          OPERATOR_UI_BACKEND_BASE_URL: ${{ needs.prepare.outputs.backend_url }}
+          OPERATOR_UI_PRESET_ID: ${{ needs.prepare.outputs.preset_id }}
+
+      - name: Upload staging verification artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: online-release-staging-verify
+          path: |
+            operator-ui/test-results/remote
+            operator-ui/playwright-report/remote
+          if-no-files-found: ignore
+
+      - name: Write workflow summary
+        if: always()
+        run: |
+          {
+            echo "## Staging verification"
+            echo
+            echo "- Commit SHA: \`${TARGET_SHA}\`"
+            echo "- Frontend URL: ${FRONTEND_URL}"
+            echo "- Backend URL: ${BACKEND_URL}"
+            echo "- Artifact: GitHub Actions artifact \`online-release-staging-verify\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
+          FRONTEND_URL: ${{ needs.prepare.outputs.frontend_url }}
+          BACKEND_URL: ${{ needs.prepare.outputs.backend_url }}
