@@ -251,3 +251,10 @@
 - **Pattern**: Playwright や browser automation を導入すると、「壊れにくい fixture regression」を先に作る判断自体は妥当でも、実装確認・調査・screenshot capture の実運用 lane を同じ言葉で吸収したつもりになりやすい
 - **Rule**: UI/browser harness を計画するときは、少なくとも `deterministic regression lane` と `real local inspection/capture lane` を分けて要件確認する。user が「人間の代わりの確認」「調査の目と手」「PR 用 screenshot」を期待しているなら、fixture lane だけで満たしたと解釈しない
 - **Applied**: `0068` / `0069` 後続の operator UI browser verification planning、今後の ai-arena local browser harness / Playwright / MCP 導入全般
+
+## [2026-06-09] reviewer 向け画像 evidence はまず PR body に載せる
+
+- **Mistake**: reviewer 向けの screenshot evidence を最初に PR comment へ載せ、PR body には local path ベースの説明を残した
+- **Pattern**: terminal/CLI で PR を整えると、手元 path や補助 comment で済ませても作業者には十分に見えやすく、reviewer が最初に読む PR body の体験を後回しにしやすい
+- **Rule**: reviewer 向けの screenshot や画像 evidence は、user から別指示がない限りまず PR body に inline 表示で載せる。PR comment は人間レビュー指摘への応答や補足説明に限って使い、初回 evidence の主置き場にしない
+- **Applied**: `.github/PULL_REQUEST_TEMPLATE.md` の `Screenshots / Logs`、今後の ai-arena PR 作成と review-ready artifact 添付全般
