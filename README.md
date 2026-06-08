@@ -123,6 +123,24 @@ The detailed runbook lives in `docs/development/operator-ui-local-verification.m
 On Debian/Ubuntu systems that also need host libraries, `pnpm exec playwright install --with-deps chromium`
 is the faster setup path.
 
+## Release flow
+
+For the Phase 6 online-service lane, the required release path is:
+
+1. Verify locally before opening or updating the PR.
+   - backend: start `arena-service` with the deploy-shaped Postgres/R2 harness
+   - frontend: verify the operator UI with `pnpm run verify:local:real` or the equivalent local runbook
+2. Merge the PR only after the required CI lanes are green.
+   - at minimum, confirm `go-ci` and `operator-ui-browser`
+3. After the PR is merged, wait for the merged commit SHA to pass the push-triggered CI workflows on `main`.
+   - once they are all green, the repo-owned staging deploy and staging verification automation runs for that same SHA
+4. Release that same verified commit SHA to production by creating a GitHub Release or otherwise pushing a tag for it.
+   - the repo-owned production release automation runs for the tag SHA
+   - the tag must point to a commit that is already in `origin/main`
+
+Do not create the production tag unless the automatic staging verification workflow passed for that same SHA.
+The detailed dispatch, rollback, and evidence rules live in `docs/development/platform-service-online-deploy.md`.
+
 ## Japanese textlint
 
 This repository runs `textlint` for changed Japanese Markdown under `docs/**/*.md`.
