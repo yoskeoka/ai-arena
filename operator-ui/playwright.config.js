@@ -10,6 +10,7 @@ const usesFixtureBackend = testScenario === "local";
 const usesManagedBackend = !usesFixtureBackend;
 const usesRemoteServers = testScenario === "remote";
 const remoteBaseURL = process.env.OPERATOR_UI_BASE_URL;
+const captureArtifacts = process.env.OPERATOR_UI_CAPTURE_ARTIFACTS === "1";
 
 if (usesRemoteServers && !remoteBaseURL) {
   throw new Error("OPERATOR_UI_BASE_URL is required when OPERATOR_UI_TEST_SCENARIO=remote");
@@ -23,7 +24,7 @@ export default defineConfig({
   use: {
     baseURL: usesRemoteServers ? remoteBaseURL : `http://127.0.0.1:${frontendPort}`,
     screenshot: "only-on-failure",
-    trace: testScenario === "real-local" ? "off" : "retain-on-failure",
+    trace: captureArtifacts || testScenario === "real-local" ? "off" : "retain-on-failure",
     video: usesManagedBackend ? "off" : "retain-on-failure",
   },
   projects: [

@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+var allowedOperatorOrigins = map[string]struct{}{
+	"https://staging.ai-arena.pages.dev": {},
+	"https://ai-arena.pages.dev":         {},
+}
+
 // ArtifactAccessMetadata is derived, non-durable access info for one artifact.
 type ArtifactAccessMetadata struct {
 	Locator     string     `json:"locator"`
@@ -102,12 +107,16 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, presets Pre
 // Handler builds one HTTP handler tree for the operator API.
 func (a *OperatorAPI) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("OPTIONS /api/v1/preset-matches", handleCORSPreflight)
+	mux.HandleFunc("OPTIONS /api/v1/matches/active", handleCORSPreflight)
+	mux.HandleFunc("OPTIONS /api/v1/matches/completed", handleCORSPreflight)
+	mux.HandleFunc("OPTIONS /api/v1/matches/{submission_id}", handleCORSPreflight)
 	mux.HandleFunc("GET /healthz", a.handleHealthz)
 	mux.HandleFunc("POST /api/v1/preset-matches", a.handlePresetMatches)
 	mux.HandleFunc("GET /api/v1/matches/active", a.handleActiveMatches)
 	mux.HandleFunc("GET /api/v1/matches/completed", a.handleCompletedMatches)
 	mux.HandleFunc("GET /api/v1/matches/{submission_id}", a.handleMatchDetail)
-	return mux
+	return withOperatorCORS(mux)
 }
 
 func (a *OperatorAPI) handleHealthz(w http.ResponseWriter, _ *http.Request) {
@@ -232,6 +241,32 @@ func statusCodeForServiceError(err error) int {
 	default:
 		return http.StatusInternalServerError
 	}
+}
+
+func withOperatorCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		applyOperatorCORSHeaders(w, r)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func handleCORSPreflight(w http.ResponseWriter, r *http.Request) {
+	applyOperatorCORSHeaders(w, r)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func applyOperatorCORSHeaders(w http.ResponseWriter, r *http.Request) {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return
+	}
+	if _, ok := allowedOperatorOrigins[origin]; !ok {
+		return
+	}
+	w.Header().Add("Vary", "Origin")
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 
 func addArtifactPath(artifacts map[string]string, kind, path string) {
