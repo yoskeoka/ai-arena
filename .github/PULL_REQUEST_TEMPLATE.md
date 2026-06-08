@@ -119,4 +119,9 @@ N/A
 
 ## Screenshots / Logs
 
-<!-- Attach verification artifacts if applicable (test output, screenshots, before/after metrics). Delete this section if not applicable. -->
+<!--
+Attach verification artifacts if applicable (test output, screenshots, before/after metrics).
+If you mention a screenshot, upload/attach the actual image to the PR or reference a repo-hosted
+image URL that renders inline in the PR. Do not leave reviewers with only a local filesystem path.
+Delete this section if not applicable.
+-->
