@@ -107,10 +107,6 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, presets Pre
 // Handler builds one HTTP handler tree for the operator API.
 func (a *OperatorAPI) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("OPTIONS /api/v1/preset-matches", handleCORSPreflight)
-	mux.HandleFunc("OPTIONS /api/v1/matches/active", handleCORSPreflight)
-	mux.HandleFunc("OPTIONS /api/v1/matches/completed", handleCORSPreflight)
-	mux.HandleFunc("OPTIONS /api/v1/matches/{submission_id}", handleCORSPreflight)
 	mux.HandleFunc("GET /healthz", a.handleHealthz)
 	mux.HandleFunc("POST /api/v1/preset-matches", a.handlePresetMatches)
 	mux.HandleFunc("GET /api/v1/matches/active", a.handleActiveMatches)
@@ -246,13 +242,12 @@ func statusCodeForServiceError(err error) int {
 func withOperatorCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		applyOperatorCORSHeaders(w, r)
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-func handleCORSPreflight(w http.ResponseWriter, r *http.Request) {
-	applyOperatorCORSHeaders(w, r)
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func applyOperatorCORSHeaders(w http.ResponseWriter, r *http.Request) {
