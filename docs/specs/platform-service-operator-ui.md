@@ -108,6 +108,14 @@ UI は少なくとも次の client state を持つ。
 state は browser reload をまたいで永続化しなくてよい。
 artifact access metadata や detail payload を local storage 等へ保存してはならない。
 
+remote `Cloudflare Pages` deploy では、operator API base URL の初期値を
+build-time 設定で固定しなければならない。
+
+- local `vite` development では base URL blank により same-origin `/api` proxy を使ってよい
+- remote `Pages` deploy では same-origin `/api` fallback を前提にしてはならない
+- staging / production deploy workflow は、それぞれの canonical backend URL を
+  `VITE_OPERATOR_API_BASE_URL` として build に渡さなければならない
+
 ## Polling Contract
 
 - active matches:
@@ -121,6 +129,8 @@ artifact access metadata や detail payload を local storage 等へ保存して
 list polling と detail polling は independent timer でよい。
 1 回の request failure で polling loop 全体を停止してはならない。
 失敗時は最後に成功した表示を維持しつつ、panel ごとに error state を表示してよい。
+list/detail endpoint が expected JSON shape を返さない場合も、blank page や uncaught exception
+ではなく panel-local error state へ落とさなければならない。
 
 ## Preset Queue Interaction
 

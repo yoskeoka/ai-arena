@@ -110,6 +110,9 @@ export class OperatorApiClient {
 
   private async decodeList(response: Response): Promise<ResultListItem[]> {
     const payload = await this.decodeJSON<ListResponse>(response);
+    if (!isListResponse(payload)) {
+      throw new Error("operator API returned an unexpected list payload");
+    }
     return payload.items;
   }
 
@@ -135,6 +138,10 @@ export class OperatorApiClient {
     const base = trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
     return `${base}${pathname}`;
   }
+}
+
+function isListResponse(payload: unknown): payload is ListResponse {
+  return typeof payload === "object" && payload !== null && "items" in payload && Array.isArray(payload.items);
 }
 
 async function decodeResponseBody<T>(response: Response): Promise<T | { error?: string } | string> {

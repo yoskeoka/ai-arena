@@ -41,6 +41,9 @@ export function hintFor(error?: string) {
     return undefined;
   }
   const normalized = error.toLowerCase();
+  if (normalized.includes("unexpected list payload")) {
+    return "Remote Pages deploys must set the operator API base URL to the backend origin. Leaving the field blank only works with the local Vite proxy.";
+  }
   if (normalized.includes("failed to fetch") || normalized.includes("err_connection_refused")) {
     return "For local dev, start arena-service first and verify `curl http://127.0.0.1:10000/healthz` returns 200. Leaving the base URL blank uses the local Vite proxy.";
   }

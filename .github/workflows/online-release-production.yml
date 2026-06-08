@@ -80,6 +80,8 @@ jobs:
       - name: Build operator UI
         run: pnpm run build
         working-directory: operator-ui
+        env:
+          VITE_OPERATOR_API_BASE_URL: ${{ env.PRODUCTION_BACKEND_URL }}
 
       - name: Deploy Pages production
         run: npx wrangler pages deploy dist --project-name="${CLOUDFLARE_PAGES_PROJECT}"
