@@ -5,7 +5,7 @@ Addresses: `docs/issues/0027-platform-service-db-migration-release-flow.md`
 
 ## Objective
 
-schema change を伴う ai-arena backend release を、`desired schema update -> generated migration SQL review -> staging DB apply -> staging backend deploy -> staging verify -> production DB apply -> production deploy`
+schema change を伴う ai-arena backend release を、`desired schema update -> generated migration SQL review -> staging DB apply -> staging backend deploy -> staging verify -> production DB apply -> production backend/frontend deploy`
 の一連の flow として repo-owned workflow に固定する。
 最初の到達点は、今回の staging failure が `service_queue_records` schema 未適用だったことを
 repo の release contract と runbook に反映し、今後の schema change が同じ事故を起こさない
@@ -13,14 +13,14 @@ repo の release contract と runbook に反映し、今後の schema change が
 
 ## Context
 
-- `0059` は Atlas を使った desired schema / migration artifact / query layer の責務分離までを導入したが、
+- `0059-service-postgres-schema-management-and-query-layer.md` は Atlas を使った desired schema / migration artifact / query layer の責務分離までを導入したが、
   deploy-time schema apply lane は scope 外だった
 - `0074` は Phase 6 release flow を `local -> CI -> stg -> verify -> prod` の形に固定したが、
   DB migration step と secret contract は未定義のまま残っている
 - current Postgres contract では runtime startup DDL を禁止し、schema apply は service 起動前提になっている
 - current deploy workflow は Pages deploy と Render deploy hook までは repo-owned だが、
   Neon staging / production DB へ migration を apply する step がない
-- Neon console では pooled connection string が default であり、
+- Neon dashboard では pooled connection string が default であり、
   schema migration のような session-dependent operation では direct connection を別に取得する必要がある
 - current secret naming proposal は、runtime は Render service env の `ARENA_SERVICE_POSTGRES_DSN`、
   release workflow migration lane は GitHub Actions secrets の
