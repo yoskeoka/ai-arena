@@ -258,3 +258,10 @@
 - Pattern: terminal/CLI で PR を整えると、手元 path や補助 comment で済ませても作業者には十分に見えやすく、reviewer が最初に読む PR body の体験を後回しにしやすい
 - Rule: reviewer 向けの screenshot や画像 evidence は、user から別指示がない限りまず PR body に inline 表示で載せる。PR comment は人間レビュー指摘への応答や補足説明に限って使い、初回 evidence の主置き場にしない
 - Applied: `.github/PULL_REQUEST_TEMPLATE.md` の `Screenshots / Logs`、今後の ai-arena PR 作成と review-ready artifact 添付全般
+
+## [2026-06-11] Atlas baseline は revision table 未作成状態で再現してから runbook 化する
+
+- Mistake: 手動で schema を揃えた staging DB を Atlas 管理へ載せる手順として、revision table が未作成の状態でも `make postgres-migrate-set VERSION=...` で baseline できる前提にしてしまった
+- Pattern: migration tool の「履歴を編集する command」と「初回 baseline を確立する command」の前提差を、実 DB で再現確認する前に docs/runbook へ書いてしまう
+- Rule: Atlas で手動適用済み DB を workflow に載せるときは、`migrate set` を先に案内しない。まず revision table 未作成の状態を再現し、`migrate apply --baseline <version>` で成立することを確認してから repo の command surface と runbook に反映する
+- Applied: `Makefile` の Postgres migration helper、`docs/development/platform-service-postgres.md`、`docs/development/platform-service-online-deploy.md`、今後の Atlas baseline/runbook 追加全般

@@ -35,7 +35,7 @@ REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtim
 REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
 REVIVE_PACKAGE_DIRS = $(shell $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
-.PHONY: test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-set postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 export COMPOSE_BAKE = false
 
@@ -93,13 +93,13 @@ postgres-migrate-diff:
 postgres-migrate-hash:
 	$(ATLAS_DOCKER) migrate hash --dir "$(POSTGRES_MIGRATIONS_URL)"
 
-postgres-migrate-set:
+postgres-migrate-baseline:
 	@if [ -z "$(VERSION)" ] && [ -z "$(POSTGRES_MIGRATION_VERSION)" ]; then \
 		echo "VERSION or POSTGRES_MIGRATION_VERSION is required"; \
 		exit 1; \
 	fi
 	version="$${VERSION:-$(POSTGRES_MIGRATION_VERSION)}"; \
-	$(ATLAS_DOCKER) migrate set "$$version" --url "$(AI_ARENA_PG_MIGRATION_DSN)" --dir "$(POSTGRES_MIGRATIONS_URL)"
+	$(ATLAS_DOCKER) migrate apply --baseline "$$version" --url "$(AI_ARENA_PG_MIGRATION_DSN)" --dir "$(POSTGRES_MIGRATIONS_URL)"
 
 postgres-migrate-apply:
 	$(ATLAS_DOCKER) migrate apply --allow-dirty --url "$(AI_ARENA_PG_MIGRATION_DSN)" --dir "$(POSTGRES_MIGRATIONS_URL)"
