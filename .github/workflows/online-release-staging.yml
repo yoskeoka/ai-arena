@@ -117,6 +117,11 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.target_sha }}
 
+      - name: Apply staging DB migrations
+        run: make postgres-migrate-apply
+        env:
+          AI_ARENA_PG_MIGRATION_DSN: ${{ secrets.NEON_STAGING_MIGRATION_DSN }}
+
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
@@ -165,6 +170,7 @@ jobs:
             echo "- Commit SHA: \`${TARGET_SHA}\`"
             echo "- Frontend URL: ${STAGING_FRONTEND_URL}"
             echo "- Backend URL: ${STAGING_BACKEND_URL}"
+            echo "- DB migration: applied before Pages/Render deploy via \`NEON_STAGING_MIGRATION_DSN\`"
             echo "- Next step: \`online-release-staging-verify.yml\` will run automatically for the same commit SHA"
           } >> "$GITHUB_STEP_SUMMARY"
         env:

@@ -10,6 +10,7 @@ GOCACHE = $(CACHE_ROOT)/go-build
 CARGO_TARGET_DIR ?= $(CACHE_ROOT)/cargo-target
 RUST_WASM_TARGET ?= wasm32-wasip1
 AI_ARENA_PG_TEST_DSN ?= postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable
+AI_ARENA_PG_MIGRATION_DSN ?= $(AI_ARENA_PG_TEST_DSN)
 AI_ARENA_PG_ATLAS_DEV_DSN ?= postgres://arena:arena@127.0.0.1:55432/postgres?sslmode=disable
 SEAWEED_DATA_DIR ?= $(CURDIR)/.local/seaweed
 SEAWEED_COMPOSE_FILE ?= tools/dev/seaweed-compose.yml
@@ -25,6 +26,7 @@ POSTGRES_MIGRATIONS_DIR ?= internal/platform/service/postgres/migrations
 POSTGRES_SQLC_CONFIG ?= sqlc.yaml
 POSTGRES_ATLAS_DEV_URL ?= $(AI_ARENA_PG_ATLAS_DEV_DSN)
 POSTGRES_MIGRATION_NAME ?=
+POSTGRES_MIGRATION_VERSION ?=
 POSTGRES_SCHEMA_URL ?= file://$(POSTGRES_SCHEMA_DIR)
 POSTGRES_MIGRATIONS_URL ?= file://$(POSTGRES_MIGRATIONS_DIR)
 GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
@@ -33,7 +35,7 @@ REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtim
 REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
 REVIVE_PACKAGE_DIRS = $(shell $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
-.PHONY: test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-set postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 export COMPOSE_BAKE = false
 
@@ -85,7 +87,22 @@ postgres-migrate-diff:
 		exit 1; \
 	fi
 	name="$${NAME:-$(POSTGRES_MIGRATION_NAME)}"; \
-	$(ATLAS_DOCKER) migrate diff "$$name" --dir "$(POSTGRES_MIGRATIONS_URL)" --to "$(POSTGRES_SCHEMA_URL)" --dev-url "$(POSTGRES_ATLAS_DEV_URL)"
+	$(ATLAS_DOCKER) migrate diff "$$name" --dir "$(POSTGRES_MIGRATIONS_URL)" --to "$(POSTGRES_SCHEMA_URL)" --dev-url "$(POSTGRES_ATLAS_DEV_URL)"; \
+	$(MAKE) postgres-migrate-hash
+
+postgres-migrate-hash:
+	$(ATLAS_DOCKER) migrate hash --dir "$(POSTGRES_MIGRATIONS_URL)"
+
+postgres-migrate-set:
+	@if [ -z "$(VERSION)" ] && [ -z "$(POSTGRES_MIGRATION_VERSION)" ]; then \
+		echo "VERSION or POSTGRES_MIGRATION_VERSION is required"; \
+		exit 1; \
+	fi
+	version="$${VERSION:-$(POSTGRES_MIGRATION_VERSION)}"; \
+	$(ATLAS_DOCKER) migrate set "$$version" --url "$(AI_ARENA_PG_MIGRATION_DSN)" --dir "$(POSTGRES_MIGRATIONS_URL)"
+
+postgres-migrate-apply:
+	$(ATLAS_DOCKER) migrate apply --allow-dirty --url "$(AI_ARENA_PG_MIGRATION_DSN)" --dir "$(POSTGRES_MIGRATIONS_URL)"
 
 postgres-sqlc-generate:
 	$(SQLC_DOCKER) generate -f "$(POSTGRES_SQLC_CONFIG)"
