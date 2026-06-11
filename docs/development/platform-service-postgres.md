@@ -51,8 +51,14 @@ release lane では target DB へ commit 済み migration SQL を順番に apply
 この target は `AI_ARENA_PG_MIGRATION_DSN` で与える。
 未指定なら local contributor lane では `AI_ARENA_PG_TEST_DSN` を流用してよいが、
 staging/production では runtime pooled DSN を使わず direct/admin DSN を別に渡す。
-initial empty DB への初回 apply では Atlas の clean-check を越えるため
-`--allow-dirty` を使う。
+helper は target DB を次のように判定する。
+
+- Atlas revision history あり:
+  strict に `migrate apply` する
+- user table なし / revision history なし:
+  initial empty DB とみなし、初回だけ `--allow-dirty` で apply する
+- user table あり / revision history なし:
+  manual schema 済み DB とみなし、そのままでは apply せず baseline を要求する
 
 `make postgres-migrate-baseline VERSION=<migration_version>` は、
 すでに手動で schema を揃えた DB に revision history を合わせる one-time baseline 入口である。
@@ -100,6 +106,8 @@ schema change PR では、desired schema SQL と generated migration SQL、
 `atlas.sum` を同じ PR に含める。
 release target DB がすでに同等 schema を手動適用済みなら、
 first workflow run 前に `make postgres-migrate-baseline VERSION=<latest_version>` で baseline を揃える。
+workflow 上で自動 baseline が必要な特殊ケースだけ、
+`POSTGRES_MIGRATION_BASELINE_VERSION=<latest_version>` を `make postgres-migrate-apply` に渡してよい。
 
 ### Test/Bootstrap Lane
 

@@ -46,7 +46,7 @@ jobs:
     needs: prepare
     runs-on: ubuntu-latest
     concurrency:
-      group: online-release-production-${{ needs.prepare.outputs.target_sha }}
+      group: online-release-production-environment
       cancel-in-progress: false
     steps:
       - name: Checkout target commit

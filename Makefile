@@ -102,7 +102,7 @@ postgres-migrate-baseline:
 	$(ATLAS_DOCKER) migrate apply --baseline "$$version" --url "$(AI_ARENA_PG_MIGRATION_DSN)" --dir "$(POSTGRES_MIGRATIONS_URL)"
 
 postgres-migrate-apply:
-	$(ATLAS_DOCKER) migrate apply --allow-dirty --url "$(AI_ARENA_PG_MIGRATION_DSN)" --dir "$(POSTGRES_MIGRATIONS_URL)"
+	ATLAS_IMAGE="$(ATLAS_IMAGE)" POSTGRES_MIGRATIONS_URL="$(POSTGRES_MIGRATIONS_URL)" AI_ARENA_PG_MIGRATION_DSN="$(AI_ARENA_PG_MIGRATION_DSN)" POSTGRES_MIGRATION_BASELINE_VERSION="$(POSTGRES_MIGRATION_BASELINE_VERSION)" ./tools/dev/postgres-migrate-apply.sh
 
 postgres-sqlc-generate:
 	$(SQLC_DOCKER) generate -f "$(POSTGRES_SQLC_CONFIG)"
