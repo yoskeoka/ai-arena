@@ -346,9 +346,12 @@ staging deploy workflow は次を 1 run にまとめる。
 
 auto trigger contract:
 
-- upstream trigger は `main` branch 上の push workflow completion を使う
-- release workflow 自身は、同じ `head_sha` の push workflow run に
-  `queued|in_progress|failure` が残っている間は deploy しない
+- authoritative trigger は `main push` で 1 回だけ起動する `online-release-staging` 自身とする
+- release workflow の `prepare` job が、同じ `head_sha` に対する required push workflow
+  (`go-ci` / `operator-ui-browser` / `Japanese textlint` / `Slopless` / `Workflow Lint`)
+  を poll し、全件 `success` を確認してから deploy へ進む
+- required push workflow に `failure` / `cancelled` / `timed_out` が出た場合、
+  staging deploy workflow 自体を failed にして止める
 - 同じ SHA に対して staging deploy は 1 回だけ進める
 
 staging frontend URL は current project shape では次を正本とする。
@@ -559,7 +562,8 @@ release operator は次の順で実行する。
    - `docs/development/operator-ui-local-verification.md` の real-local lane を通す
 2. Merge PR into `main`
 3. CI confirmation
-   - merged SHA に対する push-triggered CI workflow がすべて `success` になるのを待つ
+   - `online-release-staging.yml` の `prepare` が merged SHA に対する required push workflow の
+     全件 `success` を待つ
 4. staging deploy
    - `online-release-staging.yml` が同じ merged SHA で自動起動する
 5. staging verification
