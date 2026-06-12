@@ -347,13 +347,19 @@ staging deploy workflow は次を 1 run にまとめる。
 auto trigger contract:
 
 - authoritative trigger は `main push` で 1 回だけ起動する `online-release-staging` 自身とする
-- release workflow の `prepare` job が、同じ `head_sha` に対する required push workflow
-  (`go-ci` / `operator-ui-browser`)
-  を poll し、全件 `success` を確認してから deploy へ進む
+- release workflow の `prepare` job が commit diff を見て deploy 要否を判定する
+  - initial skiplist は狭く始め、`docs/**`、`README.md`、
+    `.github/PULL_REQUEST_TEMPLATE.md` だけを non-release change とみなす
+  - 上記だけが changed のときは `should_deploy=false` で clean に skip する
+  - それ以外の change は release candidate として扱う
+- release candidate の場合だけ、同じ `head_sha` に対する required push workflow
+  (`go-ci` / `operator-ui-browser`) のうち、
+  その workflow 自身の `push.paths` 対象に当たるものを poll し、
+  全件 `success` を確認してから deploy へ進む
 - required push workflow に `failure` / `cancelled` / `timed_out` が出た場合、
   staging deploy workflow 自体を failed にして止める
-- `online-release-staging.yml` 自身の `push.paths` は、`go-ci` と `operator-ui-browser` の
-  push-triggered coverage と整合する範囲に揃える
+- required push workflow が 1 本も該当しない release candidate
+  (例: release workflow 自身の変更) は、そのまま deploy へ進めてよい
 - 同じ SHA に対して staging deploy は 1 回だけ進める
 
 staging frontend URL は current project shape では次を正本とする。
