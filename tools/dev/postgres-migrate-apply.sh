@@ -6,6 +6,7 @@ dsn=${AI_ARENA_PG_MIGRATION_DSN:-}
 atlas_image=${ATLAS_IMAGE:-arigaio/atlas:0.30.0}
 migrations_url=${POSTGRES_MIGRATIONS_URL:-file://internal/platform/service/postgres/migrations}
 baseline_version=${POSTGRES_MIGRATION_BASELINE_VERSION:-}
+revisions_schema=${POSTGRES_MIGRATION_REVISIONS_SCHEMA:-}
 
 if [ -z "$dsn" ]; then
   echo "AI_ARENA_PG_MIGRATION_DSN is required" >&2
@@ -36,16 +37,32 @@ run_psql() {
 }
 
 run_atlas_apply() {
+  revisions_args=
+  if [ -n "$revisions_schema" ]; then
+    revisions_args="--revisions-schema $revisions_schema"
+  fi
   docker run --rm --network host \
     -v "$repo_root:/work" \
     -w /work \
     -v /var/run/docker.sock:/var/run/docker.sock \
     "$atlas_image" \
-    migrate apply "$@" --url "$dsn" --dir "$migrations_url"
+    migrate apply $revisions_args "$@" --url "$dsn" --dir "$migrations_url"
 }
 
-revisions_exists=$(run_psql "SELECT CASE WHEN to_regclass('atlas_schema_revisions.atlas_schema_revisions') IS NULL THEN 0 ELSE 1 END;")
-user_table_count=$(run_psql "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND NOT (schemaname = 'atlas_schema_revisions' AND tablename = 'atlas_schema_revisions');")
+if [ -z "$revisions_schema" ]; then
+  if [ "$(run_psql "SELECT CASE WHEN to_regclass('atlas_schema_revisions.atlas_schema_revisions') IS NULL THEN 0 ELSE 1 END;")" = "1" ]; then
+    revisions_schema=atlas_schema_revisions
+  elif [ "$(run_psql "SELECT CASE WHEN to_regclass('public.atlas_schema_revisions') IS NULL THEN 0 ELSE 1 END;")" = "1" ]; then
+    revisions_schema=public
+  fi
+fi
+
+revisions_exists=0
+if [ -n "$revisions_schema" ]; then
+  revisions_exists=1
+fi
+
+user_table_count=$(run_psql "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND NOT (schemaname = '$revisions_schema' AND tablename = 'atlas_schema_revisions');")
 
 if [ "$revisions_exists" = "1" ]; then
   run_atlas_apply

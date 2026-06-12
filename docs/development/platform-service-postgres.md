@@ -60,6 +60,10 @@ helper は target DB を次のように判定する。
 - user table あり / revision history なし:
   manual schema 済み DB とみなし、そのままでは apply せず baseline を要求する
 
+既存環境で revision table が `public.atlas_schema_revisions` にある場合は、
+`POSTGRES_MIGRATION_REVISIONS_SCHEMA=public` を明示してよい。
+repo helper も `public` と Atlas 既定 schema の両方を自動検出する。
+
 `make postgres-migrate-baseline VERSION=<migration_version>` は、
 すでに手動で schema を揃えた DB に revision history を合わせる one-time baseline 入口である。
 staging remediation 後のように migration SQL 相当の変更を先に手で入れた DB では、
@@ -108,6 +112,8 @@ release target DB がすでに同等 schema を手動適用済みなら、
 first workflow run 前に `make postgres-migrate-baseline VERSION=<latest_version>` で baseline を揃える。
 workflow 上で自動 baseline が必要な特殊ケースだけ、
 `POSTGRES_MIGRATION_BASELINE_VERSION=<latest_version>` を `make postgres-migrate-apply` に渡してよい。
+revision table schema が Atlas 既定以外にずれている環境では、
+`POSTGRES_MIGRATION_REVISIONS_SCHEMA=<schema>` も同時に渡す。
 
 ### Test/Bootstrap Lane
 
