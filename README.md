@@ -41,7 +41,7 @@ make postgres-schema-apply
 make seaweed-bootstrap
 make render-build
 ARENA_SERVICE_POSTGRES_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable \
-ARENA_SERVICE_PRESET_CONFIG=./config/platform-service/presets.example.json \
+ARENA_SERVICE_PRESET_CONFIG=./config/platform-service/presets.remote-bootstrap.json \
 ARENA_SERVICE_ARTIFACT_BACKEND=r2 \
 ARENA_SERVICE_ARTIFACT_R2_BUCKET=ai-arena-local \
 ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT=http://127.0.0.1:8333 \
@@ -70,6 +70,8 @@ postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable
 
 The Docker Postgres harness definition lives in `docs/development/platform-service-postgres.md`.
 The SeaweedFS object-storage harness and delegated artifact verification flow live in `docs/development/platform-service-object-storage.md`.
+`./config/platform-service/presets.remote-bootstrap.json` is the deploy-shaped preset catalog.
+`./config/platform-service/presets.example.json` remains the lightweight contributor example and is not the staging/production canonical value.
 When you are done with the local backends, stop them with:
 
 ```sh
@@ -79,6 +81,7 @@ make seaweed-down
 
 If you explicitly want the lightweight queue-only lane instead of the deploy-shaped Postgres lane, omit `ARENA_SERVICE_POSTGRES_DSN` and start `arena-service` with the in-memory store.
 If you want the lightweight artifact lane as well, omit `ARENA_SERVICE_ARTIFACT_BACKEND` and the service keeps the local filesystem backend.
+In that lightweight lane, it is fine to point `ARENA_SERVICE_PRESET_CONFIG` at `./config/platform-service/presets.example.json`.
 
 The equivalent direct command is:
 
@@ -91,7 +94,7 @@ ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID=admin \
 ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY=secret \
 go run ./cmd/arena-service serve \
   --listen-addr 0.0.0.0:10000 \
-  --preset-config ./config/platform-service/presets.example.json
+  --preset-config ./config/platform-service/presets.remote-bootstrap.json
 ```
 
 ### Run the operator UI

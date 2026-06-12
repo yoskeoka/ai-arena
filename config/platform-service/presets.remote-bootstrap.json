@@ -17,7 +17,7 @@
           "artifact_ref": "./config/platform-service/preset-bots/echo-ai-2turn"
         }
       ],
-      "output_dir": "./tmp/operator-ui-browser-file-backed"
+      "output_dir": "arena-service-output"
     }
   ]
 }

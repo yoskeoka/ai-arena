@@ -532,8 +532,11 @@ current path では custom domain を導入しない。
     `make render-build`
   - start:
     `make render-start`
-- real remote lane では `presets.example.json` をそのまま使わず、
-  Render service へ mount / bake / secret-managed path した preset catalog を `ARENA_SERVICE_PRESET_CONFIG` で指定する
+- real remote lane の canonical preset catalog は
+  `./config/platform-service/presets.remote-bootstrap.json` とする
+- この catalog は `presets.example.json` を流用せず、
+  `make render-build` が生成する prepared preset executable を参照しなければならない
+- staging / production の `ARENA_SERVICE_PRESET_CONFIG` は上記 canonical path を指す
 - `make render-start` は Render の `PORT` を優先して
   `0.0.0.0:$PORT` へ bind する。`PORT` 未設定時だけ `10000` を fallback に使う
 - preset catalog は server-known participant set のみを持ち、

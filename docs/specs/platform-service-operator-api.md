@@ -106,6 +106,10 @@ request の制約:
   `docs/specs/platform-service-skeleton.md` の admission contract を満たしていなければならない
 
 first landing の preset catalog は local JSON file や同等の repo-local config から読んでよい。
+ただし deploy-shaped remote lane の catalog は、repo source checkout 上の `go run` 前提 entry ではなく、
+`make render-build` などの build/start contract だけで実行可能な prepared artifact entry を指さなければならない。
+`presets.example.json` のような contributor-facing lightweight example は、
+staging / production の canonical preset catalog と同一でなくてよい。
 general registration API や DB-backed preset registry は後続へ残す。
 
 ## Polling Routes
