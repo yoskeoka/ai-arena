@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: Verified staging commit SHA to promote to production
+        description: Full commit SHA or unique short commit SHA verified on staging and promoted to production
         required: true
         type: string
       staging_verification_run_url:
@@ -31,16 +31,44 @@ jobs:
     steps:
       - name: Prepare production release inputs
         id: prepare
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "target_sha=${{ inputs.commit_sha }}" >> "$GITHUB_OUTPUT"
-            echo "verification_url=${{ inputs.staging_verification_run_url }}" >> "$GITHUB_OUTPUT"
-            echo "tag_name=" >> "$GITHUB_OUTPUT"
-          else
-            echo "target_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-            echo "verification_url=" >> "$GITHUB_OUTPUT"
-            echo "tag_name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const resolveDispatchedSha = async (rawRef) => {
+              const candidate = rawRef.trim();
+              if (!/^[0-9a-f]{7,40}$/i.test(candidate)) {
+                core.setFailed("commit_sha must be a full SHA or a unique short SHA using 7-40 hexadecimal characters.");
+                return null;
+              }
+
+              try {
+                const { data } = await github.rest.repos.getCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: candidate,
+                });
+                return data.sha;
+              } catch (error) {
+                core.setFailed(`commit_sha '${candidate}' could not be resolved. Use a full SHA or a unique short SHA on this repository.`);
+                return null;
+              }
+            };
+
+            if (context.eventName === "workflow_dispatch") {
+              const targetSha = await resolveDispatchedSha("${{ inputs.commit_sha }}");
+              if (!targetSha) {
+                return;
+              }
+              core.setOutput("target_sha", targetSha);
+              core.setOutput("verification_url", "${{ inputs.staging_verification_run_url }}");
+              core.setOutput("tag_name", "");
+              core.info(`resolved workflow_dispatch commit_sha to ${targetSha}`);
+              return;
+            }
+
+            core.setOutput("target_sha", process.env.GITHUB_SHA);
+            core.setOutput("verification_url", "");
+            core.setOutput("tag_name", process.env.GITHUB_REF_NAME);
 
   release-production:
     needs: prepare
