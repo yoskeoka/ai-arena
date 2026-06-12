@@ -81,6 +81,8 @@ deploy-shaped artifact verification lane は
 Postgres metadata backend と S3-compatible object storage backend を組み合わせてよい。
 durable lane が Postgres backend を起動するとき、schema bootstrap は runtime の責務ではない。
 target DB は service/worker 起動前に schema apply 済みでなければならない。
+release lane では、schema change を含む target commit の versioned migration を
+backend/frontend deploy より先に apply しなければならない。
 
 operator UI verification も同じく lane を分けて扱う。
 
