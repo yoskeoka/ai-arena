@@ -155,7 +155,7 @@ lint-revive:
 
 build-preset-bots:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	$(GO_ENV) ./tools/dev/build-preset-bots.sh
+	$(GO_ENV) GO="$(GO)" ./tools/dev/build-preset-bots.sh
 
 render-build:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"

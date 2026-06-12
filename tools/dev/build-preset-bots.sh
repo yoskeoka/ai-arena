@@ -5,10 +5,12 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 output_dir="$repo_root/config/platform-service/preset-bots"
 binary_path="$output_dir/echo-ai-2turn"
 manifest_path="$binary_path.arena.json"
+go_cmd=${GO:-go}
 
+cd "$repo_root"
 mkdir -p "$output_dir"
 
-go build -o "$binary_path" ./testdata/ai/echo/echo-ai
+"$go_cmd" build -o "$binary_path" ./testdata/ai/echo/echo-ai
 
 cat >"$manifest_path" <<'EOF'
 {
