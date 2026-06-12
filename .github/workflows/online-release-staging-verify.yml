@@ -67,15 +67,16 @@ jobs:
             };
 
             if (context.eventName === "workflow_dispatch") {
-              const targetSha = await resolveDispatchedSha("${{ inputs.commit_sha }}");
+              const inputs = context.payload.inputs ?? {};
+              const targetSha = await resolveDispatchedSha(inputs.commit_sha ?? "");
               if (!targetSha) {
                 return;
               }
               core.setOutput("should_verify", "true");
               core.setOutput("target_sha", targetSha);
-              core.setOutput("frontend_url", "${{ inputs.frontend_url }}");
-              core.setOutput("backend_url", "${{ inputs.backend_url }}");
-              core.setOutput("preset_id", "${{ inputs.preset_id }}");
+              core.setOutput("frontend_url", inputs.frontend_url ?? "");
+              core.setOutput("backend_url", inputs.backend_url ?? "");
+              core.setOutput("preset_id", inputs.preset_id ?? "");
               core.info(`resolved workflow_dispatch commit_sha to ${targetSha}`);
               return;
             }

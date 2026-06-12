@@ -55,12 +55,13 @@ jobs:
             };
 
             if (context.eventName === "workflow_dispatch") {
-              const targetSha = await resolveDispatchedSha("${{ inputs.commit_sha }}");
+              const inputs = context.payload.inputs ?? {};
+              const targetSha = await resolveDispatchedSha(inputs.commit_sha ?? "");
               if (!targetSha) {
                 return;
               }
               core.setOutput("target_sha", targetSha);
-              core.setOutput("verification_url", "${{ inputs.staging_verification_run_url }}");
+              core.setOutput("verification_url", inputs.staging_verification_run_url ?? "");
               core.setOutput("tag_name", "");
               core.info(`resolved workflow_dispatch commit_sha to ${targetSha}`);
               return;

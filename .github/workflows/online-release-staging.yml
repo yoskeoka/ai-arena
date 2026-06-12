@@ -57,7 +57,8 @@ jobs:
             };
 
             if (context.eventName === "workflow_dispatch") {
-              const targetSha = await resolveDispatchedSha("${{ inputs.commit_sha }}");
+              const inputs = context.payload.inputs ?? {};
+              const targetSha = await resolveDispatchedSha(inputs.commit_sha ?? "");
               if (!targetSha) {
                 return;
               }
