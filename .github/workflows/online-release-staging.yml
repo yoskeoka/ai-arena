@@ -1,21 +1,15 @@
 name: online-release-staging
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       commit_sha:
         description: Full commit SHA or unique short commit SHA to deploy to staging
         required: true
         type: string
-  workflow_run:
-    workflows:
-      - go-ci
-      - operator-ui-browser
-      - Japanese textlint
-      - Slopless
-      - Workflow Lint
-    types:
-      - completed
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -55,6 +49,67 @@ jobs:
                 return null;
               }
             };
+            const nonReleasePatterns = [
+              "docs/**",
+              "README.md",
+              ".github/PULL_REQUEST_TEMPLATE.md",
+            ];
+            const requiredWorkflows = [
+              {
+                name: "go-ci",
+                patterns: [
+                  ".github/workflows/go-ci.yml",
+                  "Makefile",
+                  "go.mod",
+                  "go.sum",
+                  "sqlc.yaml",
+                  "revive.toml",
+                  "**/*.go",
+                  "internal/platform/service/postgres/**",
+                ],
+              },
+              {
+                name: "operator-ui-browser",
+                patterns: [
+                  ".github/workflows/operator-ui-browser.yml",
+                  "Makefile",
+                  "cmd/arena-service/**",
+                  "cmd/operator-ui-fixture/**",
+                  "config/platform-service/**",
+                  "internal/platform/**",
+                  "operator-ui/**",
+                  "tools/dev/**",
+                ],
+              },
+            ];
+            const globToRegExp = (pattern) => {
+              let source = "^";
+              for (let i = 0; i < pattern.length; i += 1) {
+                const char = pattern[i];
+                if (char === "*") {
+                  const next = pattern[i + 1];
+                  if (next === "*") {
+                    source += ".*";
+                    i += 1;
+                  } else {
+                    source += "[^/]*";
+                  }
+                  continue;
+                }
+                if (char === "?") {
+                  source += ".";
+                  continue;
+                }
+                if ("\\.[]{}()+-^$|".includes(char)) {
+                  source += `\\${char}`;
+                  continue;
+                }
+                source += char;
+              }
+              source += "$";
+              return new RegExp(source);
+            };
+            const matchesAny = (patterns, value) => patterns.some((pattern) => globToRegExp(pattern).test(value));
 
             if (context.eventName === "workflow_dispatch") {
               const inputs = context.payload.inputs ?? {};
@@ -68,67 +123,103 @@ jobs:
               return;
             }
 
-            const upstream = context.payload.workflow_run;
-            const targetSha = upstream.head_sha;
+            const targetSha = context.sha;
+            const maxAttempts = 40;
+            const pollIntervalMs = 15000;
 
             core.setOutput("target_sha", targetSha);
 
-            if (upstream.event !== "push" || upstream.head_branch !== "main" || upstream.conclusion !== "success") {
-              core.info(`skip: upstream event=${upstream.event} branch=${upstream.head_branch} conclusion=${upstream.conclusion}`);
-              core.setOutput("should_deploy", "false");
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            let expectedWorkflowNames = [];
+
+            try {
+              const beforeSha = context.payload.before;
+              const isInitialPush = !beforeSha || /^0+$/.test(beforeSha);
+              if (isInitialPush) {
+                core.info(`initial push detected for ${targetSha}; defaulting to deploy`);
+              } else {
+                const comparison = await github.rest.repos.compareCommitsWithBasehead({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  basehead: `${beforeSha}...${targetSha}`,
+                });
+                const changedFiles = (comparison.data.files || []).map((file) => file.filename);
+                core.info(`changed files for ${targetSha}: ${changedFiles.join(",") || "none"}`);
+
+                if (changedFiles.length === 0) {
+                  core.info(`no changed files reported for ${targetSha}; defaulting to deploy`);
+                } else {
+                  const deployRelevantFiles = changedFiles.filter((file) => !matchesAny(nonReleasePatterns, file));
+                  if (deployRelevantFiles.length === 0) {
+                    core.info(`skip: only non-release files changed for ${targetSha}`);
+                    core.setOutput("should_deploy", "false");
+                    return;
+                  }
+
+                  expectedWorkflowNames = requiredWorkflows
+                    .filter((workflow) => changedFiles.some((file) => matchesAny(workflow.patterns, file)))
+                    .map((workflow) => workflow.name);
+                }
+              }
+            } catch (error) {
+              core.warning(`failed to evaluate changed files for ${targetSha}; defaulting to deploy: ${error.message}`);
+            }
+
+            if (expectedWorkflowNames.length === 0) {
+              core.info(`no required push workflows apply to ${targetSha}; proceeding directly to deploy`);
+              core.setOutput("should_deploy", "true");
               return;
             }
 
-            const { data } = await github.rest.actions.listWorkflowRunsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              branch: "main",
-              event: "push",
-              per_page: 100,
-            });
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+              const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                branch: "main",
+                event: "push",
+                per_page: 100,
+              });
 
-            const releaseWorkflowNames = new Set([
-              "online-release-staging",
-              "online-release-staging-verify",
-              "online-release-production",
-            ]);
+              const runsByName = new Map();
+              for (const run of data.workflow_runs) {
+                if (run.head_sha !== targetSha) {
+                  continue;
+                }
+                if (!expectedWorkflowNames.includes(run.name)) {
+                  continue;
+                }
+                const current = runsByName.get(run.name);
+                if (!current || run.id > current.id) {
+                  runsByName.set(run.name, run);
+                }
+              }
 
-            const sameShaRuns = data.workflow_runs.filter((run) => {
-              return run.head_sha === targetSha && !releaseWorkflowNames.has(run.name);
-            });
+              const missing = expectedWorkflowNames.filter((name) => !runsByName.has(name));
+              const failed = Array.from(runsByName.values()).find((run) => {
+                return run.status === "completed" && run.conclusion !== "success";
+              });
+              if (failed) {
+                core.setFailed(`required workflow ${failed.name} concluded with ${failed.conclusion} for ${targetSha}`);
+                return;
+              }
 
-            if (sameShaRuns.length === 0) {
-              core.info(`skip: no push workflow runs found for ${targetSha}`);
-              core.setOutput("should_deploy", "false");
-              return;
+              const pending = Array.from(runsByName.values()).filter((run) => run.status !== "completed");
+              if (missing.length === 0 && pending.length === 0) {
+                core.info(`all required workflows succeeded for ${targetSha}`);
+                core.setOutput("should_deploy", "true");
+                return;
+              }
+
+              core.info(
+                `waiting for required workflows on ${targetSha}; attempt=${attempt}/${maxAttempts} missing=${missing.join(",") || "none"} pending=${pending.map((run) => run.name).join(",") || "none"}`
+              );
+
+              if (attempt < maxAttempts) {
+                await sleep(pollIntervalMs);
+              }
             }
 
-            const blockingRun = sameShaRuns.find((run) => {
-              return run.status !== "completed" || run.conclusion !== "success";
-            });
-            if (blockingRun) {
-              core.info(`skip: workflow ${blockingRun.name} status=${blockingRun.status} conclusion=${blockingRun.conclusion}`);
-              core.setOutput("should_deploy", "false");
-              return;
-            }
-
-            const currentRuns = await github.rest.actions.listWorkflowRuns({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: ".github/workflows/online-release-staging.yml",
-              per_page: 100,
-            });
-
-            const duplicate = currentRuns.data.workflow_runs.find((run) => {
-              return run.id !== context.runId && run.head_sha === targetSha && (run.status !== "completed" || run.conclusion === "success");
-            });
-            if (duplicate) {
-              core.info(`skip: staging workflow already exists for ${targetSha} as run ${duplicate.id} status=${duplicate.status} conclusion=${duplicate.conclusion}`);
-              core.setOutput("should_deploy", "false");
-              return;
-            }
-
-            core.setOutput("should_deploy", "true");
+            core.setFailed(`timed out waiting for required workflows for ${targetSha}`);
 
   deploy-staging:
     needs: prepare
