@@ -9,3 +9,5 @@ operator-ui/*.tsbuildinfo
 operator-ui/playwright-report/
 operator-ui/test-results/
 testdata/ai/janken/*.wasm
+config/platform-service/preset-bots/*
+!config/platform-service/preset-bots/.gitkeep

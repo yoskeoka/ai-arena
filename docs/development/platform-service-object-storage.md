@@ -50,7 +50,7 @@ make postgres-schema-apply
 make seaweed-bootstrap
 make render-build
 ARENA_SERVICE_POSTGRES_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable \
-ARENA_SERVICE_PRESET_CONFIG=./config/platform-service/presets.example.json \
+ARENA_SERVICE_PRESET_CONFIG=./config/platform-service/presets.remote-bootstrap.json \
 ARENA_SERVICE_ARTIFACT_BACKEND=r2 \
 ARENA_SERVICE_ARTIFACT_R2_BUCKET=ai-arena-local \
 ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT=http://127.0.0.1:8333 \
@@ -59,6 +59,10 @@ ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY=secret \
 PORT=10000 \
 make render-start
 ```
+
+この lane では `presets.remote-bootstrap.json` を canonical とし、
+`make render-build` が生成する prepared preset executable を使って remote bootstrap shape を再現する。
+`presets.example.json` は lightweight contributor example であり、この deploy-shaped lane の canonical config ではない。
 
 verification helper:
 
