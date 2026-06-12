@@ -265,3 +265,10 @@
 - Pattern: migration tool の「履歴を編集する command」と「初回 baseline を確立する command」の前提差を、実 DB で再現確認する前に docs/runbook へ書いてしまう
 - Rule: Atlas で手動適用済み DB を workflow に載せるときは、`migrate set` を先に案内しない。まず revision table 未作成の状態を再現し、`migrate apply --baseline <version>` で成立することを確認してから repo の command surface と runbook に反映する
 - Applied: `Makefile` の Postgres migration helper、`docs/development/platform-service-postgres.md`、`docs/development/platform-service-online-deploy.md`、今後の Atlas baseline/runbook 追加全般
+
+## [2026-06-13] docs runbook の cross-reference と command sample は省略しすぎない
+
+- Mistake: internal surface protection runbook で後続 plan 参照を `0080-...` の省略表記にし、staging access runbook の `curl /healthz` もベース URL を省いたまま PR に出した
+- Pattern: 自分には文脈で補完できる plan 名や command を docs に書くとき、reviewer や次の実行者がそのまま辿れる粒度まで concrete に書く確認を省きやすい
+- Rule: docs runbook で別 plan/file を参照するときは、実在する file path か相対 link で書く。command sample は copy-paste でそのまま実行できる形を基本にし、hostname や path の文脈補完を reader に委ねない
+- Applied: `docs/development/platform-service-online-deploy.md` の plan 参照、access runbook、今後の exec-plan/runbook cross-reference と operational command sample 全般
