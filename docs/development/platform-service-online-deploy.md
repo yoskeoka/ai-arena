@@ -261,6 +261,81 @@ Cloudflare Access research note:
 - Pages preview を Access で閉じても `onrender.com` backend direct access 問題は別論点として残る
   ため、backend protection を達成したと誤認しない
 
+## Internal Surface Protection Decision
+
+Phase 6 時点で棚卸しする surface は次の 3 つである。
+
+- staging frontend:
+  `https://staging.ai-arena.pages.dev`
+- production frontend:
+  `https://ai-arena.pages.dev`
+- staging / production backend:
+  `https://ai-arena-staging-p4ml.onrender.com` と
+  `https://ai-arena-service.onrender.com`
+
+current path では、frontend と backend で保護境界を分けて扱う。
+
+- Pages frontend は `Cloudflare Access` で internal surface として閉じる候補を第一選択にする
+- `onrender.com` backend は Access では閉じられないため、
+  current phase では public reachability を残したまま運用上の露出最小化で扱う
+- public-facing product auth は `0080-...product-auth-and-gated-signup.md` で別契約として扱う
+
+選択肢比較:
+
+- `no-auth-yet`
+  - 利点: 追加 provider 設定なしで最短
+  - 欠点: staging preview も production frontend も public のままになり、
+    internal operator surface を accidental discovery から守れない
+  - 判断: 第一選択にしない
+- `Cloudflare Access on Pages`
+  - 利点: current Pages / Cloudflare inventory のまま導入でき、
+    repo に secret value を残さず developer email ベースで制御しやすい
+  - 欠点: Render backend 直アクセスは残る。product auth の代替にもならない
+  - 判断: Phase 6 / 7 初期の第一選択
+- `product auth now`
+  - 利点: backend / frontend を一貫した platform contract で閉じられる
+  - 欠点: operator internal surface protection と public signup/auth の責務が混ざり、
+    0076 以降の feature work を止める
+  - 判断: `0080` へ defer
+
+Access policy の first landing は次を基本形とする。
+
+- login method:
+  `One-time PIN`
+- allowlist:
+  開発者 email address を個別登録する
+- 対象:
+  staging preview を優先し、production frontend も internal-only 運用を続ける間は同じ方針で扱う
+
+`Cloudflare account member only` は Cloudflare account に contributor を増やしたいときだけ採る。
+current path では Cloudflare account member 追加よりも、
+email allowlist のほうが repo 外 secret 配布を減らしやすい。
+
+## Backend Direct Exposure Decision
+
+`onrender.com` backend は free/Hobby 前提では IP allowlist や Access で閉じられない。
+そのため current decision は「閉じたとみなさない」である。
+
+現時点で許容する理由:
+
+- current backend は high-value mutation surface をまだ広く持たない
+- operator UI 側から使う API は Phase 6 の online confirmation に必要な最小面積へ寄せている
+- product auth を先に仮実装するより、露出事実と closure 条件を明示して次 plan へ渡すほうが安全
+
+この前提で守る運用ルール:
+
+- backend URL は repo inventory に残してよいが、secret や credential と並べて書かない
+- staging / production frontend が private でも backend は private ではない、と runbook に明記する
+- new mutation endpoint や privileged read を追加する plan は、
+  その endpoint を product auth / operator auth でどう閉じるかを同じ plan で決める
+
+この risk を閉じたとみなせる条件:
+
+- backend も Cloudflare 管理下 hostname / proxy 配下へ移し、Access または同等 control で守れる
+- または backend 自体に platform auth / authorization を実装し、
+  anonymous direct access では privileged operation が成立しない
+- いずれの path でも staging / production の verification runbook が新しい境界に更新されている
+
 ## Provider Drift Check
 
 first landing の desired contract と、2026-06-02 時点の observed state を次の観点で比較する。
@@ -485,6 +560,34 @@ repo に残さないもの:
 
 current path では、staging / production へ開発者が到達するための追加 secret は
 provider dashboard、secret manager、または Access issuance flow にだけ置く。
+
+### Staging Access Runbook
+
+1. frontend URL と backend URL を inventory から確認する
+   - frontend:
+     `https://staging.ai-arena.pages.dev`
+   - backend:
+     `https://ai-arena-staging-p4ml.onrender.com`
+2. staging frontend を Access policy 配下に置く場合は、
+   Cloudflare Zero Trust dashboard で該当 application の allowlist に開発者 email を追加する
+3. login method が `One-time PIN` の場合は、対象 email で PIN を受け取って frontend へ入る
+4. backend 直確認が必要なときは、frontend protection と別論点であることを意識して
+   `curl /healthz` や preflight check だけを行う
+5. repo や PR には PIN、Access cookie、session token を残さない
+
+### Production Access Runbook
+
+1. frontend URL と backend URL を inventory から確認する
+   - frontend:
+     `https://ai-arena.pages.dev`
+   - backend:
+     `https://ai-arena-service.onrender.com`
+2. production frontend を internal-only で使う間は、
+   staging と同じ Access policy pattern を production hostname にも適用する
+3. production backend 直確認は staging より厳しく扱い、
+   health / headers / CORS など最小 read-only 確認に留める
+4. deploy hook、DSN、R2 credential、Access service token は repo に残さず、
+   provider dashboard または secret manager の issuance path だけを共有する
 
 ## Staging Failure Runbook
 
