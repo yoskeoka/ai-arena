@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: Commit SHA to deploy to staging
+        description: Full commit SHA or unique short commit SHA to deploy to staging
         required: true
         type: string
   workflow_run:
@@ -36,9 +36,35 @@ jobs:
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
+            const resolveDispatchedSha = async (rawRef) => {
+              const candidate = rawRef.trim();
+              if (!/^[0-9a-f]{7,40}$/i.test(candidate)) {
+                core.setFailed("commit_sha must be a full SHA or a unique short SHA using 7-40 hexadecimal characters.");
+                return null;
+              }
+
+              try {
+                const { data } = await github.rest.repos.getCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: candidate,
+                });
+                return data.sha;
+              } catch (error) {
+                core.setFailed(`commit_sha '${candidate}' could not be resolved. Use a full SHA or a unique short SHA on this repository.`);
+                return null;
+              }
+            };
+
             if (context.eventName === "workflow_dispatch") {
+              const inputs = context.payload.inputs ?? {};
+              const targetSha = await resolveDispatchedSha(inputs.commit_sha ?? "");
+              if (!targetSha) {
+                return;
+              }
               core.setOutput("should_deploy", "true");
-              core.setOutput("target_sha", "${{ inputs.commit_sha }}");
+              core.setOutput("target_sha", targetSha);
+              core.info(`resolved workflow_dispatch commit_sha to ${targetSha}`);
               return;
             }
 

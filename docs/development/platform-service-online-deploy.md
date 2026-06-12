@@ -322,6 +322,9 @@ repo workflow は `verified commit` を主語にしつつ、trigger は次で自
   `tag push` で自動起動する。ただし target SHA が `origin/main` に含まれない場合は fail する
 
 manual rerun / rollback 用に `workflow_dispatch` も残してよい。
+manual dispatch の `commit_sha` input は 40 桁の full SHA を正本とするが、
+repository 内で一意に解決できる短縮 hexadecimal SHA も受け付けてよい。
+workflow は deploy/verify/release の実処理前に canonical full SHA へ正規化する。
 
 schema change を含む rollout は backward-compatible release を前提にする。
 expand / dual-read-write / cleanup を 1 回の release に押し込めず、
@@ -441,6 +444,7 @@ rollback は「前回の known-good commit SHA を staging / production workflow
   `online-release-staging.yml` に previous good SHA を渡して再実行する
 - production rollback:
   `online-release-production.yml` に previous good SHA と元の staging verification evidence を渡して再実行する
+- `previous good SHA` は full SHA を優先し、短縮 SHA を使う場合も repository 内で一意に解決できる値だけを使う
 
 Phase 6 では DB schema rollback や object migration rollback の自動化までは扱わない。
 この line の rollback は backend/frontend process を known-good SHA に戻すところまでを正本とする。

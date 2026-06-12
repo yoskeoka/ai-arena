@@ -83,6 +83,9 @@ durable lane が Postgres backend を起動するとき、schema bootstrap は r
 target DB は service/worker 起動前に schema apply 済みでなければならない。
 release lane では、schema change を含む target commit の versioned migration を
 backend/frontend deploy より先に apply しなければならない。
+manual dispatch で verified target commit を指定する lane は、
+40 桁の full SHA に加えて repository 内で一意に解決できる短縮 hexadecimal SHA を受け付けてよい。
+workflow は checkout や provider deploy hook 実行の前に、その入力を canonical full SHA へ正規化しなければならない。
 
 operator UI verification も同じく lane を分けて扱う。
 

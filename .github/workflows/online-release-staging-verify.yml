@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: Commit SHA whose staging deploy should be verified
+        description: Full commit SHA or unique short commit SHA whose staging deploy should be verified
         required: true
         type: string
       frontend_url:
@@ -43,27 +43,56 @@ jobs:
     steps:
       - name: Evaluate staging verification trigger
         id: prepare
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_verify=true" >> "$GITHUB_OUTPUT"
-            echo "target_sha=${{ inputs.commit_sha }}" >> "$GITHUB_OUTPUT"
-            echo "frontend_url=${{ inputs.frontend_url }}" >> "$GITHUB_OUTPUT"
-            echo "backend_url=${{ inputs.backend_url }}" >> "$GITHUB_OUTPUT"
-            echo "preset_id=${{ inputs.preset_id }}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const resolveDispatchedSha = async (rawRef) => {
+              const candidate = rawRef.trim();
+              if (!/^[0-9a-f]{7,40}$/i.test(candidate)) {
+                core.setFailed("commit_sha must be a full SHA or a unique short SHA using 7-40 hexadecimal characters.");
+                return null;
+              }
 
-          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
-            echo "should_verify=false" >> "$GITHUB_OUTPUT"
-            echo "target_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+              try {
+                const { data } = await github.rest.repos.getCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: candidate,
+                });
+                return data.sha;
+              } catch (error) {
+                core.setFailed(`commit_sha '${candidate}' could not be resolved. Use a full SHA or a unique short SHA on this repository.`);
+                return null;
+              }
+            };
 
-          echo "should_verify=true" >> "$GITHUB_OUTPUT"
-          echo "target_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
-          echo "frontend_url=https://staging.ai-arena.pages.dev" >> "$GITHUB_OUTPUT"
-          echo "backend_url=https://ai-arena-staging-p4ml.onrender.com" >> "$GITHUB_OUTPUT"
-          echo "preset_id=echo-reference" >> "$GITHUB_OUTPUT"
+            if (context.eventName === "workflow_dispatch") {
+              const inputs = context.payload.inputs ?? {};
+              const targetSha = await resolveDispatchedSha(inputs.commit_sha ?? "");
+              if (!targetSha) {
+                return;
+              }
+              core.setOutput("should_verify", "true");
+              core.setOutput("target_sha", targetSha);
+              core.setOutput("frontend_url", inputs.frontend_url ?? "");
+              core.setOutput("backend_url", inputs.backend_url ?? "");
+              core.setOutput("preset_id", inputs.preset_id ?? "");
+              core.info(`resolved workflow_dispatch commit_sha to ${targetSha}`);
+              return;
+            }
+
+            const upstream = context.payload.workflow_run;
+            core.setOutput("target_sha", upstream.head_sha);
+
+            if (upstream.conclusion !== "success") {
+              core.setOutput("should_verify", "false");
+              return;
+            }
+
+            core.setOutput("should_verify", "true");
+            core.setOutput("frontend_url", "https://staging.ai-arena.pages.dev");
+            core.setOutput("backend_url", "https://ai-arena-staging-p4ml.onrender.com");
+            core.setOutput("preset_id", "echo-reference");
 
   verify-staging:
     needs: prepare
