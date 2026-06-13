@@ -114,7 +114,7 @@ func TestRunWithoutSubcommandShowsTopLevelUsage(t *testing.T) {
 	if err == nil {
 		t.Fatal("run() returned nil error")
 	}
-	want := "usage: arena-service <submit|run-once|submit-cancel|list|get|read|serve> ..."
+	want := "usage: arena-service <submit|run-once|submit-cancel|list|get|read|serve|ranking-get|ranking-recompute|ranking-verify> ..."
 	if err.Error() != want {
 		t.Fatalf("error = %q, want %q", err.Error(), want)
 	}
@@ -444,11 +444,20 @@ func newSharedTestCLIApp(t *testing.T) *cliApp {
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
 	reader := service.NewDefaultArtifactReader(nil)
+	rankingStore, err := service.NewLocalRankingSnapshotStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewLocalRankingSnapshotStore() error = %v", err)
+	}
+	rankings, err := service.NewRankingService(rankingStore, store, reader)
+	if err != nil {
+		t.Fatalf("NewRankingService() error = %v", err)
+	}
 	return &cliApp{
 		commands:       commands,
 		queries:        queries,
 		queue:          store,
 		reader:         reader,
+		rankings:       rankings,
 		artifactAccess: service.DirectArtifactAccessIssuer{},
 		persister:      service.LocalTerminalPersister{},
 		baseDir:        baseDir,

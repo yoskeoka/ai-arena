@@ -39,7 +39,7 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	}
 
 	subcommand := args[0]
-	if subcommand != "submit" && subcommand != "run-once" && subcommand != "submit-cancel" && subcommand != "list" && subcommand != "get" && subcommand != "read" && subcommand != "serve" {
+	if subcommand != "submit" && subcommand != "run-once" && subcommand != "submit-cancel" && subcommand != "list" && subcommand != "get" && subcommand != "read" && subcommand != "serve" && subcommand != "ranking-get" && subcommand != "ranking-recompute" && subcommand != "ranking-verify" {
 		return fmt.Errorf("usage: %s", usageFor(""))
 	}
 
@@ -57,6 +57,9 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 		pollInterval   time.Duration
 		matchTimeout   time.Duration
 		postgresDSN    string
+		gameID         string
+		gameVersion    string
+		rulesetVersion string
 	)
 	fs.StringVar(&submissionPath, "submission", "", "submission JSON path or - for stdin")
 	fs.StringVar(&submissionID, "submission-id", "", "submission id for get/read")
@@ -68,6 +71,9 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	fs.DurationVar(&pollInterval, "worker-poll-interval", 2*time.Second, "poll interval for serve worker loop")
 	fs.DurationVar(&matchTimeout, "match-timeout", 0, "match timeout for run-once")
 	fs.StringVar(&postgresDSN, "postgres-dsn", "", "PostgreSQL DSN for durable queue storage")
+	fs.StringVar(&gameID, "game-id", "", "ranking scope game id")
+	fs.StringVar(&gameVersion, "game-version", "", "ranking scope game version")
+	fs.StringVar(&rulesetVersion, "ruleset-version", "", "ranking scope ruleset version")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -118,6 +124,12 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 			return fmt.Errorf("--artifact is required")
 		}
 		return app.read(context.Background(), submissionID, artifactKind, stdout)
+	case "ranking-get":
+		return app.rankingGet(context.Background(), rankingScopeFromFlags(gameID, gameVersion, rulesetVersion), stdout)
+	case "ranking-recompute":
+		return app.rankingRecompute(context.Background(), rankingScopeFromFlags(gameID, gameVersion, rulesetVersion), stdout)
+	case "ranking-verify":
+		return app.rankingVerify(context.Background(), rankingScopeFromFlags(gameID, gameVersion, rulesetVersion), stdout)
 	}
 
 	if submissionPath == "" {
@@ -167,8 +179,14 @@ func usageFor(subcommand string) string {
 		return "arena-service read --submission-id <id> --artifact <result-summary|record|snapshot|history|exported-snapshot|stderr:<player-id>> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "serve":
 		return "arena-service serve [--listen-addr <addr>] [--preset-config <path>] [--worker-id <id>] [--worker-poll-interval <duration>] [--base-dir <dir>] [--match-timeout <duration>] [--postgres-dsn <dsn>]"
+	case "ranking-get":
+		return "arena-service ranking-get --game-id <id> --game-version <version> --ruleset-version <version> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+	case "ranking-recompute":
+		return "arena-service ranking-recompute --game-id <id> --game-version <version> --ruleset-version <version> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+	case "ranking-verify":
+		return "arena-service ranking-verify --game-id <id> --game-version <version> --ruleset-version <version> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	default:
-		return "arena-service <submit|run-once|submit-cancel|list|get|read|serve> ..."
+		return "arena-service <submit|run-once|submit-cancel|list|get|read|serve|ranking-get|ranking-recompute|ranking-verify> ..."
 	}
 }
 
@@ -179,6 +197,7 @@ type cliApp struct {
 	requests       *service.MatchRequestService
 	queue          service.QueueStore
 	reader         service.ArtifactReader
+	rankings       *service.RankingService
 	artifactAccess service.ArtifactAccessIssuer
 	persister      service.TerminalPersister
 	baseDir        string
@@ -196,6 +215,13 @@ type artifactRuntimeConfig struct {
 
 func (c artifactRuntimeConfig) usesOpaqueOutputDir() bool {
 	return c.backend == "r2"
+}
+
+type artifactRuntime struct {
+	reader         service.ArtifactReader
+	artifactAccess service.ArtifactAccessIssuer
+	persister      service.TerminalPersister
+	rankingStore   service.RankingSnapshotStore
 }
 
 func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, artifactRuntime artifactRuntimeConfig) (*cliApp, error) {
@@ -216,12 +242,12 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		closeFn()
 		return nil, err
 	}
-	reader, artifactAccess, persister, err := newArtifactRuntime(context.Background(), artifactRuntime)
+	runtime, err := newArtifactRuntime(context.Background(), baseDir, artifactRuntime)
 	if err != nil {
 		closeFn()
 		return nil, err
 	}
-	queries, err := service.NewQueryService(store, reader)
+	queries, err := service.NewQueryService(store, runtime.reader)
 	if err != nil {
 		closeFn()
 		return nil, err
@@ -236,15 +262,21 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		closeFn()
 		return nil, err
 	}
+	rankings, err := service.NewRankingService(runtime.rankingStore, store, runtime.reader)
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
 	return &cliApp{
 		commands:       commands,
 		queries:        queries,
 		general:        general,
 		requests:       requests,
 		queue:          store,
-		reader:         reader,
-		artifactAccess: artifactAccess,
-		persister:      persister,
+		reader:         runtime.reader,
+		rankings:       rankings,
+		artifactAccess: runtime.artifactAccess,
+		persister:      runtime.persister,
 		baseDir:        baseDir,
 		timeout:        matchTimeout,
 		closeFn:        closeFn,
@@ -331,7 +363,31 @@ func (a *cliApp) newWorker() (*service.Worker, error) {
 	if err != nil {
 		return nil, err
 	}
-	return service.NewWorker(a.queue, invoker, a.persister)
+	return service.NewWorker(a.queue, invoker, a.persister, a.rankings)
+}
+
+func (a *cliApp) rankingGet(ctx context.Context, scope service.RankingScope, stdout io.Writer) error {
+	snapshot, err := a.rankings.Get(ctx, scope)
+	if err != nil {
+		return err
+	}
+	return encodeJSON(stdout, snapshot)
+}
+
+func (a *cliApp) rankingRecompute(ctx context.Context, scope service.RankingScope, stdout io.Writer) error {
+	snapshot, err := a.rankings.Recompute(ctx, scope)
+	if err != nil {
+		return err
+	}
+	return encodeJSON(stdout, snapshot)
+}
+
+func (a *cliApp) rankingVerify(ctx context.Context, scope service.RankingScope, stdout io.Writer) error {
+	verification, err := a.rankings.Verify(ctx, scope)
+	if err != nil {
+		return err
+	}
+	return encodeJSON(stdout, verification)
 }
 
 func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig string, workerID string, pollInterval time.Duration, stderr io.Writer) error {
@@ -479,11 +535,20 @@ func loadArtifactRuntimeFromEnv() (artifactRuntimeConfig, error) {
 	}
 }
 
-func newArtifactRuntime(ctx context.Context, cfg artifactRuntimeConfig) (service.ArtifactReader, service.ArtifactAccessIssuer, service.TerminalPersister, error) {
+func newArtifactRuntime(ctx context.Context, baseDir string, cfg artifactRuntimeConfig) (artifactRuntime, error) {
 	switch cfg.backend {
 	case "", "filesystem":
 		reader := service.NewDefaultArtifactReader(nil)
-		return reader, service.DirectArtifactAccessIssuer{}, service.LocalTerminalPersister{}, nil
+		rankingStore, err := service.NewLocalRankingSnapshotStore(baseDir)
+		if err != nil {
+			return artifactRuntime{}, err
+		}
+		return artifactRuntime{
+			reader:         reader,
+			artifactAccess: service.DirectArtifactAccessIssuer{},
+			persister:      service.LocalTerminalPersister{},
+			rankingStore:   rankingStore,
+		}, nil
 	case "r2":
 		store, err := service.NewS3ArtifactStore(ctx, service.S3ArtifactConfig{
 			Bucket:          cfg.bucket,
@@ -492,16 +557,25 @@ func newArtifactRuntime(ctx context.Context, cfg artifactRuntimeConfig) (service
 			SecretAccessKey: cfg.secretAccessKey,
 		})
 		if err != nil {
-			return nil, nil, nil, err
+			return artifactRuntime{}, err
 		}
 		persister, err := service.NewS3TerminalPersister(store)
 		if err != nil {
-			return nil, nil, nil, err
+			return artifactRuntime{}, err
+		}
+		rankingStore, err := service.NewS3RankingSnapshotStore(store)
+		if err != nil {
+			return artifactRuntime{}, err
 		}
 		reader := service.NewDefaultArtifactReader(store)
-		return reader, service.NewS3ArtifactAccessIssuer(store), persister, nil
+		return artifactRuntime{
+			reader:         reader,
+			artifactAccess: service.NewS3ArtifactAccessIssuer(store),
+			persister:      persister,
+			rankingStore:   rankingStore,
+		}, nil
 	default:
-		return nil, nil, nil, fmt.Errorf("unsupported artifact backend %q", cfg.backend)
+		return artifactRuntime{}, fmt.Errorf("unsupported artifact backend %q", cfg.backend)
 	}
 }
 
@@ -532,6 +606,14 @@ func loadSubmission(path string, stdin io.Reader) (service.MatchSubmission, erro
 		return service.MatchSubmission{}, fmt.Errorf("decode submission: %w", err)
 	}
 	return submission, nil
+}
+
+func rankingScopeFromFlags(gameID, gameVersion, rulesetVersion string) service.RankingScope {
+	return service.RankingScope{
+		GameID:         gameID,
+		GameVersion:    gameVersion,
+		RulesetVersion: rulesetVersion,
+	}
 }
 
 func selectArtifactPath(detail service.MatchDetail, artifactKind string) (string, error) {
