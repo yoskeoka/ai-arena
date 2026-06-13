@@ -6,7 +6,7 @@
 Phase 7 の operator frontend surface を定義し、先行実装済み backend API を
 browser UI から実際に使える運営導線へつなぐ。
 最初のゴールは、game registration、AI submission、general match request、
-ranking、rerun/cancellation を `operator-ui` から辿れる最小 UI contract を固定することに置く。
+ranking、rerun/retry/cancellation を `operator-ui` から辿れる最小 UI contract を固定することに置く。
 
 ## Context
 
@@ -21,7 +21,7 @@ ranking、rerun/cancellation を `operator-ui` から辿れる最小 UI contract
 
 - Phase 7 backend API を使う operator/admin browser workflow を定義する
 - `operator-ui` の nav / route-local state / panel 構成を拡張する
-- registration -> submission -> match request -> ranking / rerun までの browser verification を整える
+- registration -> submission -> match request -> ranking / rerun / retry / cancellation までの browser verification を整える
 
 この plan では以下を扱わない。
 
@@ -45,7 +45,7 @@ ranking、rerun/cancellation を `operator-ui` から辿れる最小 UI contract
 ## Sub-tasks
 
 - [ ] current preset-first UI と Phase 7 canonical operator flow の差分を spec に落とす
-- [ ] game submission / AI submission / ranking を無理なく置ける nav / route shape を決める
+- [ ] game registration / AI submission / ranking を無理なく置ける nav / route shape を決める
 - [ ] game registration / AI submission の一覧・作成 surface を定義する
 - [ ] general match request composer と accepted request visibility surface を定義する
 - [ ] ranking / rerun / cancellation surface を backend lifecycle と整合させる
