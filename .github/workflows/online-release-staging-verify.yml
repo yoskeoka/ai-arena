@@ -98,6 +98,9 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.should_verify == 'true'
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.54.1-noble
+      options: --ipc=host
     concurrency:
       group: online-release-staging-verify-${{ needs.prepare.outputs.target_sha }}
       cancel-in-progress: false
@@ -121,10 +124,6 @@ jobs:
 
       - name: Install operator UI dependencies
         run: pnpm install --frozen-lockfile
-        working-directory: operator-ui
-
-      - name: Install Playwright browser
-        run: pnpm exec playwright install --with-deps chromium
         working-directory: operator-ui
 
       - name: Verify remote staging operator flow

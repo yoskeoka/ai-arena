@@ -42,6 +42,10 @@ pnpm exec playwright install chromium
 Debian/Ubuntu 系で host library もまとめて入れるなら、`pnpm exec playwright install --with-deps chromium`
 を使ってよい。
 
+local canonical lane は host-native のまま維持する。
+CI remote verify が Playwright Docker image を使っていても、
+contributor / AI agent が辿る repo-owned command はこの節の `pnpm` 実行を正本にする。
+
 以後の fixture local verification は次でよい。
 
 ```sh
@@ -63,6 +67,17 @@ fixture backend は repo 内の Go service package を使い、次の状態を s
 
 つまり、この lane は local backend/frontend/browser を同一環境で起動するが、
 durable Postgres lane までは持ち込まない。
+
+browser install が local host で hang する場合は、
+canonical lane を切り替える前に `Node 22 LTS` で次を再試行してよい。
+
+```sh
+cd operator-ui
+pnpm exec playwright install chromium
+```
+
+local Docker 実行は debugging fallback としては許容してよいが、
+repo-owned canonical lane ではない。
 
 ## Real local inspection/capture lane
 
