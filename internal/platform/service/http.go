@@ -113,10 +113,8 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, general *Ge
 func (a *OperatorAPI) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.handleHealthz)
-	mux.HandleFunc("GET /api/v1/game-registrations", a.handleGameRegistrations)
-	mux.HandleFunc("POST /api/v1/game-registrations", a.handleGameRegistrations)
-	mux.HandleFunc("GET /api/v1/ai-submissions", a.handleAISubmissions)
-	mux.HandleFunc("POST /api/v1/ai-submissions", a.handleAISubmissions)
+	mux.HandleFunc("/api/v1/game-registrations", a.handleGameRegistrations)
+	mux.HandleFunc("/api/v1/ai-submissions", a.handleAISubmissions)
 	mux.HandleFunc("POST /api/v1/preset-matches", a.handlePresetMatches)
 	mux.HandleFunc("GET /api/v1/matches/active", a.handleActiveMatches)
 	mux.HandleFunc("GET /api/v1/matches/completed", a.handleCompletedMatches)

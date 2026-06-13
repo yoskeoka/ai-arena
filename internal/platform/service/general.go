@@ -128,28 +128,13 @@ func NewGeneralSubmissionService(baseDir string, reg *registry.Registry, games G
 
 // RegisterGame validates and stores one operator-facing registered game view.
 func (s *GeneralSubmissionService) RegisterGame(ctx context.Context, req GameRegistrationRequest) (RegisteredGame, error) {
-	if err := catalog.ValidateMetadata(catalog.GameMetadata(req.Game)); err != nil {
-		return RegisteredGame{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
-	}
-	descriptor, err := s.registry.LookupVersion(ctx, req.Game.GameID, req.Game.GameVersion)
-	if err != nil {
-		return RegisteredGame{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
-	}
-	if !slicesContain(descriptor.BuildConstraints.SupportedRulesets, req.Game.RulesetVersion) {
-		return RegisteredGame{}, fmt.Errorf("%w: service: ruleset %q is not supported for game %q version %q", ErrBadRequest, req.Game.RulesetVersion, req.Game.GameID, req.Game.GameVersion)
-	}
-
 	registrationID := strings.TrimSpace(req.RegistrationID)
 	if registrationID == "" {
 		registrationID = defaultGameRegistrationID(req.Game)
 	}
-	record := RegisteredGame{
-		RegistrationID:    registrationID,
-		Game:              req.Game,
-		BuildMode:         descriptor.BuildMode,
-		BuilderID:         descriptor.BuilderID,
-		SupportedRulesets: append([]string(nil), descriptor.BuildConstraints.SupportedRulesets...),
-		Source:            SourceManual,
+	record, err := s.buildRegisteredGame(ctx, registrationID, req.Game, SourceManual, "")
+	if err != nil {
+		return RegisteredGame{}, err
 	}
 	if err := s.games.Save(ctx, record); err != nil {
 		return RegisteredGame{}, wrapConflict(err)
@@ -171,28 +156,13 @@ func (s *GeneralSubmissionService) RegisterAI(ctx context.Context, req AISubmiss
 		return RegisteredAI{}, err
 	}
 
-	loaded, err := validateRegisteredArtifact(s.baseDir, game.Game, req.ArtifactRef)
-	if err != nil {
-		return RegisteredAI{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
-	}
 	aiSubmissionID := strings.TrimSpace(req.AISubmissionID)
 	if aiSubmissionID == "" {
 		aiSubmissionID = s.newAISubmissionIDFn()
 	}
-	displayName := strings.TrimSpace(req.DisplayName)
-	if displayName == "" {
-		displayName = loaded.AIID
-	}
-	record := RegisteredAI{
-		AISubmissionID:     aiSubmissionID,
-		GameRegistrationID: game.RegistrationID,
-		Game:               game.Game,
-		ArtifactRef:        strings.TrimSpace(req.ArtifactRef),
-		DisplayName:        displayName,
-		RuntimeKind:        loaded.Runtime.Kind,
-		AIID:               loaded.AIID,
-		ValidationState:    ValidationReady,
-		Source:             SourceManual,
+	record, err := s.buildRegisteredAI(aiSubmissionID, game, req.ArtifactRef, req.DisplayName, SourceManual, "")
+	if err != nil {
+		return RegisteredAI{}, err
 	}
 	if err := s.submissions.Save(ctx, record); err != nil {
 		return RegisteredAI{}, wrapConflict(err)
@@ -228,14 +198,12 @@ func (s *GeneralSubmissionService) MaterializePreset(ctx context.Context, preset
 }
 
 func (s *GeneralSubmissionService) materializePresetGame(ctx context.Context, presetID string, game contract.GameMetadata) (RegisteredGame, error) {
-	record, err := s.RegisterGame(ctx, GameRegistrationRequest{
-		RegistrationID: defaultGameRegistrationID(game),
-		Game:           game,
-	})
+	record, err := s.buildRegisteredGame(ctx, defaultGameRegistrationID(game), game, SourcePreset, presetID)
+	if err != nil {
+		return RegisteredGame{}, err
+	}
+	err = s.games.Save(ctx, record)
 	if err == nil {
-		record.Source = SourcePreset
-		record.SourceID = presetID
-		_ = s.games.Save(ctx, record)
 		return record, nil
 	}
 	if !errors.Is(err, ErrConflict) {
@@ -249,16 +217,12 @@ func (s *GeneralSubmissionService) materializePresetGame(ctx context.Context, pr
 }
 
 func (s *GeneralSubmissionService) materializePresetAI(ctx context.Context, presetID string, game RegisteredGame, player SubmittedPlayer) (RegisteredAI, error) {
-	record, err := s.RegisterAI(ctx, AISubmissionRequest{
-		AISubmissionID:     defaultPresetAISubmissionID(presetID, player.PlayerID),
-		GameRegistrationID: game.RegistrationID,
-		ArtifactRef:        player.ArtifactRef,
-		DisplayName:        player.PlayerID,
-	})
+	record, err := s.buildRegisteredAI(defaultPresetAISubmissionID(presetID, player.PlayerID), game, player.ArtifactRef, player.PlayerID, SourcePreset, presetID)
+	if err != nil {
+		return RegisteredAI{}, err
+	}
+	err = s.submissions.Save(ctx, record)
 	if err == nil {
-		record.Source = SourcePreset
-		record.SourceID = presetID
-		_ = s.submissions.Save(ctx, record)
 		return record, nil
 	}
 	if !errors.Is(err, ErrConflict) {
@@ -294,6 +258,52 @@ func wrapConflict(err error) error {
 		return fmt.Errorf("%w: %w", ErrConflict, err)
 	}
 	return err
+}
+
+func (s *GeneralSubmissionService) buildRegisteredGame(ctx context.Context, registrationID string, game contract.GameMetadata, source RegistrationSource, sourceID string) (RegisteredGame, error) {
+	if err := catalog.ValidateMetadata(catalog.GameMetadata(game)); err != nil {
+		return RegisteredGame{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
+	}
+	descriptor, err := s.registry.LookupVersion(ctx, game.GameID, game.GameVersion)
+	if err != nil {
+		return RegisteredGame{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
+	}
+	if !slicesContain(descriptor.BuildConstraints.SupportedRulesets, game.RulesetVersion) {
+		return RegisteredGame{}, fmt.Errorf("%w: service: ruleset %q is not supported for game %q version %q", ErrBadRequest, game.RulesetVersion, game.GameID, game.GameVersion)
+	}
+
+	return RegisteredGame{
+		RegistrationID:    registrationID,
+		Game:              game,
+		BuildMode:         descriptor.BuildMode,
+		BuilderID:         descriptor.BuilderID,
+		SupportedRulesets: append([]string(nil), descriptor.BuildConstraints.SupportedRulesets...),
+		Source:            source,
+		SourceID:          sourceID,
+	}, nil
+}
+
+func (s *GeneralSubmissionService) buildRegisteredAI(aiSubmissionID string, game RegisteredGame, artifactRef string, displayName string, source RegistrationSource, sourceID string) (RegisteredAI, error) {
+	loaded, err := validateRegisteredArtifact(s.baseDir, game.Game, artifactRef)
+	if err != nil {
+		return RegisteredAI{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
+	}
+	name := strings.TrimSpace(displayName)
+	if name == "" {
+		name = loaded.AIID
+	}
+	return RegisteredAI{
+		AISubmissionID:     aiSubmissionID,
+		GameRegistrationID: game.RegistrationID,
+		Game:               game.Game,
+		ArtifactRef:        strings.TrimSpace(artifactRef),
+		DisplayName:        name,
+		RuntimeKind:        loaded.Runtime.Kind,
+		AIID:               loaded.AIID,
+		ValidationState:    ValidationReady,
+		Source:             source,
+		SourceID:           sourceID,
+	}, nil
 }
 
 // InMemoryGameRegistrationStore keeps general game registrations inside one process.

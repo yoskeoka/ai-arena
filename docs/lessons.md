@@ -238,6 +238,13 @@
 - Rule: infra 導入前のローカル確認手順を書くときは、deploy-shaped lane を主導線に置く。managed service 相当をローカル harness で置き換える場合は、起動、schema apply、DSN、停止まで README から辿れるように書く。in-memory や lightweight lane は補助導線として扱う
 - Applied: `README.md` の `arena-service` ローカル起動案内、今後の Postgres/R2/Pages を伴う local verification runbook 全般
 
+## [2026-06-13] advisory review を human 承認後は即座に branch へ反映する
+
+- Mistake: PR の advisory review で妥当な fix 候補が出ていた時点では triage だけで止め、その後 user が「全部修正」と明示するまで branch 更新を保留した結果、follow-up 実装と再検証が 1 turn 遅れた
+- Pattern: `advisory comments は勝手に適用しない` ルールを守ることと、human がその場で採用判断を出した後の即時実装を分離せず、承認後も待ち状態を引きずりやすい
+- Rule: advisory review の指摘を human が明示採用したら、その turn で即座に patch・test・push まで進める。triage 報告と承認待ちの境界だけを厳密に守り、承認後は通常の execution follow-up として扱う
+- Applied: PR 上の Copilot/Claude/agent review follow-up、特に `ai-arena` の execution PR で human が review fix を一括承認した場面
+
 ## [2026-06-03] local frontend 検証手順では backend health check と dev proxy を先に固める
 
 - Mistake: `operator-ui` のローカル確認導線で backend 起動確認の 1 ステップを置かず、frontend から直接 `127.0.0.1:10000` へ fetch させたままにした

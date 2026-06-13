@@ -68,12 +68,18 @@ func TestOperatorAPIPresetLifecycle(t *testing.T) {
 	if len(gameRegistrations) != 1 || gameRegistrations[0].RegistrationID != "echo-count-v2" {
 		t.Fatalf("game registrations = %+v, want materialized echo-count-v2", gameRegistrations)
 	}
+	if gameRegistrations[0].Source != SourcePreset || gameRegistrations[0].SourceID != "echo-reference" {
+		t.Fatalf("game registration source = %+v, want preset echo-reference", gameRegistrations[0])
+	}
 	registeredAIs, err := general.ListAIs(context.Background())
 	if err != nil {
 		t.Fatalf("general.ListAIs() error = %v", err)
 	}
 	if len(registeredAIs) != 2 {
 		t.Fatalf("len(registeredAIs) = %d, want 2", len(registeredAIs))
+	}
+	if registeredAIs[0].Source != SourcePreset || registeredAIs[0].SourceID != "echo-reference" {
+		t.Fatalf("registered AI source = %+v, want preset echo-reference", registeredAIs[0])
 	}
 
 	activeResp := httptest.NewRecorder()
@@ -286,6 +292,43 @@ func TestOperatorAPIDoesNotAllowUnknownCORSOrigin(t *testing.T) {
 	api.Handler().ServeHTTP(resp, req)
 	if got := resp.Header().Get("Access-Control-Allow-Origin"); got != "" {
 		t.Fatalf("allow-origin = %q, want empty", got)
+	}
+}
+
+func TestOperatorAPIGeneralRegistrationRoutesRejectUnsupportedMethod(t *testing.T) {
+	commands := newTestCommandService(t)
+	queries, err := NewQueryService(NewInMemoryQueueStore())
+	if err != nil {
+		t.Fatalf("NewQueryService() error = %v", err)
+	}
+	general := newTestGeneralSubmissionService(t)
+	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
+		{
+			PresetID: "echo-reference",
+			Game: contract.GameMetadata{
+				GameID:         "echo-count",
+				GameVersion:    "2.0.0",
+				RulesetVersion: "phase2-simultaneous-2turn",
+			},
+			Players: []SubmittedPlayer{
+				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
+			},
+			OutputDir: t.TempDir(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
+	}
+	api, err := NewOperatorAPI(commands, queries, general, presets, DirectArtifactAccessIssuer{})
+	if err != nil {
+		t.Fatalf("NewOperatorAPI() error = %v", err)
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/game-registrations", nil)
+	resp := httptest.NewRecorder()
+	api.Handler().ServeHTTP(resp, req)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, body = %s, want %d", resp.Code, resp.Body.String(), http.StatusMethodNotAllowed)
 	}
 }
 
