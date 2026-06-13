@@ -39,6 +39,7 @@ first remote lane の process topology 前提を固定する。
 - `docs/specs/platform-service-persistence.md`: service write model と artifact locator 保存単位の正本
 - `docs/specs/platform-service-read-model.md`: operator-facing list/get/read query contract の正本
 - `docs/specs/platform-service-operator-api.md`: operator-facing HTTP route と preset enqueue contract の正本
+- `docs/specs/platform-service-general-submission.md`: general operator lane の entity / validation contract
 
 ## サービス境界
 
@@ -134,6 +135,12 @@ replaceable queue store の初期実装が in-memory だけであることを前
 1 回の command invocation の中で queue write、queued-only cancel、
 または worker 実行までを閉じてよい。
 
+general operator lane が入っても、この spec の `match submission` は
+single-match execution request のままに保つ。
+`game registration` や `AI submission` はこの spec の前段 entity であり、
+後続の match request / scheduling が必要なときだけ
+`match submission` へ具体化されなければならない。
+
 first remote lane の backend process は、
 1 つの queue store に対して次を同居させる。
 
@@ -163,6 +170,9 @@ worker loop だけが `leased` 以降の execution lifecycle を進める。
 first remote lane の preset enqueue でも、queue に入るのは最終的に同じ `match submission` である。
 HTTP request 側は `preset_id` と optional override を受けてよいが、
 service command 境界では server-known preset から具体化された `match submission` へ正規化しなければならない。
+このとき preset lane は、必要なら
+`docs/specs/platform-service-general-submission.md` の `game registration` / `AI submission`
+identity を先に materialize してから queue へ流してよい。
 
 最小 JSON shape:
 
