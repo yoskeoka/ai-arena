@@ -11,9 +11,9 @@
 
 関連箇所:
 
-- [operator-ui/playwright.config.js](/home/yoske/src/github.com/yoskeoka/vibe-coding-workspace/.worktrees/ai-arena@feat-platform-online-foundation-03-04-matchmaking-ranking-follow-up-06-rerun-retry-cancellation/operator-ui/playwright.config.js)
-- [operator-ui/package.json](/home/yoske/src/github.com/yoskeoka/vibe-coding-workspace/.worktrees/ai-arena@feat-platform-online-foundation-03-04-matchmaking-ranking-follow-up-06-rerun-retry-cancellation/operator-ui/package.json)
-- [tools/run-textlint.sh](/home/yoske/src/github.com/yoskeoka/vibe-coding-workspace/.worktrees/ai-arena@feat-platform-online-foundation-03-04-matchmaking-ranking-follow-up-06-rerun-retry-cancellation/tools/run-textlint.sh)
+- `operator-ui/playwright.config.js`
+- `operator-ui/package.json`
+- `tools/run-textlint.sh`
 
 ## Proposed Solution
 

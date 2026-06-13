@@ -23,7 +23,7 @@ func NewS3TerminalPersister(store *S3ArtifactStore) (*S3TerminalPersister, error
 	return &S3TerminalPersister{store: store}, nil
 }
 
-// Persist writes terminal artifacts under output_dir/match_id in object storage.
+// Persist writes terminal artifacts under output_dir/run_id in object storage.
 func (p *S3TerminalPersister) Persist(ctx context.Context, submission MatchSubmission, result ExecutionResult) (TerminalArtifacts, error) {
 	matchKeyPrefix := strings.Trim(strings.TrimSpace(submission.OutputDir), "/")
 	matchKeyPrefix = path.Join(matchKeyPrefix, submission.RunID)

@@ -95,7 +95,6 @@ func (w *Worker) ProcessNext(ctx context.Context, workerID string) (QueueRecord,
 	if result.Record.Status == game.StatusCompleted {
 		official, err := w.shouldAutoPromote(ctx, record)
 		if err != nil {
-			record.State = StateFailed
 			if updateErr := w.queue.Update(ctx, record); updateErr != nil {
 				return QueueRecord{}, updateErr
 			}
@@ -108,11 +107,6 @@ func (w *Worker) ProcessNext(ctx context.Context, workerID string) (QueueRecord,
 	}
 	if w.rankings != nil && result.Record.Status == game.StatusCompleted && record.Submission.Official {
 		if err := w.rankings.ApplyCompleted(ctx, record.Submission, summaryFromRecord(result)); err != nil {
-			record.State = StateFailed
-			record.Submission.Official = false
-			if updateErr := w.queue.Update(ctx, record); updateErr != nil {
-				return QueueRecord{}, updateErr
-			}
 			return cloneQueueRecord(record), err
 		}
 	}

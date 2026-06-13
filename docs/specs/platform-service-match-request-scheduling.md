@@ -36,6 +36,7 @@
 - `docs/specs/platform-service-skeleton.md`: queue へ入る single-run execution request の正本
 - `docs/specs/platform-service-operator-api.md`: operator-facing route contract の正本
 - `docs/specs/platform-service-ranking-lifecycle.md`: official run と ranking correction の正本
+- `docs/specs/platform-service-single-worker-assumptions.md`: single-worker 前提で許容している non-atomic path の正本
 
 ## Match Request
 
@@ -197,3 +198,4 @@ process-local request cache だけに置いてはならない。
 - pending / deferred request backlog
 - per-game / per-owner quota
 - scheduling fairness and multi-worker dispatch policy
+- single-worker assumption を外す official selection / promote atomicity

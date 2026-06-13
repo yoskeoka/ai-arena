@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
@@ -251,6 +252,91 @@ func TestWorkerProcessNextFailsOnMismatchedMatchID(t *testing.T) {
 	}
 }
 
+func TestWorkerProcessNextKeepsCompletedStateWhenAutoPromoteDecisionFails(t *testing.T) {
+	store := listErrorQueueStore{QueueStore: NewInMemoryQueueStore(), listErr: errors.New("list failed")}
+	commands := newTestCommandServiceWithStore(t, store)
+	submission := testEchoSubmission(t, t.TempDir(),
+		"phase2-simultaneous-2turn",
+		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
+		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
+	)
+
+	if _, err := commands.Submit(context.Background(), submission); err != nil {
+		t.Fatalf("Submit() error = %v", err)
+	}
+
+	record, err := newTestWorker(t, store, 0).ProcessNext(context.Background(), "worker-1")
+	if err == nil {
+		t.Fatal("ProcessNext() returned nil error")
+	}
+	if !strings.Contains(err.Error(), "list failed") {
+		t.Fatalf("ProcessNext() error = %v, want list failed", err)
+	}
+	if record.State != StateCompleted {
+		t.Fatalf("record.State = %q, want %q", record.State, StateCompleted)
+	}
+	if record.Submission.Official {
+		t.Fatal("record.Submission.Official = true, want false")
+	}
+	stored, getErr := store.Get(context.Background(), submission.RunID)
+	if getErr != nil {
+		t.Fatalf("Get() error = %v", getErr)
+	}
+	if stored.State != StateCompleted {
+		t.Fatalf("stored.State = %q, want %q", stored.State, StateCompleted)
+	}
+	if stored.Terminal == nil {
+		t.Fatal("stored.Terminal = nil, want persisted artifacts")
+	}
+}
+
+func TestWorkerProcessNextKeepsCompletedStateWhenRankingApplyFails(t *testing.T) {
+	store := NewInMemoryQueueStore()
+	commands := newTestCommandServiceWithStore(t, store)
+	submission := testEchoSubmission(t, t.TempDir(),
+		"phase2-simultaneous-2turn",
+		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
+		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
+	)
+
+	if _, err := commands.Submit(context.Background(), submission); err != nil {
+		t.Fatalf("Submit() error = %v", err)
+	}
+
+	invoker, err := NewLocalRunnerInvoker(repoRoot(t), nil, 0)
+	if err != nil {
+		t.Fatalf("NewLocalRunnerInvoker() error = %v", err)
+	}
+	worker, err := NewWorker(store, invoker, LocalTerminalPersister{}, failingRankingUpdater{err: errors.New("ranking apply failed")})
+	if err != nil {
+		t.Fatalf("NewWorker() error = %v", err)
+	}
+
+	record, err := worker.ProcessNext(context.Background(), "worker-1")
+	if err == nil {
+		t.Fatal("ProcessNext() returned nil error")
+	}
+	if !strings.Contains(err.Error(), "ranking apply failed") {
+		t.Fatalf("ProcessNext() error = %v, want ranking apply failed", err)
+	}
+	if record.State != StateCompleted {
+		t.Fatalf("record.State = %q, want %q", record.State, StateCompleted)
+	}
+	if !record.Submission.Official {
+		t.Fatal("record.Submission.Official = false, want true")
+	}
+	stored, getErr := store.Get(context.Background(), submission.RunID)
+	if getErr != nil {
+		t.Fatalf("Get() error = %v", getErr)
+	}
+	if stored.State != StateCompleted {
+		t.Fatalf("stored.State = %q, want %q", stored.State, StateCompleted)
+	}
+	if !stored.Submission.Official {
+		t.Fatal("stored.Submission.Official = false, want true")
+	}
+}
+
 func newTestCommandService(t *testing.T) *CommandService {
 	return newTestCommandServiceWithStore(t, NewInMemoryQueueStore())
 }
@@ -361,6 +447,23 @@ type stubTerminalPersister struct{}
 
 func (stubTerminalPersister) Persist(context.Context, MatchSubmission, ExecutionResult) (TerminalArtifacts, error) {
 	return TerminalArtifacts{}, nil
+}
+
+type listErrorQueueStore struct {
+	QueueStore
+	listErr error
+}
+
+func (s listErrorQueueStore) List(context.Context) ([]QueueRecord, error) {
+	return nil, s.listErr
+}
+
+type failingRankingUpdater struct {
+	err error
+}
+
+func (u failingRankingUpdater) ApplyCompleted(context.Context, MatchSubmission, artifacts.ResultSummary) error {
+	return u.err
 }
 
 func repoRoot(t *testing.T) string {

@@ -34,6 +34,7 @@ retry / rerun / correction とどう整合させるかである。
 - `docs/specs/platform-service-match-request-scheduling.md`: request / match-run-group / correction 単位の正本
 - `docs/specs/platform-service-general-submission.md`: admitted AI identity の正本
 - `docs/specs/platform.md`: `result-summary.json` を含む terminal artifact contract の正本
+- `docs/specs/platform-service-single-worker-assumptions.md`: current non-atomic official selection / ranking refresh の前提
 
 ## Ranking Input
 
@@ -195,6 +196,13 @@ recompute helper は少なくとも次を確認できなければならない。
 recompute helper は correction mutation route ではない。
 first milestone では read/verify 用途に留め、
 snapshot repair の最終手順は後続 plan で定義する。
+
+current phase では、
+official selection と ranking snapshot persist の間に
+single-worker 前提の短い不整合窓を許容してよい。
+この前提を外すときは
+`docs/specs/platform-service-single-worker-assumptions.md`
+を更新しながら atomicity を詰めなければならない。
 
 ## Ranking Read Surface
 
