@@ -64,6 +64,10 @@ func newFixtureBackend(listenAddr string) (*fixtureBackend, error) {
 	if err != nil {
 		return nil, err
 	}
+	requests, err := service.NewMatchRequestService(general, commands, store, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	presets, err := service.NewStaticPresetCatalog([]service.MatchPresetDefinition{
 		{
@@ -89,7 +93,7 @@ func newFixtureBackend(listenAddr string) (*fixtureBackend, error) {
 	}
 
 	downloadURL := fmt.Sprintf("http://%s/fixture-artifacts/result-summary.json", listenAddr)
-	api, err := service.NewOperatorAPI(commands, queries, general, presets, fixtureArtifactAccessIssuer{
+	api, err := service.NewOperatorAPI(commands, queries, general, requests, presets, fixtureArtifactAccessIssuer{
 		downloadURL: downloadURL,
 	})
 	if err != nil {

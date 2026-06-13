@@ -79,12 +79,13 @@ type OperatorAPI struct {
 	commands       *CommandService
 	queries        *QueryService
 	general        *GeneralSubmissionService
+	requests       *MatchRequestService
 	presets        PresetCatalog
 	artifactAccess ArtifactAccessIssuer
 }
 
 // NewOperatorAPI constructs the HTTP adapter for operator routes.
-func NewOperatorAPI(commands *CommandService, queries *QueryService, general *GeneralSubmissionService, presets PresetCatalog, artifactAccess ArtifactAccessIssuer) (*OperatorAPI, error) {
+func NewOperatorAPI(commands *CommandService, queries *QueryService, general *GeneralSubmissionService, requests *MatchRequestService, presets PresetCatalog, artifactAccess ArtifactAccessIssuer) (*OperatorAPI, error) {
 	if commands == nil {
 		return nil, fmt.Errorf("service: command service is required")
 	}
@@ -93,6 +94,9 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, general *Ge
 	}
 	if general == nil {
 		return nil, fmt.Errorf("service: general submission service is required")
+	}
+	if requests == nil {
+		return nil, fmt.Errorf("service: match request service is required")
 	}
 	if presets == nil {
 		return nil, fmt.Errorf("service: preset catalog is required")
@@ -104,6 +108,7 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, general *Ge
 		commands:       commands,
 		queries:        queries,
 		general:        general,
+		requests:       requests,
 		presets:        presets,
 		artifactAccess: artifactAccess,
 	}, nil
@@ -115,6 +120,7 @@ func (a *OperatorAPI) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", a.handleHealthz)
 	mux.HandleFunc("/api/v1/game-registrations", a.handleGameRegistrations)
 	mux.HandleFunc("/api/v1/ai-submissions", a.handleAISubmissions)
+	mux.HandleFunc("/api/v1/match-requests", a.handleMatchRequests)
 	mux.HandleFunc("POST /api/v1/preset-matches", a.handlePresetMatches)
 	mux.HandleFunc("GET /api/v1/matches/active", a.handleActiveMatches)
 	mux.HandleFunc("GET /api/v1/matches/completed", a.handleCompletedMatches)
@@ -193,11 +199,7 @@ func (a *OperatorAPI) handlePresetMatches(w http.ResponseWriter, r *http.Request
 		writeError(w, status, err)
 		return
 	}
-	if _, _, err := a.general.MaterializePreset(r.Context(), req.PresetID, submission); err != nil {
-		writeError(w, statusCodeForServiceError(err), err)
-		return
-	}
-	record, err := a.commands.Submit(r.Context(), submission)
+	_, record, err := a.requests.CreatePreset(r.Context(), req.PresetID, submission)
 	if err != nil {
 		writeError(w, statusCodeForServiceError(err), err)
 		return
@@ -208,6 +210,32 @@ func (a *OperatorAPI) handlePresetMatches(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
+}
+
+func (a *OperatorAPI) handleMatchRequests(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		items, err := a.requests.List(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	case http.MethodPost:
+		req, err := decodeJSON[MatchRequestCreateRequest](r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		record, _, err := a.requests.Create(r.Context(), req)
+		if err != nil {
+			writeError(w, statusCodeForServiceError(err), err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, record)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, fmt.Errorf("method %s is not allowed", r.Method))
+	}
 }
 
 func (a *OperatorAPI) handleActiveMatches(w http.ResponseWriter, r *http.Request) {

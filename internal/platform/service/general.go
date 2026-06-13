@@ -180,6 +180,16 @@ func (s *GeneralSubmissionService) ListAIs(ctx context.Context) ([]RegisteredAI,
 	return s.submissions.List(ctx)
 }
 
+// GetGame returns one registered game by id.
+func (s *GeneralSubmissionService) GetGame(ctx context.Context, registrationID string) (RegisteredGame, error) {
+	return s.games.Get(ctx, registrationID)
+}
+
+// GetAI returns one admitted AI submission by id.
+func (s *GeneralSubmissionService) GetAI(ctx context.Context, aiSubmissionID string) (RegisteredAI, error) {
+	return s.submissions.Get(ctx, aiSubmissionID)
+}
+
 // MaterializePreset converts one preset submission into general-lane identities.
 func (s *GeneralSubmissionService) MaterializePreset(ctx context.Context, presetID string, submission MatchSubmission) (RegisteredGame, []RegisteredAI, error) {
 	game, err := s.materializePresetGame(ctx, presetID, submission.Game)
