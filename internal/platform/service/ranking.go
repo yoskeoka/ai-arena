@@ -35,25 +35,25 @@ type RankingScope struct {
 
 // RankingEntry aggregates one competitor across completed submissions in one scope.
 type RankingEntry struct {
-	CompetitorRef    string           `json:"competitor_ref"`
-	LastPlayerID     string           `json:"last_player_id"`
-	MatchesPlayed    int              `json:"matches_played"`
-	FirstPlaces      int              `json:"first_places"`
-	PlacementCounts  map[int]int      `json:"placement_counts,omitempty"`
-	LastRunID        string           `json:"last_run_id"`
-	LastMatchID      string           `json:"last_match_id"`
-	LastStatus       game.MatchStatus `json:"last_status"`
+	CompetitorRef   string           `json:"competitor_ref"`
+	LastPlayerID    string           `json:"last_player_id"`
+	MatchesPlayed   int              `json:"matches_played"`
+	FirstPlaces     int              `json:"first_places"`
+	PlacementCounts map[int]int      `json:"placement_counts,omitempty"`
+	LastRunID       string           `json:"last_run_id"`
+	LastMatchID     string           `json:"last_match_id"`
+	LastStatus      game.MatchStatus `json:"last_status"`
 }
 
 // RankingSnapshot is the durable aggregate payload for one ranking scope.
 type RankingSnapshot struct {
-	Scope            RankingScope   `json:"scope"`
-	AppliedRunIDs    []string       `json:"applied_run_ids,omitempty"`
-	AppliedMatchIDs  []string       `json:"applied_match_ids,omitempty"`
-	LastAppliedRunID string         `json:"last_applied_run_id,omitempty"`
-	LastAppliedMatchID string       `json:"last_applied_match_id,omitempty"`
-	CompletedMatches int            `json:"completed_matches"`
-	Entries          []RankingEntry `json:"entries,omitempty"`
+	Scope              RankingScope   `json:"scope"`
+	AppliedRunIDs      []string       `json:"applied_run_ids,omitempty"`
+	AppliedMatchIDs    []string       `json:"applied_match_ids,omitempty"`
+	LastAppliedRunID   string         `json:"last_applied_run_id,omitempty"`
+	LastAppliedMatchID string         `json:"last_applied_match_id,omitempty"`
+	CompletedMatches   int            `json:"completed_matches"`
+	Entries            []RankingEntry `json:"entries,omitempty"`
 }
 
 // StoredRankingSnapshot returns the durable snapshot plus its stable locator.
@@ -71,10 +71,10 @@ type RankingVerification struct {
 }
 
 type rankingUpdate struct {
-	Scope     RankingScope
-	RunID     string
-	MatchID   string
-	Status    game.MatchStatus
+	Scope      RankingScope
+	RunID      string
+	MatchID    string
+	Status     game.MatchStatus
 	Placements []rankingPlacement
 }
 
@@ -282,6 +282,7 @@ func (s *LocalRankingSnapshotStore) Put(_ context.Context, snapshot RankingSnaps
 		return "", err
 	}
 	locator := s.locator(snapshot.Scope)
+	// #nosec G703 -- locator is derived from validated scope fields via escapeRankingPathSegment under baseDir.
 	if err := os.MkdirAll(filepath.Dir(locator), 0o750); err != nil {
 		return "", fmt.Errorf("service: create ranking snapshot dir %s: %w", filepath.Dir(locator), err)
 	}
@@ -289,6 +290,7 @@ func (s *LocalRankingSnapshotStore) Put(_ context.Context, snapshot RankingSnaps
 	if err != nil {
 		return "", err
 	}
+	// #nosec G703 -- locator is derived from validated scope fields via escapeRankingPathSegment under baseDir.
 	if err := os.WriteFile(locator, data, 0o600); err != nil {
 		return "", fmt.Errorf("service: write ranking snapshot %s: %w", locator, err)
 	}

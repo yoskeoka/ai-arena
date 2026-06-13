@@ -50,13 +50,13 @@ type MatchRequestStore interface {
 
 // MatchRequestService validates general/preset match requests and schedules them into the queue.
 type MatchRequestService struct {
-	general           *GeneralSubmissionService
-	commands          *CommandService
-	queue             QueueStore
-	store             MatchRequestStore
-	newRequestIDFn    func() string
-	newRunIDFn       func() string
-	newMatchIDFn     func() string
+	general        *GeneralSubmissionService
+	commands       *CommandService
+	queue          QueueStore
+	store          MatchRequestStore
+	newRequestIDFn func() string
+	newRunIDFn     func() string
+	newMatchIDFn   func() string
 }
 
 // NewMatchRequestService constructs the minimal request+scheduling service.
@@ -74,10 +74,10 @@ func NewMatchRequestService(general *GeneralSubmissionService, commands *Command
 		store = NewInMemoryMatchRequestStore()
 	}
 	return &MatchRequestService{
-		general:           general,
-		commands:          commands,
-		queue:             queue,
-		store:             store,
+		general:        general,
+		commands:       commands,
+		queue:          queue,
+		store:          store,
 		newRequestIDFn: func() string { return "req-" + uuid.NewString() },
 		newRunIDFn:     func() string { return "run-" + uuid.NewString() },
 		newMatchIDFn:   func() string { return "match-" + uuid.NewString() },

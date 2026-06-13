@@ -13,15 +13,15 @@ import (
 
 // MatchSubmission is one admitted request to execute a single match.
 type MatchSubmission struct {
-	RunID       string                `json:"run_id"`
-	MatchID     string                `json:"match_id"`
-	Game        contract.GameMetadata `json:"game"`
-	Players     []SubmittedPlayer     `json:"players"`
-	OutputDir   string                `json:"output_dir"`
-	AttemptCount int                  `json:"attempt_count"`
-	ParentRunID string                `json:"parent_run_id,omitempty"`
-	RunKind     RunKind               `json:"run_kind"`
-	Official    bool                  `json:"official"`
+	RunID        string                `json:"run_id"`
+	MatchID      string                `json:"match_id"`
+	Game         contract.GameMetadata `json:"game"`
+	Players      []SubmittedPlayer     `json:"players"`
+	OutputDir    string                `json:"output_dir"`
+	AttemptCount int                   `json:"attempt_count"`
+	ParentRunID  string                `json:"parent_run_id,omitempty"`
+	RunKind      RunKind               `json:"run_kind"`
+	Official     bool                  `json:"official"`
 }
 
 // SubmittedPlayer binds a player id to an opaque AI artifact reference.

@@ -21,9 +21,9 @@ var (
 
 // PresetMatchRequest is the operator-facing enqueue request for one preset match.
 type PresetMatchRequest struct {
-	PresetID string `json:"preset_id"`
-	RunID    string `json:"run_id,omitempty"`
-	MatchID  string `json:"match_id,omitempty"`
+	PresetID  string `json:"preset_id"`
+	RunID     string `json:"run_id,omitempty"`
+	MatchID   string `json:"match_id,omitempty"`
 	OutputDir string `json:"output_dir,omitempty"`
 }
 
@@ -47,7 +47,7 @@ type PresetCatalog interface {
 
 // StaticPresetCatalog resolves requests from an in-memory preset map.
 type StaticPresetCatalog struct {
-	presets           map[string]MatchPresetDefinition
+	presets      map[string]MatchPresetDefinition
 	newRunIDFn   func() string
 	newMatchIDFn func() string
 }
