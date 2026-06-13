@@ -134,7 +134,7 @@ func (s *MatchRequestService) Create(ctx context.Context, req MatchRequestCreate
 		LifecycleState:        record.State,
 	}
 	if err := s.store.Save(ctx, item); err != nil {
-		return MatchRequest{}, QueueRecord{}, wrapConflict(err)
+		return MatchRequest{}, QueueRecord{}, s.rollbackQueuedSubmission(ctx, record, wrapConflict(err))
 	}
 	return item, record, nil
 }
@@ -170,7 +170,7 @@ func (s *MatchRequestService) CreatePreset(ctx context.Context, presetID string,
 		LifecycleState:        record.State,
 	}
 	if err := s.store.Save(ctx, item); err != nil {
-		return MatchRequest{}, QueueRecord{}, wrapConflict(err)
+		return MatchRequest{}, QueueRecord{}, s.rollbackQueuedSubmission(ctx, record, wrapConflict(err))
 	}
 	return item, record, nil
 }
@@ -244,6 +244,21 @@ func cloneRequestParticipants(items []MatchRequestParticipant) []MatchRequestPar
 	return cloned
 }
 
+func cloneMatchRequest(item MatchRequest) MatchRequest {
+	item.Participants = cloneRequestParticipants(item.Participants)
+	return item
+}
+
+func (s *MatchRequestService) rollbackQueuedSubmission(ctx context.Context, record QueueRecord, cause error) error {
+	if record.Submission.SubmissionID == "" {
+		return cause
+	}
+	if _, err := s.commands.Cancel(ctx, record.Submission.SubmissionID); err != nil {
+		return fmt.Errorf("%w: rollback queued submission %q: %v", cause, record.Submission.SubmissionID, err)
+	}
+	return cause
+}
+
 // InMemoryMatchRequestStore keeps accepted match requests inside one process.
 type InMemoryMatchRequestStore struct {
 	mu    sync.Mutex
@@ -267,7 +282,7 @@ func (s *InMemoryMatchRequestStore) Save(_ context.Context, item MatchRequest) e
 	if _, exists := s.items[item.RequestID]; exists {
 		return fmt.Errorf("service: request_id %q already exists", item.RequestID)
 	}
-	s.items[item.RequestID] = item
+	s.items[item.RequestID] = cloneMatchRequest(item)
 	s.order = append(s.order, item.RequestID)
 	return nil
 }
@@ -279,7 +294,7 @@ func (s *InMemoryMatchRequestStore) List(_ context.Context) ([]MatchRequest, err
 
 	items := make([]MatchRequest, 0, len(s.order))
 	for _, requestID := range s.order {
-		items = append(items, s.items[requestID])
+		items = append(items, cloneMatchRequest(s.items[requestID]))
 	}
 	return items, nil
 }
