@@ -20,7 +20,9 @@ remote verification job を Playwright 公式 Docker image ベースへ寄せる
 - `operator-ui` の remote verify lane は staging frontend/backend URL を直接叩く構成であり、
   local backend/frontend を同居起動する lane ではない
 - current Playwright config では managed-backend lane の `video` は `off` であり、
-  remote verification の required artifact は `trace + screenshot + HTML report` が中心になっている
+  `OPERATOR_UI_CAPTURE_ARTIFACTS=1` を付けた `pnpm run verify:remote` 実行で
+  `operator-ui/test-results/remote/` に trace/screenshot 系 artifact、
+  `operator-ui/playwright-report/remote/` に HTML report が出る current contract になっている
 - user decision:
   - CI remote verify は Docker 化する
   - local verification contract は canonical command を変えずに維持する
@@ -76,7 +78,9 @@ CI だけを Playwright 公式 image へ寄せる。
 - `online-release-staging-verify` の remote verify job が Playwright 公式 Docker image を使うことを追記する
 - image tag は repo の `operator-ui/package.json` にある `@playwright/test` version と揃える rule を明記する
 - browser install step を workflow 内で実行しないことを明記する
-- verify artifact は current remote lane では `Playwright trace zip`, `screenshot`, `HTML report` を正本とする
+- verify artifact は current remote lane では次を正本とする
+  - `operator-ui/test-results/remote/` 配下の trace/screenshot 系 artifact
+  - `operator-ui/playwright-report/remote/` 配下の HTML report
 
 ### `docs/development/operator-ui-local-verification.md`
 
@@ -88,7 +92,9 @@ CI だけを Playwright 公式 image へ寄せる。
 ### `docs/specs/platform-service-operator-ui.md`
 
 - staging verification の CI artifact contract を current remote lane 実態に合わせて
-  `trace + screenshot + HTML report` 中心で明記する
+  `OPERATOR_UI_CAPTURE_ARTIFACTS=1` 前提の
+  `operator-ui/test-results/remote/` と `operator-ui/playwright-report/remote/` を
+  canonical path として明記する
 - CI lane では browser runtime を repo 外の pinned Playwright image に載せてもよいことを補足する
 
 ## Expected Code Changes
@@ -128,13 +134,18 @@ CI だけを Playwright 公式 image へ寄せる。
 - local lane まで Docker 前提だと contributor / agent の real-local verification が重くなる
   - mitigation: local contract は維持し、Docker は remote CI lane に限定する
 - current artifact contract と spec wording がずれて reviewer が期待する evidence を誤解する
-  - mitigation: remote verify artifact を `trace + screenshot + HTML report` で揃えて docs/spec を更新する
+  - mitigation: remote verify artifact の生成条件と canonical path
+    (`OPERATOR_UI_CAPTURE_ARTIFACTS=1`,
+    `operator-ui/test-results/remote/`,
+    `operator-ui/playwright-report/remote/`) を docs/spec に明記する
 
 ## Design Decisions
 
 - remote staging verify は host-runner 上の browser install ではなく、Playwright 公式 Docker image を canonical runtime とする
 - local verification は existing host-native commands を canonical runtime のまま維持する
 - video/ffmpeg の扱いはこの issue では再拡張せず、artifact contract は current remote lane の実態を正本にする
+- current remote lane の artifact contract は generic 名称だけでなく
+  `operator-ui/test-results/remote/` と `operator-ui/playwright-report/remote/` の canonical path まで固定する
 
 ## Verification
 
