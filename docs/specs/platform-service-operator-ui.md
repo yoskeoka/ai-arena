@@ -85,6 +85,10 @@ browser verification lane は少なくとも次の 3 系統で同じ acceptance 
   actual operator API request により preset queue から started/completed state を作り、
   同じ panel / detail / artifact observation surface を継続検証する lane
 
+dedicated CI browser lane は、browser runtime を repo checkout 外の
+pinned Playwright 公式 image へ載せてもよい。
+ただし image version は repo が使う `@playwright/test` version と一致しなければならない。
+
 初期表示では completed matches panel の先頭 item を自動選択してよい。
 completed item がない場合は、detail panel は empty state を表示してよい。
 
@@ -198,12 +202,17 @@ first landing の operator UI は、少なくとも次の hook family を stable
 machine-readable hook の役割は browser verification の stable targeting に限る。
 style hook や analytics 用途と混在させてはならない。
 
-CI の browser workflow は failure 時に少なくとも次を artifact として回収しなければならない。
+CI の browser workflow は `OPERATOR_UI_CAPTURE_ARTIFACTS=1` を前提に、
+少なくとも次の repo-relative path を canonical artifact path として回収しなければならない。
+
+- `operator-ui/test-results/remote/`
+- `operator-ui/playwright-report/remote/`
+
+この path 群には少なくとも次の artifact family が含まれなければならない。
 
 - Playwright screenshot
-- Playwright trace / video
-- backend startup/runtime log
-- frontend dev-server log
+- Playwright trace
+- HTML report
 
 real local inspection/capture lane は success 時にも review artifact を保存できなければならない。
 

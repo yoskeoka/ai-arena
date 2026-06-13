@@ -236,6 +236,19 @@ Current operational note:
 - dedicated browser CI lane も同じ app root / install / build contract を共有してよい。
   Pages deploy lane が drift しないよう、browser verification で使う frontend install/build command は
   `operator-ui/` の canonical `pnpm` surface に揃える
+- `online-release-staging-verify` の canonical remote lane は、
+  GitHub-hosted runner 上で browser install を行うのではなく
+  Playwright 公式 Docker image を runtime として使う
+- remote lane の image tag は `operator-ui/package.json` の `@playwright/test` version と一致させる。
+  たとえば repo が `1.54.1` を使うなら、
+  workflow image も `mcr.microsoft.com/playwright:v1.54.1-noble` のように pin する
+- remote lane では `pnpm exec playwright install --with-deps chromium` を追加実行しない。
+  browser runtime と Linux dependency は pinned image 側を正本にする
+- current remote verify lane の artifact 正本 path は次とする
+  - `operator-ui/test-results/remote/`
+  - `operator-ui/playwright-report/remote/`
+- workflow summary には verify 対象 commit SHA、frontend URL、backend URL、
+  artifact 名 `online-release-staging-verify` を残す
 
 Direct Upload contract:
 
