@@ -279,3 +279,10 @@
 - Pattern: 自分には文脈で補完できる plan 名や command を docs に書くとき、reviewer や次の実行者がそのまま辿れる粒度まで concrete に書く確認を省きやすい
 - Rule: docs runbook で別 plan/file を参照するときは、実在する file path か相対 link で書く。command sample は copy-paste でそのまま実行できる形を基本にし、hostname や path の文脈補完を reader に委ねない
 - Applied: `docs/development/platform-service-online-deploy.md` の plan 参照、access runbook、今後の exec-plan/runbook cross-reference と operational command sample 全般
+
+## [2026-06-14] lifecycle 用語は運用判断の単位がそのまま読める名前を先に選ぶ
+
+- Mistake: rerun / retry / correction の設計で、`lineage` のような抽象語を先に置き、`match_id` が logical match なのか実行 1 回なのかを後から詰める流れになった
+- Pattern: 履歴保持や再実行モデルを考えるとき、データ構造の一般名詞で済ませてしまい、operator が何を判断・切替する entity なのかが名前だけでは伝わらない
+- Rule: rerun / retry / correction のような運用操作を伴う仕様では、まず `logical match`、`run`、`official run` のように operator の判断単位が名前から読める語彙を固定する。`lineage` のような抽象語は、その具体語彙で置き換えられない場合だけ使う
+- Applied: `docs/specs/platform-service-match-request-scheduling.md`、`docs/specs/platform-service-ranking-lifecycle.md`、`docs/specs/platform-service-operator-api.md`、今後の lifecycle / audit / correction 系 spec と実装命名

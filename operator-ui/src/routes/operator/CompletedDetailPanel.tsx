@@ -29,15 +29,17 @@ export function CompletedDetailPanel({
       testId="operator-panel-completed-detail"
     >
       {detail ? (
-        <div className="space-y-5" data-testid={`match-detail-${detail.submission_id}`}>
+        <div className="space-y-5" data-testid={`match-detail-${detail.run_id}`}>
           <div className="rounded-3xl bg-ink p-5 text-paper">
             <div className="flex flex-wrap items-center gap-2">
               <Badge>service: {detail.lifecycle_state}</Badge>
               {detail.terminal_status ? <Badge tone="teal">match: {detail.terminal_status}</Badge> : null}
+              {detail.official ? <Badge tone="moss">official</Badge> : null}
             </div>
             <h2 className="mt-4 text-xl font-semibold">{detail.match_id}</h2>
-            <p className="mt-1 text-sm text-paper/70">{detail.submission_id}</p>
+            <p className="mt-1 text-sm text-paper/70">{detail.run_id}</p>
             <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+              <Meta label="Attempt" value={String(detail.attempt_count)} />
               <Meta label="Game" value={`${detail.game_id}@${detail.game_version}`} />
               <Meta label="Ruleset" value={detail.ruleset_version} />
               <Meta label="Output Dir" value={detail.output_dir} />
@@ -157,7 +159,7 @@ export function CompletedDetailPanel({
 function EmptyDetailState() {
   return (
     <div className="rounded-3xl border border-dashed border-black/15 bg-paper p-8 text-center text-sm text-black/60">
-      Select a completed submission to inspect result-summary, replay inputs, and delegated artifact links.
+      Select a completed run to inspect result-summary, replay inputs, and delegated artifact links.
     </div>
   );
 }

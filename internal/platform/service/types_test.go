@@ -9,8 +9,8 @@ import (
 
 func TestValidateSubmission(t *testing.T) {
 	valid := MatchSubmission{
-		SubmissionID: "sub-1",
-		MatchID:      "match-1",
+		RunID:   "run-1",
+		MatchID: "match-1",
 		Game: contract.GameMetadata{
 			GameID:         "janken",
 			GameVersion:    "2.1.0",
@@ -28,6 +28,7 @@ func TestValidateSubmission(t *testing.T) {
 		},
 		OutputDir:    "arena-service-output",
 		AttemptCount: 1,
+		RunKind:      RunKindInitial,
 	}
 	clone := func() MatchSubmission {
 		sub := valid
@@ -42,7 +43,7 @@ func TestValidateSubmission(t *testing.T) {
 	}{
 		{name: "valid", submission: valid, wantOK: true},
 		{
-			name: "requires attempt count one",
+			name: "requires initial attempt count one",
 			submission: func() MatchSubmission {
 				sub := clone()
 				sub.AttemptCount = 2
@@ -99,8 +100,8 @@ func TestValidateSubmission(t *testing.T) {
 func TestQueueRecordJSONOmitEmpty(t *testing.T) {
 	record := QueueRecord{
 		Submission: MatchSubmission{
-			SubmissionID: "sub-1",
-			MatchID:      "match-1",
+			RunID:   "run-1",
+			MatchID: "match-1",
 			Game: contract.GameMetadata{
 				GameID:         "janken",
 				GameVersion:    "2.1.0",
@@ -114,6 +115,7 @@ func TestQueueRecordJSONOmitEmpty(t *testing.T) {
 			},
 			OutputDir:    "arena-service-output",
 			AttemptCount: 1,
+			RunKind:      RunKindInitial,
 		},
 		State: StateQueued,
 	}

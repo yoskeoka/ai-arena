@@ -118,9 +118,9 @@ func (i *LocalRunnerInvoker) loadPlayersAndSessions(ctx context.Context, submiss
 // LocalTerminalPersister writes standard artifacts plus per-player stderr logs under output_dir.
 type LocalTerminalPersister struct{}
 
-// Persist writes terminal artifacts under submission.output_dir/match_id.
+// Persist writes terminal artifacts under submission.output_dir/run_id.
 func (LocalTerminalPersister) Persist(_ context.Context, submission MatchSubmission, result ExecutionResult) (TerminalArtifacts, error) {
-	layout := artifacts.NewLayout(submission.OutputDir, submission.MatchID)
+	layout := artifacts.NewLayout(submission.OutputDir, submission.RunID)
 	if err := artifacts.EnsureLayout(layout); err != nil {
 		return TerminalArtifacts{}, err
 	}

@@ -12,10 +12,12 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 )
 
-// ResultListItem is the compact operator-facing view for one submission.
+// ResultListItem is the compact operator-facing view for one run.
 type ResultListItem struct {
-	SubmissionID      string            `json:"submission_id"`
+	RunID             string            `json:"run_id"`
 	MatchID           string            `json:"match_id"`
+	AttemptCount      int               `json:"attempt_count"`
+	Official          bool              `json:"official"`
 	GameID            string            `json:"game_id"`
 	GameVersion       string            `json:"game_version"`
 	RulesetVersion    string            `json:"ruleset_version"`
@@ -28,7 +30,7 @@ type ResultListItem struct {
 	ResultSummaryPath string            `json:"result_summary_path,omitempty"`
 }
 
-// MatchDetail is the operator-facing detail view for one submission.
+// MatchDetail is the operator-facing detail view for one run.
 type MatchDetail struct {
 	ResultListItem
 	Players           []SubmittedPlayer        `json:"players"`
@@ -58,7 +60,7 @@ func NewQueryService(queue QueueStore, readers ...ArtifactReader) (*QueryService
 	return &QueryService{queue: queue, reader: reader}, nil
 }
 
-// List returns compact operator-facing rows for all known submissions.
+// List returns compact operator-facing rows for all known runs.
 func (s *QueryService) List(ctx context.Context) ([]ResultListItem, error) {
 	records, err := s.queue.List(ctx)
 	if err != nil {
@@ -75,9 +77,9 @@ func (s *QueryService) List(ctx context.Context) ([]ResultListItem, error) {
 	return items, nil
 }
 
-// Get returns the operator-facing detail view for one submission.
-func (s *QueryService) Get(ctx context.Context, submissionID string) (MatchDetail, error) {
-	record, err := s.queue.Get(ctx, submissionID)
+// Get returns the operator-facing detail view for one run.
+func (s *QueryService) Get(ctx context.Context, runID string) (MatchDetail, error) {
+	record, err := s.queue.Get(ctx, runID)
 	if err != nil {
 		return MatchDetail{}, err
 	}
@@ -107,8 +109,10 @@ func (s *QueryService) Get(ctx context.Context, submissionID string) (MatchDetai
 
 func buildResultListItem(ctx context.Context, record QueueRecord, reader ArtifactReader) (ResultListItem, *artifacts.ResultSummary, error) {
 	item := ResultListItem{
-		SubmissionID:   record.Submission.SubmissionID,
+		RunID:          record.Submission.RunID,
 		MatchID:        record.Submission.MatchID,
+		AttemptCount:   record.Submission.AttemptCount,
+		Official:       record.Submission.Official,
 		GameID:         record.Submission.Game.GameID,
 		GameVersion:    record.Submission.Game.GameVersion,
 		RulesetVersion: record.Submission.Game.RulesetVersion,

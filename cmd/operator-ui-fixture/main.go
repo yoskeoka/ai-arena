@@ -150,12 +150,13 @@ func (i fixtureArtifactAccessIssuer) Issue(ctx context.Context, detail service.M
 
 func seedActiveRecord(store *service.InMemoryQueueStore, outputDir string) error {
 	_, err := store.Enqueue(context.Background(), service.MatchSubmission{
-		SubmissionID: "sub-active-queued",
+		RunID:        "run-active-queued",
 		MatchID:      "match-active-queued",
 		Game:         fixtureGame(),
 		Players:      fixturePlayers(),
 		OutputDir:    outputDir,
 		AttemptCount: 1,
+		RunKind:      service.RunKindInitial,
 	})
 	return err
 }
@@ -163,12 +164,13 @@ func seedActiveRecord(store *service.InMemoryQueueStore, outputDir string) error
 func seedCompletedRecord(store *service.InMemoryQueueStore, summaryPath string) error {
 	ctx := context.Background()
 	submission := service.MatchSubmission{
-		SubmissionID: "sub-completed-local",
+		RunID:        "run-completed-local",
 		MatchID:      "match-completed-local",
 		Game:         fixtureGame(),
 		Players:      fixturePlayers(),
 		OutputDir:    "fixture-output/operator-ui",
 		AttemptCount: 1,
+		RunKind:      service.RunKindInitial,
 	}
 	if _, err := store.Enqueue(ctx, submission); err != nil {
 		return err
@@ -190,6 +192,7 @@ func seedCompletedRecord(store *service.InMemoryQueueStore, summaryPath string) 
 		ResultSummaryPath: summaryPath,
 		MatchStatus:       game.StatusCompleted,
 	}
+	record.Submission.Official = true
 	return store.Update(ctx, record)
 }
 

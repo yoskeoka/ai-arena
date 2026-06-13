@@ -30,6 +30,7 @@ func TestRankingServiceApplyCompletedAndGet(t *testing.T) {
 		{PlayerID: "alpha", ArtifactRef: "artifact://alpha"},
 		{PlayerID: "beta", ArtifactRef: "artifact://beta"},
 	})
+	submission.Official = true
 	summary := rankingTestSummary("match-1", []game.Placement{
 		{PlayerID: "alpha", Place: 1},
 		{PlayerID: "beta", Place: 2},
@@ -82,6 +83,7 @@ func TestRankingServiceRecomputeAndVerify(t *testing.T) {
 		{PlayerID: "alpha", ArtifactRef: "artifact://alpha"},
 		{PlayerID: "beta", ArtifactRef: "artifact://beta"},
 	})
+	firstSubmission.Official = true
 	firstSummaryPath := writeRankingSummaryFile(t, baseDir, "match-1", rankingTestSummary("match-1", []game.Placement{
 		{PlayerID: "alpha", Place: 1},
 		{PlayerID: "beta", Place: 2},
@@ -98,6 +100,7 @@ func TestRankingServiceRecomputeAndVerify(t *testing.T) {
 		{PlayerID: "alpha", ArtifactRef: "artifact://alpha"},
 		{PlayerID: "beta", ArtifactRef: "artifact://beta"},
 	})
+	secondSubmission.Official = true
 	secondSummaryPath := writeRankingSummaryFile(t, baseDir, "match-2", rankingTestSummary("match-2", []game.Placement{
 		{PlayerID: "beta", Place: 1},
 		{PlayerID: "alpha", Place: 2},
@@ -188,10 +191,10 @@ func (s staticRunnerInvoker) Run(_ context.Context, _ ExecutionRequest) (Executi
 	return s.result, s.err
 }
 
-func rankingTestSubmission(submissionID, matchID string, players []SubmittedPlayer) MatchSubmission {
+func rankingTestSubmission(runID, matchID string, players []SubmittedPlayer) MatchSubmission {
 	return MatchSubmission{
-		SubmissionID: submissionID,
-		MatchID:      matchID,
+		RunID:   runID,
+		MatchID: matchID,
 		Game: contract.GameMetadata{
 			GameID:         "echo",
 			GameVersion:    "v1",
@@ -200,6 +203,7 @@ func rankingTestSubmission(submissionID, matchID string, players []SubmittedPlay
 		Players:      players,
 		OutputDir:    "unused",
 		AttemptCount: 1,
+		RunKind:      RunKindInitial,
 	}
 }
 

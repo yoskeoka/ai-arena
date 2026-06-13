@@ -21,10 +21,10 @@ var (
 
 // PresetMatchRequest is the operator-facing enqueue request for one preset match.
 type PresetMatchRequest struct {
-	PresetID     string `json:"preset_id"`
-	SubmissionID string `json:"submission_id,omitempty"`
-	MatchID      string `json:"match_id,omitempty"`
-	OutputDir    string `json:"output_dir,omitempty"`
+	PresetID string `json:"preset_id"`
+	RunID    string `json:"run_id,omitempty"`
+	MatchID  string `json:"match_id,omitempty"`
+	OutputDir string `json:"output_dir,omitempty"`
 }
 
 // MatchPresetDefinition is one server-known preset match template.
@@ -48,8 +48,8 @@ type PresetCatalog interface {
 // StaticPresetCatalog resolves requests from an in-memory preset map.
 type StaticPresetCatalog struct {
 	presets           map[string]MatchPresetDefinition
-	newSubmissionIDFn func() string
-	newMatchIDFn      func() string
+	newRunIDFn   func() string
+	newMatchIDFn func() string
 }
 
 // NewStaticPresetCatalog constructs a catalog from validated preset definitions.
@@ -70,12 +70,13 @@ func NewStaticPresetCatalog(definitions []MatchPresetDefinition) (*StaticPresetC
 			return nil, fmt.Errorf("service: preset %q output_dir is required", definition.PresetID)
 		}
 		submission := MatchSubmission{
-			SubmissionID: "preset-validation-submission",
+			RunID:        "preset-validation-run",
 			MatchID:      "preset-validation-match",
 			Game:         definition.Game,
 			Players:      append([]SubmittedPlayer(nil), definition.Players...),
 			OutputDir:    definition.OutputDir,
 			AttemptCount: 1,
+			RunKind:      RunKindInitial,
 		}
 		if err := ValidateSubmission(submission); err != nil {
 			return nil, fmt.Errorf("service: preset %q invalid: %w", definition.PresetID, err)
@@ -89,9 +90,9 @@ func NewStaticPresetCatalog(definitions []MatchPresetDefinition) (*StaticPresetC
 	}
 
 	return &StaticPresetCatalog{
-		presets:           presets,
-		newSubmissionIDFn: func() string { return "sub-" + uuid.NewString() },
-		newMatchIDFn:      func() string { return "match-" + uuid.NewString() },
+		presets:      presets,
+		newRunIDFn:   func() string { return "run-" + uuid.NewString() },
+		newMatchIDFn: func() string { return "match-" + uuid.NewString() },
 	}, nil
 }
 
@@ -125,9 +126,9 @@ func (c *StaticPresetCatalog) Build(_ context.Context, req PresetMatchRequest) (
 		return MatchSubmission{}, ErrPresetNotFound
 	}
 
-	submissionID := strings.TrimSpace(req.SubmissionID)
-	if submissionID == "" {
-		submissionID = c.newSubmissionIDFn()
+	runID := strings.TrimSpace(req.RunID)
+	if runID == "" {
+		runID = c.newRunIDFn()
 	}
 	matchID := strings.TrimSpace(req.MatchID)
 	if matchID == "" {
@@ -139,11 +140,12 @@ func (c *StaticPresetCatalog) Build(_ context.Context, req PresetMatchRequest) (
 	}
 
 	return MatchSubmission{
-		SubmissionID: submissionID,
+		RunID:        runID,
 		MatchID:      matchID,
 		Game:         definition.Game,
 		Players:      append([]SubmittedPlayer(nil), definition.Players...),
 		OutputDir:    outputDir,
 		AttemptCount: 1,
+		RunKind:      RunKindInitial,
 	}, nil
 }

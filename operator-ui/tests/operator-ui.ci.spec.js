@@ -36,18 +36,18 @@ test("service-backed operator UI browser lane covers queue, active, completed de
 
   const activePanel = page.getByTestId("operator-panel-active-matches");
   const completedPanel = page.getByTestId("operator-panel-completed-matches");
-  const knownSubmissionIDs = await currentSubmissionIDs(request);
+  const knownRunIDs = await currentRunIDs(request);
 
   await page.getByTestId(`preset-queue-action-${presetId}`).click();
 
   const created = await waitForRecord(request, async () => {
     const activeItems = await listItems(request, `${backendBaseURL}/api/v1/matches/active`);
-    const activeRecord = activeItems.find((item) => !knownSubmissionIDs.has(item.submission_id));
+    const activeRecord = activeItems.find((item) => !knownRunIDs.has(item.run_id));
     if (activeRecord) {
       return { record: activeRecord, source: "active" };
     }
     const completedItems = await listItems(request, `${backendBaseURL}/api/v1/matches/completed`);
-    const completedRecord = completedItems.find((item) => !knownSubmissionIDs.has(item.submission_id));
+    const completedRecord = completedItems.find((item) => !knownRunIDs.has(item.run_id));
     if (completedRecord) {
       return { record: completedRecord, source: "completed" };
     }
@@ -55,24 +55,24 @@ test("service-backed operator UI browser lane covers queue, active, completed de
   }, "new submission after preset enqueue");
 
   if (created.source === "active") {
-    await expect(activePanel.getByTestId(`match-row-${created.record.submission_id}`)).toBeVisible();
+    await expect(activePanel.getByTestId(`match-row-${created.record.run_id}`)).toBeVisible();
   }
 
   const completedRecord = await waitForRecord(request, async () => {
     const completedItems = await listItems(request, `${backendBaseURL}/api/v1/matches/completed`);
-    return completedItems.find((item) => item.submission_id === created.record.submission_id);
+    return completedItems.find((item) => item.run_id === created.record.run_id);
   }, "completed submission in completed list");
 
   await page.reload();
 
-  const completedRow = completedPanel.getByTestId(`match-row-${completedRecord.submission_id}`);
+  const completedRow = completedPanel.getByTestId(`match-row-${completedRecord.run_id}`);
   await expect(completedRow).toBeVisible();
   await completedRow.click();
 
-  const detail = page.getByTestId(`match-detail-${completedRecord.submission_id}`);
+  const detail = page.getByTestId(`match-detail-${completedRecord.run_id}`);
   await expect(detail).toBeVisible();
   await expect(detail.getByRole("heading", { name: completedRecord.match_id, exact: true })).toBeVisible();
-  await expect(detail.getByText(completedRecord.submission_id, { exact: true })).toBeVisible();
+  await expect(detail.getByText(completedRecord.run_id, { exact: true })).toBeVisible();
   await expect(detail.getByText("Status", { exact: true })).toBeVisible();
   await expect(detail.getByText("completed", { exact: true })).toBeVisible();
 
@@ -101,10 +101,10 @@ test("service-backed operator UI browser lane covers queue, active, completed de
   }
 });
 
-async function currentSubmissionIDs(request) {
+async function currentRunIDs(request) {
   const activeItems = await listItems(request, `${backendBaseURL}/api/v1/matches/active`);
   const completedItems = await listItems(request, `${backendBaseURL}/api/v1/matches/completed`);
-  return new Set([...activeItems, ...completedItems].map((item) => item.submission_id));
+  return new Set([...activeItems, ...completedItems].map((item) => item.run_id));
 }
 
 async function listItems(request, url) {

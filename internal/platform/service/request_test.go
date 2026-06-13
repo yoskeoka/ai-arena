@@ -8,7 +8,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 )
 
-func TestMatchRequestServiceCreatesQueuedSubmission(t *testing.T) {
+func TestMatchRequestServiceCreatesQueuedRun(t *testing.T) {
 	store := NewInMemoryQueueStore()
 	commands := newTestCommandServiceWithStore(t, store)
 	general := newTestGeneralSubmissionService(t)
@@ -58,8 +58,8 @@ func TestMatchRequestServiceCreatesQueuedSubmission(t *testing.T) {
 	if item.LifecycleState != StateQueued {
 		t.Fatalf("item.LifecycleState = %q, want %q", item.LifecycleState, StateQueued)
 	}
-	if item.ScheduledSubmissionID != record.Submission.SubmissionID {
-		t.Fatalf("item.ScheduledSubmissionID = %q, want %q", item.ScheduledSubmissionID, record.Submission.SubmissionID)
+	if item.LatestRunID != record.Submission.RunID {
+		t.Fatalf("item.LatestRunID = %q, want %q", item.LatestRunID, record.Submission.RunID)
 	}
 
 	items, err := requests.List(context.Background())
@@ -122,7 +122,7 @@ func TestMatchRequestServiceRejectsMismatchedAIRegistration(t *testing.T) {
 	}
 }
 
-func TestMatchRequestServiceRollsBackQueuedSubmissionWhenSaveFails(t *testing.T) {
+func TestMatchRequestServiceRollsBackQueuedRunWhenSaveFails(t *testing.T) {
 	store := NewInMemoryQueueStore()
 	commands := newTestCommandServiceWithStore(t, store)
 	general := newTestGeneralSubmissionService(t)
@@ -174,14 +174,14 @@ func TestMatchRequestServiceRollsBackQueuedSubmissionWhenSaveFails(t *testing.T)
 func TestInMemoryMatchRequestStoreClonesParticipants(t *testing.T) {
 	store := NewInMemoryMatchRequestStore()
 	item := MatchRequest{
-		RequestID:             "req-1",
-		GameRegistrationID:    "echo-count-v2",
-		Game:                  contract.GameMetadata{GameID: "echo-count", GameVersion: "2.0.0", RulesetVersion: "phase2-simultaneous-2turn"},
-		Participants:          []MatchRequestParticipant{{PlayerID: "p1", AISubmissionID: "ai-1"}},
-		OutputDir:             "out",
-		ScheduledSubmissionID: "sub-1",
-		ScheduledMatchID:      "match-1",
-		LifecycleState:        StateQueued,
+		RequestID:          "req-1",
+		GameRegistrationID: "echo-count-v2",
+		Game:               contract.GameMetadata{GameID: "echo-count", GameVersion: "2.0.0", RulesetVersion: "phase2-simultaneous-2turn"},
+		Participants:       []MatchRequestParticipant{{PlayerID: "p1", AISubmissionID: "ai-1"}},
+		OutputDir:          "out",
+		MatchID:            "match-1",
+		LatestRunID:        "run-1",
+		LifecycleState:     StateQueued,
 	}
 
 	if err := store.Save(context.Background(), item); err != nil {

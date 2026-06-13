@@ -48,14 +48,14 @@ func TestCommandServiceCancelQueued(t *testing.T) {
 	if _, err := commands.Submit(context.Background(), submission); err != nil {
 		t.Fatalf("Submit() error = %v", err)
 	}
-	record, err := commands.Cancel(context.Background(), submission.SubmissionID)
+	record, err := commands.Cancel(context.Background(), submission.RunID)
 	if err != nil {
 		t.Fatalf("Cancel() error = %v", err)
 	}
 	if record.State != StateCanceled {
 		t.Fatalf("record.State = %q, want %q", record.State, StateCanceled)
 	}
-	if _, err := commands.Cancel(context.Background(), submission.SubmissionID); err == nil {
+	if _, err := commands.Cancel(context.Background(), submission.RunID); err == nil {
 		t.Fatal("Cancel() returned nil error for terminal record")
 	}
 }
@@ -84,7 +84,7 @@ func TestInMemoryQueueStoreRejectsCancelAfterClaim(t *testing.T) {
 	if _, err := store.Claim(context.Background(), "worker-1"); err != nil {
 		t.Fatalf("Claim() error = %v", err)
 	}
-	if _, err := store.CancelQueued(context.Background(), submission.SubmissionID); err == nil {
+	if _, err := store.CancelQueued(context.Background(), submission.RunID); err == nil {
 		t.Fatal("CancelQueued() returned nil error")
 	}
 	if len(store.order) != 0 {
@@ -289,8 +289,8 @@ func newTestWorker(t *testing.T, store QueueStore, timeout time.Duration) *Worke
 
 func testSubmission(artifactRef string) MatchSubmission {
 	return MatchSubmission{
-		SubmissionID: "sub-1",
-		MatchID:      "match-1",
+		RunID:   "run-1",
+		MatchID: "match-1",
 		Game: contract.GameMetadata{
 			GameID:         "janken",
 			GameVersion:    "2.1.0",
@@ -304,6 +304,7 @@ func testSubmission(artifactRef string) MatchSubmission {
 		},
 		OutputDir:    "arena-service-output",
 		AttemptCount: 1,
+		RunKind:      RunKindInitial,
 	}
 }
 
@@ -311,8 +312,8 @@ func testEchoSubmission(t *testing.T, outputDir, ruleset, player1, player2 strin
 	t.Helper()
 
 	return MatchSubmission{
-		SubmissionID: "sub-echo-1",
-		MatchID:      "match-echo-1",
+		RunID:   "run-echo-1",
+		MatchID: "match-echo-1",
 		Game: contract.GameMetadata{
 			GameID:         "echo-count",
 			GameVersion:    "2.0.0",
@@ -324,6 +325,7 @@ func testEchoSubmission(t *testing.T, outputDir, ruleset, player1, player2 strin
 		},
 		OutputDir:    outputDir,
 		AttemptCount: 1,
+		RunKind:      RunKindInitial,
 	}
 }
 

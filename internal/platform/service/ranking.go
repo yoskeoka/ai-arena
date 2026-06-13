@@ -40,19 +40,20 @@ type RankingEntry struct {
 	MatchesPlayed    int              `json:"matches_played"`
 	FirstPlaces      int              `json:"first_places"`
 	PlacementCounts  map[int]int      `json:"placement_counts,omitempty"`
-	LastSubmissionID string           `json:"last_submission_id"`
+	LastRunID        string           `json:"last_run_id"`
 	LastMatchID      string           `json:"last_match_id"`
 	LastStatus       game.MatchStatus `json:"last_status"`
 }
 
 // RankingSnapshot is the durable aggregate payload for one ranking scope.
 type RankingSnapshot struct {
-	Scope                   RankingScope   `json:"scope"`
-	AppliedSubmissionIDs    []string       `json:"applied_submission_ids,omitempty"`
-	LastAppliedSubmissionID string         `json:"last_applied_submission_id,omitempty"`
-	LastAppliedMatchID      string         `json:"last_applied_match_id,omitempty"`
-	CompletedMatches        int            `json:"completed_matches"`
-	Entries                 []RankingEntry `json:"entries,omitempty"`
+	Scope            RankingScope   `json:"scope"`
+	AppliedRunIDs    []string       `json:"applied_run_ids,omitempty"`
+	AppliedMatchIDs  []string       `json:"applied_match_ids,omitempty"`
+	LastAppliedRunID string         `json:"last_applied_run_id,omitempty"`
+	LastAppliedMatchID string       `json:"last_applied_match_id,omitempty"`
+	CompletedMatches int            `json:"completed_matches"`
+	Entries          []RankingEntry `json:"entries,omitempty"`
 }
 
 // StoredRankingSnapshot returns the durable snapshot plus its stable locator.
@@ -70,11 +71,11 @@ type RankingVerification struct {
 }
 
 type rankingUpdate struct {
-	Scope        RankingScope
-	SubmissionID string
-	MatchID      string
-	Status       game.MatchStatus
-	Placements   []rankingPlacement
+	Scope     RankingScope
+	RunID     string
+	MatchID   string
+	Status    game.MatchStatus
+	Placements []rankingPlacement
 }
 
 type rankingPlacement struct {
@@ -119,6 +120,9 @@ func NewRankingService(store RankingSnapshotStore, queue QueueStore, readers ...
 
 // ApplyCompleted applies one completed submission to the durable snapshot in its scope.
 func (s *RankingService) ApplyCompleted(ctx context.Context, submission MatchSubmission, summary artifacts.ResultSummary) error {
+	if !submission.Official {
+		return nil
+	}
 	update, err := buildRankingUpdate(submission, summary)
 	if err != nil {
 		return err
@@ -136,6 +140,27 @@ func (s *RankingService) ApplyCompleted(ctx context.Context, submission MatchSub
 		return err
 	}
 	_, err = s.store.Put(ctx, next)
+	return err
+}
+
+// RefreshCompletedRun recomputes and stores the snapshot for one completed run scope.
+func (s *RankingService) RefreshCompletedRun(ctx context.Context, record QueueRecord) error {
+	if record.Terminal == nil {
+		return fmt.Errorf("service: terminal artifacts are required to refresh ranking")
+	}
+	summary, err := readResultSummary(ctx, s.reader, record.Terminal.ResultSummaryPath)
+	if err != nil {
+		return err
+	}
+	if summary == nil {
+		return fmt.Errorf("service: result summary is required to refresh ranking")
+	}
+	scope := scopeFromSummary(*summary)
+	recomputed, err := s.Recompute(ctx, scope)
+	if err != nil {
+		return err
+	}
+	_, err = s.store.Put(ctx, recomputed)
 	return err
 }
 
@@ -167,7 +192,7 @@ func (s *RankingService) Recompute(ctx context.Context, scope RankingScope) (Ran
 	}
 	snapshot := newRankingSnapshot(scope)
 	for _, record := range records {
-		if record.State != StateCompleted || record.Terminal == nil || strings.TrimSpace(record.Terminal.ResultSummaryPath) == "" {
+		if record.State != StateCompleted || !record.Submission.Official || record.Terminal == nil || strings.TrimSpace(record.Terminal.ResultSummaryPath) == "" {
 			continue
 		}
 		summary, err := readResultSummary(ctx, s.reader, record.Terminal.ResultSummaryPath)
@@ -347,8 +372,8 @@ func buildRankingUpdate(submission MatchSubmission, summary artifacts.ResultSumm
 	if summary.Status != game.StatusCompleted {
 		return rankingUpdate{}, fmt.Errorf("service: ranking summary status must be completed")
 	}
-	if strings.TrimSpace(submission.SubmissionID) == "" {
-		return rankingUpdate{}, fmt.Errorf("service: submission_id is required for ranking update")
+	if strings.TrimSpace(submission.RunID) == "" {
+		return rankingUpdate{}, fmt.Errorf("service: run_id is required for ranking update")
 	}
 	if strings.TrimSpace(summary.MatchID) == "" {
 		return rankingUpdate{}, fmt.Errorf("service: match_id is required for ranking update")
@@ -384,11 +409,11 @@ func buildRankingUpdate(submission MatchSubmission, summary artifacts.ResultSumm
 		})
 	}
 	return rankingUpdate{
-		Scope:        scope,
-		SubmissionID: submission.SubmissionID,
-		MatchID:      summary.MatchID,
-		Status:       summary.Status,
-		Placements:   placements,
+		Scope:      scope,
+		RunID:      submission.RunID,
+		MatchID:    summary.MatchID,
+		Status:     summary.Status,
+		Placements: placements,
 	}, nil
 }
 
@@ -397,7 +422,7 @@ func applyRankingUpdate(snapshot RankingSnapshot, update rankingUpdate) (Ranking
 	if snapshot.Scope != normalizeRankingScope(update.Scope) {
 		return RankingSnapshot{}, fmt.Errorf("service: ranking scope mismatch")
 	}
-	if slices.Contains(snapshot.AppliedSubmissionIDs, update.SubmissionID) {
+	if slices.Contains(snapshot.AppliedRunIDs, update.RunID) || slices.Contains(snapshot.AppliedMatchIDs, update.MatchID) {
 		return snapshot, nil
 	}
 
@@ -415,16 +440,17 @@ func applyRankingUpdate(snapshot RankingSnapshot, update rankingUpdate) (Ranking
 		if placement.Place == 1 {
 			entry.FirstPlaces++
 		}
-		entry.LastSubmissionID = update.SubmissionID
+		entry.LastRunID = update.RunID
 		entry.LastMatchID = update.MatchID
 		entry.LastStatus = update.Status
 		entries[placement.CompetitorRef] = entry
 	}
 
-	snapshot.AppliedSubmissionIDs = append(snapshot.AppliedSubmissionIDs, update.SubmissionID)
-	snapshot.LastAppliedSubmissionID = update.SubmissionID
+	snapshot.AppliedRunIDs = append(snapshot.AppliedRunIDs, update.RunID)
+	snapshot.AppliedMatchIDs = append(snapshot.AppliedMatchIDs, update.MatchID)
+	snapshot.LastAppliedRunID = update.RunID
 	snapshot.LastAppliedMatchID = update.MatchID
-	snapshot.CompletedMatches = len(snapshot.AppliedSubmissionIDs)
+	snapshot.CompletedMatches = len(snapshot.AppliedMatchIDs)
 	snapshot.Entries = make([]RankingEntry, 0, len(entries))
 	for _, entry := range entries {
 		snapshot.Entries = append(snapshot.Entries, normalizeRankingEntry(entry))
@@ -469,10 +495,13 @@ func validateRankingScope(scope RankingScope) error {
 
 func normalizeRankingSnapshot(snapshot RankingSnapshot) RankingSnapshot {
 	snapshot.Scope = normalizeRankingScope(snapshot.Scope)
-	if snapshot.AppliedSubmissionIDs == nil {
-		snapshot.AppliedSubmissionIDs = []string{}
+	if snapshot.AppliedRunIDs == nil {
+		snapshot.AppliedRunIDs = []string{}
 	}
-	snapshot.CompletedMatches = len(snapshot.AppliedSubmissionIDs)
+	if snapshot.AppliedMatchIDs == nil {
+		snapshot.AppliedMatchIDs = []string{}
+	}
+	snapshot.CompletedMatches = len(snapshot.AppliedMatchIDs)
 	if snapshot.Entries == nil {
 		snapshot.Entries = []RankingEntry{}
 	}
@@ -488,7 +517,7 @@ func normalizeRankingSnapshot(snapshot RankingSnapshot) RankingSnapshot {
 func normalizeRankingEntry(entry RankingEntry) RankingEntry {
 	entry.CompetitorRef = strings.TrimSpace(entry.CompetitorRef)
 	entry.LastPlayerID = strings.TrimSpace(entry.LastPlayerID)
-	entry.LastSubmissionID = strings.TrimSpace(entry.LastSubmissionID)
+	entry.LastRunID = strings.TrimSpace(entry.LastRunID)
 	entry.LastMatchID = strings.TrimSpace(entry.LastMatchID)
 	if entry.PlacementCounts == nil {
 		entry.PlacementCounts = map[int]int{}
@@ -499,9 +528,10 @@ func normalizeRankingEntry(entry RankingEntry) RankingEntry {
 func rankingSnapshotsEqual(left, right RankingSnapshot) bool {
 	left = normalizeRankingSnapshot(left)
 	right = normalizeRankingSnapshot(right)
-	return slices.Equal(left.AppliedSubmissionIDs, right.AppliedSubmissionIDs) &&
+	return slices.Equal(left.AppliedRunIDs, right.AppliedRunIDs) &&
+		slices.Equal(left.AppliedMatchIDs, right.AppliedMatchIDs) &&
 		left.Scope == right.Scope &&
-		left.LastAppliedSubmissionID == right.LastAppliedSubmissionID &&
+		left.LastAppliedRunID == right.LastAppliedRunID &&
 		left.LastAppliedMatchID == right.LastAppliedMatchID &&
 		left.CompletedMatches == right.CompletedMatches &&
 		slices.EqualFunc(left.Entries, right.Entries, rankingEntriesEqual)
@@ -514,7 +544,7 @@ func rankingEntriesEqual(left, right RankingEntry) bool {
 		left.LastPlayerID == right.LastPlayerID &&
 		left.MatchesPlayed == right.MatchesPlayed &&
 		left.FirstPlaces == right.FirstPlaces &&
-		left.LastSubmissionID == right.LastSubmissionID &&
+		left.LastRunID == right.LastRunID &&
 		left.LastMatchID == right.LastMatchID &&
 		left.LastStatus == right.LastStatus &&
 		equalPlacementCounts(left.PlacementCounts, right.PlacementCounts)

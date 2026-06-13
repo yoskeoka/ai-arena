@@ -35,19 +35,19 @@ func (s *InMemoryQueueStore) Enqueue(_ context.Context, submission MatchSubmissi
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if strings.TrimSpace(submission.SubmissionID) == "" {
-		return QueueRecord{}, fmt.Errorf("service: submission_id is required")
+	if strings.TrimSpace(submission.RunID) == "" {
+		return QueueRecord{}, fmt.Errorf("service: run_id is required")
 	}
-	if _, exists := s.records[submission.SubmissionID]; exists {
-		return QueueRecord{}, fmt.Errorf("service: submission_id %q already exists", submission.SubmissionID)
+	if _, exists := s.records[submission.RunID]; exists {
+		return QueueRecord{}, fmt.Errorf("service: run_id %q already exists", submission.RunID)
 	}
 	record := QueueRecord{
 		Submission: cloneMatchSubmission(submission),
 		State:      StateQueued,
 	}
-	s.records[submission.SubmissionID] = record
-	s.all = append(s.all, submission.SubmissionID)
-	s.order = append(s.order, submission.SubmissionID)
+	s.records[submission.RunID] = record
+	s.all = append(s.all, submission.RunID)
+	s.order = append(s.order, submission.RunID)
 	return cloneQueueRecord(record), nil
 }
 
@@ -60,16 +60,16 @@ func (s *InMemoryQueueStore) Claim(_ context.Context, workerID string) (QueueRec
 		return QueueRecord{}, fmt.Errorf("service: worker_id is required")
 	}
 	for len(s.order) > 0 {
-		submissionID := s.order[0]
+		runID := s.order[0]
 		s.order = s.order[1:]
 
-		record, ok := s.records[submissionID]
+		record, ok := s.records[runID]
 		if !ok || record.State != StateQueued {
 			continue
 		}
 		record.State = StateLeased
 		record.Lease = &WorkerLease{WorkerID: workerID}
-		s.records[submissionID] = record
+		s.records[runID] = record
 		return cloneQueueRecord(record), nil
 	}
 	return QueueRecord{}, ErrNoQueuedSubmission
@@ -80,23 +80,23 @@ func (s *InMemoryQueueStore) Update(_ context.Context, next QueueRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	current, ok := s.records[next.Submission.SubmissionID]
+	current, ok := s.records[next.Submission.RunID]
 	if !ok {
 		return ErrQueueRecordNotFound
 	}
 	if err := ValidateTransition(current.State, next.State); err != nil {
 		return err
 	}
-	s.records[next.Submission.SubmissionID] = cloneQueueRecord(next)
+	s.records[next.Submission.RunID] = cloneQueueRecord(next)
 	return nil
 }
 
 // CancelQueued moves one queued record into canceled.
-func (s *InMemoryQueueStore) CancelQueued(_ context.Context, submissionID string) (QueueRecord, error) {
+func (s *InMemoryQueueStore) CancelQueued(_ context.Context, runID string) (QueueRecord, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	record, ok := s.records[submissionID]
+	record, ok := s.records[runID]
 	if !ok {
 		return QueueRecord{}, ErrQueueRecordNotFound
 	}
@@ -109,17 +109,17 @@ func (s *InMemoryQueueStore) CancelQueued(_ context.Context, submissionID string
 	record.State = StateCanceled
 	record.Lease = nil
 	record.Terminal = nil
-	s.records[submissionID] = record
-	s.removeFromOrder(submissionID)
+	s.records[runID] = record
+	s.removeFromOrder(runID)
 	return cloneQueueRecord(record), nil
 }
 
-// Get returns one existing queue record by submission id.
-func (s *InMemoryQueueStore) Get(_ context.Context, submissionID string) (QueueRecord, error) {
+// Get returns one existing queue record by run id.
+func (s *InMemoryQueueStore) Get(_ context.Context, runID string) (QueueRecord, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	record, ok := s.records[submissionID]
+	record, ok := s.records[runID]
 	if !ok {
 		return QueueRecord{}, ErrQueueRecordNotFound
 	}

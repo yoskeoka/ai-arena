@@ -21,7 +21,7 @@ export function useOperatorPageState() {
   const [completedError, setCompletedError] = useState<string>();
   const [detailError, setDetailError] = useState<string>();
   const [enqueueError, setEnqueueError] = useState<string>();
-  const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>();
+  const [selectedRunId, setSelectedRunId] = useState<string>();
   const [detail, setDetail] = useState<MatchDetailResponse>();
   const [detailReloadToken, setDetailReloadToken] = useState(0);
   const detailRequestSequence = useRef(0);
@@ -71,7 +71,7 @@ export function useOperatorPageState() {
         setCompletedItems(items);
         setCompletedState("ready");
         setCompletedError(undefined);
-        setSelectedSubmissionId((current) => current ?? items[0]?.submission_id);
+        setSelectedRunId((current) => current ?? items[0]?.run_id);
       } catch (error) {
         if (canceled) {
           return;
@@ -92,7 +92,7 @@ export function useOperatorPageState() {
   }, [client]);
 
   useEffect(() => {
-    if (!selectedSubmissionId) {
+    if (!selectedRunId) {
       setDetail(undefined);
       setDetailState("idle");
       setDetailError(undefined);
@@ -110,7 +110,7 @@ export function useOperatorPageState() {
       inFlightController = controller;
       setDetailState((current) => (current === "ready" ? current : "loading"));
       try {
-        const response = await client.getMatchDetail(selectedSubmissionId, controller.signal);
+        const response = await client.getMatchDetail(selectedRunId, controller.signal);
         if (canceled || requestSequence !== detailRequestSequence.current) {
           return;
         }
@@ -135,7 +135,7 @@ export function useOperatorPageState() {
       inFlightController?.abort();
       window.clearInterval(timer);
     };
-  }, [client, detailReloadToken, selectedSubmissionId]);
+  }, [client, detailReloadToken, selectedRunId]);
 
   const handleEnqueue = async (presetId: string) => {
     setEnqueueState("submitting");
@@ -166,8 +166,8 @@ export function useOperatorPageState() {
     completedError,
     detailError,
     enqueueError,
-    selectedSubmissionId,
-    setSelectedSubmissionId,
+    selectedRunId,
+    setSelectedRunId,
     detail,
     reloadDetail: () => setDetailReloadToken((current) => current + 1),
     enqueuePreset: handleEnqueue,
