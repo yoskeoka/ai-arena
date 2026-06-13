@@ -40,6 +40,7 @@ first remote lane の process topology 前提を固定する。
 - `docs/specs/platform-service-read-model.md`: operator-facing list/get/read query contract の正本
 - `docs/specs/platform-service-operator-api.md`: operator-facing HTTP route と preset enqueue contract の正本
 - `docs/specs/platform-service-general-submission.md`: general operator lane の entity / validation contract
+- `docs/specs/platform-service-match-request-scheduling.md`: general match request と scheduling contract の正本
 
 ## サービス境界
 
@@ -138,7 +139,7 @@ replaceable queue store の初期実装が in-memory だけであることを前
 general operator lane が入っても、この spec の `match submission` は
 single-match execution request のままに保つ。
 `game registration` や `AI submission` はこの spec の前段 entity であり、
-後続の match request / scheduling が必要なときだけ
+後続の `match request` / scheduling が必要なときだけ
 `match submission` へ具体化されなければならない。
 
 first remote lane の backend process は、

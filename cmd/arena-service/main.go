@@ -176,6 +176,7 @@ type cliApp struct {
 	commands       *service.CommandService
 	queries        *service.QueryService
 	general        *service.GeneralSubmissionService
+	requests       *service.MatchRequestService
 	queue          service.QueueStore
 	reader         service.ArtifactReader
 	artifactAccess service.ArtifactAccessIssuer
@@ -230,10 +231,16 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		closeFn()
 		return nil, err
 	}
+	requests, err := service.NewMatchRequestService(general, commands, store, nil)
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
 	return &cliApp{
 		commands:       commands,
 		queries:        queries,
 		general:        general,
+		requests:       requests,
 		queue:          store,
 		reader:         reader,
 		artifactAccess: artifactAccess,
@@ -336,7 +343,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	if err != nil {
 		return err
 	}
-	api, err := service.NewOperatorAPI(a.commands, a.queries, a.general, resolvingPresetCatalog{
+	api, err := service.NewOperatorAPI(a.commands, a.queries, a.general, a.requests, resolvingPresetCatalog{
 		baseDir: a.baseDir,
 		opaque:  isOpaqueArtifactBackend(a.persister),
 		next:    presets,
