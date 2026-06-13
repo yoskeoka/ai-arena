@@ -21,6 +21,7 @@ func TestOperatorAPIPresetLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
+	general := newTestGeneralSubmissionService(t)
 	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
 		{
 			PresetID: "echo-reference",
@@ -39,7 +40,7 @@ func TestOperatorAPIPresetLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, presets, DirectArtifactAccessIssuer{})
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -58,6 +59,21 @@ func TestOperatorAPIPresetLifecycle(t *testing.T) {
 	}
 	if created.LifecycleState != StateQueued {
 		t.Fatalf("created.LifecycleState = %q, want %q", created.LifecycleState, StateQueued)
+	}
+
+	gameRegistrations, err := general.ListGames(context.Background())
+	if err != nil {
+		t.Fatalf("general.ListGames() error = %v", err)
+	}
+	if len(gameRegistrations) != 1 || gameRegistrations[0].RegistrationID != "echo-count-v2" {
+		t.Fatalf("game registrations = %+v, want materialized echo-count-v2", gameRegistrations)
+	}
+	registeredAIs, err := general.ListAIs(context.Background())
+	if err != nil {
+		t.Fatalf("general.ListAIs() error = %v", err)
+	}
+	if len(registeredAIs) != 2 {
+		t.Fatalf("len(registeredAIs) = %d, want 2", len(registeredAIs))
 	}
 
 	activeResp := httptest.NewRecorder()
@@ -144,6 +160,7 @@ func TestOperatorAPIRejectsUnknownPreset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
+	general := newTestGeneralSubmissionService(t)
 	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
 		{
 			PresetID: "echo-reference",
@@ -161,7 +178,7 @@ func TestOperatorAPIRejectsUnknownPreset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, presets, DirectArtifactAccessIssuer{})
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -181,6 +198,7 @@ func TestOperatorAPIAllowsConfiguredCORSOrigins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
+	general := newTestGeneralSubmissionService(t)
 	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
 		{
 			PresetID: "echo-reference",
@@ -198,7 +216,7 @@ func TestOperatorAPIAllowsConfiguredCORSOrigins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, presets, DirectArtifactAccessIssuer{})
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -239,6 +257,7 @@ func TestOperatorAPIDoesNotAllowUnknownCORSOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
+	general := newTestGeneralSubmissionService(t)
 	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
 		{
 			PresetID: "echo-reference",
@@ -256,7 +275,7 @@ func TestOperatorAPIDoesNotAllowUnknownCORSOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, presets, DirectArtifactAccessIssuer{})
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -268,6 +287,86 @@ func TestOperatorAPIDoesNotAllowUnknownCORSOrigin(t *testing.T) {
 	if got := resp.Header().Get("Access-Control-Allow-Origin"); got != "" {
 		t.Fatalf("allow-origin = %q, want empty", got)
 	}
+}
+
+func TestOperatorAPIGeneralRegistrationRoutes(t *testing.T) {
+	commands := newTestCommandService(t)
+	queries, err := NewQueryService(NewInMemoryQueueStore())
+	if err != nil {
+		t.Fatalf("NewQueryService() error = %v", err)
+	}
+	general := newTestGeneralSubmissionService(t)
+	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
+		{
+			PresetID: "echo-reference",
+			Game: contract.GameMetadata{
+				GameID:         "echo-count",
+				GameVersion:    "2.0.0",
+				RulesetVersion: "phase2-simultaneous-2turn",
+			},
+			Players: []SubmittedPlayer{
+				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
+			},
+			OutputDir: t.TempDir(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
+	}
+	api, err := NewOperatorAPI(commands, queries, general, presets, DirectArtifactAccessIssuer{})
+	if err != nil {
+		t.Fatalf("NewOperatorAPI() error = %v", err)
+	}
+	handler := api.Handler()
+
+	gameReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/game-registrations", bytes.NewBufferString(`{"game":{"game_id":"echo-count","game_version":"2.0.0","ruleset_version":"phase2-simultaneous-2turn"}}`))
+	gameReq.Header.Set("Content-Type", "application/json")
+	gameResp := httptest.NewRecorder()
+	handler.ServeHTTP(gameResp, gameReq)
+	if gameResp.Code != http.StatusCreated {
+		t.Fatalf("POST /api/v1/game-registrations status = %d, body = %s", gameResp.Code, gameResp.Body.String())
+	}
+
+	aiReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/ai-submissions", bytes.NewBufferString(fmt.Sprintf(`{"game_registration_id":"echo-count-v2","artifact_ref":%q}`, repoJoin(t, "testdata/ai/echo/echo-ai-2turn"))))
+	aiReq.Header.Set("Content-Type", "application/json")
+	aiResp := httptest.NewRecorder()
+	handler.ServeHTTP(aiResp, aiReq)
+	if aiResp.Code != http.StatusCreated {
+		t.Fatalf("POST /api/v1/ai-submissions status = %d, body = %s", aiResp.Code, aiResp.Body.String())
+	}
+
+	var createdAI RegisteredAI
+	if err := json.Unmarshal(aiResp.Body.Bytes(), &createdAI); err != nil {
+		t.Fatalf("json.Unmarshal(createdAI) error = %v", err)
+	}
+	if createdAI.ValidationState != ValidationReady {
+		t.Fatalf("createdAI.ValidationState = %q, want %q", createdAI.ValidationState, ValidationReady)
+	}
+
+	listResp := httptest.NewRecorder()
+	handler.ServeHTTP(listResp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/ai-submissions", nil))
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/ai-submissions status = %d, body = %s", listResp.Code, listResp.Body.String())
+	}
+	var listed struct {
+		Items []RegisteredAI `json:"items"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("json.Unmarshal(listed) error = %v", err)
+	}
+	if len(listed.Items) != 1 {
+		t.Fatalf("len(listed.Items) = %d, want 1", len(listed.Items))
+	}
+}
+
+func newTestGeneralSubmissionService(t *testing.T) *GeneralSubmissionService {
+	t.Helper()
+
+	general, err := NewGeneralSubmissionService(repoRoot(t), nil, nil, nil)
+	if err != nil {
+		t.Fatalf("NewGeneralSubmissionService() error = %v", err)
+	}
+	return general
 }
 
 func TestStatusCodeForServiceError(t *testing.T) {

@@ -175,6 +175,7 @@ func usageFor(subcommand string) string {
 type cliApp struct {
 	commands       *service.CommandService
 	queries        *service.QueryService
+	general        *service.GeneralSubmissionService
 	queue          service.QueueStore
 	reader         service.ArtifactReader
 	artifactAccess service.ArtifactAccessIssuer
@@ -224,9 +225,15 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		closeFn()
 		return nil, err
 	}
+	general, err := service.NewGeneralSubmissionService(baseDir, nil, nil, nil)
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
 	return &cliApp{
 		commands:       commands,
 		queries:        queries,
+		general:        general,
 		queue:          store,
 		reader:         reader,
 		artifactAccess: artifactAccess,
@@ -329,7 +336,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	if err != nil {
 		return err
 	}
-	api, err := service.NewOperatorAPI(a.commands, a.queries, resolvingPresetCatalog{
+	api, err := service.NewOperatorAPI(a.commands, a.queries, a.general, resolvingPresetCatalog{
 		baseDir: a.baseDir,
 		opaque:  isOpaqueArtifactBackend(a.persister),
 		next:    presets,

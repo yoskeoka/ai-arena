@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
+	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
 	"github.com/yoskeoka/ai-arena/internal/platform/runtime"
 )
@@ -73,25 +74,27 @@ func (c *LocalDryRunChecker) Check(_ context.Context, submission MatchSubmission
 		return fmt.Errorf("service: output_dir must be a local path")
 	}
 
-	matchMeta := catalog.GameMetadata{
-		GameID:         submission.Game.GameID,
-		GameVersion:    submission.Game.GameVersion,
-		RulesetVersion: submission.Game.RulesetVersion,
-	}
 	for _, player := range submission.Players {
-		entryPath, err := resolveLocalArtifactRef(c.baseDir, player.ArtifactRef)
-		if err != nil {
-			return fmt.Errorf("service: %s artifact_ref invalid: %w", player.PlayerID, err)
-		}
-		loaded, err := catalog.LoadEntry(matchMeta, entryPath)
-		if err != nil {
+		if _, err := validateRegisteredArtifact(c.baseDir, submission.Game, player.ArtifactRef); err != nil {
 			return fmt.Errorf("service: %s admission failed: %w", player.PlayerID, err)
-		}
-		if err := ensureRuntimeStartable(c.baseDir, loaded.Runtime); err != nil {
-			return fmt.Errorf("service: %s runtime entrypoint invalid: %w", player.PlayerID, err)
 		}
 	}
 	return nil
+}
+
+func validateRegisteredArtifact(baseDir string, meta contract.GameMetadata, artifactRef string) (catalog.LoadedEntry, error) {
+	entryPath, err := resolveLocalArtifactRef(baseDir, artifactRef)
+	if err != nil {
+		return catalog.LoadedEntry{}, fmt.Errorf("artifact_ref invalid: %w", err)
+	}
+	loaded, err := catalog.LoadEntry(catalog.GameMetadata(meta), entryPath)
+	if err != nil {
+		return catalog.LoadedEntry{}, err
+	}
+	if err := ensureRuntimeStartable(baseDir, loaded.Runtime); err != nil {
+		return catalog.LoadedEntry{}, fmt.Errorf("runtime entrypoint invalid: %w", err)
+	}
+	return loaded, nil
 }
 
 func resolveLocalArtifactRef(baseDir, artifactRef string) (string, error) {
