@@ -238,6 +238,13 @@
 - Rule: infra 導入前のローカル確認手順を書くときは、deploy-shaped lane を主導線に置く。managed service 相当をローカル harness で置き換える場合は、起動、schema apply、DSN、停止まで README から辿れるように書く。in-memory や lightweight lane は補助導線として扱う
 - Applied: `README.md` の `arena-service` ローカル起動案内、今後の Postgres/R2/Pages を伴う local verification runbook 全般
 
+## [2026-06-14] worktree 生成物は掃除より ignore を先に検討する
+
+- Mistake: `.arena-service/` のような worktree ローカル生成物を、未追跡差分を減らすため毎回削除する運用を続けかけた
+- Pattern: 一時生成物が repo 管理対象ではないのに、worktree がそのうち破棄される前提と `.gitignore` で十分なケースを見落として cleanup 手順を増やしてしまう
+- Rule: worktree 固有のローカル生成物が今後も繰り返し出るなら、追跡不要であることを確認したうえで削除運用より先に `.gitignore` 追加を検討する。明示的な cleanup が必要なのは共有環境や容量制約がある場合だけにする
+- Applied: `.arena-service/`、今後の ai-arena ローカル verification 生成物と worktree 固有キャッシュ全般
+
 ## [2026-06-13] advisory review を human 承認後は即座に branch へ反映する
 
 - Mistake: PR の advisory review で妥当な fix 候補が出ていた時点では triage だけで止め、その後 user が「全部修正」と明示するまで branch 更新を保留した結果、follow-up 実装と再検証が 1 turn 遅れた
