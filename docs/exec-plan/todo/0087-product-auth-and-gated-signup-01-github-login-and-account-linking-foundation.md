@@ -24,6 +24,9 @@ Postgres 上の account / account identity / invite / role 境界を固定し、
   初回 signup gate は provider subject の事前 allowlist より
   TTL + one-time signup link を優先する
 - user decision として、login 関連の durable data は PostgreSQL に保存する
+- user decision として、GitHub login 実現に必要な provider-side 準備
+  (OAuth app / callback URL / secret inventory など) も
+  execution 前に見落とさないよう plan に含める
 
 ## Option Snapshot
 
@@ -58,6 +61,7 @@ Postgres 上の account / account identity / invite / role 境界を固定し、
 - TTL + one-time invite token による gated signup contract を定義する
 - participant / developer / operator role の最小境界を定義する
 - Google や email identity を後から足せる provider-agnostic identity contract を定義する
+- platform 運営側が GitHub login のために事前準備すべき provider bootstrap を定義する
 
 この plan では以下を扱わない。
 
@@ -73,6 +77,9 @@ Postgres 上の account / account identity / invite / role 境界を固定し、
   account、account identity、invite、session、role の責務を定義する
 - `docs/specs/platform-frontend-architecture.md` に、
   login entry / auth shell / provider add-on 前提の boundary 補足を追加する
+- `docs/development/platform-service-online-deploy.md` または同等 runbook に、
+  GitHub OAuth app 作成、callback URL、client secret 登録、
+  環境ごとの redirect URI と secret inventory を追記する
 - operator / general submission 系 spec に、
   participant / developer / operator の最小権限境界への cross-reference を追加する
 
@@ -85,6 +92,7 @@ Postgres 上の account / account identity / invite / role 境界を固定し、
 - invite claim backend と first-login account bootstrap path
 - frontend auth shell と GitHub login entry、
   invite claim から login 完了へ進む browser flow
+- GitHub provider bootstrap runbook と env / secret inventory 更新
 
 ## Sub-tasks
 
@@ -92,6 +100,7 @@ Postgres 上の account / account identity / invite / role 境界を固定し、
 - [ ] same-origin + http-only cookie session contract を定義する
 - [ ] TTL + one-time signup invite と claim flow を定義する
 - [ ] GitHub login 専用の first provider contract を定義する
+- [ ] GitHub OAuth app / callback URL / secret inventory / environment wiring の運用準備を定義する
 - [ ] participant / developer / operator の最小 role 境界を定義する
 - [ ] Google / email identity を migration なしで追加できる拡張点を明記する
 
@@ -115,6 +124,8 @@ Postgres 上の account / account identity / invite / role 境界を固定し、
   - mitigation: invite 正本は TTL + one-time token にし、identity bind は login 完了時に行う
 - participant と developer を混同すると game developer 権限と AI competitor 権限が混ざる
   - mitigation: AI submit の主体は participant とし、developer は game/provider integration 側へ寄せる
+- provider-side 準備を code plan から外すと、OAuth app 未作成や callback mismatch で execution が止まる
+  - mitigation: GitHub OAuth app 設定、redirect URI、secret 登録先、環境差分を plan と runbook へ明記する
 
 ## Design Decisions
 
