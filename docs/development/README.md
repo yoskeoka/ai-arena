@@ -10,6 +10,7 @@
 
 現時点の主要文書:
 
+- `docs/development/contributor-bootstrap-entrypoints.md`: fresh worktree 向け self-bootstrap command 入口
 - `docs/development/go-quality-gates.md`: Go module の quality gate と CI lane の運用
 - `docs/development/japanese-textlint.md`: 日本語 `docs/**/*.md` 向け textlint CI と辞書運用
 - `docs/development/github-actions-pinning.md`: GitHub Actions の `uses:` pinning 運用

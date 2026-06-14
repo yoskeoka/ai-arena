@@ -24,16 +24,16 @@ test("local operator UI browser lane covers queue, active, completed detail, and
 
   const activePanel = page.getByTestId("operator-panel-active-matches");
   const completedPanel = page.getByTestId("operator-panel-completed-matches");
-  const completedRow = completedPanel.getByTestId("match-row-sub-completed-local");
+  const completedRow = completedPanel.getByTestId("match-row-run-completed-local");
 
-  await expect(activePanel.getByTestId("match-row-sub-active-queued")).toBeVisible();
+  await expect(activePanel.getByTestId("match-row-run-active-queued")).toBeVisible();
   await expect(completedRow).toBeVisible();
   await completedRow.click();
 
-  const detail = page.getByTestId("match-detail-sub-completed-local");
+  const detail = page.getByTestId("match-detail-run-completed-local");
   await expect(detail).toBeVisible();
   await expect(detail.getByRole("heading", { name: "match-completed-local", exact: true })).toBeVisible();
-  await expect(detail.getByText("sub-completed-local", { exact: true })).toBeVisible();
+  await expect(detail.getByText("run-completed-local", { exact: true })).toBeVisible();
   await expect(detail.getByText("Status", { exact: true })).toBeVisible();
   await expect(detail.getByText("completed", { exact: true })).toBeVisible();
   const resultSummaryArtifact = detail.getByTestId("artifact-entry-result-summary");

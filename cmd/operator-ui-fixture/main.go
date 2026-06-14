@@ -46,6 +46,10 @@ type fixtureBackend struct {
 }
 
 func newFixtureBackend(listenAddr string) (*fixtureBackend, error) {
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("resolve repo root: %w", err)
+	}
 	outputDir, err := os.MkdirTemp("", "ai-arena-operator-ui-fixture-")
 	if err != nil {
 		return nil, fmt.Errorf("create fixture output dir: %w", err)
@@ -60,7 +64,7 @@ func newFixtureBackend(listenAddr string) (*fixtureBackend, error) {
 	if err != nil {
 		return nil, err
 	}
-	general, err := service.NewGeneralSubmissionService(outputDir, nil, nil, nil)
+	general, err := service.NewGeneralSubmissionService(repoRoot, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -235,8 +239,17 @@ func fixtureGame() contract.GameMetadata {
 }
 
 func fixturePlayers() []service.SubmittedPlayer {
+	artifactRef := fixtureArtifactRef()
 	return []service.SubmittedPlayer{
-		{PlayerID: "p1", ArtifactRef: "file:///fixture/ai/echo/p1"},
-		{PlayerID: "p2", ArtifactRef: "file:///fixture/ai/echo/p2"},
+		{PlayerID: "p1", ArtifactRef: artifactRef},
+		{PlayerID: "p2", ArtifactRef: artifactRef},
 	}
+}
+
+func fixtureArtifactRef() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "./testdata/ai/echo/echo-ai"
+	}
+	return filepath.Join(cwd, "testdata/ai/echo/echo-ai")
 }

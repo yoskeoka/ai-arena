@@ -190,9 +190,9 @@ first landing の operator UI は、少なくとも次の hook family を stable
 - preset queue action:
   `data-testid="preset-queue-action-<preset-id>"`
 - active / completed row:
-  `data-testid="match-row-<submission-id>"`
+  `data-testid="match-row-<run-id>"`
 - detail root:
-  `data-testid="match-detail-<submission-id>"`
+  `data-testid="match-detail-<run-id>"`
 - artifact entry:
   `data-testid="artifact-entry-<artifact-kind>"`
 
