@@ -62,7 +62,7 @@ ranking、rerun/retry/cancellation を `operator-ui` から辿れる最小 UI co
 - depends on: `0077-platform-online-foundation-03-04-matchmaking-ranking-follow-up-04-match-request-and-scheduling.md`
 - depends on: `0078-platform-online-foundation-03-04-matchmaking-ranking-follow-up-05-ranking-lifecycle.md`
 - depends on: `0079-platform-online-foundation-03-04-matchmaking-ranking-follow-up-06-rerun-retry-cancellation.md`
-- coordinates with: `0080-platform-online-foundation-03-04-matchmaking-ranking-follow-up-07-product-auth-and-gated-signup.md`
+- coordinates with: `0087-product-auth-and-gated-signup-01-github-login-and-account-linking-foundation.md`
 - depends on: parent/base item `0067-platform-online-foundation-03-04-matchmaking-ranking-follow-up.md` (retired after split)
 
 ## Risks and Mitigations
