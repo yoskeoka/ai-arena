@@ -28,6 +28,20 @@ Postgres 上の account / account identity / invite / role 境界を固定し、
   (OAuth app / callback URL / secret inventory など) も
   execution 前に見落とさないよう plan に含める
 
+## Provider Bootstrap References
+
+- GitHub OAuth app creation:
+  https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app
+- GitHub OAuth web application flow:
+  https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
+- Render environment variables and secrets:
+  https://render.com/docs/configure-environment-variables
+- Cloudflare Workers secrets:
+  https://developers.cloudflare.com/workers/configuration/secrets/
+
+これらの URL は、execution 時に GitHub OAuth app 作成、callback URL 登録、
+secret 配置、redirect URI の確認をやり直すための正本参照として plan に残す。
+
 ## Option Snapshot
 
 ### Option A: GitHub handle / email allowlist で gated signup する
@@ -104,6 +118,22 @@ Postgres 上の account / account identity / invite / role 境界を固定し、
 - [ ] participant / developer / operator の最小 role 境界を定義する
 - [ ] Google / email identity を migration なしで追加できる拡張点を明記する
 
+## Secret Inventory Baseline
+
+- primary secret placement:
+  current backend が `Render` 上の `arena-service` で token exchange / session 発行を担う前提なら、
+  `GITHUB_OAUTH_CLIENT_ID` と `GITHUB_OAUTH_CLIENT_SECRET` は
+  Render service の Environment Variables を第一選択にする
+- environment grouping:
+  staging / production で同一 key を共有したい場合は、
+  Render Environment Group を使って service へ配布してよい
+- Cloudflare fallback:
+  callback handler や token exchange を Cloudflare Worker / Pages Functions へ移す場合に限り、
+  Cloudflare Secrets を代替候補として扱う
+- do not default to dual write:
+  同じ GitHub OAuth secret を Render と Cloudflare の両方へ常設する前提にはしない
+  - どちらが token exchange の実行主体かを先に固定し、その実行面だけに secret を置く
+
 ## Parallelism
 
 - [parallel] account/session schema 整理と invite flow 整理は並行できる
@@ -114,7 +144,7 @@ Postgres 上の account / account identity / invite / role 境界を固定し、
 - depends on: `0075-platform-online-foundation-03-04-matchmaking-ranking-follow-up-02-internal-surface-protection-and-developer-access.md`
 - depends on: `0076-platform-online-foundation-03-04-matchmaking-ranking-follow-up-03-general-submission-and-game-registration.md`
 - depends on: `0082-platform-service-db-migration-release-flow.md`
-- depends on: parent/base item `0080-platform-online-foundation-03-04-matchmaking-ranking-follow-up-07-product-auth-and-gated-signup.md` (retired after child split; may live under `docs/exec-plan/done/`)
+- depends on: parent/base item `0080-platform-online-foundation-03-04-matchmaking-ranking-follow-up-07-product-auth-and-gated-signup.md` (retired after child split; lives under `docs/exec-plan/done/`)
 
 ## Risks and Mitigations
 

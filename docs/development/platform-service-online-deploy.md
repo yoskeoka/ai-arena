@@ -292,8 +292,8 @@ current path では、frontend と backend で保護境界を分けて扱う。
 - `onrender.com` backend は Access では閉じられないため、
   current phase では public reachability を残したまま運用上の露出最小化で扱う
 - public-facing product auth は
-  `0080-platform-online-foundation-03-04-matchmaking-ranking-follow-up-07-product-auth-and-gated-signup.md`
-  と、その child plan 群で別契約として扱う
+  `0087-product-auth-and-gated-signup-01-github-login-and-account-linking-foundation.md`
+  を current execution 入口として別契約で扱う
 
 選択肢比較:
 
