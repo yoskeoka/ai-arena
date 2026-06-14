@@ -4,8 +4,8 @@ fresh worktree で setup runbook を先に辿らなくても、
 repo-owned な canonical command をそのまま実行すれば
 必要最小限の local bootstrap が missing 時だけ走る。
 
-正本の contract は `docs/specs/contributor-bootstrap-entrypoints.md` とする。
-この文書は contributor / agent 向けの短い運用入口だけを持つ。
+これは `ai-arena` サービス仕様ではなく、開発者向けの repo-local workflow 文書である。
+依存ツールの bootstrap 方針は、この文書と各 runbook / command の実装を正本とする。
 
 ## Canonical commands
 
@@ -42,6 +42,8 @@ wrapper は command 実行直前にだけ次を確認する。
   Playwright Chromium executable が missing なら browser install helper
 
 dependencies と browser が既に揃っている通常時は再install しない。
+つまり contributor は、Playwright などの依存ツールのために事前準備コマンドを先に暗記する必要は基本的にない。
+必要な command を叩いたときだけ missing 分が補われる。
 
 ## What auto-bootstrap does not solve
 

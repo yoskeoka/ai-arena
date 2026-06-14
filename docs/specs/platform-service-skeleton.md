@@ -116,8 +116,6 @@ failure artifact upload の責務境界は workflow helper 側で固定してよ
 local browser lane の canonical contract は ordinary Playwright harness のような
 repo-owned browser automation command とする。
 agent-specific interactive tooling は、その command を補助する optional tactic としてのみ扱ってよい。
-その local entrypoint は `operator-ui` dependency と host-native Playwright browser が missing なときだけ
-self-bootstrap を行ってよく、steady-state run では install を再実行してはならない。
 
 real local browser lane は、completed detail 表示まで到達した success run でも
 review artifact を保存してよい。
