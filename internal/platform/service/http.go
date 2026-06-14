@@ -77,6 +77,7 @@ func (DirectArtifactAccessIssuer) Issue(_ context.Context, detail MatchDetail) (
 // OperatorAPI exposes the remote operator-facing HTTP API.
 type OperatorAPI struct {
 	commands       *CommandService
+	runs           *RunCommandService
 	queries        *QueryService
 	general        *GeneralSubmissionService
 	requests       *MatchRequestService
@@ -85,7 +86,7 @@ type OperatorAPI struct {
 }
 
 // NewOperatorAPI constructs the HTTP adapter for operator routes.
-func NewOperatorAPI(commands *CommandService, queries *QueryService, general *GeneralSubmissionService, requests *MatchRequestService, presets PresetCatalog, artifactAccess ArtifactAccessIssuer) (*OperatorAPI, error) {
+func NewOperatorAPI(commands *CommandService, queries *QueryService, general *GeneralSubmissionService, requests *MatchRequestService, presets PresetCatalog, artifactAccess ArtifactAccessIssuer, rankings ...*RankingService) (*OperatorAPI, error) {
 	if commands == nil {
 		return nil, fmt.Errorf("service: command service is required")
 	}
@@ -98,6 +99,14 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, general *Ge
 	if requests == nil {
 		return nil, fmt.Errorf("service: match request service is required")
 	}
+	var rankingService *RankingService
+	if len(rankings) > 0 {
+		rankingService = rankings[0]
+	}
+	runs, err := NewRunCommandService(commands, queries.queue, rankingService)
+	if err != nil {
+		return nil, err
+	}
 	if presets == nil {
 		return nil, fmt.Errorf("service: preset catalog is required")
 	}
@@ -106,6 +115,7 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, general *Ge
 	}
 	return &OperatorAPI{
 		commands:       commands,
+		runs:           runs,
 		queries:        queries,
 		general:        general,
 		requests:       requests,
@@ -122,9 +132,12 @@ func (a *OperatorAPI) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/ai-submissions", a.handleAISubmissions)
 	mux.HandleFunc("/api/v1/match-requests", a.handleMatchRequests)
 	mux.HandleFunc("POST /api/v1/preset-matches", a.handlePresetMatches)
+	mux.HandleFunc("POST /api/v1/runs/{run_id}/retry", a.handleRunRetry)
+	mux.HandleFunc("POST /api/v1/runs/{run_id}/rerun", a.handleRunRerun)
+	mux.HandleFunc("POST /api/v1/runs/{run_id}/promote", a.handleRunPromote)
 	mux.HandleFunc("GET /api/v1/matches/active", a.handleActiveMatches)
 	mux.HandleFunc("GET /api/v1/matches/completed", a.handleCompletedMatches)
-	mux.HandleFunc("GET /api/v1/matches/{submission_id}", a.handleMatchDetail)
+	mux.HandleFunc("GET /api/v1/runs/{run_id}", a.handleMatchDetail)
 	return withOperatorCORS(mux)
 }
 
@@ -247,6 +260,48 @@ func (a *OperatorAPI) handleActiveMatches(w http.ResponseWriter, r *http.Request
 	})
 }
 
+func (a *OperatorAPI) handleRunRetry(w http.ResponseWriter, r *http.Request) {
+	record, err := a.runs.Retry(r.Context(), r.PathValue("run_id"))
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	item, _, err := buildResultListItem(r.Context(), record, a.queries.reader)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (a *OperatorAPI) handleRunRerun(w http.ResponseWriter, r *http.Request) {
+	record, err := a.runs.Rerun(r.Context(), r.PathValue("run_id"))
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	item, _, err := buildResultListItem(r.Context(), record, a.queries.reader)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (a *OperatorAPI) handleRunPromote(w http.ResponseWriter, r *http.Request) {
+	record, err := a.runs.Promote(r.Context(), r.PathValue("run_id"))
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	item, _, err := buildResultListItem(r.Context(), record, a.queries.reader)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (a *OperatorAPI) handleCompletedMatches(w http.ResponseWriter, r *http.Request) {
 	a.handleMatchList(w, r, map[LifecycleState]struct{}{
 		StateCompleted: {},
@@ -272,12 +327,12 @@ func (a *OperatorAPI) handleMatchList(w http.ResponseWriter, r *http.Request, al
 }
 
 func (a *OperatorAPI) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
-	submissionID := strings.TrimSpace(r.PathValue("submission_id"))
-	if submissionID == "" {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("service: submission_id is required"))
+	runID := strings.TrimSpace(r.PathValue("run_id"))
+	if runID == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("service: run_id is required"))
 		return
 	}
-	detail, err := a.queries.Get(r.Context(), submissionID)
+	detail, err := a.queries.Get(r.Context(), runID)
 	if err != nil {
 		writeError(w, statusCodeForServiceError(err), err)
 		return

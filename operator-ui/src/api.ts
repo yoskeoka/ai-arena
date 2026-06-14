@@ -8,8 +8,10 @@ export type LifecycleState =
   | "canceled";
 
 export type ResultListItem = {
-  submission_id: string;
+  run_id: string;
   match_id: string;
+  attempt_count: number;
+  official: boolean;
   game_id: string;
   game_version: string;
   ruleset_version: string;
@@ -92,8 +94,8 @@ export class OperatorApiClient {
     return this.decodeList(response);
   }
 
-  async getMatchDetail(submissionId: string, signal?: AbortSignal): Promise<MatchDetailResponse> {
-    const response = await fetch(this.url(`/api/v1/matches/${encodeURIComponent(submissionId)}`), { signal });
+  async getMatchDetail(runId: string, signal?: AbortSignal): Promise<MatchDetailResponse> {
+    const response = await fetch(this.url(`/api/v1/runs/${encodeURIComponent(runId)}`), { signal });
     return this.decodeJSON<MatchDetailResponse>(response);
   }
 

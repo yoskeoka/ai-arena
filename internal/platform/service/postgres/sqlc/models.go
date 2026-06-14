@@ -12,6 +12,9 @@ type ServiceQueueRecord struct {
 	SubmissionID   string
 	QueueOrder     int64
 	MatchID        string
+	ParentRunID    pgtype.Text
+	RunKind        string
+	Official       bool
 	GameID         string
 	GameVersion    string
 	RulesetVersion string

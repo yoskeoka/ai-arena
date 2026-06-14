@@ -18,7 +18,7 @@ func TestPostgresQueryServiceListAndGetAcrossLifecycleStates(t *testing.T) {
 	}
 
 	runningSubmission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
-	runningSubmission.SubmissionID = "sub-running"
+	runningSubmission.RunID = "run-running"
 	runningSubmission.MatchID = "match-running"
 	if _, err := commands.Submit(ctx, runningSubmission); err != nil {
 		t.Fatalf("Submit(running) error = %v", err)
@@ -33,7 +33,7 @@ func TestPostgresQueryServiceListAndGetAcrossLifecycleStates(t *testing.T) {
 	}
 
 	failedSubmission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
-	failedSubmission.SubmissionID = "sub-failed"
+	failedSubmission.RunID = "run-failed"
 	failedSubmission.MatchID = "match-failed"
 	if _, err := commands.Submit(ctx, failedSubmission); err != nil {
 		t.Fatalf("Submit(failed) error = %v", err)
@@ -54,7 +54,7 @@ func TestPostgresQueryServiceListAndGetAcrossLifecycleStates(t *testing.T) {
 		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
 		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
 	)
-	completedSubmission.SubmissionID = "sub-completed"
+	completedSubmission.RunID = "run-completed"
 	completedSubmission.MatchID = "match-completed"
 	if _, err := commands.Submit(ctx, completedSubmission); err != nil {
 		t.Fatalf("Submit(completed) error = %v", err)
@@ -64,19 +64,19 @@ func TestPostgresQueryServiceListAndGetAcrossLifecycleStates(t *testing.T) {
 	}
 
 	queuedSubmission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
-	queuedSubmission.SubmissionID = "sub-queued"
+	queuedSubmission.RunID = "run-queued"
 	queuedSubmission.MatchID = "match-queued"
 	if _, err := commands.Submit(ctx, queuedSubmission); err != nil {
 		t.Fatalf("Submit(queued) error = %v", err)
 	}
 
 	canceledSubmission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
-	canceledSubmission.SubmissionID = "sub-canceled"
+	canceledSubmission.RunID = "run-canceled"
 	canceledSubmission.MatchID = "match-canceled"
 	if _, err := commands.Submit(ctx, canceledSubmission); err != nil {
 		t.Fatalf("Submit(canceled) error = %v", err)
 	}
-	if _, err := commands.Cancel(ctx, canceledSubmission.SubmissionID); err != nil {
+	if _, err := commands.Cancel(ctx, canceledSubmission.RunID); err != nil {
 		t.Fatalf("Cancel(canceled) error = %v", err)
 	}
 
@@ -109,7 +109,7 @@ func TestPostgresQueryServiceListAndGetAcrossLifecycleStates(t *testing.T) {
 		t.Fatalf("items[4].LifecycleState = %q, want %q", items[4].LifecycleState, StateCanceled)
 	}
 
-	detail, err := query.Get(ctx, completedSubmission.SubmissionID)
+	detail, err := query.Get(ctx, completedSubmission.RunID)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
@@ -152,7 +152,7 @@ func TestQueryServiceGetReportsReplayInputVerificationIssues(t *testing.T) {
 		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
 		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
 	)
-	submission.SubmissionID = "sub-mismatch"
+	submission.RunID = "run-mismatch"
 	submission.MatchID = "match-mismatch"
 	if _, err := commands.Submit(ctx, submission); err != nil {
 		t.Fatalf("Submit() error = %v", err)
@@ -161,7 +161,7 @@ func TestQueryServiceGetReportsReplayInputVerificationIssues(t *testing.T) {
 		t.Fatalf("ProcessNext() error = %v", err)
 	}
 
-	detail, err := query.Get(ctx, submission.SubmissionID)
+	detail, err := query.Get(ctx, submission.RunID)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
@@ -172,7 +172,7 @@ func TestQueryServiceGetReportsReplayInputVerificationIssues(t *testing.T) {
 		t.Fatalf("os.WriteFile() error = %v", err)
 	}
 
-	detail, err = query.Get(ctx, submission.SubmissionID)
+	detail, err = query.Get(ctx, submission.RunID)
 	if err != nil {
 		t.Fatalf("Get() after tamper error = %v", err)
 	}
@@ -206,7 +206,7 @@ func TestQueryServiceGetKeepsReplayInputsWhenDerivedArtifactDecodeFails(t *testi
 		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
 		repoJoin(t, "testdata/ai/echo/echo-ai-2turn"),
 	)
-	submission.SubmissionID = "sub-decode-failure"
+	submission.RunID = "run-decode-failure"
 	submission.MatchID = "match-decode-failure"
 	if _, err := commands.Submit(ctx, submission); err != nil {
 		t.Fatalf("Submit() error = %v", err)
@@ -215,7 +215,7 @@ func TestQueryServiceGetKeepsReplayInputsWhenDerivedArtifactDecodeFails(t *testi
 		t.Fatalf("ProcessNext() error = %v", err)
 	}
 
-	detail, err := query.Get(ctx, submission.SubmissionID)
+	detail, err := query.Get(ctx, submission.RunID)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
@@ -226,7 +226,7 @@ func TestQueryServiceGetKeepsReplayInputsWhenDerivedArtifactDecodeFails(t *testi
 		t.Fatalf("os.WriteFile() error = %v", err)
 	}
 
-	detail, err = query.Get(ctx, submission.SubmissionID)
+	detail, err = query.Get(ctx, submission.RunID)
 	if err != nil {
 		t.Fatalf("Get() after malformed history error = %v", err)
 	}

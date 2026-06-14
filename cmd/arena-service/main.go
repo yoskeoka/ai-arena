@@ -47,22 +47,24 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	fs.SetOutput(stderr)
 
 	var (
-		submissionPath string
-		submissionID   string
-		artifactKind   string
-		baseDir        string
-		workerID       string
-		listenAddr     string
-		presetConfig   string
-		pollInterval   time.Duration
-		matchTimeout   time.Duration
-		postgresDSN    string
-		gameID         string
-		gameVersion    string
-		rulesetVersion string
+		submissionPath         string
+		runID                  string
+		deprecatedSubmissionID string
+		artifactKind           string
+		baseDir                string
+		workerID               string
+		listenAddr             string
+		presetConfig           string
+		pollInterval           time.Duration
+		matchTimeout           time.Duration
+		postgresDSN            string
+		gameID                 string
+		gameVersion            string
+		rulesetVersion         string
 	)
 	fs.StringVar(&submissionPath, "submission", "", "submission JSON path or - for stdin")
-	fs.StringVar(&submissionID, "submission-id", "", "submission id for get/read")
+	fs.StringVar(&runID, "run-id", "", "run id for get/read")
+	fs.StringVar(&deprecatedSubmissionID, "submission-id", "", "deprecated alias for --run-id")
 	fs.StringVar(&artifactKind, "artifact", "", "artifact selector for read")
 	fs.StringVar(&baseDir, "base-dir", "", "base directory for resolving local artifact refs and output_dir")
 	fs.StringVar(&workerID, "worker-id", "cli-worker", "worker identifier for run-once")
@@ -112,18 +114,20 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	case "list":
 		return app.list(context.Background(), stdout)
 	case "get":
-		if submissionID == "" {
-			return fmt.Errorf("--submission-id is required")
+		runID = resolveRunIDFlag(runID, deprecatedSubmissionID)
+		if runID == "" {
+			return fmt.Errorf("--run-id is required")
 		}
-		return app.get(context.Background(), submissionID, stdout)
+		return app.get(context.Background(), runID, stdout)
 	case "read":
-		if submissionID == "" {
-			return fmt.Errorf("--submission-id is required")
+		runID = resolveRunIDFlag(runID, deprecatedSubmissionID)
+		if runID == "" {
+			return fmt.Errorf("--run-id is required")
 		}
 		if artifactKind == "" {
 			return fmt.Errorf("--artifact is required")
 		}
-		return app.read(context.Background(), submissionID, artifactKind, stdout)
+		return app.read(context.Background(), runID, artifactKind, stdout)
 	case "ranking-get":
 		return app.rankingGet(context.Background(), rankingScopeFromFlags(gameID, gameVersion, rulesetVersion), stdout)
 	case "ranking-recompute":
@@ -153,7 +157,7 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 		return fmt.Errorf("unsupported subcommand %q", subcommand)
 	}
 	if err != nil {
-		if subcommand == "run-once" && record.Submission.SubmissionID != "" {
+		if subcommand == "run-once" && record.Submission.RunID != "" {
 			if encodeErr := encodeRecord(stdout, record); encodeErr != nil {
 				return encodeErr
 			}
@@ -174,9 +178,9 @@ func usageFor(subcommand string) string {
 	case "list":
 		return "arena-service list [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "get":
-		return "arena-service get --submission-id <id> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+		return "arena-service get --run-id <id> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "read":
-		return "arena-service read --submission-id <id> --artifact <result-summary|record|snapshot|history|exported-snapshot|stderr:<player-id>> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+		return "arena-service read --run-id <id> --artifact <result-summary|record|snapshot|history|exported-snapshot|stderr:<player-id>> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "serve":
 		return "arena-service serve [--listen-addr <addr>] [--preset-config <path>] [--worker-id <id>] [--worker-poll-interval <duration>] [--base-dir <dir>] [--match-timeout <duration>] [--postgres-dsn <dsn>]"
 	case "ranking-get":
@@ -322,7 +326,7 @@ func (a *cliApp) submitCancel(ctx context.Context, submission service.MatchSubmi
 	if err != nil {
 		return service.QueueRecord{}, err
 	}
-	return a.commands.Cancel(ctx, record.Submission.SubmissionID)
+	return a.commands.Cancel(ctx, record.Submission.RunID)
 }
 
 func (a *cliApp) list(ctx context.Context, stdout io.Writer) error {
@@ -333,16 +337,16 @@ func (a *cliApp) list(ctx context.Context, stdout io.Writer) error {
 	return encodeJSON(stdout, items)
 }
 
-func (a *cliApp) get(ctx context.Context, submissionID string, stdout io.Writer) error {
-	detail, err := a.queries.Get(ctx, submissionID)
+func (a *cliApp) get(ctx context.Context, runID string, stdout io.Writer) error {
+	detail, err := a.queries.Get(ctx, runID)
 	if err != nil {
 		return err
 	}
 	return encodeJSON(stdout, detail)
 }
 
-func (a *cliApp) read(ctx context.Context, submissionID string, artifactKind string, stdout io.Writer) error {
-	detail, err := a.queries.Get(ctx, submissionID)
+func (a *cliApp) read(ctx context.Context, runID string, artifactKind string, stdout io.Writer) error {
+	detail, err := a.queries.Get(ctx, runID)
 	if err != nil {
 		return err
 	}
@@ -403,7 +407,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 		baseDir: a.baseDir,
 		opaque:  isOpaqueArtifactBackend(a.persister),
 		next:    presets,
-	}, a.artifactAccess)
+	}, a.artifactAccess, a.rankings)
 	if err != nil {
 		return err
 	}
@@ -511,6 +515,13 @@ func resolveBaseDirPath(baseDir, value string) string {
 	return filepath.Join(baseDir, filepath.Clean(value))
 }
 
+func resolveRunIDFlag(runID string, deprecatedSubmissionID string) string {
+	if strings.TrimSpace(runID) != "" {
+		return strings.TrimSpace(runID)
+	}
+	return strings.TrimSpace(deprecatedSubmissionID)
+}
+
 func loadArtifactRuntimeFromEnv() (artifactRuntimeConfig, error) {
 	cfg := artifactRuntimeConfig{
 		backend:         strings.TrimSpace(os.Getenv("ARENA_SERVICE_ARTIFACT_BACKEND")),
@@ -604,6 +615,9 @@ func loadSubmission(path string, stdin io.Reader) (service.MatchSubmission, erro
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&submission); err != nil {
 		return service.MatchSubmission{}, fmt.Errorf("decode submission: %w", err)
+	}
+	if submission.RunKind == "" {
+		submission.RunKind = service.RunKindInitial
 	}
 	return submission, nil
 }

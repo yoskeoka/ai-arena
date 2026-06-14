@@ -1,0 +1,4 @@
+ALTER TABLE service_queue_records
+    ADD COLUMN IF NOT EXISTS parent_run_id TEXT,
+    ADD COLUMN IF NOT EXISTS run_kind TEXT NOT NULL DEFAULT 'initial',
+    ADD COLUMN IF NOT EXISTS official BOOLEAN NOT NULL DEFAULT FALSE;

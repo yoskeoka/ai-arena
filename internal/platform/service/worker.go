@@ -8,7 +8,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 )
 
-// Worker claims queued submissions, invokes the runner once, and persists terminal artifacts.
+// Worker claims queued runs, invokes the runner once, and persists terminal artifacts.
 type Worker struct {
 	queue     QueueStore
 	runner    RunnerInvoker
@@ -39,7 +39,7 @@ func NewWorker(queue QueueStore, runner RunnerInvoker, persister TerminalPersist
 	}, nil
 }
 
-// ProcessNext claims the next queued submission for one worker and drives it to a terminal queue state.
+// ProcessNext claims the next queued run for one worker and drives it to a terminal queue state.
 func (w *Worker) ProcessNext(ctx context.Context, workerID string) (QueueRecord, error) {
 	record, err := w.queue.Claim(ctx, workerID)
 	if err != nil {
@@ -68,9 +68,9 @@ func (w *Worker) ProcessNext(ctx context.Context, workerID string) (QueueRecord,
 			return QueueRecord{}, updateErr
 		}
 		return cloneQueueRecord(record), fmt.Errorf(
-			"service: runner returned mismatched match_id %q for submission %q",
+			"service: runner returned mismatched match_id %q for run %q",
 			result.Record.MatchID,
-			record.Submission.MatchID,
+			record.Submission.RunID,
 		)
 	}
 
@@ -89,23 +89,51 @@ func (w *Worker) ProcessNext(ctx context.Context, workerID string) (QueueRecord,
 	}
 	terminal.MatchStatus = result.Record.Status
 	terminal.Error = artifacts.TerminalError(result.Record)
-	if w.rankings != nil && result.Record.Status == game.StatusCompleted {
-		if err := w.rankings.ApplyCompleted(ctx, record.Submission, summaryFromRecord(result)); err != nil {
-			record.State = StateFailed
+
+	record.State = StateCompleted
+	record.Terminal = &terminal
+	if result.Record.Status == game.StatusCompleted {
+		official, err := w.shouldAutoPromote(ctx, record)
+		if err != nil {
 			if updateErr := w.queue.Update(ctx, record); updateErr != nil {
 				return QueueRecord{}, updateErr
 			}
 			return cloneQueueRecord(record), err
 		}
+		record.Submission.Official = official
 	}
-
-	record.State = StateCompleted
-	record.Terminal = &terminal
 	if err := w.queue.Update(ctx, record); err != nil {
 		return QueueRecord{}, err
+	}
+	if w.rankings != nil && result.Record.Status == game.StatusCompleted && record.Submission.Official {
+		if err := w.rankings.ApplyCompleted(ctx, record.Submission, summaryFromRecord(result)); err != nil {
+			return cloneQueueRecord(record), err
+		}
 	}
 	if runErr != nil {
 		return cloneQueueRecord(record), runErr
 	}
 	return cloneQueueRecord(record), nil
+}
+
+func (w *Worker) shouldAutoPromote(ctx context.Context, record QueueRecord) (bool, error) {
+	if record.Submission.RunKind == RunKindRerun {
+		return false, nil
+	}
+	records, err := w.queue.List(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, current := range records {
+		if current.Submission.MatchID != record.Submission.MatchID {
+			continue
+		}
+		if current.Submission.RunID == record.Submission.RunID {
+			continue
+		}
+		if current.State == StateCompleted && current.Submission.Official {
+			return false, nil
+		}
+	}
+	return true, nil
 }

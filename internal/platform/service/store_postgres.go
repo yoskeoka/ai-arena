@@ -52,10 +52,10 @@ func (s *PostgresQueueStore) Close() {
 	s.pool.Close()
 }
 
-// Enqueue appends one admitted submission in queued state.
+// Enqueue appends one admitted run in queued state.
 func (s *PostgresQueueStore) Enqueue(ctx context.Context, submission MatchSubmission) (QueueRecord, error) {
-	if strings.TrimSpace(submission.SubmissionID) == "" {
-		return QueueRecord{}, fmt.Errorf("service: submission_id is required")
+	if strings.TrimSpace(submission.RunID) == "" {
+		return QueueRecord{}, fmt.Errorf("service: run_id is required")
 	}
 
 	playersJSON, err := json.Marshal(submission.Players)
@@ -68,8 +68,11 @@ func (s *PostgresQueueStore) Enqueue(ctx context.Context, submission MatchSubmis
 	}
 
 	err = s.queries.CreateQueueRecord(ctx, servicepostgressqlc.CreateQueueRecordParams{
-		SubmissionID:   submission.SubmissionID,
+		SubmissionID:   submission.RunID,
 		MatchID:        submission.MatchID,
+		ParentRunID:    textValue(submission.ParentRunID),
+		RunKind:        string(submission.RunKind),
+		Official:       submission.Official,
 		GameID:         submission.Game.GameID,
 		GameVersion:    submission.Game.GameVersion,
 		RulesetVersion: submission.Game.RulesetVersion,
@@ -81,9 +84,9 @@ func (s *PostgresQueueStore) Enqueue(ctx context.Context, submission MatchSubmis
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == postgresQueueRecordPrimaryKey {
-			return QueueRecord{}, fmt.Errorf("service: submission_id %q already exists", submission.SubmissionID)
+			return QueueRecord{}, fmt.Errorf("service: run_id %q already exists", submission.RunID)
 		}
-		return QueueRecord{}, fmt.Errorf("service: enqueue submission: %w", err)
+		return QueueRecord{}, fmt.Errorf("service: enqueue run: %w", err)
 	}
 
 	return QueueRecord{
@@ -113,11 +116,14 @@ func (s *PostgresQueueStore) Claim(ctx context.Context, workerID string) (QueueR
 		if errors.Is(err, pgx.ErrNoRows) {
 			return QueueRecord{}, ErrNoQueuedSubmission
 		}
-		return QueueRecord{}, fmt.Errorf("service: claim queued submission: %w", err)
+		return QueueRecord{}, fmt.Errorf("service: claim queued run: %w", err)
 	}
 	record, err := queueRecordFromFields(
 		row.SubmissionID,
 		row.MatchID,
+		row.ParentRunID,
+		row.RunKind,
+		row.Official,
 		row.GameID,
 		row.GameVersion,
 		row.RulesetVersion,
@@ -145,7 +151,7 @@ func (s *PostgresQueueStore) Update(ctx context.Context, next QueueRecord) error
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	current, err := s.loadRecordTx(ctx, tx, next.Submission.SubmissionID, true)
+	current, err := s.loadRecordTx(ctx, tx, next.Submission.RunID, true)
 	if err != nil {
 		return err
 	}
@@ -171,6 +177,9 @@ func (s *PostgresQueueStore) Update(ctx context.Context, next QueueRecord) error
 
 	if err := s.queries.WithTx(tx).UpdateQueueRecord(ctx, servicepostgressqlc.UpdateQueueRecordParams{
 		MatchID:        next.Submission.MatchID,
+		ParentRunID:    textValue(next.Submission.ParentRunID),
+		RunKind:        string(next.Submission.RunKind),
+		Official:       next.Submission.Official,
 		GameID:         next.Submission.Game.GameID,
 		GameVersion:    next.Submission.Game.GameVersion,
 		RulesetVersion: next.Submission.Game.RulesetVersion,
@@ -180,7 +189,7 @@ func (s *PostgresQueueStore) Update(ctx context.Context, next QueueRecord) error
 		State:          string(next.State),
 		WorkerID:       textValueFromLease(next.Lease),
 		TerminalJson:   terminalJSON,
-		SubmissionID:   next.Submission.SubmissionID,
+		SubmissionID:   next.Submission.RunID,
 	}); err != nil {
 		return fmt.Errorf("service: update queue record: %w", err)
 	}
@@ -192,19 +201,19 @@ func (s *PostgresQueueStore) Update(ctx context.Context, next QueueRecord) error
 }
 
 // CancelQueued moves one queued record into canceled.
-func (s *PostgresQueueStore) CancelQueued(ctx context.Context, submissionID string) (QueueRecord, error) {
+func (s *PostgresQueueStore) CancelQueued(ctx context.Context, runID string) (QueueRecord, error) {
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return QueueRecord{}, fmt.Errorf("service: begin cancel tx: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	record, err := s.loadRecordTx(ctx, tx, submissionID, true)
+	record, err := s.loadRecordTx(ctx, tx, runID, true)
 	if err != nil {
 		return QueueRecord{}, err
 	}
 	if record.State != StateQueued {
-		return QueueRecord{}, fmt.Errorf("service: only queued submissions can be canceled")
+		return QueueRecord{}, fmt.Errorf("service: only queued runs can be canceled")
 	}
 	if err := ValidateTransition(record.State, StateCanceled); err != nil {
 		return QueueRecord{}, err
@@ -216,7 +225,7 @@ func (s *PostgresQueueStore) CancelQueued(ctx context.Context, submissionID stri
 
 	if err := s.queries.WithTx(tx).CancelQueueRecord(ctx, servicepostgressqlc.CancelQueueRecordParams{
 		State:        string(StateCanceled),
-		SubmissionID: submissionID,
+		SubmissionID: runID,
 	}); err != nil {
 		return QueueRecord{}, fmt.Errorf("service: cancel queue record: %w", err)
 	}
@@ -226,9 +235,9 @@ func (s *PostgresQueueStore) CancelQueued(ctx context.Context, submissionID stri
 	return cloneQueueRecord(record), nil
 }
 
-// Get returns one existing queue record by submission id.
-func (s *PostgresQueueStore) Get(ctx context.Context, submissionID string) (QueueRecord, error) {
-	return s.loadRecord(ctx, submissionID)
+// Get returns one existing queue record by run id.
+func (s *PostgresQueueStore) Get(ctx context.Context, runID string) (QueueRecord, error) {
+	return s.loadRecord(ctx, runID)
 }
 
 // List returns queue records in durable queue order.
@@ -243,6 +252,9 @@ func (s *PostgresQueueStore) List(ctx context.Context) ([]QueueRecord, error) {
 		record, err := queueRecordFromFields(
 			row.SubmissionID,
 			row.MatchID,
+			row.ParentRunID,
+			row.RunKind,
+			row.Official,
 			row.GameID,
 			row.GameVersion,
 			row.RulesetVersion,
@@ -261,11 +273,11 @@ func (s *PostgresQueueStore) List(ctx context.Context) ([]QueueRecord, error) {
 	return records, nil
 }
 
-func (s *PostgresQueueStore) loadRecord(ctx context.Context, submissionID string) (QueueRecord, error) {
-	return s.loadRecordTx(ctx, nil, submissionID, false)
+func (s *PostgresQueueStore) loadRecord(ctx context.Context, runID string) (QueueRecord, error) {
+	return s.loadRecordTx(ctx, nil, runID, false)
 }
 
-func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, tx pgx.Tx, submissionID string, forUpdate bool) (QueueRecord, error) {
+func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, tx pgx.Tx, runID string, forUpdate bool) (QueueRecord, error) {
 	queries := s.queries
 	if tx != nil {
 		queries = queries.WithTx(tx)
@@ -275,13 +287,16 @@ func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, tx pgx.Tx, submis
 		err    error
 	)
 	if forUpdate {
-		row, rowErr := queries.GetQueueRecordForUpdate(ctx, submissionID)
+		row, rowErr := queries.GetQueueRecordForUpdate(ctx, runID)
 		if rowErr != nil {
 			err = rowErr
 		} else {
 			record, err = queueRecordFromFields(
 				row.SubmissionID,
 				row.MatchID,
+				row.ParentRunID,
+				row.RunKind,
+				row.Official,
 				row.GameID,
 				row.GameVersion,
 				row.RulesetVersion,
@@ -294,13 +309,16 @@ func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, tx pgx.Tx, submis
 			)
 		}
 	} else {
-		row, rowErr := queries.GetQueueRecord(ctx, submissionID)
+		row, rowErr := queries.GetQueueRecord(ctx, runID)
 		if rowErr != nil {
 			err = rowErr
 		} else {
 			record, err = queueRecordFromFields(
 				row.SubmissionID,
 				row.MatchID,
+				row.ParentRunID,
+				row.RunKind,
+				row.Official,
 				row.GameID,
 				row.GameVersion,
 				row.RulesetVersion,
@@ -323,8 +341,11 @@ func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, tx pgx.Tx, submis
 }
 
 func queueRecordFromFields(
-	submissionID string,
+	runID string,
 	matchID string,
+	parentRunID pgtype.Text,
+	runKind string,
+	official bool,
 	gameID string,
 	gameVersion string,
 	rulesetVersion string,
@@ -342,13 +363,18 @@ func queueRecordFromFields(
 
 	record := QueueRecord{
 		Submission: MatchSubmission{
-			SubmissionID: submissionID,
+			RunID:        runID,
 			MatchID:      matchID,
 			OutputDir:    outputDir,
 			AttemptCount: int(attemptCount),
 			Players:      players,
+			RunKind:      RunKind(runKind),
+			Official:     official,
 		},
 		State: LifecycleState(state),
+	}
+	if parentRunID.Valid {
+		record.Submission.ParentRunID = parentRunID.String
 	}
 	record.Submission.Game.GameID = gameID
 	record.Submission.Game.GameVersion = gameVersion

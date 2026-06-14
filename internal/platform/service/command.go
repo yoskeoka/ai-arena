@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// CommandService orchestrates submission admission and queued-only cancellation.
+// CommandService orchestrates run admission and queued-only cancellation.
 type CommandService struct {
 	queue     QueueStore
 	validator AdmissionValidator
@@ -27,7 +27,7 @@ func NewCommandService(queue QueueStore, validator AdmissionValidator) (*Command
 	}, nil
 }
 
-// Submit validates a match submission and enqueues it when admission passes.
+// Submit validates one match run and enqueues it when admission passes.
 func (s *CommandService) Submit(ctx context.Context, submission MatchSubmission) (QueueRecord, error) {
 	if err := s.validator.Validate(ctx, submission); err != nil {
 		return QueueRecord{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
@@ -45,7 +45,7 @@ func (s *CommandService) Submit(ctx context.Context, submission MatchSubmission)
 	return QueueRecord{}, err
 }
 
-// Cancel transitions one queued submission into canceled.
-func (s *CommandService) Cancel(ctx context.Context, submissionID string) (QueueRecord, error) {
-	return s.queue.CancelQueued(ctx, submissionID)
+// Cancel transitions one queued run into canceled.
+func (s *CommandService) Cancel(ctx context.Context, runID string) (QueueRecord, error) {
+	return s.queue.CancelQueued(ctx, runID)
 }

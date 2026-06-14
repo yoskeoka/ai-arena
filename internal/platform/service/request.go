@@ -18,18 +18,19 @@ type MatchRequestParticipant struct {
 	AISubmissionID string `json:"ai_submission_id"`
 }
 
-// MatchRequest is one operator-created match request plus its scheduled queue submission.
+// MatchRequest is one operator-created logical match plus its run-group summary.
 type MatchRequest struct {
-	RequestID             string                    `json:"request_id"`
-	GameRegistrationID    string                    `json:"game_registration_id"`
-	Game                  contract.GameMetadata     `json:"game"`
-	Participants          []MatchRequestParticipant `json:"participants"`
-	OutputDir             string                    `json:"output_dir"`
-	Source                RegistrationSource        `json:"source,omitempty"`
-	SourceID              string                    `json:"source_id,omitempty"`
-	ScheduledSubmissionID string                    `json:"scheduled_submission_id"`
-	ScheduledMatchID      string                    `json:"scheduled_match_id"`
-	LifecycleState        LifecycleState            `json:"lifecycle_state"`
+	RequestID          string                    `json:"request_id"`
+	GameRegistrationID string                    `json:"game_registration_id"`
+	Game               contract.GameMetadata     `json:"game"`
+	Participants       []MatchRequestParticipant `json:"participants"`
+	OutputDir          string                    `json:"output_dir"`
+	Source             RegistrationSource        `json:"source,omitempty"`
+	SourceID           string                    `json:"source_id,omitempty"`
+	MatchID            string                    `json:"match_id"`
+	LatestRunID        string                    `json:"latest_run_id"`
+	OfficialRunID      string                    `json:"official_run_id,omitempty"`
+	LifecycleState     LifecycleState            `json:"lifecycle_state"`
 }
 
 // MatchRequestCreateRequest is the operator-facing create payload for one general match request.
@@ -49,13 +50,13 @@ type MatchRequestStore interface {
 
 // MatchRequestService validates general/preset match requests and schedules them into the queue.
 type MatchRequestService struct {
-	general           *GeneralSubmissionService
-	commands          *CommandService
-	queue             QueueStore
-	store             MatchRequestStore
-	newRequestIDFn    func() string
-	newSubmissionIDFn func() string
-	newMatchIDFn      func() string
+	general        *GeneralSubmissionService
+	commands       *CommandService
+	queue          QueueStore
+	store          MatchRequestStore
+	newRequestIDFn func() string
+	newRunIDFn     func() string
+	newMatchIDFn   func() string
 }
 
 // NewMatchRequestService constructs the minimal request+scheduling service.
@@ -73,13 +74,13 @@ func NewMatchRequestService(general *GeneralSubmissionService, commands *Command
 		store = NewInMemoryMatchRequestStore()
 	}
 	return &MatchRequestService{
-		general:           general,
-		commands:          commands,
-		queue:             queue,
-		store:             store,
-		newRequestIDFn:    func() string { return "req-" + uuid.NewString() },
-		newSubmissionIDFn: func() string { return "sub-" + uuid.NewString() },
-		newMatchIDFn:      func() string { return "match-" + uuid.NewString() },
+		general:        general,
+		commands:       commands,
+		queue:          queue,
+		store:          store,
+		newRequestIDFn: func() string { return "req-" + uuid.NewString() },
+		newRunIDFn:     func() string { return "run-" + uuid.NewString() },
+		newMatchIDFn:   func() string { return "match-" + uuid.NewString() },
 	}, nil
 }
 
@@ -110,12 +111,13 @@ func (s *MatchRequestService) Create(ctx context.Context, req MatchRequestCreate
 		matchID = s.newMatchIDFn()
 	}
 	submission := MatchSubmission{
-		SubmissionID: s.newSubmissionIDFn(),
+		RunID:        s.newRunIDFn(),
 		MatchID:      matchID,
 		Game:         game.Game,
 		Players:      players,
 		OutputDir:    strings.TrimSpace(req.OutputDir),
 		AttemptCount: 1,
+		RunKind:      RunKindInitial,
 	}
 	record, err := s.commands.Submit(ctx, submission)
 	if err != nil {
@@ -123,15 +125,16 @@ func (s *MatchRequestService) Create(ctx context.Context, req MatchRequestCreate
 	}
 
 	item := MatchRequest{
-		RequestID:             requestID,
-		GameRegistrationID:    gameRegistrationID,
-		Game:                  game.Game,
-		Participants:          cloneRequestParticipants(req.Participants),
-		OutputDir:             submission.OutputDir,
-		Source:                SourceManual,
-		ScheduledSubmissionID: record.Submission.SubmissionID,
-		ScheduledMatchID:      record.Submission.MatchID,
-		LifecycleState:        record.State,
+		RequestID:          requestID,
+		GameRegistrationID: gameRegistrationID,
+		Game:               game.Game,
+		Participants:       cloneRequestParticipants(req.Participants),
+		OutputDir:          submission.OutputDir,
+		Source:             SourceManual,
+		MatchID:            record.Submission.MatchID,
+		LatestRunID:        record.Submission.RunID,
+		OfficialRunID:      officialRunID(record),
+		LifecycleState:     record.State,
 	}
 	if err := s.store.Save(ctx, item); err != nil {
 		return MatchRequest{}, QueueRecord{}, s.rollbackQueuedSubmission(ctx, record, wrapConflict(err))
@@ -158,16 +161,17 @@ func (s *MatchRequestService) CreatePreset(ctx context.Context, presetID string,
 		return MatchRequest{}, QueueRecord{}, err
 	}
 	item := MatchRequest{
-		RequestID:             "preset-" + presetID + "-" + record.Submission.SubmissionID,
-		GameRegistrationID:    game.RegistrationID,
-		Game:                  game.Game,
-		Participants:          participants,
-		OutputDir:             submission.OutputDir,
-		Source:                SourcePreset,
-		SourceID:              presetID,
-		ScheduledSubmissionID: record.Submission.SubmissionID,
-		ScheduledMatchID:      record.Submission.MatchID,
-		LifecycleState:        record.State,
+		RequestID:          "preset-" + presetID + "-" + record.Submission.RunID,
+		GameRegistrationID: game.RegistrationID,
+		Game:               game.Game,
+		Participants:       participants,
+		OutputDir:          submission.OutputDir,
+		Source:             SourcePreset,
+		SourceID:           presetID,
+		MatchID:            record.Submission.MatchID,
+		LatestRunID:        record.Submission.RunID,
+		OfficialRunID:      officialRunID(record),
+		LifecycleState:     record.State,
 	}
 	if err := s.store.Save(ctx, item); err != nil {
 		return MatchRequest{}, QueueRecord{}, s.rollbackQueuedSubmission(ctx, record, wrapConflict(err))
@@ -181,19 +185,37 @@ func (s *MatchRequestService) List(ctx context.Context) ([]MatchRequest, error) 
 	if err != nil {
 		return nil, err
 	}
-	for index := range items {
-		submissionID := strings.TrimSpace(items[index].ScheduledSubmissionID)
-		if submissionID == "" {
+	records, err := s.queue.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	latestByMatch := make(map[string]QueueRecord, len(records))
+	officialByMatch := make(map[string]QueueRecord, len(records))
+	for _, record := range records {
+		matchID := strings.TrimSpace(record.Submission.MatchID)
+		if matchID == "" {
 			continue
 		}
-		record, getErr := s.queue.Get(ctx, submissionID)
-		if getErr != nil {
-			if errors.Is(getErr, ErrQueueRecordNotFound) {
-				continue
-			}
-			return nil, getErr
+		current, ok := latestByMatch[matchID]
+		if !ok || record.Submission.AttemptCount > current.Submission.AttemptCount {
+			latestByMatch[matchID] = record
 		}
-		items[index].LifecycleState = record.State
+		if record.Submission.Official {
+			officialByMatch[matchID] = record
+		}
+	}
+	for index := range items {
+		matchID := strings.TrimSpace(items[index].MatchID)
+		if matchID == "" {
+			continue
+		}
+		if record, ok := latestByMatch[matchID]; ok {
+			items[index].LatestRunID = record.Submission.RunID
+			items[index].LifecycleState = record.State
+		}
+		if record, ok := officialByMatch[matchID]; ok {
+			items[index].OfficialRunID = record.Submission.RunID
+		}
 	}
 	return items, nil
 }
@@ -250,13 +272,20 @@ func cloneMatchRequest(item MatchRequest) MatchRequest {
 }
 
 func (s *MatchRequestService) rollbackQueuedSubmission(ctx context.Context, record QueueRecord, cause error) error {
-	if record.Submission.SubmissionID == "" {
+	if record.Submission.RunID == "" {
 		return cause
 	}
-	if _, err := s.commands.Cancel(ctx, record.Submission.SubmissionID); err != nil {
-		return fmt.Errorf("%w: rollback queued submission %q: %v", cause, record.Submission.SubmissionID, err)
+	if _, err := s.commands.Cancel(ctx, record.Submission.RunID); err != nil {
+		return fmt.Errorf("%w: rollback queued submission %q: %v", cause, record.Submission.RunID, err)
 	}
 	return cause
+}
+
+func officialRunID(record QueueRecord) string {
+	if record.Submission.Official {
+		return record.Submission.RunID
+	}
+	return ""
 }
 
 // InMemoryMatchRequestStore keeps accepted match requests inside one process.

@@ -1,4 +1,5 @@
 .worktrees/
+.arena-service/
 arena-runner
 /app
 .local/

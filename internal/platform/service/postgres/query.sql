@@ -2,6 +2,9 @@
 INSERT INTO service_queue_records (
     submission_id,
     match_id,
+    parent_run_id,
+    run_kind,
+    official,
     game_id,
     game_version,
     ruleset_version,
@@ -13,6 +16,9 @@ INSERT INTO service_queue_records (
 VALUES (
     @submission_id,
     @match_id,
+    @parent_run_id,
+    @run_kind,
+    @official,
     @game_id,
     @game_version,
     @ruleset_version,
@@ -38,6 +44,9 @@ WHERE records.submission_id = next_record.submission_id
 RETURNING
     records.submission_id,
     records.match_id,
+    records.parent_run_id,
+    records.run_kind,
+    records.official,
     records.game_id,
     records.game_version,
     records.ruleset_version,
@@ -52,6 +61,9 @@ RETURNING
 UPDATE service_queue_records
 SET
     match_id = @match_id,
+    parent_run_id = @parent_run_id,
+    run_kind = @run_kind,
+    official = @official,
     game_id = @game_id,
     game_version = @game_version,
     ruleset_version = @ruleset_version,
@@ -73,6 +85,9 @@ WHERE submission_id = @submission_id;
 SELECT
     submission_id,
     match_id,
+    parent_run_id,
+    run_kind,
+    official,
     game_id,
     game_version,
     ruleset_version,
@@ -89,6 +104,9 @@ WHERE submission_id = @submission_id;
 SELECT
     submission_id,
     match_id,
+    parent_run_id,
+    run_kind,
+    official,
     game_id,
     game_version,
     ruleset_version,
@@ -106,6 +124,9 @@ FOR UPDATE;
 SELECT
     submission_id,
     match_id,
+    parent_run_id,
+    run_kind,
+    official,
     game_id,
     game_version,
     ruleset_version,

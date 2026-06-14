@@ -43,6 +43,9 @@ WHERE records.submission_id = next_record.submission_id
 RETURNING
     records.submission_id,
     records.match_id,
+    records.parent_run_id,
+    records.run_kind,
+    records.official,
     records.game_id,
     records.game_version,
     records.ruleset_version,
@@ -63,6 +66,9 @@ type ClaimNextQueueRecordParams struct {
 type ClaimNextQueueRecordRow struct {
 	SubmissionID   string
 	MatchID        string
+	ParentRunID    pgtype.Text
+	RunKind        string
+	Official       bool
 	GameID         string
 	GameVersion    string
 	RulesetVersion string
@@ -80,6 +86,9 @@ func (q *Queries) ClaimNextQueueRecord(ctx context.Context, arg ClaimNextQueueRe
 	err := row.Scan(
 		&i.SubmissionID,
 		&i.MatchID,
+		&i.ParentRunID,
+		&i.RunKind,
+		&i.Official,
 		&i.GameID,
 		&i.GameVersion,
 		&i.RulesetVersion,
@@ -97,6 +106,9 @@ const createQueueRecord = `-- name: CreateQueueRecord :exec
 INSERT INTO service_queue_records (
     submission_id,
     match_id,
+    parent_run_id,
+    run_kind,
+    official,
     game_id,
     game_version,
     ruleset_version,
@@ -114,13 +126,19 @@ VALUES (
     $6,
     $7,
     $8,
-    $9
+    $9,
+    $10,
+    $11,
+    $12
 )
 `
 
 type CreateQueueRecordParams struct {
 	SubmissionID   string
 	MatchID        string
+	ParentRunID    pgtype.Text
+	RunKind        string
+	Official       bool
 	GameID         string
 	GameVersion    string
 	RulesetVersion string
@@ -134,6 +152,9 @@ func (q *Queries) CreateQueueRecord(ctx context.Context, arg CreateQueueRecordPa
 	_, err := q.db.Exec(ctx, createQueueRecord,
 		arg.SubmissionID,
 		arg.MatchID,
+		arg.ParentRunID,
+		arg.RunKind,
+		arg.Official,
 		arg.GameID,
 		arg.GameVersion,
 		arg.RulesetVersion,
@@ -149,6 +170,9 @@ const getQueueRecord = `-- name: GetQueueRecord :one
 SELECT
     submission_id,
     match_id,
+    parent_run_id,
+    run_kind,
+    official,
     game_id,
     game_version,
     ruleset_version,
@@ -165,6 +189,9 @@ WHERE submission_id = $1
 type GetQueueRecordRow struct {
 	SubmissionID   string
 	MatchID        string
+	ParentRunID    pgtype.Text
+	RunKind        string
+	Official       bool
 	GameID         string
 	GameVersion    string
 	RulesetVersion string
@@ -182,6 +209,9 @@ func (q *Queries) GetQueueRecord(ctx context.Context, submissionID string) (GetQ
 	err := row.Scan(
 		&i.SubmissionID,
 		&i.MatchID,
+		&i.ParentRunID,
+		&i.RunKind,
+		&i.Official,
 		&i.GameID,
 		&i.GameVersion,
 		&i.RulesetVersion,
@@ -199,6 +229,9 @@ const getQueueRecordForUpdate = `-- name: GetQueueRecordForUpdate :one
 SELECT
     submission_id,
     match_id,
+    parent_run_id,
+    run_kind,
+    official,
     game_id,
     game_version,
     ruleset_version,
@@ -216,6 +249,9 @@ FOR UPDATE
 type GetQueueRecordForUpdateRow struct {
 	SubmissionID   string
 	MatchID        string
+	ParentRunID    pgtype.Text
+	RunKind        string
+	Official       bool
 	GameID         string
 	GameVersion    string
 	RulesetVersion string
@@ -233,6 +269,9 @@ func (q *Queries) GetQueueRecordForUpdate(ctx context.Context, submissionID stri
 	err := row.Scan(
 		&i.SubmissionID,
 		&i.MatchID,
+		&i.ParentRunID,
+		&i.RunKind,
+		&i.Official,
 		&i.GameID,
 		&i.GameVersion,
 		&i.RulesetVersion,
@@ -250,6 +289,9 @@ const listQueueRecords = `-- name: ListQueueRecords :many
 SELECT
     submission_id,
     match_id,
+    parent_run_id,
+    run_kind,
+    official,
     game_id,
     game_version,
     ruleset_version,
@@ -266,6 +308,9 @@ ORDER BY queue_order
 type ListQueueRecordsRow struct {
 	SubmissionID   string
 	MatchID        string
+	ParentRunID    pgtype.Text
+	RunKind        string
+	Official       bool
 	GameID         string
 	GameVersion    string
 	RulesetVersion string
@@ -289,6 +334,9 @@ func (q *Queries) ListQueueRecords(ctx context.Context) ([]ListQueueRecordsRow, 
 		if err := rows.Scan(
 			&i.SubmissionID,
 			&i.MatchID,
+			&i.ParentRunID,
+			&i.RunKind,
+			&i.Official,
 			&i.GameID,
 			&i.GameVersion,
 			&i.RulesetVersion,
@@ -313,21 +361,27 @@ const updateQueueRecord = `-- name: UpdateQueueRecord :exec
 UPDATE service_queue_records
 SET
     match_id = $1,
-    game_id = $2,
-    game_version = $3,
-    ruleset_version = $4,
-    players_json = $5,
-    output_dir = $6,
-    attempt_count = $7,
-    state = $8,
-    worker_id = $9,
-    terminal_json = $10,
+    parent_run_id = $2,
+    run_kind = $3,
+    official = $4,
+    game_id = $5,
+    game_version = $6,
+    ruleset_version = $7,
+    players_json = $8,
+    output_dir = $9,
+    attempt_count = $10,
+    state = $11,
+    worker_id = $12,
+    terminal_json = $13,
     updated_at = NOW()
-WHERE submission_id = $11
+WHERE submission_id = $14
 `
 
 type UpdateQueueRecordParams struct {
 	MatchID        string
+	ParentRunID    pgtype.Text
+	RunKind        string
+	Official       bool
 	GameID         string
 	GameVersion    string
 	RulesetVersion string
@@ -343,6 +397,9 @@ type UpdateQueueRecordParams struct {
 func (q *Queries) UpdateQueueRecord(ctx context.Context, arg UpdateQueueRecordParams) error {
 	_, err := q.db.Exec(ctx, updateQueueRecord,
 		arg.MatchID,
+		arg.ParentRunID,
+		arg.RunKind,
+		arg.Official,
 		arg.GameID,
 		arg.GameVersion,
 		arg.RulesetVersion,

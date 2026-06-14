@@ -13,12 +13,15 @@ import (
 
 // MatchSubmission is one admitted request to execute a single match.
 type MatchSubmission struct {
-	SubmissionID string                `json:"submission_id"`
+	RunID        string                `json:"run_id"`
 	MatchID      string                `json:"match_id"`
 	Game         contract.GameMetadata `json:"game"`
 	Players      []SubmittedPlayer     `json:"players"`
 	OutputDir    string                `json:"output_dir"`
 	AttemptCount int                   `json:"attempt_count"`
+	ParentRunID  string                `json:"parent_run_id,omitempty"`
+	RunKind      RunKind               `json:"run_kind"`
+	Official     bool                  `json:"official"`
 }
 
 // SubmittedPlayer binds a player id to an opaque AI artifact reference.
@@ -26,6 +29,18 @@ type SubmittedPlayer struct {
 	PlayerID    string `json:"player_id"`
 	ArtifactRef string `json:"artifact_ref"`
 }
+
+// RunKind identifies why one run exists inside a match run group.
+type RunKind string
+
+const (
+	// RunKindInitial is the first scheduled run for a logical match.
+	RunKindInitial RunKind = "initial"
+	// RunKindRetry is one recovery run appended from a failed run.
+	RunKindRetry RunKind = "retry"
+	// RunKindRerun is one candidate run appended from a completed run.
+	RunKindRerun RunKind = "rerun"
+)
 
 // LifecycleState tracks service-side queue and execution progress.
 type LifecycleState string
@@ -113,8 +128,8 @@ type TerminalPersister interface {
 
 // ValidateSubmission checks the minimum service skeleton contract.
 func ValidateSubmission(submission MatchSubmission) error {
-	if strings.TrimSpace(submission.SubmissionID) == "" {
-		return fmt.Errorf("service: submission_id is required")
+	if strings.TrimSpace(submission.RunID) == "" {
+		return fmt.Errorf("service: run_id is required")
 	}
 	if strings.TrimSpace(submission.MatchID) == "" {
 		return fmt.Errorf("service: match_id is required")
@@ -134,8 +149,23 @@ func ValidateSubmission(submission MatchSubmission) error {
 	if strings.TrimSpace(submission.OutputDir) == "" {
 		return fmt.Errorf("service: output_dir is required")
 	}
-	if submission.AttemptCount != 1 {
-		return fmt.Errorf("service: attempt_count must be 1 in the initial service skeleton")
+	if submission.AttemptCount <= 0 {
+		return fmt.Errorf("service: attempt_count must be positive")
+	}
+	switch submission.RunKind {
+	case RunKindInitial:
+		if submission.AttemptCount != 1 {
+			return fmt.Errorf("service: initial run attempt_count must be 1")
+		}
+		if strings.TrimSpace(submission.ParentRunID) != "" {
+			return fmt.Errorf("service: initial run must not set parent_run_id")
+		}
+	case RunKindRetry, RunKindRerun:
+		if strings.TrimSpace(submission.ParentRunID) == "" {
+			return fmt.Errorf("service: %s run requires parent_run_id", submission.RunKind)
+		}
+	default:
+		return fmt.Errorf("service: run_kind is required")
 	}
 
 	playerIDs := make([]string, 0, len(submission.Players))

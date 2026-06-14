@@ -15,10 +15,10 @@ func TestPostgresQueueStoreSharesQueueAcrossInstances(t *testing.T) {
 
 	store1 := newTestPostgresQueueStore(t, ctx, dsn, true)
 	submission1 := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
-	submission1.SubmissionID = "sub-pg-1"
+	submission1.RunID = "run-pg-1"
 	submission1.MatchID = "match-pg-1"
 	submission2 := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
-	submission2.SubmissionID = "sub-pg-2"
+	submission2.RunID = "run-pg-2"
 	submission2.MatchID = "match-pg-2"
 
 	if _, err := store1.Enqueue(ctx, submission1); err != nil {
@@ -34,8 +34,8 @@ func TestPostgresQueueStoreSharesQueueAcrossInstances(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim() error = %v", err)
 	}
-	if record.Submission.SubmissionID != submission1.SubmissionID {
-		t.Fatalf("Claim() submission_id = %q, want %q", record.Submission.SubmissionID, submission1.SubmissionID)
+	if record.Submission.RunID != submission1.RunID {
+		t.Fatalf("Claim() run_id = %q, want %q", record.Submission.RunID, submission1.RunID)
 	}
 	if record.Lease == nil || record.Lease.WorkerID != "worker-1" {
 		t.Fatalf("Claim() lease = %+v, want worker-1", record.Lease)
@@ -62,7 +62,7 @@ func TestPostgresQueueStoreSharesQueueAcrossInstances(t *testing.T) {
 	store2.Close()
 
 	store3 := newTestPostgresQueueStore(t, ctx, dsn, false)
-	loaded, err := store3.loadRecord(ctx, submission1.SubmissionID)
+	loaded, err := store3.loadRecord(ctx, submission1.RunID)
 	if err != nil {
 		t.Fatalf("loadRecord() error = %v", err)
 	}
@@ -79,8 +79,8 @@ func TestPostgresQueueStoreSharesQueueAcrossInstances(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim(second) error = %v", err)
 	}
-	if next.Submission.SubmissionID != submission2.SubmissionID {
-		t.Fatalf("Claim(second) submission_id = %q, want %q", next.Submission.SubmissionID, submission2.SubmissionID)
+	if next.Submission.RunID != submission2.RunID {
+		t.Fatalf("Claim(second) run_id = %q, want %q", next.Submission.RunID, submission2.RunID)
 	}
 }
 
@@ -90,13 +90,13 @@ func TestPostgresQueueStoreCancelQueued(t *testing.T) {
 	store := newTestPostgresQueueStore(t, ctx, dsn, true)
 
 	submission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
-	submission.SubmissionID = "sub-pg-cancel"
+	submission.RunID = "run-pg-cancel"
 	submission.MatchID = "match-pg-cancel"
 
 	if _, err := store.Enqueue(ctx, submission); err != nil {
 		t.Fatalf("Enqueue() error = %v", err)
 	}
-	record, err := store.CancelQueued(ctx, submission.SubmissionID)
+	record, err := store.CancelQueued(ctx, submission.RunID)
 	if err != nil {
 		t.Fatalf("CancelQueued() error = %v", err)
 	}
@@ -114,10 +114,10 @@ func TestPostgresQueueStoreListAndGet(t *testing.T) {
 	store := newTestPostgresQueueStore(t, ctx, dsn, true)
 
 	submission1 := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
-	submission1.SubmissionID = "sub-pg-list-1"
+	submission1.RunID = "run-pg-list-1"
 	submission1.MatchID = "match-pg-list-1"
 	submission2 := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
-	submission2.SubmissionID = "sub-pg-list-2"
+	submission2.RunID = "run-pg-list-2"
 	submission2.MatchID = "match-pg-list-2"
 
 	record1, err := store.Enqueue(ctx, submission1)
@@ -128,7 +128,7 @@ func TestPostgresQueueStoreListAndGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enqueue(submission2) error = %v", err)
 	}
-	record2, err = store.CancelQueued(ctx, submission2.SubmissionID)
+	record2, err = store.CancelQueued(ctx, submission2.RunID)
 	if err != nil {
 		t.Fatalf("CancelQueued(submission2) error = %v", err)
 	}
@@ -140,22 +140,22 @@ func TestPostgresQueueStoreListAndGet(t *testing.T) {
 	if len(records) != 2 {
 		t.Fatalf("len(records) = %d, want 2", len(records))
 	}
-	if records[0].Submission.SubmissionID != record1.Submission.SubmissionID {
-		t.Fatalf("records[0].submission_id = %q, want %q", records[0].Submission.SubmissionID, record1.Submission.SubmissionID)
+	if records[0].Submission.RunID != record1.Submission.RunID {
+		t.Fatalf("records[0].run_id = %q, want %q", records[0].Submission.RunID, record1.Submission.RunID)
 	}
 	if records[1].State != StateCanceled {
 		t.Fatalf("records[1].State = %q, want %q", records[1].State, StateCanceled)
 	}
 
-	loaded, err := store.Get(ctx, submission1.SubmissionID)
+	loaded, err := store.Get(ctx, submission1.RunID)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
 	if loaded.Submission.MatchID != submission1.MatchID {
 		t.Fatalf("loaded.MatchID = %q, want %q", loaded.Submission.MatchID, submission1.MatchID)
 	}
-	if record2.Submission.SubmissionID == "" {
-		t.Fatal("canceled record should preserve submission id")
+	if record2.Submission.RunID == "" {
+		t.Fatal("canceled record should preserve run id")
 	}
 }
 

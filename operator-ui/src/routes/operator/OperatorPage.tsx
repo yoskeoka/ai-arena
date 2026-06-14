@@ -39,9 +39,9 @@ export function OperatorPage() {
         >
           <MatchTable
             items={state.activeItems}
-            emptyMessage="No active submissions are currently queued or running."
-            onSelect={(item) => state.setSelectedSubmissionId(item.submission_id)}
-            selectedSubmissionId={state.selectedSubmissionId}
+            emptyMessage="No active runs are currently queued or running."
+            onSelect={(item) => state.setSelectedRunId(item.run_id)}
+            selectedRunId={state.selectedRunId}
           />
         </Panel>
 
@@ -55,9 +55,9 @@ export function OperatorPage() {
         >
           <MatchTable
             items={state.completedItems}
-            emptyMessage="No completed submissions yet."
-            onSelect={(item) => state.setSelectedSubmissionId(item.submission_id)}
-            selectedSubmissionId={state.selectedSubmissionId}
+            emptyMessage="No completed runs yet."
+            onSelect={(item) => state.setSelectedRunId(item.run_id)}
+            selectedRunId={state.selectedRunId}
           />
         </Panel>
       </section>

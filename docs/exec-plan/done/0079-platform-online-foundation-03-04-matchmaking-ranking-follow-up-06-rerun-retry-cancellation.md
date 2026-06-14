@@ -34,13 +34,14 @@ operator が rerun / retry / cancellation をどう扱うかを定義する。
 - rerun / retry command surface
 - lifecycle persistence / audit updates
 - verification scenario
+- operator API / operator UI vocabulary update from `submission_id` to `run_id`
 
 ## Sub-tasks
 
-- [ ] queued cancel、retry、rerun の定義を切り分ける
-- [ ] history / audit trail contract を定義する
-- [ ] ranking correction rule を定義する
-- [ ] operator verification scenario を整理する
+- [x] queued cancel、retry、rerun の定義を切り分ける
+- [x] history / audit trail contract を定義する
+- [x] ranking correction rule を定義する
+- [x] operator verification scenario を整理する
 
 ## Parallelism
 
@@ -59,3 +60,6 @@ operator が rerun / retry / cancellation をどう扱うかを定義する。
 ## Design Decisions
 
 - queued-only cancel、execution retry、operator rerun は別 lifecycle として扱う
+- `match_id` は logical match、`run_id` は各試行、`official_run_id` は completed run のうち正式採用 1 件とする
+- `retry` は failed run のみを対象にし、成功時は既存 official completed run がない場合だけ自動採用する
+- `rerun` は completed run のみを対象にし、成功しても auto-promote せず `promote` / correction で official を切り替える

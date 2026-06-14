@@ -19,7 +19,7 @@ func TestRunResolvesRelativeOutputDirAgainstBaseDir(t *testing.T) {
 	baseDir := repoRoot(t)
 
 	input := `{
-  "submission_id": "sub-1",
+  "run_id": "run-1",
   "match_id": "match-1",
   "game": {
     "game_id": "janken",
@@ -33,7 +33,8 @@ func TestRunResolvesRelativeOutputDirAgainstBaseDir(t *testing.T) {
     }
   ],
   "output_dir": "arena-service-output",
-  "attempt_count": 1
+  "attempt_count": 1,
+  "run_kind": "initial"
 }`
 
 	submissionPath := filepath.Join(t.TempDir(), "submission.json")
@@ -124,8 +125,8 @@ func TestRunListGetAndReadUseQuerySurface(t *testing.T) {
 	app := newSharedTestCLIApp(t)
 
 	completed := service.MatchSubmission{
-		SubmissionID: "sub-list-completed",
-		MatchID:      "match-list-completed",
+		RunID:   "run-list-completed",
+		MatchID: "match-list-completed",
 		Game: contract.GameMetadata{
 			GameID:         "echo-count",
 			GameVersion:    "2.0.0",
@@ -137,14 +138,15 @@ func TestRunListGetAndReadUseQuerySurface(t *testing.T) {
 		},
 		OutputDir:    t.TempDir(),
 		AttemptCount: 1,
+		RunKind:      service.RunKindInitial,
 	}
 	if _, err := app.runOnce(context.Background(), completed, "worker-1"); err != nil {
 		t.Fatalf("runOnce(completed) error = %v", err)
 	}
 
 	queued := service.MatchSubmission{
-		SubmissionID: "sub-list-queued",
-		MatchID:      "match-list-queued",
+		RunID:   "run-list-queued",
+		MatchID: "match-list-queued",
 		Game: contract.GameMetadata{
 			GameID:         "echo-count",
 			GameVersion:    "2.0.0",
@@ -156,6 +158,7 @@ func TestRunListGetAndReadUseQuerySurface(t *testing.T) {
 		},
 		OutputDir:    filepath.Join(t.TempDir(), "queued-output"),
 		AttemptCount: 1,
+		RunKind:      service.RunKindInitial,
 	}
 	if _, err := app.commands.Submit(context.Background(), queued); err != nil {
 		t.Fatalf("Submit(queued) error = %v", err)
@@ -179,7 +182,7 @@ func TestRunListGetAndReadUseQuerySurface(t *testing.T) {
 	}
 
 	var getOut bytes.Buffer
-	if err := runWithFactory([]string{"get", "--submission-id", completed.SubmissionID}, &getOut, &stderr, factory); err != nil {
+	if err := runWithFactory([]string{"get", "--run-id", completed.RunID}, &getOut, &stderr, factory); err != nil {
 		t.Fatalf("runWithFactory(get) error = %v, stderr = %s", err, stderr.String())
 	}
 	var detail service.MatchDetail
@@ -197,7 +200,7 @@ func TestRunListGetAndReadUseQuerySurface(t *testing.T) {
 	}
 
 	var readOut bytes.Buffer
-	if err := runWithFactory([]string{"read", "--submission-id", completed.SubmissionID, "--artifact", "result-summary"}, &readOut, &stderr, factory); err != nil {
+	if err := runWithFactory([]string{"read", "--run-id", completed.RunID, "--artifact", "result-summary"}, &readOut, &stderr, factory); err != nil {
 		t.Fatalf("runWithFactory(read) error = %v, stderr = %s", err, stderr.String())
 	}
 	var summary artifacts.ResultSummary
@@ -210,7 +213,7 @@ func TestRunListGetAndReadUseQuerySurface(t *testing.T) {
 
 	for _, artifactKind := range []string{"snapshot", "history", "exported-snapshot"} {
 		readOut.Reset()
-		if err := runWithFactory([]string{"read", "--submission-id", completed.SubmissionID, "--artifact", artifactKind}, &readOut, &stderr, factory); err != nil {
+		if err := runWithFactory([]string{"read", "--run-id", completed.RunID, "--artifact", artifactKind}, &readOut, &stderr, factory); err != nil {
 			t.Fatalf("runWithFactory(read %s) error = %v, stderr = %s", artifactKind, err, stderr.String())
 		}
 		if readOut.Len() == 0 {
@@ -223,8 +226,8 @@ func TestRunOncePersistsTerminalArtifacts(t *testing.T) {
 	baseDir := repoRoot(t)
 	outputDir := t.TempDir()
 	submission := service.MatchSubmission{
-		SubmissionID: "sub-echo-1",
-		MatchID:      "match-echo-1",
+		RunID:   "run-echo-1",
+		MatchID: "match-echo-1",
 		Game: contract.GameMetadata{
 			GameID:         "echo-count",
 			GameVersion:    "2.0.0",
@@ -236,6 +239,7 @@ func TestRunOncePersistsTerminalArtifacts(t *testing.T) {
 		},
 		OutputDir:    outputDir,
 		AttemptCount: 1,
+		RunKind:      service.RunKindInitial,
 	}
 	submissionPath := writeSubmissionFile(t, submission)
 
@@ -280,8 +284,8 @@ func TestRunOnceFailureStillPrintsTerminalRecord(t *testing.T) {
 	baseDir := repoRoot(t)
 	outputDir := t.TempDir()
 	submission := service.MatchSubmission{
-		SubmissionID: "sub-echo-timeout-1",
-		MatchID:      "match-echo-timeout-1",
+		RunID:   "run-echo-timeout-1",
+		MatchID: "match-echo-timeout-1",
 		Game: contract.GameMetadata{
 			GameID:         "echo-count",
 			GameVersion:    "2.0.0",
@@ -293,6 +297,7 @@ func TestRunOnceFailureStillPrintsTerminalRecord(t *testing.T) {
 		},
 		OutputDir:    outputDir,
 		AttemptCount: 1,
+		RunKind:      service.RunKindInitial,
 	}
 	submissionPath := writeSubmissionFile(t, submission)
 
@@ -340,8 +345,8 @@ func TestSubmitRejectsIncompatibleArtifactWithoutArtifacts(t *testing.T) {
 	baseDir := repoRoot(t)
 	outputDir := filepath.Join(t.TempDir(), "rejected-output")
 	submissionPath := writeSubmissionFile(t, service.MatchSubmission{
-		SubmissionID: "sub-bad-1",
-		MatchID:      "match-bad-1",
+		RunID:   "run-bad-1",
+		MatchID: "match-bad-1",
 		Game: contract.GameMetadata{
 			GameID:         "janken",
 			GameVersion:    "2.1.0",
@@ -352,6 +357,7 @@ func TestSubmitRejectsIncompatibleArtifactWithoutArtifacts(t *testing.T) {
 		},
 		OutputDir:    outputDir,
 		AttemptCount: 1,
+		RunKind:      service.RunKindInitial,
 	})
 
 	var stdout bytes.Buffer
@@ -369,8 +375,8 @@ func TestSubmitCancelKeepsQueuedOnlyCancelArtifactFree(t *testing.T) {
 	baseDir := repoRoot(t)
 	outputDir := filepath.Join(t.TempDir(), "canceled-output")
 	submissionPath := writeSubmissionFile(t, service.MatchSubmission{
-		SubmissionID: "sub-cancel-1",
-		MatchID:      "match-cancel-1",
+		RunID:   "run-cancel-1",
+		MatchID: "match-cancel-1",
 		Game: contract.GameMetadata{
 			GameID:         "echo-count",
 			GameVersion:    "2.0.0",
@@ -382,6 +388,7 @@ func TestSubmitCancelKeepsQueuedOnlyCancelArtifactFree(t *testing.T) {
 		},
 		OutputDir:    outputDir,
 		AttemptCount: 1,
+		RunKind:      service.RunKindInitial,
 	})
 
 	var stdout bytes.Buffer

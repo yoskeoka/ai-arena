@@ -128,7 +128,7 @@ func TestOperatorAPIPresetLifecycle(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if completedItem.SubmissionID == "" {
+	if completedItem.RunID == "" {
 		t.Fatal("completed match did not appear before timeout")
 	}
 	if completedItem.TerminalStatus == nil || *completedItem.TerminalStatus != contract.StatusCompleted {
@@ -136,9 +136,9 @@ func TestOperatorAPIPresetLifecycle(t *testing.T) {
 	}
 
 	detailResp := httptest.NewRecorder()
-	handler.ServeHTTP(detailResp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/matches/"+created.SubmissionID, nil))
+	handler.ServeHTTP(detailResp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/runs/"+created.RunID, nil))
 	if detailResp.Code != http.StatusOK {
-		t.Fatalf("GET /api/v1/matches/{submission_id} status = %d, body = %s", detailResp.Code, detailResp.Body.String())
+		t.Fatalf("GET /api/v1/runs/{run_id} status = %d, body = %s", detailResp.Code, detailResp.Body.String())
 	}
 	var detail MatchDetailResponse
 	if err := json.Unmarshal(detailResp.Body.Bytes(), &detail); err != nil {
@@ -491,8 +491,8 @@ func TestOperatorAPIMatchRequestRoutes(t *testing.T) {
 	if len(listed.Items) != 1 {
 		t.Fatalf("len(listed.Items) = %d, want 1", len(listed.Items))
 	}
-	if listed.Items[0].ScheduledSubmissionID == "" {
-		t.Fatal("listed.Items[0].ScheduledSubmissionID = empty, want queued submission id")
+	if listed.Items[0].LatestRunID == "" {
+		t.Fatal("listed.Items[0].LatestRunID = empty, want queued run id")
 	}
 }
 
@@ -524,7 +524,7 @@ func TestStatusCodeForServiceError(t *testing.T) {
 	}{
 		{name: "not found", err: ErrQueueRecordNotFound, want: http.StatusNotFound},
 		{name: "bad request", err: fmt.Errorf("%w: %w", ErrBadRequest, errors.New("service: output_dir is required")), want: http.StatusBadRequest},
-		{name: "conflict", err: fmt.Errorf("%w: %w", ErrConflict, errors.New("service: submission_id already exists")), want: http.StatusConflict},
+		{name: "conflict", err: fmt.Errorf("%w: %w", ErrConflict, errors.New("service: run_id already exists")), want: http.StatusConflict},
 		{name: "internal prefixed error stays internal", err: errors.New("service: enqueue submission: connection reset"), want: http.StatusInternalServerError},
 	}
 

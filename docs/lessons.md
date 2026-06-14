@@ -238,6 +238,13 @@
 - Rule: infra 導入前のローカル確認手順を書くときは、deploy-shaped lane を主導線に置く。managed service 相当をローカル harness で置き換える場合は、起動、schema apply、DSN、停止まで README から辿れるように書く。in-memory や lightweight lane は補助導線として扱う
 - Applied: `README.md` の `arena-service` ローカル起動案内、今後の Postgres/R2/Pages を伴う local verification runbook 全般
 
+## [2026-06-14] worktree 生成物は掃除より ignore を先に検討する
+
+- Mistake: `.arena-service/` のような worktree ローカル生成物を、未追跡差分を減らすため毎回削除する運用を続けかけた
+- Pattern: 一時生成物が repo 管理対象ではないのに、worktree がそのうち破棄される前提と `.gitignore` で十分なケースを見落として cleanup 手順を増やしてしまう
+- Rule: worktree 固有のローカル生成物が今後も繰り返し出るなら、追跡不要であることを確認したうえで削除運用より先に `.gitignore` 追加を検討する。明示的な cleanup が必要なのは共有環境や容量制約がある場合だけにする
+- Applied: `.arena-service/`、今後の ai-arena ローカル verification 生成物と worktree 固有キャッシュ全般
+
 ## [2026-06-13] advisory review を human 承認後は即座に branch へ反映する
 
 - Mistake: PR の advisory review で妥当な fix 候補が出ていた時点では triage だけで止め、その後 user が「全部修正」と明示するまで branch 更新を保留した結果、follow-up 実装と再検証が 1 turn 遅れた
@@ -279,3 +286,10 @@
 - Pattern: 自分には文脈で補完できる plan 名や command を docs に書くとき、reviewer や次の実行者がそのまま辿れる粒度まで concrete に書く確認を省きやすい
 - Rule: docs runbook で別 plan/file を参照するときは、実在する file path か相対 link で書く。command sample は copy-paste でそのまま実行できる形を基本にし、hostname や path の文脈補完を reader に委ねない
 - Applied: `docs/development/platform-service-online-deploy.md` の plan 参照、access runbook、今後の exec-plan/runbook cross-reference と operational command sample 全般
+
+## [2026-06-14] lifecycle 用語は運用判断の単位がそのまま読める名前を先に選ぶ
+
+- Mistake: rerun / retry / correction の設計で、`lineage` のような抽象語を先に置き、`match_id` が logical match なのか実行 1 回なのかを後から詰める流れになった
+- Pattern: 履歴保持や再実行モデルを考えるとき、データ構造の一般名詞で済ませてしまい、operator が何を判断・切替する entity なのかが名前だけでは伝わらない
+- Rule: rerun / retry / correction のような運用操作を伴う仕様では、まず `logical match`、`run`、`official run` のように operator の判断単位が名前から読める語彙を固定する。`lineage` のような抽象語は、その具体語彙で置き換えられない場合だけ使う
+- Applied: `docs/specs/platform-service-match-request-scheduling.md`、`docs/specs/platform-service-ranking-lifecycle.md`、`docs/specs/platform-service-operator-api.md`、今後の lifecycle / audit / correction 系 spec と実装命名
