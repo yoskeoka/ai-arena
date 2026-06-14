@@ -59,7 +59,7 @@ root の Markdown lint と `operator-ui` の local browser verify を
 - worktree 生成直後に dependencies を展開できる
 - ただし repo 外の workflow 依存が強く、ai-arena 単体の repo-owned contract としては drift に弱い
 
-## Recommended Decision
+## Recommendation
 
 Option 1 を採る。
 
@@ -68,23 +68,15 @@ Option 1 を採る。
 - local lane は host-native のまま保ちつつ、fresh worktree 停止点だけを減らせる
 - Option 2 は issue を実質的に残し、Option 3 は repo contract を `ww` 実装へ漏らしすぎる
 
-## Spec Changes
+## Development Doc Changes
 
-### New: `docs/specs/contributor-bootstrap-entrypoints.md`
+### New: `docs/development/contributor-bootstrap-entrypoints.md`
 
 - repo-owned contributor command のうち self-bootstrap を許可する entrypoint を定義する
 - bootstrap は command 実行直前にだけ発火し、missing condition でのみ走る contract を明記する
 - root dependency bootstrap、`operator-ui` dependency bootstrap、
   local Playwright browser bootstrap の責務境界を定義する
 - hidden startup hook を使わず、observable command path に閉じる decision を記録する
-
-### Update: `docs/specs/platform-service-operator-ui.md`
-
-- local browser verification contract に、
-  canonical command が missing local dependency / browser を前段 bootstrap してよいことを追記する
-- local lane は host-native command を正本とし、remote Docker lane とは bootstrap strategy を分けることを再確認する
-
-## Documentation Changes
 
 ### `README.md`
 
