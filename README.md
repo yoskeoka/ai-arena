@@ -115,16 +115,14 @@ For the repo-owned local browser verification lane, use the Playwright harness i
 
 ```sh
 cd operator-ui
-pnpm install --frozen-lockfile
-pnpm exec playwright install chromium
 pnpm run verify:local
 ```
 
-This command starts a Go fixture backend, starts the local Vite frontend, and verifies
+This command self-bootstraps missing `operator-ui` dependencies and the local Playwright Chromium browser,
+then starts a Go fixture backend, starts the local Vite frontend, and verifies
 the preset queue / active matches / completed detail / artifact access surface automatically.
 The detailed runbook lives in `docs/development/operator-ui-local-verification.md`.
-On Debian/Ubuntu systems that also need host libraries, `pnpm exec playwright install --with-deps chromium`
-is the faster setup path.
+If Playwright still fails after browser bootstrap, check the runbook for host-library troubleshooting.
 
 ## Release flow
 
@@ -175,10 +173,11 @@ Notes:
 To add a preferred replacement:
 
 1. Append one JSON line to `config/textlint/terms.jsonl`
-2. Run `pnpm install --frozen-lockfile`
-3. Run `pnpm run textlint:file -- <target.md>`
+2. Run `pnpm run textlint:file -- <target.md>`
 
 Local commands:
 
 - `pnpm run textlint`: run against tracked `docs/**/*.md`
 - `pnpm run textlint:file -- docs/specs/platform.md`: run against specific Markdown files
+
+Both commands self-bootstrap missing root dependencies before invoking `textlint`.

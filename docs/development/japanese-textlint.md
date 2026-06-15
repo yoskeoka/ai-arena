@@ -51,6 +51,7 @@ tools/list-changed-japanese-markdown.sh [base-ref]
 - workflow と local command は `--rulesdir ./tools/textlint-rules` を使う
 - repo-local dictionary rule は `config/textlint/terms.jsonl` を読む
 - `pnpm run textlint` は `git ls-files` で tracked `docs/**/*.md` を集める
+- local wrapper は root dependencies が missing なときだけ `pnpm install --frozen-lockfile` を先行してよい
 - local command は次を提供する
   - `pnpm run textlint`: tracked `docs/**/*.md` 全体を対象にする
   - `pnpm run textlint:file -- <target.md>...`: 指定 file を対象にする
@@ -131,7 +132,9 @@ tools/list-changed-japanese-markdown.sh origin/main
 CI 相当の focused check:
 
 ```sh
-pnpm install --frozen-lockfile
 mapfile -t files < <(tools/list-changed-japanese-markdown.sh origin/main)
 [ "${#files[@]}" -eq 0 ] || pnpm run textlint:file -- "${files[@]}"
 ```
+
+fresh worktree の contributor / agent 入口は `pnpm run textlint*` でよい。
+manual install を先に叩く必要はない。

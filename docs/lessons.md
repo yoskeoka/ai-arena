@@ -219,6 +219,13 @@
 
 ## [2026-05-31] spec には現在の契約だけを書き、plan の達成文脈を混ぜない
 
+## [2026-06-14] 開発環境 bootstrap は service spec に入れない
+
+- Mistake: fresh worktree 向けの dependency / Playwright bootstrap 方針を `docs/specs/contributor-bootstrap-entrypoints.md` と service-adjacent spec wording に入れた
+- Pattern: repo-local な開発者 workflow と `ai-arena` 自体の提供契約を分離せず、開発環境の都合を product/service spec に昇格させてしまう
+- Rule: dependency install、Playwright browser bootstrap、repo-owned wrapper command のような開発環境の土台は `docs/development/` と README に書く。`docs/specs/` には `ai-arena` サービスが提供する契約だけを書く
+- Applied: `docs/development/contributor-bootstrap-entrypoints.md`、`docs/development/operator-ui-local-verification.md`、`docs/development/japanese-textlint.md`、今後の repo-local bootstrap / tooling 文書化全般
+
 - Mistake: spec に「follow-up 実装後は」のような plan 完了前提の文言を入れ、現在の契約説明ではなく実装段階の文脈を持ち込んだ
 - Pattern: 直前の exec-plan の目的や実装順序を頭に置いたまま spec を書くと、最終状態の契約だけを簡潔に書くべき箇所に rollout 文脈が混ざりやすい
 - Rule: spec では最新の契約を現在形で直接書く。`この plan で`、`follow-up 実装後`、`初回は` のような実装順序・移行段階・milestone 文脈は plan/issue に残し、spec 本文には持ち込まない
