@@ -1,0 +1,3 @@
+copy_files = [".env"]
+
+symlink_files = ["operator-ui/node_modules"]

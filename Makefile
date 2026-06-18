@@ -40,6 +40,14 @@ REVIVE_PACKAGE_DIRS = $(shell $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS)
 
 export COMPOSE_BAKE = false
 
+up:
+	$(MAKE) postgres-up
+	$(MAKE) seaweed-up
+
+down:
+	$(MAKE) postgres-down
+	$(MAKE) seaweed-down
+
 test:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	$(GO_ENV) $(GO) test ./...
@@ -166,6 +174,10 @@ render-start:
 	./app serve \
 		--listen-addr "0.0.0.0:$${PORT:-10000}" \
 		--preset-config "$${ARENA_SERVICE_PRESET_CONFIG:-./config/platform-service/presets.remote-bootstrap.json}"
+
+start-local:
+	@OPERATOR_UI_BACKEND_MODE=real-local \
+	bash ./tools/dev/operator-ui-backend.sh
 
 build-janken-go-wasm:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"

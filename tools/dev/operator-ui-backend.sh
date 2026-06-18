@@ -83,4 +83,8 @@ case "$mode" in
 esac
 
 make render-build
-PORT="$port" make render-start
+if [ -z "${OPERATOR_UI_TEST_SCENARIO:-}" ] && command -v direnv >/dev/null 2>&1; then
+  PORT="$port" direnv exec "$repo_root" make render-start
+else
+  PORT="$port" make render-start
+fi

@@ -120,15 +120,38 @@ secret 配置、redirect URI の確認をやり直すための正本参照とし
 
 ## Secret Inventory Baseline
 
+- callback path contract:
+  provider 追加時に衝突しないよう、OAuth callback path は
+  `/auth/{provider}/callback` を正本にする
+  - GitHub first landing では `/auth/github/callback` を使う
+- environment callback URLs:
+  current deploy shape では frontend が `Pages`、session 発行主体が `Render` backend なので、
+  GitHub OAuth app の callback URL は backend origin へ向ける
+  - staging:
+    `https://ai-arena-staging-p4ml.onrender.com/auth/github/callback`
+  - production:
+    `https://ai-arena-service.onrender.com/auth/github/callback`
 - primary secret placement:
   current backend が `Render` 上の `arena-service` で token exchange / session 発行を担う前提なら、
-  `GITHUB_OAUTH_CLIENT_ID` と `GITHUB_OAUTH_CLIENT_SECRET` は
-  Render service の Environment Variables を第一選択にする
+  provider OAuth secret は Render service の Environment Variables を第一選択にする
+- runtime env naming:
+  provider-specific secret 名は `<PROVIDER>_OAUTH_CLIENT_ID` /
+  `<PROVIDER>_OAUTH_CLIENT_SECRET` の形で固定する
+  - GitHub first landing:
+    `ARENA_GITHUB_OAUTH_CLIENT_ID`
+    `ARENA_GITHUB_OAUTH_CLIENT_SECRET`
+- return flow env:
+  frontend return origin allowlist を env で override するときは
+  `ARENA_AUTH_ALLOWED_RETURN_ORIGINS` を使う
+- cookie signing env:
+  pending OAuth state cookie の signing secret を分けたい場合は
+  `ARENA_AUTH_COOKIE_SIGNING_SECRET` を使ってよい
+  - empty のときは `ARENA_GITHUB_OAUTH_CLIENT_SECRET` fallback を許容する
 - environment grouping:
-  staging / production で同一 key を共有したい場合は、
-  Render Environment Group を使って service へ配布してよい
+  staging / production では key 名をそろえ、value だけを環境ごとに分ける
+  - Render Environment Group を使う場合も、staging/prod 共通 value 前提にはしない
 - Cloudflare fallback:
-  callback handler や token exchange を Cloudflare Worker / Pages Functions へ移す場合に限り、
+  callback handler や token exchange を `Pages Functions` / `Cloudflare Worker` へ移す場合に限り、
   Cloudflare Secrets を代替候補として扱う
 - do not default to dual write:
   同じ GitHub OAuth secret を Render と Cloudflare の両方へ常設する前提にはしない

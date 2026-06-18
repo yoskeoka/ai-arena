@@ -1,2 +1,4 @@
-h1:WpWGkZSR35eJgQ9PhZ87J7/Fk8D8rLj4sKGNhWPbwyw=
-20260529000000_create_service_queue_records.sql h1:0lsyiv+DY/mExKgJ9OE0B49W3+OwPvkxHo13EBIt0gc=
+h1:iCsnTBxjv2FQLBf6IY5GTjjcLjZ8fkcbiURDKecwEx4=
+20260529000000_create_service_queue_records.sql h1:gpeGQif6IbMjl9PeKZZ1eKQmFbGOmycjdl9TI+CM8rM=
+20260614000000_add_run_metadata_to_service_queue_records.sql h1:xE3feF8C5TbP6gwScTGNsjwt3ichweeIqJHMZHprthM=
+20260617000000_create_auth_tables.sql h1:/ML6IJIo6RU+PJNOx2X1Gu+H7GxcJBYR9kWV5CpMICM=

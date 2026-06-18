@@ -23,12 +23,14 @@ operator-facing query API や replay / resume 用の read model 詳細は別 pla
 - replay / resume / audit 用の派生 read model
 - retention、archive、compaction policy
 - distributed fairness、multi-region queue、dead-letter queue
+- product auth の provider exchange detail
 
 ## 参照関係
 
 - `docs/specs/platform-service-skeleton.md`: submission / admission / queue lifecycle の正本
 - `docs/specs/platform-service-read-model.md`: operator-facing read model / list / get / read contract の正本
 - `docs/specs/platform.md`: runner、artifact layout、platform core 責務の正本
+- `docs/specs/platform-product-auth.md`: account / identity / session / invite metadata の正本
 
 ## 保存単位
 
@@ -87,6 +89,8 @@ first deploy target は `Cloudflare Pages + Render + Neon Postgres + Cloudflare 
 
 - `Neon Postgres`:
   submission metadata、queue ordering、lease metadata、terminal locator summary
+  - product auth metadata:
+    account、identity、session、invite、role binding
 - `Cloudflare R2`:
   `record.json`、`result-summary.json`、`snapshot.json`、`history.json`、stderr artifact、AI / game master payload 本体
 

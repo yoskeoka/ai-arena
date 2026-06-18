@@ -80,6 +80,44 @@ Service-level env / secret contract:
 - `ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID`
 - `ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY`
 
+GitHub OAuth first landing contract:
+
+- callback path は provider 衝突回避のため `/auth/{provider}/callback` を正本にする
+  - GitHub OAuth app の callback path:
+    `/auth/github/callback`
+- current deploy shape では frontend が `Cloudflare Pages`、token exchange / session 発行主体が
+  `Render` backend なので、GitHub OAuth app の callback URL は backend origin へ向ける
+  - staging callback URL:
+    `https://ai-arena-staging-p4ml.onrender.com/auth/github/callback`
+  - production callback URL:
+    `https://ai-arena-service.onrender.com/auth/github/callback`
+- callback で受けた認可 code の token exchange、session 発行、login flow 復帰 redirect は
+  backend 側で完結させる
+- browser が自動送信する http-only cookie の正本は backend origin に寄せる
+  - current `pages.dev` / `onrender.com` split-origin のままでも整合する
+- frontend origin から same-origin で auth API を見せたい場合は、
+  custom domain または Cloudflare proxy を伴う follow-up として扱う
+- GitHub OAuth app は staging / production で 2 つ作成し、
+  env var 名はそろえたまま value を環境ごとに分ける
+- repo / runtime が共有する GitHub OAuth env 名は次で固定する
+  - `ARENA_GITHUB_OAUTH_CLIENT_ID`
+  - `ARENA_GITHUB_OAUTH_CLIENT_SECRET`
+- callback / return flow を hard-code しないため、frontend return origin allowlist は env で上書きしてよい
+  - `ARENA_AUTH_ALLOWED_RETURN_ORIGINS`
+  - empty のときは repo canonical origin
+    `http://localhost:4173`,
+    `https://staging.ai-arena.pages.dev`,
+    `https://ai-arena.pages.dev`
+    を default にしてよい
+- pending OAuth state cookie の signing secret は次で override してよい
+  - `ARENA_AUTH_COOKIE_SIGNING_SECRET`
+  - empty のときは `ARENA_GITHUB_OAUTH_CLIENT_SECRET` を fallback に使ってよい
+- 将来 Google などを追加するときも、
+  provider-specific secret 名は `ARENA_<PROVIDER>_OAUTH_CLIENT_ID` /
+  `ARENA_<PROVIDER>_OAUTH_CLIENT_SECRET` の規則に従う
+- callback handler や token exchange を frontend origin 側へ移すまでは、
+  同じ GitHub OAuth secret を Cloudflare 側へ常設しない
+
 ## Neon Postgres
 
 References:

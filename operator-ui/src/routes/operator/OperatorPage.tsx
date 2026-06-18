@@ -1,3 +1,4 @@
+import { AuthPrincipal } from "../../api";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor } from "./operatorPageSupport";
 import { CompletedDetailPanel } from "./CompletedDetailPanel";
@@ -6,12 +7,22 @@ import { OperatorHeader } from "./OperatorHeader";
 import { PresetQueuePanel } from "./PresetQueuePanel";
 import { useOperatorPageState } from "./useOperatorPageState";
 
-export function OperatorPage() {
+type OperatorPageProps = {
+  principal?: AuthPrincipal;
+  onLogout?: () => void;
+};
+
+export function OperatorPage({ principal, onLogout }: OperatorPageProps) {
   const state = useOperatorPageState();
 
   return (
     <>
-      <OperatorHeader baseUrl={state.baseUrl} onBaseUrlChange={state.setBaseUrl} />
+      <OperatorHeader
+        baseUrl={state.baseUrl}
+        onBaseUrlChange={state.setBaseUrl}
+        providerLogin={principal?.provider_login}
+        onLogout={onLogout}
+      />
 
       <section className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         <PresetQueuePanel
