@@ -348,6 +348,7 @@ func (a *AuthService) redirectLoginError(w http.ResponseWriter, r *http.Request,
 }
 
 func (a *AuthService) setSessionCookie(w http.ResponseWriter, r *http.Request, token string, ttl time.Duration) {
+	// #nosec G124 -- localhost manual auth verification requires non-Secure cookies on plain HTTP; HTTPS requests still receive Secure cookies.
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
@@ -370,6 +371,7 @@ func (a *AuthService) setSignedCookie(w http.ResponseWriter, r *http.Request, na
 		return err
 	}
 	value := encoded + "." + hex.EncodeToString(mac.Sum(nil))
+	// #nosec G124 -- the pending OAuth cookie must remain usable on localhost HTTP during manual development; production HTTPS still receives Secure cookies.
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    value,
@@ -407,6 +409,7 @@ func (a *AuthService) decodeSignedValue(raw string, dest any) error {
 }
 
 func (a *AuthService) clearCookie(w http.ResponseWriter, r *http.Request, name string) {
+	// #nosec G124 -- cookie clearing must match the same localhost HTTP attributes used when issuing local development cookies.
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    "",
