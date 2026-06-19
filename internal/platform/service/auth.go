@@ -270,6 +270,13 @@ func (a *AuthService) Logout(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin != "" {
+		if _, ok := a.allowedReturnOrigins[origin]; !ok {
+			writeError(w, http.StatusForbidden, fmt.Errorf("origin is not allowed"))
+			return
+		}
+	}
 	sessionCookie, err := r.Cookie(sessionCookieName)
 	if err == nil && strings.TrimSpace(sessionCookie.Value) != "" {
 		_ = a.store.DeleteSession(r.Context(), sessionCookie.Value)
