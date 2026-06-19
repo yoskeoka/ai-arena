@@ -86,7 +86,7 @@ health route は queue backend や artifact backend の full readiness probe を
 
 operator surface と同じ backend process は、auth companion route を同居させてよい。
 
-- `GET /api/v1/session`
+- `GET /auth/session`
 - `GET /auth/github/login`
 - `GET /auth/github/callback`
 - `POST /auth/logout`

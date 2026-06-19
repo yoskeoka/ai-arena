@@ -6,15 +6,15 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:10000",
+        target: "http://localhost:10000",
         changeOrigin: true,
       },
       "/auth": {
-        target: "http://127.0.0.1:10000",
+        target: "http://localhost:10000",
         changeOrigin: true,
       },
       "/healthz": {
-        target: "http://127.0.0.1:10000",
+        target: "http://localhost:10000",
         changeOrigin: true,
       },
     },

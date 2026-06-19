@@ -130,7 +130,7 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, general *Ge
 func (a *OperatorAPI) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.handleHealthz)
-	mux.HandleFunc("GET /api/v1/session", a.handleSessionStatus)
+	mux.HandleFunc("GET /auth/session", a.handleSessionStatus)
 	if a.auth != nil {
 		mux.HandleFunc("GET /auth/github/login", a.auth.GitHubLogin)
 		mux.HandleFunc("GET /auth/github/callback", a.auth.GitHubCallback)

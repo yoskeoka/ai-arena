@@ -36,7 +36,7 @@ REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtim
 REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
 REVIVE_PACKAGE_DIRS = $(shell $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
-.PHONY: test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-preset-bots render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: up down migrate local-dummy-fixture local-invite-url start-local start-backend-local start-frontend-local test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-preset-bots render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 export COMPOSE_BAKE = false
 
@@ -47,6 +47,15 @@ up:
 down:
 	$(MAKE) postgres-down
 	$(MAKE) seaweed-down
+
+migrate:
+	$(MAKE) postgres-schema-apply
+
+local-dummy-fixture:
+	./tools/dev/local-dummy-fixture.sh
+
+local-invite-url:
+	./tools/dev/local-dummy-fixture.sh
 
 test:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
@@ -77,6 +86,7 @@ verify-local-object-storage:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	ARENA_SERVICE_BASE_URL="http://127.0.0.1:$${PORT:-10000}" $(GO_ENV) $(GO) run ./tools/dev/verify-local-object-storage.go
 
+# Use this for quick local compose DB setup when you want the current schema without creating revision history.
 postgres-schema-apply:
 	@attempt=0; \
 	until [ "$$attempt" -ge 10 ]; do \
@@ -90,6 +100,7 @@ postgres-schema-apply:
 	echo "postgres-schema-apply failed after $$attempt attempts"; \
 	exit 1
 
+# Use this when schema files changed and you need a new migration SQL file plus updated atlas hash.
 postgres-migrate-diff:
 	@if [ -z "$(NAME)" ] && [ -z "$(POSTGRES_MIGRATION_NAME)" ]; then \
 		echo "NAME or POSTGRES_MIGRATION_NAME is required"; \
@@ -102,6 +113,7 @@ postgres-migrate-diff:
 postgres-migrate-hash:
 	$(ATLAS_DOCKER) migrate hash --dir "$(POSTGRES_MIGRATIONS_URL)"
 
+# Use this only when adopting an already-existing manual DB into Atlas revision history at a known version.
 postgres-migrate-baseline:
 	@if [ -z "$(VERSION)" ] && [ -z "$(POSTGRES_MIGRATION_VERSION)" ]; then \
 		echo "VERSION or POSTGRES_MIGRATION_VERSION is required"; \
@@ -110,6 +122,7 @@ postgres-migrate-baseline:
 	version="$${VERSION:-$(POSTGRES_MIGRATION_VERSION)}"; \
 	ATLAS_IMAGE="$(ATLAS_IMAGE)" POSTGRES_MIGRATIONS_URL="$(POSTGRES_MIGRATIONS_URL)" AI_ARENA_PG_MIGRATION_DSN="$(AI_ARENA_PG_MIGRATION_DSN)" POSTGRES_MIGRATION_BASELINE_VERSION="$$version" POSTGRES_MIGRATION_REVISIONS_SCHEMA="$(POSTGRES_MIGRATION_REVISIONS_SCHEMA)" ./tools/dev/postgres-migrate-apply.sh
 
+# Use this for generated migration files against a durable DB where revision history must be preserved.
 postgres-migrate-apply:
 	ATLAS_IMAGE="$(ATLAS_IMAGE)" POSTGRES_MIGRATIONS_URL="$(POSTGRES_MIGRATIONS_URL)" AI_ARENA_PG_MIGRATION_DSN="$(AI_ARENA_PG_MIGRATION_DSN)" POSTGRES_MIGRATION_BASELINE_VERSION="$(POSTGRES_MIGRATION_BASELINE_VERSION)" POSTGRES_MIGRATION_REVISIONS_SCHEMA="$(POSTGRES_MIGRATION_REVISIONS_SCHEMA)" ./tools/dev/postgres-migrate-apply.sh
 
@@ -176,8 +189,16 @@ render-start:
 		--preset-config "$${ARENA_SERVICE_PRESET_CONFIG:-./config/platform-service/presets.remote-bootstrap.json}"
 
 start-local:
-	@OPERATOR_UI_BACKEND_MODE=real-local \
+	@OPERATOR_UI_BACKEND_MODE=local OPERATOR_UI_LOG_TO_FILE=0 \
 	bash ./tools/dev/operator-ui-backend.sh
+
+start-backend-local:
+	@OPERATOR_UI_BACKEND_MODE=local OPERATOR_UI_LOG_TO_FILE=0 \
+	bash ./tools/dev/operator-ui-backend.sh
+
+start-frontend-local:
+	@OPERATOR_UI_FRONTEND_PORT=5173 OPERATOR_UI_LOG_TO_FILE=0 \
+	bash ./tools/dev/operator-ui-frontend.sh
 
 build-janken-go-wasm:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"

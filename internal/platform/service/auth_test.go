@@ -74,7 +74,7 @@ func TestAuthServiceGitHubLoginCallbackAndSessionStatus(t *testing.T) {
 		t.Fatal("session cookie = nil, want issued auth session")
 	}
 
-	sessionReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:10000/api/v1/session", nil)
+	sessionReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:10000/auth/session", nil)
 	sessionReq.AddCookie(sessionCookie)
 	sessionResp := httptest.NewRecorder()
 	auth.SessionStatus(sessionResp, sessionReq)
@@ -153,6 +153,25 @@ func TestAuthServiceRequireOperatorRejectsAnonymousAndNonOperator(t *testing.T) 
 	protected.ServeHTTP(operatorResp, operatorReq)
 	if operatorResp.Code != http.StatusNoContent {
 		t.Fatalf("operator status = %d, want %d", operatorResp.Code, http.StatusNoContent)
+	}
+}
+
+func TestAuthServiceGitHubLoginAllowsDefaultLocalReturnOrigin(t *testing.T) {
+	t.Parallel()
+
+	auth, err := NewAuthService(AuthConfig{
+		GitHubClientID:     "client-id",
+		GitHubClientSecret: "client-secret",
+	}, &memoryAuthStore{}, fakeGitHubOAuthClient{})
+	if err != nil {
+		t.Fatalf("NewAuthService() error = %v", err)
+	}
+
+	loginReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:10000/auth/github/login?return_to=http://127.0.0.1:5173/operator", nil)
+	loginResp := httptest.NewRecorder()
+	auth.GitHubLogin(loginResp, loginReq)
+	if loginResp.Code != http.StatusFound {
+		t.Fatalf("GitHubLogin status = %d, want %d", loginResp.Code, http.StatusFound)
 	}
 }
 

@@ -99,7 +99,7 @@ export class OperatorApiClient {
   constructor(private readonly baseUrl: string) {}
 
   async session(signal?: AbortSignal): Promise<SessionStatusResponse> {
-    const response = await fetch(this.url("/api/v1/session"), {
+    const response = await fetch(this.url("/auth/session"), {
       signal,
       credentials: "include",
     });

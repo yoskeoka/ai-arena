@@ -4,6 +4,8 @@ The value is a fair, exciting benchmark for real engineering skill (not prompt-o
 
 ## Local runtime commands
 
+For contributor setup, local secrets, and manual GitHub login verification, see [DEVELOPMENT.md](./DEVELOPMENT.md).
+
 ### Run `arena-runner`
 
 Use `arena-runner` when you want to execute one match directly without the online service layer.

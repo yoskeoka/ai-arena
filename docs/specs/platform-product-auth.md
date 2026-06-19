@@ -92,7 +92,7 @@ current split-origin では first landing の正本にしない。
     pending login state を検証し、GitHub code exchange、
     account bootstrap / identity bind / session 発行を行い、
     `return_to` へ redirect する
-- `GET /api/v1/session`
+- `GET /auth/session`
   - 目的:
     current browser session の auth mode と authenticated principal を返す
 - `POST /auth/logout`
