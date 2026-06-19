@@ -11,12 +11,14 @@ import (
 	"time"
 )
 
+// DefaultGitHubOAuthClient is the production HTTP client for GitHub OAuth exchanges.
 type DefaultGitHubOAuthClient struct {
 	client       *http.Client
 	clientID     string
 	clientSecret string
 }
 
+// NewDefaultGitHubOAuthClient constructs the default GitHub OAuth HTTP client.
 func NewDefaultGitHubOAuthClient(clientID string, clientSecret string) *DefaultGitHubOAuthClient {
 	return &DefaultGitHubOAuthClient{
 		client:       &http.Client{Timeout: 10 * time.Second},
@@ -25,6 +27,7 @@ func NewDefaultGitHubOAuthClient(clientID string, clientSecret string) *DefaultG
 	}
 }
 
+// ExchangeCode exchanges a GitHub authorization code for an access token.
 func (c *DefaultGitHubOAuthClient) ExchangeCode(ctx context.Context, code string, redirectURI string) (string, error) {
 	payload := url.Values{}
 	payload.Set("client_id", c.clientID)
@@ -61,6 +64,7 @@ func (c *DefaultGitHubOAuthClient) ExchangeCode(ctx context.Context, code string
 	return body.AccessToken, nil
 }
 
+// FetchUser fetches the authenticated GitHub user profile for the access token.
 func (c *DefaultGitHubOAuthClient) FetchUser(ctx context.Context, accessToken string) (GitHubUserProfile, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user", nil)
 	if err != nil {

@@ -19,16 +19,19 @@ type pgxQueryer interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
+// PostgresAuthStore persists auth state in Postgres.
 type PostgresAuthStore struct {
 	pool *pgxpool.Pool
 }
 
+// SignupInviteRecord returns the raw invite token created for local/bootstrap flows.
 type SignupInviteRecord struct {
 	InviteToken string    `json:"invite_token"`
 	Role        string    `json:"role"`
 	ExpiresAt   time.Time `json:"expires_at"`
 }
 
+// NewPostgresAuthStore opens the auth store and validates that auth tables exist.
 func NewPostgresAuthStore(ctx context.Context, dsn string) (*PostgresAuthStore, error) {
 	if strings.TrimSpace(dsn) == "" {
 		return nil, fmt.Errorf("service: postgres dsn is required")
@@ -44,6 +47,7 @@ func NewPostgresAuthStore(ctx context.Context, dsn string) (*PostgresAuthStore, 
 	return &PostgresAuthStore{pool: pool}, nil
 }
 
+// Close releases the underlying Postgres connection pool.
 func (s *PostgresAuthStore) Close() {
 	if s == nil || s.pool == nil {
 		return
@@ -51,6 +55,7 @@ func (s *PostgresAuthStore) Close() {
 	s.pool.Close()
 }
 
+// ResolveGitHubLogin loads an existing GitHub-linked principal or claims a signup invite for first login.
 func (s *PostgresAuthStore) ResolveGitHubLogin(ctx context.Context, profile GitHubUserProfile, inviteToken string, now time.Time) (AuthPrincipal, error) {
 	if strings.TrimSpace(profile.Subject) == "" || strings.TrimSpace(profile.Login) == "" {
 		return AuthPrincipal{}, fmt.Errorf("service: github profile subject and login are required")
@@ -91,6 +96,7 @@ func (s *PostgresAuthStore) ResolveGitHubLogin(ctx context.Context, profile GitH
 	return principal, nil
 }
 
+// CreateSession creates a new persisted account session and returns the raw session token.
 func (s *PostgresAuthStore) CreateSession(ctx context.Context, accountID string, expiresAt time.Time) (string, error) {
 	token, err := randomToken(32)
 	if err != nil {
@@ -107,15 +113,18 @@ func (s *PostgresAuthStore) CreateSession(ctx context.Context, accountID string,
 	return token, nil
 }
 
+// GetSession resolves an active session token to its authenticated principal.
 func (s *PostgresAuthStore) GetSession(ctx context.Context, sessionToken string, now time.Time) (AuthPrincipal, error) {
 	return lookupPrincipalBySession(ctx, s.pool, tokenHash(sessionToken), now)
 }
 
+// DeleteSession removes a persisted session token from the auth store.
 func (s *PostgresAuthStore) DeleteSession(ctx context.Context, sessionToken string) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM account_sessions WHERE session_token_hash = $1`, tokenHash(sessionToken))
 	return err
 }
 
+// CreateSignupInvite creates a new single-use signup invite for the requested role.
 func (s *PostgresAuthStore) CreateSignupInvite(ctx context.Context, role string, expiresAt time.Time) (SignupInviteRecord, error) {
 	role = strings.TrimSpace(role)
 	if role == "" {

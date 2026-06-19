@@ -27,13 +27,19 @@ const (
 )
 
 var (
-	ErrAuthDisabled         = errors.New("authentication is disabled")
+	// ErrAuthDisabled indicates that auth-dependent behavior was requested while auth is not configured.
+	ErrAuthDisabled = errors.New("authentication is disabled")
+	// ErrAuthenticationNeeded indicates that no valid authenticated session is present.
 	ErrAuthenticationNeeded = errors.New("authentication required")
-	ErrOperatorRoleNeeded   = errors.New("operator role required")
+	// ErrOperatorRoleNeeded indicates that the authenticated account lacks the operator role.
+	ErrOperatorRoleNeeded = errors.New("operator role required")
+	// ErrSignupInviteRequired indicates that first-time signup requires an invite token.
 	ErrSignupInviteRequired = errors.New("signup invite is required")
-	ErrInvalidSignupInvite  = errors.New("signup invite is invalid or expired")
+	// ErrInvalidSignupInvite indicates that the supplied invite token is invalid, expired, or already claimed.
+	ErrInvalidSignupInvite = errors.New("signup invite is invalid or expired")
 )
 
+// AuthConfig describes the runtime configuration required for GitHub-backed auth.
 type AuthConfig struct {
 	GitHubClientID       string
 	GitHubClientSecret   string
@@ -42,6 +48,7 @@ type AuthConfig struct {
 	CookieSigningSecret  string
 }
 
+// AuthStore persists account identities, sessions, and signup invites.
 type AuthStore interface {
 	ResolveGitHubLogin(ctx context.Context, profile GitHubUserProfile, inviteToken string, now time.Time) (AuthPrincipal, error)
 	CreateSession(ctx context.Context, accountID string, expiresAt time.Time) (string, error)
@@ -49,17 +56,20 @@ type AuthStore interface {
 	DeleteSession(ctx context.Context, sessionToken string) error
 }
 
+// GitHubOAuthClient exchanges GitHub authorization codes and fetches the authenticated user profile.
 type GitHubOAuthClient interface {
 	ExchangeCode(ctx context.Context, code string, redirectURI string) (string, error)
 	FetchUser(ctx context.Context, accessToken string) (GitHubUserProfile, error)
 }
 
+// GitHubUserProfile is the subset of GitHub identity data needed for account linking.
 type GitHubUserProfile struct {
 	Subject string
 	Login   string
 	Email   string
 }
 
+// AuthPrincipal is the authenticated account identity returned to operator clients.
 type AuthPrincipal struct {
 	AccountID     string   `json:"account_id"`
 	Provider      string   `json:"provider"`
@@ -68,12 +78,14 @@ type AuthPrincipal struct {
 	Roles         []string `json:"roles"`
 }
 
+// SessionStatusResponse reports whether the current browser session is authenticated.
 type SessionStatusResponse struct {
 	AuthMode      string         `json:"auth_mode"`
 	Authenticated bool           `json:"authenticated"`
 	Principal     *AuthPrincipal `json:"principal,omitempty"`
 }
 
+// AuthService coordinates GitHub OAuth, session issuance, and operator access control.
 type AuthService struct {
 	store                AuthStore
 	github               GitHubOAuthClient
@@ -92,6 +104,7 @@ type pendingGitHubAuth struct {
 	IssuedAt    time.Time `json:"issued_at"`
 }
 
+// NewAuthService constructs an auth service from the configured store and GitHub client.
 func NewAuthService(cfg AuthConfig, store AuthStore, github GitHubOAuthClient) (*AuthService, error) {
 	if store == nil {
 		return nil, fmt.Errorf("service: auth store is required")
@@ -139,6 +152,7 @@ func NewAuthService(cfg AuthConfig, store AuthStore, github GitHubOAuthClient) (
 	}, nil
 }
 
+// SessionStatus returns the current session principal when the browser is authenticated.
 func (a *AuthService) SessionStatus(w http.ResponseWriter, r *http.Request) {
 	if a == nil {
 		writeJSON(w, http.StatusOK, SessionStatusResponse{AuthMode: authModeDisabled, Authenticated: false})
@@ -156,6 +170,7 @@ func (a *AuthService) SessionStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GitHubLogin starts the GitHub OAuth authorization-code flow.
 func (a *AuthService) GitHubLogin(w http.ResponseWriter, r *http.Request) {
 	if a == nil {
 		writeError(w, http.StatusServiceUnavailable, ErrAuthDisabled)
@@ -195,6 +210,7 @@ func (a *AuthService) GitHubLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target+"?"+params.Encode(), http.StatusFound)
 }
 
+// GitHubCallback completes the GitHub OAuth flow and issues the operator session cookie.
 func (a *AuthService) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	if a == nil {
 		writeError(w, http.StatusServiceUnavailable, ErrAuthDisabled)
@@ -248,6 +264,7 @@ func (a *AuthService) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, pending.ReturnTo, http.StatusFound)
 }
 
+// Logout revokes the current persisted session and clears the browser cookie.
 func (a *AuthService) Logout(w http.ResponseWriter, r *http.Request) {
 	if a == nil {
 		w.WriteHeader(http.StatusNoContent)
@@ -261,6 +278,7 @@ func (a *AuthService) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// RequireOperator wraps a handler with authenticated-operator access control.
 func (a *AuthService) RequireOperator(next http.Handler) http.Handler {
 	if a == nil {
 		return next
