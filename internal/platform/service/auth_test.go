@@ -33,7 +33,7 @@ func TestAuthServiceGitHubLoginCallbackAndSessionStatus(t *testing.T) {
 		t.Fatalf("NewAuthService() error = %v", err)
 	}
 
-	loginReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:10000/auth/github/login?return_to=http://localhost:4173/operator&invite_token=invite-1", nil)
+	loginReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/auth/github/login?return_to=http://localhost:4173/operator&invite_token=invite-1", nil)
 	loginResp := httptest.NewRecorder()
 	auth.GitHubLogin(loginResp, loginReq)
 	if loginResp.Code != http.StatusFound {
@@ -52,7 +52,7 @@ func TestAuthServiceGitHubLoginCallbackAndSessionStatus(t *testing.T) {
 	}
 	pendingCookie := loginResp.Result().Cookies()[0]
 
-	callbackReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:10000/auth/github/callback?code=code-1&state="+state, nil)
+	callbackReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/auth/github/callback?code=code-1&state="+state, nil)
 	callbackReq.AddCookie(pendingCookie)
 	callbackResp := httptest.NewRecorder()
 	auth.GitHubCallback(callbackResp, callbackReq)
@@ -74,7 +74,7 @@ func TestAuthServiceGitHubLoginCallbackAndSessionStatus(t *testing.T) {
 		t.Fatal("session cookie = nil, want issued auth session")
 	}
 
-	sessionReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:10000/auth/session", nil)
+	sessionReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/auth/session", nil)
 	sessionReq.AddCookie(sessionCookie)
 	sessionResp := httptest.NewRecorder()
 	auth.SessionStatus(sessionResp, sessionReq)
@@ -126,7 +126,7 @@ func TestAuthServiceRequireOperatorRejectsAnonymousAndNonOperator(t *testing.T) 
 	}))
 
 	anonymousResp := httptest.NewRecorder()
-	protected.ServeHTTP(anonymousResp, httptest.NewRequest(http.MethodGet, "http://127.0.0.1:10000/api/v1/matches/active", nil))
+	protected.ServeHTTP(anonymousResp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/api/v1/matches/active", nil))
 	if anonymousResp.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous status = %d, want %d", anonymousResp.Code, http.StatusUnauthorized)
 	}
@@ -135,7 +135,7 @@ func TestAuthServiceRequireOperatorRejectsAnonymousAndNonOperator(t *testing.T) 
 	if err != nil {
 		t.Fatalf("CreateSession(participant) error = %v", err)
 	}
-	participantReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:10000/api/v1/matches/active", nil)
+	participantReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/api/v1/matches/active", nil)
 	participantReq.AddCookie(&http.Cookie{Name: sessionCookieName, Value: participantToken})
 	participantResp := httptest.NewRecorder()
 	protected.ServeHTTP(participantResp, participantReq)
@@ -147,7 +147,7 @@ func TestAuthServiceRequireOperatorRejectsAnonymousAndNonOperator(t *testing.T) 
 	if err != nil {
 		t.Fatalf("CreateSession(operator) error = %v", err)
 	}
-	operatorReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:10000/api/v1/matches/active", nil)
+	operatorReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/api/v1/matches/active", nil)
 	operatorReq.AddCookie(&http.Cookie{Name: sessionCookieName, Value: operatorToken})
 	operatorResp := httptest.NewRecorder()
 	protected.ServeHTTP(operatorResp, operatorReq)
@@ -167,7 +167,7 @@ func TestAuthServiceGitHubLoginAllowsDefaultLocalReturnOrigin(t *testing.T) {
 		t.Fatalf("NewAuthService() error = %v", err)
 	}
 
-	loginReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:10000/auth/github/login?return_to=http://127.0.0.1:5173/operator", nil)
+	loginReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/auth/github/login?return_to=http://127.0.0.1:5173/operator", nil)
 	loginResp := httptest.NewRecorder()
 	auth.GitHubLogin(loginResp, loginReq)
 	if loginResp.Code != http.StatusFound {
