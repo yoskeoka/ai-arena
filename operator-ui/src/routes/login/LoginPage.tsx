@@ -109,6 +109,7 @@ function resolvedReturnTo() {
     return "http://localhost:4173/operator";
   }
   return new URL("/operator", window.location.origin).toString();
+}
 
 function queryParam(name: string) {
   if (typeof window === "undefined") {
