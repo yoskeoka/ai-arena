@@ -40,7 +40,7 @@ func TestOperatorAPIPresetLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -184,7 +184,7 @@ func TestOperatorAPIRejectsUnknownPreset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -222,7 +222,7 @@ func TestOperatorAPIAllowsConfiguredCORSOrigins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -281,7 +281,7 @@ func TestOperatorAPIDoesNotAllowUnknownCORSOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -319,7 +319,7 @@ func TestOperatorAPIGeneralRegistrationRoutesRejectUnsupportedMethod(t *testing.
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -356,7 +356,7 @@ func TestOperatorAPIGeneralRegistrationRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -428,7 +428,7 @@ func TestOperatorAPIMatchRequestRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, general, requests, presets, DirectArtifactAccessIssuer{})
+	api, err := NewOperatorAPI(commands, queries, general, requests, presets, DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}

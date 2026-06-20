@@ -8,6 +8,38 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Account struct {
+	AccountID pgtype.UUID
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type AccountIdentity struct {
+	IdentityID      pgtype.UUID
+	AccountID       pgtype.UUID
+	Provider        string
+	ProviderSubject string
+	ProviderLogin   string
+	ProviderEmail   pgtype.Text
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type AccountRole struct {
+	AccountID pgtype.UUID
+	Role      string
+	CreatedAt pgtype.Timestamptz
+}
+
+type AccountSession struct {
+	SessionID        pgtype.UUID
+	AccountID        pgtype.UUID
+	SessionTokenHash string
+	ExpiresAt        pgtype.Timestamptz
+	LastSeenAt       pgtype.Timestamptz
+	CreatedAt        pgtype.Timestamptz
+}
+
 type ServiceQueueRecord struct {
 	SubmissionID   string
 	QueueOrder     int64
@@ -26,4 +58,14 @@ type ServiceQueueRecord struct {
 	TerminalJson   []byte
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+}
+
+type SignupInvite struct {
+	InviteID         pgtype.UUID
+	InviteTokenHash  string
+	Role             string
+	ExpiresAt        pgtype.Timestamptz
+	ClaimedAccountID pgtype.UUID
+	ClaimedAt        pgtype.Timestamptz
+	CreatedAt        pgtype.Timestamptz
 }

@@ -39,7 +39,7 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	}
 
 	subcommand := args[0]
-	if subcommand != "submit" && subcommand != "run-once" && subcommand != "submit-cancel" && subcommand != "list" && subcommand != "get" && subcommand != "read" && subcommand != "serve" && subcommand != "ranking-get" && subcommand != "ranking-recompute" && subcommand != "ranking-verify" {
+	if subcommand != "submit" && subcommand != "run-once" && subcommand != "submit-cancel" && subcommand != "list" && subcommand != "get" && subcommand != "read" && subcommand != "serve" && subcommand != "ranking-get" && subcommand != "ranking-recompute" && subcommand != "ranking-verify" && subcommand != "signup-invite-create" {
 		return fmt.Errorf("usage: %s", usageFor(""))
 	}
 
@@ -61,6 +61,8 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 		gameID                 string
 		gameVersion            string
 		rulesetVersion         string
+		inviteRole             string
+		inviteTTL              time.Duration
 	)
 	fs.StringVar(&submissionPath, "submission", "", "submission JSON path or - for stdin")
 	fs.StringVar(&runID, "run-id", "", "run id for get/read")
@@ -76,6 +78,8 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	fs.StringVar(&gameID, "game-id", "", "ranking scope game id")
 	fs.StringVar(&gameVersion, "game-version", "", "ranking scope game version")
 	fs.StringVar(&rulesetVersion, "ruleset-version", "", "ranking scope ruleset version")
+	fs.StringVar(&inviteRole, "role", "operator", "signup invite role")
+	fs.DurationVar(&inviteTTL, "ttl", 24*time.Hour, "signup invite lifetime")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -108,6 +112,9 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 		serveCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		return app.serve(serveCtx, listenAddr, presetConfig, workerID, pollInterval, stderr)
+	}
+	if subcommand == "signup-invite-create" {
+		return createSignupInvite(stdout, postgresDSN, inviteRole, inviteTTL)
 	}
 
 	switch subcommand {
@@ -189,8 +196,10 @@ func usageFor(subcommand string) string {
 		return "arena-service ranking-recompute --game-id <id> --game-version <version> --ruleset-version <version> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "ranking-verify":
 		return "arena-service ranking-verify --game-id <id> --game-version <version> --ruleset-version <version> [--base-dir <dir>] [--postgres-dsn <dsn>]"
+	case "signup-invite-create":
+		return "arena-service signup-invite-create [--role <operator|participant|developer>] [--ttl <duration>] [--postgres-dsn <dsn>]"
 	default:
-		return "arena-service <submit|run-once|submit-cancel|list|get|read|serve|ranking-get|ranking-recompute|ranking-verify> ..."
+		return "arena-service <submit|run-once|submit-cancel|list|get|read|serve|ranking-get|ranking-recompute|ranking-verify|signup-invite-create> ..."
 	}
 }
 
@@ -204,6 +213,7 @@ type cliApp struct {
 	rankings       *service.RankingService
 	artifactAccess service.ArtifactAccessIssuer
 	persister      service.TerminalPersister
+	auth           *service.AuthService
 	baseDir        string
 	timeout        time.Duration
 	closeFn        func()
@@ -241,36 +251,48 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	if err != nil {
 		return nil, err
 	}
+	closeQueue := true
+	defer func() {
+		if closeQueue {
+			closeFn()
+		}
+	}()
+	auth, authCloseFn, err := newAuthService(postgresDSN)
+	if err != nil {
+		return nil, err
+	}
+	closeAuth := true
+	defer func() {
+		if closeAuth {
+			authCloseFn()
+		}
+	}()
 	commands, err := service.NewCommandService(store, validator)
 	if err != nil {
-		closeFn()
 		return nil, err
 	}
 	runtime, err := newArtifactRuntime(context.Background(), baseDir, artifactRuntime)
 	if err != nil {
-		closeFn()
 		return nil, err
 	}
 	queries, err := service.NewQueryService(store, runtime.reader)
 	if err != nil {
-		closeFn()
 		return nil, err
 	}
 	general, err := service.NewGeneralSubmissionService(baseDir, nil, nil, nil)
 	if err != nil {
-		closeFn()
 		return nil, err
 	}
 	requests, err := service.NewMatchRequestService(general, commands, store, nil)
 	if err != nil {
-		closeFn()
 		return nil, err
 	}
 	rankings, err := service.NewRankingService(runtime.rankingStore, store, runtime.reader)
 	if err != nil {
-		closeFn()
 		return nil, err
 	}
+	closeQueue = false
+	closeAuth = false
 	return &cliApp{
 		commands:       commands,
 		queries:        queries,
@@ -281,9 +303,13 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		rankings:       rankings,
 		artifactAccess: runtime.artifactAccess,
 		persister:      runtime.persister,
+		auth:           auth,
 		baseDir:        baseDir,
 		timeout:        matchTimeout,
-		closeFn:        closeFn,
+		closeFn: func() {
+			authCloseFn()
+			closeFn()
+		},
 	}, nil
 }
 
@@ -297,6 +323,36 @@ func newQueueStore(postgresDSN string) (service.QueueStore, func(), error) {
 		return nil, nil, err
 	}
 	return store, store.Close, nil
+}
+
+func newAuthService(postgresDSN string) (*service.AuthService, func(), error) {
+	clientID := strings.TrimSpace(os.Getenv("ARENA_GITHUB_OAUTH_CLIENT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("ARENA_GITHUB_OAUTH_CLIENT_SECRET"))
+	if clientID == "" && clientSecret == "" {
+		return nil, func() {}, nil
+	}
+	if clientID == "" || clientSecret == "" {
+		return nil, nil, fmt.Errorf("ARENA_GITHUB_OAUTH_CLIENT_ID and ARENA_GITHUB_OAUTH_CLIENT_SECRET must be set together")
+	}
+	if strings.TrimSpace(postgresDSN) == "" {
+		return nil, nil, fmt.Errorf("ARENA_SERVICE_POSTGRES_DSN is required when GitHub OAuth is enabled")
+	}
+	store, err := service.NewPostgresAuthStore(context.Background(), postgresDSN)
+	if err != nil {
+		return nil, nil, err
+	}
+	cfg := service.AuthConfig{
+		GitHubClientID:       clientID,
+		GitHubClientSecret:   clientSecret,
+		AllowedReturnOrigins: splitCSV(os.Getenv("ARENA_AUTH_ALLOWED_RETURN_ORIGINS")),
+		CookieSigningSecret:  strings.TrimSpace(os.Getenv("ARENA_AUTH_COOKIE_SIGNING_SECRET")),
+	}
+	auth, err := service.NewAuthService(cfg, store, service.NewDefaultGitHubOAuthClient(clientID, clientSecret))
+	if err != nil {
+		store.Close()
+		return nil, nil, err
+	}
+	return auth, store.Close, nil
 }
 
 func (a *cliApp) close() {
@@ -407,7 +463,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 		baseDir: a.baseDir,
 		opaque:  isOpaqueArtifactBackend(a.persister),
 		next:    presets,
-	}, a.artifactAccess, a.rankings)
+	}, a.artifactAccess, a.auth, a.rankings)
 	if err != nil {
 		return err
 	}
@@ -513,6 +569,36 @@ func resolveBaseDirPath(baseDir, value string) string {
 		return filepath.Clean(value)
 	}
 	return filepath.Join(baseDir, filepath.Clean(value))
+}
+
+func splitCSV(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			values = append(values, trimmed)
+		}
+	}
+	return values
+}
+
+func createSignupInvite(stdout io.Writer, postgresDSN string, role string, ttl time.Duration) error {
+	if strings.TrimSpace(postgresDSN) == "" {
+		return fmt.Errorf("--postgres-dsn or ARENA_SERVICE_POSTGRES_DSN is required")
+	}
+	store, err := service.NewPostgresAuthStore(context.Background(), postgresDSN)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	record, err := store.CreateSignupInvite(context.Background(), role, time.Now().UTC().Add(ttl))
+	if err != nil {
+		return err
+	}
+	return encodeJSON(stdout, record)
 }
 
 func resolveRunIDFlag(runID string, deprecatedSubmissionID string) string {

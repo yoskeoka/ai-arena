@@ -73,6 +73,20 @@ export type MatchDetailResponse = ResultListItem & {
   artifact_access?: Record<string, ArtifactAccessMetadata>;
 };
 
+export type AuthPrincipal = {
+  account_id: string;
+  provider: string;
+  provider_login: string;
+  provider_email?: string;
+  roles: string[];
+};
+
+export type SessionStatusResponse = {
+  auth_mode: "disabled" | "enabled";
+  authenticated: boolean;
+  principal?: AuthPrincipal;
+};
+
 type ListResponse = {
   items: ResultListItem[];
 };
@@ -84,30 +98,66 @@ type EnqueuePayload = {
 export class OperatorApiClient {
   constructor(private readonly baseUrl: string) {}
 
+  async session(signal?: AbortSignal): Promise<SessionStatusResponse> {
+    const response = await fetch(this.url("/auth/session"), {
+      signal,
+      credentials: "include",
+    });
+    return this.decodeJSON<SessionStatusResponse>(response);
+  }
+
   async listActive(signal?: AbortSignal): Promise<ResultListItem[]> {
-    const response = await fetch(this.url("/api/v1/matches/active"), { signal });
+    const response = await fetch(this.url("/api/v1/matches/active"), {
+      signal,
+      credentials: "include",
+    });
     return this.decodeList(response);
   }
 
   async listCompleted(signal?: AbortSignal): Promise<ResultListItem[]> {
-    const response = await fetch(this.url("/api/v1/matches/completed"), { signal });
+    const response = await fetch(this.url("/api/v1/matches/completed"), {
+      signal,
+      credentials: "include",
+    });
     return this.decodeList(response);
   }
 
   async getMatchDetail(runId: string, signal?: AbortSignal): Promise<MatchDetailResponse> {
-    const response = await fetch(this.url(`/api/v1/runs/${encodeURIComponent(runId)}`), { signal });
+    const response = await fetch(this.url(`/api/v1/runs/${encodeURIComponent(runId)}`), {
+      signal,
+      credentials: "include",
+    });
     return this.decodeJSON<MatchDetailResponse>(response);
   }
 
   async enqueuePreset(presetId: string): Promise<ResultListItem> {
     const response = await fetch(this.url("/api/v1/preset-matches"), {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ preset_id: presetId } satisfies EnqueuePayload),
     });
     return this.decodeJSON<ResultListItem>(response);
+  }
+
+  async logout(): Promise<void> {
+    const response = await fetch(this.url("/auth/logout"), {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      throw new Error(`request failed with status ${response.status}`);
+    }
+  }
+
+  githubLoginURL(returnTo: string, inviteToken?: string): string {
+    const params = new URLSearchParams({ return_to: returnTo });
+    if (inviteToken && inviteToken.trim() !== "") {
+      params.set("invite_token", inviteToken.trim());
+    }
+    return `${this.url("/auth/github/login")}?${params.toString()}`;
   }
 
   private async decodeList(response: Response): Promise<ResultListItem[]> {
