@@ -44,8 +44,7 @@ Addresses: `docs/issues/0032-replace-hand-rolled-oauth-oidc-with-supported-libra
   Google login 追加時に provider abstraction、callback state、
   token / claim validation の責務をもう一度剥がす必要がある
 
-### Option B: route contract は GitHub first のまま、backend 内部を
-`oauth2` + optional OIDC verifier の provider boundary に整理する
+### Option B: route contract は GitHub first のまま、backend 内部を `oauth2` + optional OIDC verifier の provider boundary に整理する
 
 - 利点:
   current GitHub behavior を保ちつつ、OIDC provider 追加時の差分を
