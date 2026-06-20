@@ -30,6 +30,9 @@ func NewCoreOIDCIdentityVerifier(verifier *oidc.IDTokenVerifier) CoreOIDCIdentit
 
 // Verify validates the raw ID token and exposes its claims for normalization.
 func (v CoreOIDCIdentityVerifier) Verify(ctx context.Context, rawIDToken string) (OIDCVerifiedClaims, error) {
+	if v.verifier == nil {
+		return nil, fmt.Errorf("service: oidc verifier is required")
+	}
 	return v.verifier.Verify(ctx, strings.TrimSpace(rawIDToken))
 }
 

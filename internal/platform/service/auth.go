@@ -344,6 +344,9 @@ func (a *AuthService) pendingAuth(r *http.Request) (pendingAuth, error) {
 	if err := a.decodeSignedValue(cookie.Value, &pending); err != nil {
 		return pendingAuth{}, err
 	}
+	if strings.TrimSpace(pending.Provider) == "" {
+		pending.Provider = authProviderGitHub
+	}
 	return pending, nil
 }
 

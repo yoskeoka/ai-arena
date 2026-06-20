@@ -43,6 +43,7 @@ func (c *DefaultGitHubAuthProvider) AuthorizationURL(redirectURI string, state s
 
 // ExchangeIdentity exchanges the GitHub authorization code and resolves a normalized identity.
 func (c *DefaultGitHubAuthProvider) ExchangeIdentity(ctx context.Context, code string, redirectURI string) (AuthIdentity, error) {
+	ctx = context.WithValue(ctx, oauth2.HTTPClient, c.client)
 	token, err := c.oauthConfig.Exchange(ctx, strings.TrimSpace(code), oauth2.SetAuthURLParam("redirect_uri", strings.TrimSpace(redirectURI)))
 	if err != nil {
 		return AuthIdentity{}, err

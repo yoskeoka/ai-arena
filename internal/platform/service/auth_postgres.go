@@ -57,7 +57,8 @@ func (s *PostgresAuthStore) Close() {
 
 // ResolveIdentityLogin loads an existing provider-linked principal or claims a signup invite for first login.
 func (s *PostgresAuthStore) ResolveIdentityLogin(ctx context.Context, identity AuthIdentity, inviteToken string, now time.Time) (AuthPrincipal, error) {
-	if strings.TrimSpace(identity.Provider) == "" || strings.TrimSpace(identity.Subject) == "" || strings.TrimSpace(identity.Login) == "" {
+	identity = normalizedAuthIdentity(identity)
+	if identity.Provider == "" || identity.Subject == "" || identity.Login == "" {
 		return AuthPrincipal{}, fmt.Errorf("service: identity provider, subject, and login are required")
 	}
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
@@ -206,6 +207,7 @@ func lookupPrincipalByIdentity(ctx context.Context, db pgxQueryer, provider stri
 }
 
 func createPrincipalFromInvite(ctx context.Context, tx pgx.Tx, identity AuthIdentity, inviteToken string, now time.Time) (string, AuthPrincipal, error) {
+	identity = normalizedAuthIdentity(identity)
 	var role string
 	var claimedAt *time.Time
 	var expiresAt time.Time
@@ -250,6 +252,15 @@ func createPrincipalFromInvite(ctx context.Context, tx pgx.Tx, identity AuthIden
 		ProviderEmail: identity.Email,
 		Roles:         []string{role},
 	}, nil
+}
+
+func normalizedAuthIdentity(identity AuthIdentity) AuthIdentity {
+	return AuthIdentity{
+		Provider: strings.TrimSpace(identity.Provider),
+		Subject:  strings.TrimSpace(identity.Subject),
+		Login:    strings.TrimSpace(identity.Login),
+		Email:    strings.TrimSpace(identity.Email),
+	}
 }
 
 func loadRoles(ctx context.Context, db pgxQueryer, accountID string) ([]string, error) {

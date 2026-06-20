@@ -195,13 +195,13 @@ func TestAuthServiceRequireOperatorRejectsAnonymousAndNonOperator(t *testing.T) 
 
 	store := &memoryAuthStore{
 		identities: map[string]AuthPrincipal{
-			"12345": {
+			authIdentityKey(AuthIdentity{Provider: authProviderGitHub, Subject: "12345"}): {
 				AccountID:     "account-operator",
 				Provider:      "github",
 				ProviderLogin: "operator-dev",
 				Roles:         []string{"operator"},
 			},
-			"54321": {
+			authIdentityKey(AuthIdentity{Provider: authProviderGitHub, Subject: "54321"}): {
 				AccountID:     "account-participant",
 				Provider:      "github",
 				ProviderLogin: "participant-dev",
@@ -355,6 +355,10 @@ func (s *memoryAuthStore) ResolveIdentityLogin(_ context.Context, identity AuthI
 	if s.identities == nil {
 		s.identities = map[string]AuthPrincipal{}
 	}
+	identity = normalizedAuthIdentity(identity)
+	if principal, ok := s.identities[authIdentityKey(identity)]; ok {
+		return principal, nil
+	}
 	if principal, ok := s.identities[identity.Subject]; ok {
 		return principal, nil
 	}
@@ -366,7 +370,7 @@ func (s *memoryAuthStore) ResolveIdentityLogin(_ context.Context, identity AuthI
 			ProviderEmail: identity.Email,
 			Roles:         []string{role},
 		}
-		s.identities[identity.Subject] = principal
+		s.identities[authIdentityKey(identity)] = principal
 		delete(s.invites, inviteToken)
 		return principal, nil
 	}
@@ -400,4 +404,8 @@ func (s *memoryAuthStore) GetSession(_ context.Context, sessionToken string, _ t
 func (s *memoryAuthStore) DeleteSession(_ context.Context, sessionToken string) error {
 	delete(s.sessions, sessionToken)
 	return nil
+}
+
+func authIdentityKey(identity AuthIdentity) string {
+	return identity.Provider + ":" + identity.Subject
 }
