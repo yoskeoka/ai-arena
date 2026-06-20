@@ -347,7 +347,7 @@ func newAuthService(postgresDSN string) (*service.AuthService, func(), error) {
 		AllowedReturnOrigins: splitCSV(os.Getenv("ARENA_AUTH_ALLOWED_RETURN_ORIGINS")),
 		CookieSigningSecret:  strings.TrimSpace(os.Getenv("ARENA_AUTH_COOKIE_SIGNING_SECRET")),
 	}
-	auth, err := service.NewAuthService(cfg, store, service.NewDefaultGitHubOAuthClient(clientID, clientSecret))
+	auth, err := service.NewAuthService(cfg, store, service.NewDefaultGitHubAuthProvider(clientID, clientSecret))
 	if err != nil {
 		store.Close()
 		return nil, nil, err
