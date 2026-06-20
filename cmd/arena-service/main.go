@@ -251,47 +251,48 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	if err != nil {
 		return nil, err
 	}
+	closeQueue := true
+	defer func() {
+		if closeQueue {
+			closeFn()
+		}
+	}()
 	auth, authCloseFn, err := newAuthService(postgresDSN)
 	if err != nil {
-		closeFn()
 		return nil, err
 	}
+	closeAuth := true
+	defer func() {
+		if closeAuth {
+			authCloseFn()
+		}
+	}()
 	commands, err := service.NewCommandService(store, validator)
 	if err != nil {
-		closeFn()
-		authCloseFn()
 		return nil, err
 	}
 	runtime, err := newArtifactRuntime(context.Background(), baseDir, artifactRuntime)
 	if err != nil {
-		closeFn()
-		authCloseFn()
 		return nil, err
 	}
 	queries, err := service.NewQueryService(store, runtime.reader)
 	if err != nil {
-		closeFn()
-		authCloseFn()
 		return nil, err
 	}
 	general, err := service.NewGeneralSubmissionService(baseDir, nil, nil, nil)
 	if err != nil {
-		closeFn()
-		authCloseFn()
 		return nil, err
 	}
 	requests, err := service.NewMatchRequestService(general, commands, store, nil)
 	if err != nil {
-		closeFn()
-		authCloseFn()
 		return nil, err
 	}
 	rankings, err := service.NewRankingService(runtime.rankingStore, store, runtime.reader)
 	if err != nil {
-		closeFn()
-		authCloseFn()
 		return nil, err
 	}
+	closeQueue = false
+	closeAuth = false
 	return &cliApp{
 		commands:       commands,
 		queries:        queries,
