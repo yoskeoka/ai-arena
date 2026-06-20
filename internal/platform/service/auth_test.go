@@ -93,6 +93,65 @@ func TestAuthServiceGitHubLoginCallbackAndSessionStatus(t *testing.T) {
 	}
 }
 
+func TestAuthServiceGitHubCallbackStateMismatchRedirectsToLoginAndClearsPendingCookie(t *testing.T) {
+	t.Parallel()
+
+	auth, err := NewAuthService(AuthConfig{
+		GitHubClientID:       "client-id",
+		GitHubClientSecret:   "client-secret",
+		AllowedReturnOrigins: []string{"http://localhost:4173"},
+	}, &memoryAuthStore{}, fakeGitHubOAuthClient{})
+	if err != nil {
+		t.Fatalf("NewAuthService() error = %v", err)
+	}
+
+	loginReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/auth/github/login?return_to=http://localhost:4173/operator&invite_token=invite-1", nil)
+	loginResp := httptest.NewRecorder()
+	auth.GitHubLogin(loginResp, loginReq)
+	if loginResp.Code != http.StatusFound {
+		t.Fatalf("GitHubLogin status = %d, want %d", loginResp.Code, http.StatusFound)
+	}
+	pendingCookie := loginResp.Result().Cookies()[0]
+
+	callbackReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/auth/github/callback?code=code-1&state=wrong-state", nil)
+	callbackReq.AddCookie(pendingCookie)
+	callbackResp := httptest.NewRecorder()
+	auth.GitHubCallback(callbackResp, callbackReq)
+	if callbackResp.Code != http.StatusFound {
+		t.Fatalf("GitHubCallback status = %d, want %d", callbackResp.Code, http.StatusFound)
+	}
+	redirectURL, err := url.Parse(callbackResp.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("Parse(state mismatch redirect) error = %v", err)
+	}
+	if got := redirectURL.Scheme + "://" + redirectURL.Host + redirectURL.Path; got != "http://localhost:4173/login" {
+		t.Fatalf("state mismatch redirect path = %q, want login route", got)
+	}
+	if got := redirectURL.Query().Get("return_to"); got != "http://localhost:4173/operator" {
+		t.Fatalf("state mismatch return_to = %q, want operator route", got)
+	}
+	if got := redirectURL.Query().Get("invite_token"); got != "invite-1" {
+		t.Fatalf("state mismatch invite_token = %q, want invite-1", got)
+	}
+	if got := redirectURL.Query().Get("error"); got != "oauth_state_mismatch" {
+		t.Fatalf("state mismatch error = %q, want oauth_state_mismatch", got)
+	}
+
+	var clearedPendingCookie *http.Cookie
+	for _, cookie := range callbackResp.Result().Cookies() {
+		if cookie.Name == pendingAuthCookieName {
+			clearedPendingCookie = cookie
+			break
+		}
+	}
+	if clearedPendingCookie == nil {
+		t.Fatal("cleared pending cookie = nil, want cookie clearing on state mismatch")
+	}
+	if clearedPendingCookie.MaxAge != -1 {
+		t.Fatalf("cleared pending cookie MaxAge = %d, want -1", clearedPendingCookie.MaxAge)
+	}
+}
+
 func TestAuthServiceRequireOperatorRejectsAnonymousAndNonOperator(t *testing.T) {
 	t.Parallel()
 

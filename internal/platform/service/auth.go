@@ -224,7 +224,7 @@ func (a *AuthService) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	queryState := strings.TrimSpace(r.URL.Query().Get("state"))
 	if queryState == "" || !hmac.Equal([]byte(queryState), []byte(pending.StateNonce)) {
 		a.clearCookie(w, r, pendingAuthCookieName)
-		writeError(w, http.StatusBadRequest, fmt.Errorf("oauth state mismatch"))
+		a.redirectLoginError(w, r, pending.ReturnTo, pending.InviteToken, "oauth_state_mismatch")
 		return
 	}
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
