@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -90,6 +92,16 @@ func TestDefaultArtifactReaderSupportsS3Locator(t *testing.T) {
 	}
 }
 
+func TestS3ArtifactStoreReadLocatorMissingObjectReturnsNotExist(t *testing.T) {
+	store, shutdown := newTestS3ArtifactStore(t)
+	defer shutdown()
+
+	_, err := store.ReadLocator(context.Background(), "s3://ai-arena-local/matches/missing/result-summary.json")
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("ReadLocator() error = %v, want os.ErrNotExist", err)
+	}
+}
+
 func newTestS3ArtifactStore(t *testing.T) (*S3ArtifactStore, func()) {
 	t.Helper()
 
@@ -114,7 +126,9 @@ func newTestS3ArtifactStore(t *testing.T) (*S3ArtifactStore, func()) {
 			body, ok := objects[key]
 			mu.Unlock()
 			if !ok {
-				http.NotFound(w, r)
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`<Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message></Error>`))
 				return
 			}
 			w.WriteHeader(http.StatusOK)
