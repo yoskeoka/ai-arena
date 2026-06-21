@@ -167,8 +167,7 @@ manual local auth lane の起動は `DEVELOPMENT.md` の `make start-backend-loc
 - manual local auth check では frontend も `http://localhost:5173` を使い、
   `127.0.0.1` と混在させない
 - first operator signup 用の invite token が必要なら、
-  `make local-invite-url` を正本にし、`make local-dummy-fixture` は legacy alias として残してよい。
-  あるいは
+  repo helper command または
   `./app signup-invite-create --role operator` /
   `go run ./cmd/arena-service signup-invite-create --role operator`
   を backend と同じ Postgres DSN で実行して発行してよい

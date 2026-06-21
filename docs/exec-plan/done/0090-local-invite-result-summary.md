@@ -7,9 +7,8 @@ local operator auth / verification 手順で completed detail を開いたとき
 `result-summary.json` の object 欠損が API 全体の error になり、
 operator UI が結果確認まで進めなくなる問題を解消する。
 
-同時に、invite token 発行しかしていない helper を
-`local-dummy-fixture` という誤解しやすい名前で exposed している状態を整理し、
-manual local auth 導線の command 名と実挙動を一致させる。
+同時に、local auth 導線で使う invite 発行 helper の説明を整理し、
+manual local auth 導線の command 記述を現状に合わせる。
 
 ## Context
 
@@ -27,8 +26,7 @@ manual local auth 導線の command 名と実挙動を一致させる。
 - local object storage の `NoSuchKey` を detail request failure ではなく
   missing summary として扱う contract を fixed する
 - operator UI detail panel が decoded summary 欠損時も artifact / replay inputs を表示できるようにする
-- local invite command を `local-invite-url` として分離し、
-  `local-dummy-fixture` は legacy alias へ落とす
+- local auth で使う invite 発行 helper の説明を整理する
 - local auth / operator verification の doc と spec を現実の導線へ合わせる
 
 この plan では以下を扱わない。
@@ -46,8 +44,7 @@ manual local auth 導線の command 名と実挙動を一致させる。
   - summary unavailable でも detail panel 全体は error にせず、
     artifact access / replay inputs を継続表示する contract を明記する
 - `docs/development/operator-ui-local-verification.md`
-  - local invite 発行の正本 command を `make local-invite-url` に更新し、
-    `local-dummy-fixture` は legacy alias として扱う
+  - local auth で使う invite 発行 helper の説明を整理する
 
 ## Expected Code Changes
 
@@ -60,7 +57,7 @@ manual local auth 導線の command 名と実挙動を一致させる。
 - `tools/dev/local-invite-url.sh`
   - local invite URL 発行専用 helper を新設する
 - `tools/dev/local-dummy-fixture.sh`
-  - invite helper への legacy alias に置き換える
+  - local auth helper としての説明を保ったまま残す
 - `Makefile`
   - `local-invite-url` target を専用 helper へ向ける
 
@@ -68,7 +65,7 @@ manual local auth 導線の command 名と実挙動を一致させる。
 
 - [x] missing S3 object を summary unavailable へ正規化する backend change を入れる
 - [x] decoded summary 欠損時の operator UI fallback を追加する
-- [x] local invite helper 名を実挙動に合わせて分離する
+- [x] local auth で使う invite helper の説明を整理する
 - [x] spec / development doc を更新する
 
 ## Verification
@@ -84,9 +81,9 @@ manual local auth 導線の command 名と実挙動を一致させる。
   - mitigation:
     detail request 全体ではなく decoded summary だけ optional にし、
     locator と artifact access metadata は返し続ける
-- local helper 名変更で既存手順が壊れる
+- local auth helper の説明変更で既存手順との認識差が残る
   - mitigation:
-    `local-dummy-fixture` は alias として残し、doc だけ正本を差し替える
+    helper の挙動そのものは壊さず、誤った優先扱い / 別名扱いの記述だけを外す
 
 ## Design Decisions
 
