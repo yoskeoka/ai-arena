@@ -1,5 +1,5 @@
 # local-invite-result-summary
-**Execution**: Use `/execute-task` to implement this plan.
+**実行**: `/execute-task` でこの plan を実装する。
 
 ## Objective
 

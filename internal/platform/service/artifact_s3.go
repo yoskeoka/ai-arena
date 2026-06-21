@@ -102,7 +102,7 @@ func (s *S3ArtifactStore) ReadLocator(ctx context.Context, locator string) ([]by
 	if err != nil {
 		var apiErr smithy.APIError
 		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NoSuchKey" {
-			return nil, os.ErrNotExist
+			return nil, fmt.Errorf("service: get artifact object %s: %w", locator, os.ErrNotExist)
 		}
 		return nil, fmt.Errorf("service: get artifact object %s: %w", locator, err)
 	}
