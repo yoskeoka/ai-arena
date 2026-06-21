@@ -327,6 +327,7 @@ func newQueueStore(postgresDSN string) (service.QueueStore, func(), error) {
 }
 
 func newAuthService(postgresDSN string) (*service.AuthService, func(), error) {
+	ensureGitHubOAuthProviderEnv(os.Getenv("PORT"))
 	clientID := strings.TrimSpace(os.Getenv("ARENA_GITHUB_OAUTH_CLIENT_ID"))
 	clientSecret := strings.TrimSpace(os.Getenv("ARENA_GITHUB_OAUTH_CLIENT_SECRET"))
 	if clientID == "" && clientSecret == "" {
@@ -352,7 +353,12 @@ func newAuthService(postgresDSN string) (*service.AuthService, func(), error) {
 		AllowedReturnOrigins: splitCSV(os.Getenv("ARENA_AUTH_ALLOWED_RETURN_ORIGINS")),
 		CookieSigningSecret:  strings.TrimSpace(os.Getenv("ARENA_AUTH_COOKIE_SIGNING_SECRET")),
 	}
-	auth, err := service.NewAuthService(cfg, store, githubAuthProviderFromEnv(clientID, clientSecret))
+	provider, err := githubAuthProviderFromEnv(clientID, clientSecret)
+	if err != nil {
+		store.Close()
+		return nil, nil, err
+	}
+	auth, err := service.NewAuthService(cfg, store, provider)
 	if err != nil {
 		store.Close()
 		return nil, nil, err
@@ -360,7 +366,7 @@ func newAuthService(postgresDSN string) (*service.AuthService, func(), error) {
 	return auth, store.Close, nil
 }
 
-func githubAuthProviderFromEnv(clientID string, clientSecret string) service.OAuthIdentityProvider {
+func githubAuthProviderFromEnv(clientID string, clientSecret string) (service.OAuthIdentityProvider, error) {
 	return service.NewGitHubAuthProvider(service.GitHubAuthProviderConfig{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,

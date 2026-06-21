@@ -40,13 +40,16 @@ func TestGitHubAuthProviderUsesConfiguredEndpoints(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	provider := NewGitHubAuthProvider(GitHubAuthProviderConfig{
+	provider, err := NewGitHubAuthProvider(GitHubAuthProviderConfig{
 		ClientID:     "client-id",
 		ClientSecret: "client-secret",
 		AuthURL:      server.URL + "/oauth/authorize",
 		TokenURL:     server.URL + "/oauth/token",
 		UserURL:      server.URL + "/api/user",
 	})
+	if err != nil {
+		t.Fatalf("NewGitHubAuthProvider() error = %v", err)
+	}
 
 	redirectURL := provider.AuthorizationURL("http://127.0.0.1:10000/auth/github/callback", "state-1")
 	parsedRedirect, err := url.Parse(redirectURL)

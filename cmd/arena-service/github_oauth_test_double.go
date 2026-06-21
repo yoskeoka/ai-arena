@@ -17,7 +17,7 @@ const (
 	githubOAuthUserPath      = "/_internal/test-auth/github/user"
 )
 
-func withGitHubOAuthTestDouble(next http.Handler, listenAddr string) http.Handler {
+func withGitHubOAuthTestDouble(next http.Handler, _ string) http.Handler {
 	if strings.TrimSpace(os.Getenv(githubOAuthTestDoubleEnv)) == "" {
 		return next
 	}
@@ -26,23 +26,23 @@ func withGitHubOAuthTestDouble(next http.Handler, listenAddr string) http.Handle
 	mux.HandleFunc(githubOAuthTokenPath, handleGitHubOAuthToken)
 	mux.HandleFunc(githubOAuthUserPath, handleGitHubOAuthUser)
 	mux.Handle("/", next)
-	ensureGitHubOAuthProviderEnv(listenAddr)
 	return mux
 }
 
-func ensureGitHubOAuthProviderEnv(listenAddr string) {
-	baseURL := absoluteLocalURL(listenAddr)
+func ensureGitHubOAuthProviderEnv(rawPort string) {
+	baseURL := absoluteLocalURL(rawPort)
 	setenvDefault("ARENA_AUTH_GITHUB_PROVIDER_AUTH_URL", baseURL+githubOAuthAuthorizePath)
 	setenvDefault("ARENA_AUTH_GITHUB_PROVIDER_TOKEN_URL", baseURL+githubOAuthTokenPath)
 	setenvDefault("ARENA_AUTH_GITHUB_PROVIDER_USER_URL", baseURL+githubOAuthUserPath)
 }
 
-func absoluteLocalURL(listenAddr string) string {
-	trimmed := strings.TrimSpace(listenAddr)
-	if strings.HasPrefix(trimmed, ":") {
-		return "http://127.0.0.1" + trimmed
+func absoluteLocalURL(rawPort string) string {
+	trimmed := strings.TrimSpace(rawPort)
+	if trimmed == "" {
+		trimmed = "10000"
 	}
-	return "http://" + trimmed
+	trimmed = strings.TrimPrefix(trimmed, ":")
+	return "http://127.0.0.1:" + trimmed
 }
 
 func setenvDefault(key string, value string) {

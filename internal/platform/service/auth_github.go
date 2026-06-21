@@ -30,7 +30,7 @@ type GitHubAuthProviderConfig struct {
 }
 
 // NewGitHubAuthProvider constructs a GitHub auth provider from the supplied config.
-func NewGitHubAuthProvider(cfg GitHubAuthProviderConfig) *DefaultGitHubAuthProvider {
+func NewGitHubAuthProvider(cfg GitHubAuthProviderConfig) (*DefaultGitHubAuthProvider, error) {
 	client := cfg.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
@@ -48,9 +48,18 @@ func NewGitHubAuthProvider(cfg GitHubAuthProviderConfig) *DefaultGitHubAuthProvi
 	if userURL == "" {
 		userURL = "https://api.github.com/user"
 	}
-	authURL = mustProviderEndpointURL(authURL)
-	tokenURL = mustProviderEndpointURL(tokenURL)
-	userURL = mustProviderEndpointURL(userURL)
+	authURL, err := validatedProviderEndpointURL(authURL)
+	if err != nil {
+		return nil, err
+	}
+	tokenURL, err = validatedProviderEndpointURL(tokenURL)
+	if err != nil {
+		return nil, err
+	}
+	userURL, err = validatedProviderEndpointURL(userURL)
+	if err != nil {
+		return nil, err
+	}
 	return &DefaultGitHubAuthProvider{
 		client: client,
 		oauthConfig: &oauth2.Config{
@@ -64,15 +73,19 @@ func NewGitHubAuthProvider(cfg GitHubAuthProviderConfig) *DefaultGitHubAuthProvi
 			Scopes: []string{"read:user"},
 		},
 		userURL: userURL,
-	}
+	}, nil
 }
 
 // NewDefaultGitHubAuthProvider constructs the default GitHub auth provider.
 func NewDefaultGitHubAuthProvider(clientID string, clientSecret string) *DefaultGitHubAuthProvider {
-	return NewGitHubAuthProvider(GitHubAuthProviderConfig{
+	provider, err := NewGitHubAuthProvider(GitHubAuthProviderConfig{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 	})
+	if err != nil {
+		panic(err)
+	}
+	return provider
 }
 
 // AuthorizationURL builds the GitHub authorization URL for the current login attempt.
@@ -135,19 +148,19 @@ func (c *DefaultGitHubAuthProvider) fetchUser(ctx context.Context, accessToken s
 	}, nil
 }
 
-func mustProviderEndpointURL(raw string) string {
+func validatedProviderEndpointURL(raw string) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		panic(fmt.Sprintf("invalid GitHub auth provider endpoint %q", raw))
+		return "", fmt.Errorf("invalid GitHub auth provider endpoint %q", raw)
 	}
 	switch parsed.Scheme {
 	case "https":
-		return parsed.String()
+		return parsed.String(), nil
 	case "http":
 		host := parsed.Hostname()
 		if host == "localhost" || host == "127.0.0.1" {
-			return parsed.String()
+			return parsed.String(), nil
 		}
 	}
-	panic(fmt.Sprintf("unsupported GitHub auth provider endpoint %q", raw))
+	return "", fmt.Errorf("unsupported GitHub auth provider endpoint %q", raw)
 }

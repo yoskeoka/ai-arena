@@ -5,7 +5,7 @@ const artifactDir = process.env.OPERATOR_UI_ARTIFACT_DIR ?? "./test-results";
 const reportDir = process.env.OPERATOR_UI_REPORT_DIR ?? "./playwright-report";
 const backendPort = process.env.OPERATOR_UI_BACKEND_PORT ?? "10000";
 const frontendPort = process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173";
-const frontendHost = process.env.OPERATOR_UI_FRONTEND_HOST ?? (process.env.OPERATOR_UI_TEST_AUTH === "1" ? "localhost" : "127.0.0.1");
+const frontendHost = process.env.OPERATOR_UI_FRONTEND_HOST ?? "127.0.0.1";
 const browserChannel = testScenario === "ci" ? process.env.OPERATOR_UI_BROWSER_CHANNEL ?? "chrome" : undefined;
 const usesFixtureBackend = testScenario === "local";
 const usesManagedBackend = !usesFixtureBackend;
