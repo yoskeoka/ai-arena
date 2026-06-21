@@ -72,6 +72,11 @@ Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
   - local / CI only-visible な OIDC login hand を持つ
   - fixed tester account による multi-user verification を第一目的とする
   - public default では見せない
+- local/CI mock OIDC provider の実装基盤は
+  `https://github.com/luikyv/go-oidc` で固定する
+  - repo-owned minimal provider を hand-rolled で組むのではなく、
+    OIDC server library の上に fixed tester account / fixed password の
+    minimal login surface を載せる
 - Option B の価値は secondary benefit として残す
   - future Google login / OIDC seam の regression lane に流用してよい
   - ただし primary objective は local/CI の multi-user auth seam とする
@@ -98,6 +103,7 @@ Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
   - OIDC-capable provider seam と local/CI-only provider contract を追記する
   - local provider visibility の条件
     (`local/CI only`、public default hidden など) を明記する
+  - local/CI mock OIDC provider は `luikyv/go-oidc` ベースで構築する方針を明記する
 - `docs/specs/platform-service-operator-ui.md`
   - browser verification lane に
     `local OIDC auth lane` を追加する
@@ -117,6 +123,7 @@ Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
   - token
   - jwks
   - user login form
+  - `luikyv/go-oidc` の provider/server 構成
 - backend auth route / provider config
   - local OIDC provider descriptor
   - callback handling
@@ -134,6 +141,7 @@ Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
 - [ ] local/CI-only OIDC provider の positioning を
   `local/CI only-visible login hand` として固定する
 - [ ] minimal provider feature set を固定する
+- [ ] `luikyv/go-oidc` 上で必要な provider/server 構成と login surface を整理する
 - [ ] tester account / password bootstrap を決める
 - [ ] multi-user tester switching contract を決める
 - [ ] backend 側の OIDC route / verifier / claim mapping を定義する
@@ -170,6 +178,7 @@ Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
     `tester01`, `tester02` の identity 差分と切り替え手順を最初から contract に含める
 - generic OIDC provider を作り込みすぎると current issue より大きい auth project になる
   - mitigation:
+    `luikyv/go-oidc` を使いつつも、
     fixed tester account、fixed password、minimal OIDC endpoints に限定する
 - Google login regression lane と local-only login hand の目的が混ざる
   - mitigation:
@@ -178,6 +187,7 @@ Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
 ## Design Decisions
 
 - generic local auth provider を持つなら OIDC の方が自然という判断を採る
+- local/CI mock OIDC provider の server library は `luikyv/go-oidc` で固定する
 - provider 機能は browser automation 通過に必要な最小面へ絞る
 - local verification の multi-user seam を first-class requirement として扱う
 - product login hand と regression lane の位置づけを曖昧にしたまま実装を始めない
