@@ -74,6 +74,13 @@ local browser verification は、少なくとも次の acceptance surface を同
 - completed matches panel が visible で、`completed|failed|canceled` item を 0 件以上表示できる
 - completed detail panel が visible で、selected submission の `result_summary` と artifact access entry を表示できる
 
+auth-enabled GitHub regression lane では、
+上記 operator surface に到達する前段として次も acceptance surface に含めなければならない。
+
+- `/login` page の heading と GitHub login CTA
+- provider authorize form の submit action
+- callback 完了後の authenticated principal 表示
+
 browser verification lane は少なくとも次の 3 系統で同じ acceptance surface を共有しなければならない。
 
 - fixture local regression lane:
@@ -84,10 +91,29 @@ browser verification lane は少なくとも次の 3 系統で同じ acceptance 
 - dedicated CI browser lane:
   actual operator API request により preset queue から started/completed state を作り、
   同じ panel / detail / artifact observation surface を継続検証する lane
+- auth-enabled GitHub regression lane:
+  auth-enabled backend と repo-owned provider test double を使い、
+  `/login -> /auth/github/login -> provider form -> callback -> session cookie -> /operator`
+  を通したうえで同じ operator surface を確認する lane
 
 dedicated CI browser lane は、browser runtime を repo checkout 外の
 pinned Playwright 公式 image へ載せてもよい。
 ただし image version は repo が使う `@playwright/test` version と一致しなければならない。
+
+auth-enabled GitHub regression lane は、
+current public login hand の regression capture を目的とする。
+
+- login page の `Continue with GitHub` から provider authorize form へ進めること
+- fixed tester account で login 完了後、
+  backend callback が session cookie を発行すること
+- callback 後に browser が `/operator` へ戻り、
+  protected panel surface を表示できること
+- `GET /auth/session` が authenticated principal を返すこと
+- logout 後は `/login` へ戻り、
+  protected route が再度 session を要求すること
+
+この lane は product login hand を増やすものではない。
+provider test double は local / CI verification seam に限ってよい。
 
 初期表示では completed matches panel の先頭 item を自動選択してよい。
 completed item がない場合は、detail panel は empty state を表示してよい。

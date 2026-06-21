@@ -208,6 +208,28 @@ provider 固有 subject や login name は `account` に混ぜず、
 - auth env が未注入の lightweight fixture lane では、
   login flow を前提にしない verification を維持してよい
 
+## Browser Verification Seam
+
+- current public login hand は GitHub login first のまま維持しなければならない
+  - `/auth/github/login`
+  - provider authorize
+  - `/auth/github/callback`
+  - backend session cookie
+- local / CI の auth regression lane では、
+  public route を変えずに provider upstream だけ repo-owned test double へ切り替えてよい
+- この seam は verification 専用であり、
+  product に local 専用 login provider や別 public login button を増やしてはならない
+- provider test double は次の最小 contract だけを持てばよい
+  - browser が到達する authorize form
+  - backend が呼ぶ token exchange endpoint
+  - backend が呼ぶ identity/profile endpoint
+- auth regression lane の canonical seed は
+  first signup invite 常用ではなく、
+  backend 起動時に用意される fixed tester account とする
+  - first signup invite flow は別 verification scenario として分離してよい
+- auth regression lane を起動する entrypoint は、
+  auth table 未作成で詰まらないよう schema apply bootstrap を明示的に担わなければならない
+
 ## Deferred Follow-Ups
 
 - Google login

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -15,23 +16,63 @@ import (
 type DefaultGitHubAuthProvider struct {
 	client      *http.Client
 	oauthConfig *oauth2.Config
+	userURL     string
+}
+
+// GitHubAuthProviderConfig configures the GitHub OAuth transport and user lookup endpoints.
+type GitHubAuthProviderConfig struct {
+	ClientID     string
+	ClientSecret string
+	AuthURL      string
+	TokenURL     string
+	UserURL      string
+	HTTPClient   *http.Client
+}
+
+// NewGitHubAuthProvider constructs a GitHub auth provider from the supplied config.
+func NewGitHubAuthProvider(cfg GitHubAuthProviderConfig) *DefaultGitHubAuthProvider {
+	client := cfg.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	authURL := strings.TrimSpace(cfg.AuthURL)
+	if authURL == "" {
+		authURL = "https://github.com/login/oauth/authorize"
+	}
+	tokenURL := strings.TrimSpace(cfg.TokenURL)
+	if tokenURL == "" {
+		// #nosec G101 -- OAuth endpoint URLs are public protocol constants, not embedded secrets.
+		tokenURL = "https://github.com/login/oauth/access_token"
+	}
+	userURL := strings.TrimSpace(cfg.UserURL)
+	if userURL == "" {
+		userURL = "https://api.github.com/user"
+	}
+	authURL = mustProviderEndpointURL(authURL)
+	tokenURL = mustProviderEndpointURL(tokenURL)
+	userURL = mustProviderEndpointURL(userURL)
+	return &DefaultGitHubAuthProvider{
+		client: client,
+		oauthConfig: &oauth2.Config{
+			ClientID:     strings.TrimSpace(cfg.ClientID),
+			ClientSecret: strings.TrimSpace(cfg.ClientSecret),
+			// #nosec G101 -- OAuth endpoint URLs are public protocol constants, not embedded secrets.
+			Endpoint: oauth2.Endpoint{
+				AuthURL:  authURL,
+				TokenURL: tokenURL,
+			},
+			Scopes: []string{"read:user"},
+		},
+		userURL: userURL,
+	}
 }
 
 // NewDefaultGitHubAuthProvider constructs the default GitHub auth provider.
 func NewDefaultGitHubAuthProvider(clientID string, clientSecret string) *DefaultGitHubAuthProvider {
-	return &DefaultGitHubAuthProvider{
-		client: &http.Client{Timeout: 10 * time.Second},
-		oauthConfig: &oauth2.Config{
-			ClientID:     strings.TrimSpace(clientID),
-			ClientSecret: strings.TrimSpace(clientSecret),
-			// #nosec G101 -- OAuth endpoint URLs are public protocol constants, not embedded secrets.
-			Endpoint: oauth2.Endpoint{
-				AuthURL:  "https://github.com/login/oauth/authorize",
-				TokenURL: "https://github.com/login/oauth/access_token",
-			},
-			Scopes: []string{"read:user"},
-		},
-	}
+	return NewGitHubAuthProvider(GitHubAuthProviderConfig{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+	})
 }
 
 // AuthorizationURL builds the GitHub authorization URL for the current login attempt.
@@ -59,12 +100,14 @@ func (c *DefaultGitHubAuthProvider) ExchangeIdentity(ctx context.Context, code s
 }
 
 func (c *DefaultGitHubAuthProvider) fetchUser(ctx context.Context, accessToken string) (AuthIdentity, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user", nil)
+	// #nosec G704 -- the provider endpoint is validated by mustProviderEndpointURL and limited to GitHub HTTPS or localhost test doubles.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.userURL, nil)
 	if err != nil {
 		return AuthIdentity{}, err
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+	// #nosec G704 -- the provider endpoint is validated by mustProviderEndpointURL and limited to GitHub HTTPS or localhost test doubles.
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return AuthIdentity{}, err
@@ -90,4 +133,21 @@ func (c *DefaultGitHubAuthProvider) fetchUser(ctx context.Context, accessToken s
 		Login:    body.Login,
 		Email:    body.Email,
 	}, nil
+}
+
+func mustProviderEndpointURL(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		panic(fmt.Sprintf("invalid GitHub auth provider endpoint %q", raw))
+	}
+	switch parsed.Scheme {
+	case "https":
+		return parsed.String()
+	case "http":
+		host := parsed.Hostname()
+		if host == "localhost" || host == "127.0.0.1" {
+			return parsed.String()
+		}
+	}
+	panic(fmt.Sprintf("unsupported GitHub auth provider endpoint %q", raw))
 }

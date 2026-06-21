@@ -3,7 +3,7 @@
 
 ## Objective
 
-`docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
+`docs/issues/done/0030-operator-ui-playwright-auth-coverage-gap.md`
 のうち、current GitHub login を本命 auth hand としたまま
 `/auth/github/login -> provider authorize -> callback -> session cookie -> /operator`
 の browser flow を repo-owned Playwright lane で回帰確認できるようにする。
@@ -12,7 +12,7 @@
 local / CI verification のために GitHub OAuth provider 相当の test double を持ち込み、
 current public route と backend callback / session contract の回帰を主目的とする。
 
-Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
+Addresses: `docs/issues/done/0030-operator-ui-playwright-auth-coverage-gap.md`
 
 ## Context
 
@@ -117,7 +117,7 @@ Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
 
 - depends on: `docs/specs/platform-product-auth.md`
 - depends on: `docs/specs/platform-service-operator-ui.md`
-- depends on: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
+- depends on: `docs/issues/done/0030-operator-ui-playwright-auth-coverage-gap.md`
 - depends on: `docs/exec-plan/done/0089-oauth-library-adoption.md`
 
 ## Verification
