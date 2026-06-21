@@ -49,7 +49,7 @@ Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
 - ただし product login hand は増やさず、
   test double は local / CI verification seam に限定する
 - generic local provider 追加は sibling plan
-  `0091-operator-ui-auth-playwright-local-oidc-provider.md` で別に扱う
+  `0092-operator-ui-auth-playwright-local-oidc-provider.md` で別に扱う
 
 ## Scope
 
