@@ -160,6 +160,9 @@ browser reload または subsequent polling により completed row / detail 表
 
 detail panel は `result-summary` を primary observation entry とし、
 残りの artifact は secondary access として表示する。
+`result_summary_path` があるのに decoded `result_summary` が取得できない場合でも、
+detail panel 全体を error にせず、
+summary unavailable state と残りの artifact access / replay input を表示できなければならない。
 
 artifact access entry は少なくとも次を表示してよい:
 

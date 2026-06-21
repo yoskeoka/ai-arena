@@ -55,7 +55,7 @@ local-dummy-fixture:
 	./tools/dev/local-dummy-fixture.sh
 
 local-invite-url:
-	./tools/dev/local-dummy-fixture.sh
+	./tools/dev/local-invite-url.sh
 
 test:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
