@@ -129,6 +129,10 @@ minimal operator UI は detail response を受けた時点で、
 残りの artifact access は secondary action として表示してよい。
 local の S3-compatible verification lane でも、
 同じ detail contract を使って stable locator と delegated download URL を確認してよい。
+`result_summary_path` が残っていても object backend 側に対象 object が存在しない場合、
+detail view は locator と artifact access metadata を返し続けつつ、
+decoded `result_summary` だけを欠落扱いにしてよい。
+この欠落は detail request 全体の failure にしてはならない。
 
 ## Artifact Read Contract
 

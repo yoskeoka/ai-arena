@@ -3,10 +3,12 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 )
 
 const defaultArtifactPresignTTL = 5 * time.Minute
@@ -97,6 +100,10 @@ func (s *S3ArtifactStore) ReadLocator(ctx context.Context, locator string) ([]by
 		Key:    aws.String(key),
 	})
 	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NoSuchKey" {
+			return nil, os.ErrNotExist
+		}
 		return nil, fmt.Errorf("service: get artifact object %s: %w", locator, err)
 	}
 	defer resp.Body.Close()

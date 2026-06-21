@@ -70,7 +70,10 @@ export function CompletedDetailPanel({
                   </div>
                 </div>
               ) : (
-                <p className="mt-3 text-sm text-black/60">No decoded result summary available.</p>
+                <div className="mt-3 space-y-2 text-sm text-black/60">
+                  <p>No decoded result summary available.</p>
+                  <p>Use the artifact entries below to inspect the persisted locator directly.</p>
+                </div>
               )}
             </section>
 
