@@ -17,11 +17,12 @@ func TestAuthServiceGitHubLoginCallbackAndSessionStatus(t *testing.T) {
 	store := &memoryAuthStore{
 		invites: map[string]string{"invite-1": "operator"},
 	}
-	github := fakeGitHubOAuthClient{
-		profile: GitHubUserProfile{
-			Subject: "12345",
-			Login:   "arena-dev",
-			Email:   "arena-dev@example.com",
+	github := fakeGitHubAuthProvider{
+		identity: AuthIdentity{
+			Provider: authProviderGitHub,
+			Subject:  "12345",
+			Login:    "arena-dev",
+			Email:    "arena-dev@example.com",
 		},
 	}
 	auth, err := NewAuthService(AuthConfig{
@@ -100,7 +101,7 @@ func TestAuthServiceGitHubCallbackStateMismatchRedirectsToLoginAndClearsPendingC
 		GitHubClientID:       "client-id",
 		GitHubClientSecret:   "client-secret",
 		AllowedReturnOrigins: []string{"http://localhost:4173"},
-	}, &memoryAuthStore{}, fakeGitHubOAuthClient{})
+	}, &memoryAuthStore{}, fakeGitHubAuthProvider{})
 	if err != nil {
 		t.Fatalf("NewAuthService() error = %v", err)
 	}
@@ -152,18 +153,55 @@ func TestAuthServiceGitHubCallbackStateMismatchRedirectsToLoginAndClearsPendingC
 	}
 }
 
+func TestAuthServiceGitHubCallbackProfileLookupFailureRedirectsWithExistingErrorCode(t *testing.T) {
+	t.Parallel()
+
+	auth, err := NewAuthService(AuthConfig{
+		GitHubClientID:       "client-id",
+		GitHubClientSecret:   "client-secret",
+		AllowedReturnOrigins: []string{"http://localhost:4173"},
+	}, &memoryAuthStore{}, fakeGitHubAuthProvider{exchangeErr: ErrIdentityLookupFailed})
+	if err != nil {
+		t.Fatalf("NewAuthService() error = %v", err)
+	}
+
+	loginReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/auth/github/login?return_to=http://localhost:4173/operator", nil)
+	loginResp := httptest.NewRecorder()
+	auth.GitHubLogin(loginResp, loginReq)
+	pendingCookie := loginResp.Result().Cookies()[0]
+	redirectURL, err := url.Parse(loginResp.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("Parse(login redirect) error = %v", err)
+	}
+
+	callbackReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:10000/auth/github/callback?code=code-1&state="+redirectURL.Query().Get("state"), nil)
+	callbackReq.AddCookie(pendingCookie)
+	callbackResp := httptest.NewRecorder()
+	auth.GitHubCallback(callbackResp, callbackReq)
+	if callbackResp.Code != http.StatusFound {
+		t.Fatalf("GitHubCallback status = %d, want %d", callbackResp.Code, http.StatusFound)
+	}
+	got, err := url.Parse(callbackResp.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("Parse(callback redirect) error = %v", err)
+	}
+	if got.Query().Get("error") != "github_profile_failed" {
+		t.Fatalf("callback error = %q, want github_profile_failed", got.Query().Get("error"))
+	}
+}
+
 func TestAuthServiceRequireOperatorRejectsAnonymousAndNonOperator(t *testing.T) {
 	t.Parallel()
 
 	store := &memoryAuthStore{
 		identities: map[string]AuthPrincipal{
-			"12345": {
+			authIdentityKey(AuthIdentity{Provider: authProviderGitHub, Subject: "12345"}): {
 				AccountID:     "account-operator",
 				Provider:      "github",
 				ProviderLogin: "operator-dev",
 				Roles:         []string{"operator"},
 			},
-			"54321": {
+			authIdentityKey(AuthIdentity{Provider: authProviderGitHub, Subject: "54321"}): {
 				AccountID:     "account-participant",
 				Provider:      "github",
 				ProviderLogin: "participant-dev",
@@ -175,7 +213,7 @@ func TestAuthServiceRequireOperatorRejectsAnonymousAndNonOperator(t *testing.T) 
 		GitHubClientID:       "client-id",
 		GitHubClientSecret:   "client-secret",
 		AllowedReturnOrigins: []string{"http://localhost:4173"},
-	}, store, fakeGitHubOAuthClient{})
+	}, store, fakeGitHubAuthProvider{})
 	if err != nil {
 		t.Fatalf("NewAuthService() error = %v", err)
 	}
@@ -221,7 +259,7 @@ func TestAuthServiceGitHubLoginAllowsDefaultLocalReturnOrigin(t *testing.T) {
 	auth, err := NewAuthService(AuthConfig{
 		GitHubClientID:     "client-id",
 		GitHubClientSecret: "client-secret",
-	}, &memoryAuthStore{}, fakeGitHubOAuthClient{})
+	}, &memoryAuthStore{}, fakeGitHubAuthProvider{})
 	if err != nil {
 		t.Fatalf("NewAuthService() error = %v", err)
 	}
@@ -234,16 +272,77 @@ func TestAuthServiceGitHubLoginAllowsDefaultLocalReturnOrigin(t *testing.T) {
 	}
 }
 
-type fakeGitHubOAuthClient struct {
-	profile GitHubUserProfile
+func TestNormalizedOIDCIdentityUsesPreferredUsernameAndNameFallback(t *testing.T) {
+	t.Parallel()
+
+	identity, err := normalizedOIDCIdentity(context.Background(), fakeOIDCVerifier{
+		claims: map[string]any{
+			"sub":                "subject-1",
+			"email":              "oidc@example.com",
+			"preferred_username": "oidc-user",
+			"name":               "OIDC User",
+		},
+	}, "google", "raw-token")
+	if err != nil {
+		t.Fatalf("normalizedOIDCIdentity() error = %v", err)
+	}
+	if identity.Provider != "google" || identity.Subject != "subject-1" || identity.Login != "oidc-user" {
+		t.Fatalf("normalizedOIDCIdentity() = %+v, want normalized preferred username identity", identity)
+	}
+
+	fallbackIdentity, err := normalizedOIDCIdentity(context.Background(), fakeOIDCVerifier{
+		claims: map[string]any{
+			"sub":   "subject-2",
+			"name":  "OIDC Display",
+			"email": "display@example.com",
+		},
+	}, "google", "raw-token")
+	if err != nil {
+		t.Fatalf("normalizedOIDCIdentity() fallback error = %v", err)
+	}
+	if fallbackIdentity.Login != "OIDC Display" {
+		t.Fatalf("fallback login = %q, want OIDC Display", fallbackIdentity.Login)
+	}
 }
 
-func (f fakeGitHubOAuthClient) ExchangeCode(_ context.Context, code string, redirectURI string) (string, error) {
-	return "access-token-" + code + "-" + redirectURI, nil
+type fakeGitHubAuthProvider struct {
+	identity    AuthIdentity
+	exchangeErr error
 }
 
-func (f fakeGitHubOAuthClient) FetchUser(_ context.Context, _ string) (GitHubUserProfile, error) {
-	return f.profile, nil
+func (f fakeGitHubAuthProvider) AuthorizationURL(redirectURI string, state string) string {
+	return "https://github.com/login/oauth/authorize?redirect_uri=" + url.QueryEscape(redirectURI) + "&state=" + url.QueryEscape(state)
+}
+
+func (f fakeGitHubAuthProvider) ExchangeIdentity(_ context.Context, _ string, _ string) (AuthIdentity, error) {
+	if f.exchangeErr != nil {
+		return AuthIdentity{}, f.exchangeErr
+	}
+	return f.identity, nil
+}
+
+type fakeOIDCVerifier struct {
+	claims map[string]any
+	err    error
+}
+
+func (f fakeOIDCVerifier) Verify(_ context.Context, _ string) (OIDCVerifiedClaims, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeOIDCVerifiedClaims{claims: f.claims}, nil
+}
+
+type fakeOIDCVerifiedClaims struct {
+	claims map[string]any
+}
+
+func (f fakeOIDCVerifiedClaims) Claims(dest any) error {
+	payload, err := json.Marshal(f.claims)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(payload, dest)
 }
 
 type memoryAuthStore struct {
@@ -252,22 +351,26 @@ type memoryAuthStore struct {
 	sessions   map[string]AuthPrincipal
 }
 
-func (s *memoryAuthStore) ResolveGitHubLogin(_ context.Context, profile GitHubUserProfile, inviteToken string, _ time.Time) (AuthPrincipal, error) {
+func (s *memoryAuthStore) ResolveIdentityLogin(_ context.Context, identity AuthIdentity, inviteToken string, _ time.Time) (AuthPrincipal, error) {
 	if s.identities == nil {
 		s.identities = map[string]AuthPrincipal{}
 	}
-	if principal, ok := s.identities[profile.Subject]; ok {
+	identity = normalizedAuthIdentity(identity)
+	if principal, ok := s.identities[authIdentityKey(identity)]; ok {
+		return principal, nil
+	}
+	if principal, ok := s.identities[identity.Subject]; ok {
 		return principal, nil
 	}
 	if role := s.invites[inviteToken]; role != "" {
 		principal := AuthPrincipal{
-			AccountID:     "account-" + profile.Subject,
-			Provider:      "github",
-			ProviderLogin: profile.Login,
-			ProviderEmail: profile.Email,
+			AccountID:     "account-" + identity.Subject,
+			Provider:      identity.Provider,
+			ProviderLogin: identity.Login,
+			ProviderEmail: identity.Email,
 			Roles:         []string{role},
 		}
-		s.identities[profile.Subject] = principal
+		s.identities[authIdentityKey(identity)] = principal
 		delete(s.invites, inviteToken)
 		return principal, nil
 	}
@@ -301,4 +404,8 @@ func (s *memoryAuthStore) GetSession(_ context.Context, sessionToken string, _ t
 func (s *memoryAuthStore) DeleteSession(_ context.Context, sessionToken string) error {
 	delete(s.sessions, sessionToken)
 	return nil
+}
+
+func authIdentityKey(identity AuthIdentity) string {
+	return identity.Provider + ":" + identity.Subject
 }

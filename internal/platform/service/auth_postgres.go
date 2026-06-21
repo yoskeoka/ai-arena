@@ -55,10 +55,11 @@ func (s *PostgresAuthStore) Close() {
 	s.pool.Close()
 }
 
-// ResolveGitHubLogin loads an existing GitHub-linked principal or claims a signup invite for first login.
-func (s *PostgresAuthStore) ResolveGitHubLogin(ctx context.Context, profile GitHubUserProfile, inviteToken string, now time.Time) (AuthPrincipal, error) {
-	if strings.TrimSpace(profile.Subject) == "" || strings.TrimSpace(profile.Login) == "" {
-		return AuthPrincipal{}, fmt.Errorf("service: github profile subject and login are required")
+// ResolveIdentityLogin loads an existing provider-linked principal or claims a signup invite for first login.
+func (s *PostgresAuthStore) ResolveIdentityLogin(ctx context.Context, identity AuthIdentity, inviteToken string, now time.Time) (AuthPrincipal, error) {
+	identity = normalizedAuthIdentity(identity)
+	if identity.Provider == "" || identity.Subject == "" || identity.Login == "" {
+		return AuthPrincipal{}, fmt.Errorf("service: identity provider, subject, and login are required")
 	}
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -66,7 +67,7 @@ func (s *PostgresAuthStore) ResolveGitHubLogin(ctx context.Context, profile GitH
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	principal, err := lookupPrincipalByIdentity(ctx, tx, "github", profile.Subject)
+	principal, err := lookupPrincipalByIdentity(ctx, tx, identity.Provider, identity.Subject)
 	if err == nil {
 		if err := tx.Commit(ctx); err != nil {
 			return AuthPrincipal{}, err
@@ -79,7 +80,7 @@ func (s *PostgresAuthStore) ResolveGitHubLogin(ctx context.Context, profile GitH
 	if strings.TrimSpace(inviteToken) == "" {
 		return AuthPrincipal{}, ErrSignupInviteRequired
 	}
-	accountID, principal, err := createPrincipalFromInvite(ctx, tx, profile, inviteToken, now)
+	accountID, principal, err := createPrincipalFromInvite(ctx, tx, identity, inviteToken, now)
 	if err != nil {
 		return AuthPrincipal{}, err
 	}
@@ -171,7 +172,8 @@ func lookupPrincipalBySession(ctx context.Context, db pgxQueryer, sessionTokenHa
 		JOIN account_identities i ON i.account_id = a.account_id
 		WHERE s.session_token_hash = $1
 		  AND s.expires_at > $2
-		  AND i.provider = 'github'
+		ORDER BY i.provider, i.created_at
+		LIMIT 1
 	`, sessionTokenHash, now).Scan(&principal.AccountID, &principal.Provider, &principal.ProviderLogin, &principal.ProviderEmail); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return AuthPrincipal{}, ErrAuthenticationNeeded
@@ -204,7 +206,8 @@ func lookupPrincipalByIdentity(ctx context.Context, db pgxQueryer, provider stri
 	return principal, nil
 }
 
-func createPrincipalFromInvite(ctx context.Context, tx pgx.Tx, profile GitHubUserProfile, inviteToken string, now time.Time) (string, AuthPrincipal, error) {
+func createPrincipalFromInvite(ctx context.Context, tx pgx.Tx, identity AuthIdentity, inviteToken string, now time.Time) (string, AuthPrincipal, error) {
+	identity = normalizedAuthIdentity(identity)
 	var role string
 	var claimedAt *time.Time
 	var expiresAt time.Time
@@ -232,8 +235,8 @@ func createPrincipalFromInvite(ctx context.Context, tx pgx.Tx, profile GitHubUse
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO account_identities (
 			identity_id, account_id, provider, provider_subject, provider_login, provider_email, created_at, updated_at
-		) VALUES ($1, $2, 'github', $3, $4, NULLIF($5, ''), $6, $6)
-	`, uuid.NewString(), accountID, profile.Subject, profile.Login, profile.Email, now); err != nil {
+		) VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $7)
+	`, uuid.NewString(), accountID, identity.Provider, identity.Subject, identity.Login, identity.Email, now); err != nil {
 		return "", AuthPrincipal{}, err
 	}
 	if _, err := tx.Exec(ctx, `
@@ -244,11 +247,20 @@ func createPrincipalFromInvite(ctx context.Context, tx pgx.Tx, profile GitHubUse
 	}
 	return accountID, AuthPrincipal{
 		AccountID:     accountID,
-		Provider:      "github",
-		ProviderLogin: profile.Login,
-		ProviderEmail: profile.Email,
+		Provider:      identity.Provider,
+		ProviderLogin: identity.Login,
+		ProviderEmail: identity.Email,
 		Roles:         []string{role},
 	}, nil
+}
+
+func normalizedAuthIdentity(identity AuthIdentity) AuthIdentity {
+	return AuthIdentity{
+		Provider: strings.TrimSpace(identity.Provider),
+		Subject:  strings.TrimSpace(identity.Subject),
+		Login:    strings.TrimSpace(identity.Login),
+		Email:    strings.TrimSpace(identity.Email),
+	}
 }
 
 func loadRoles(ctx context.Context, db pgxQueryer, accountID string) ([]string, error) {

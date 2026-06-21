@@ -102,6 +102,8 @@ GitHub OAuth first landing contract:
 - repo / runtime が共有する GitHub OAuth env 名は次で固定する
   - `ARENA_GITHUB_OAUTH_CLIENT_ID`
   - `ARENA_GITHUB_OAUTH_CLIENT_SECRET`
+- backend は authorization URL generation / token exchange を supported OAuth library で扱う前提とし、
+  上記 secret は provider client config 入力として使う
 - callback / return flow を hard-code しないため、frontend return origin allowlist は env で上書きしてよい
   - `ARENA_AUTH_ALLOWED_RETURN_ORIGINS`
   - empty のときは repo canonical origin
@@ -118,6 +120,12 @@ GitHub OAuth first landing contract:
 - 将来 Google などを追加するときも、
   provider-specific secret 名は `ARENA_<PROVIDER>_OAUTH_CLIENT_ID` /
   `ARENA_<PROVIDER>_OAUTH_CLIENT_SECRET` の規則に従う
+- OIDC provider を追加するときは、client credentials に加えて issuer を env inventory に持たせてよい
+  - `ARENA_GOOGLE_OIDC_ISSUER`
+  - `ARENA_GOOGLE_OAUTH_CLIENT_ID`
+  - `ARENA_GOOGLE_OAUTH_CLIENT_SECRET`
+- ID token verification は backend 側で完結させ、
+  callback / exchange 実行面を Cloudflare 側へ移すまでは provider secret や issuer config を frontend 側へ複製しない
 - callback handler や token exchange を frontend origin 側へ移すまでは、
   同じ GitHub OAuth secret を Cloudflare 側へ常設しない
 

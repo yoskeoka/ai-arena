@@ -16,6 +16,7 @@ Google login、email login、MFA、profile 編集は扱わない。
 - GitHub OAuth login start / callback / logout / session 確認 route
 - `Cloudflare Pages` frontend と `Render` backend が split-origin のまま成立する
   session cookie contract
+- backend auth provider boundary と provider 差分吸収責務
 - initial account / identity / session / signup invite / role 保存単位
 - first-login 時の gated signup contract
 - frontend `/login` route と post-login return flow
@@ -154,6 +155,39 @@ first landing の auth metadata backend は `Postgres` とする。
 
 provider 固有 subject や login name は `account` に混ぜず、
 `account_identity` 側に寄せなければならない。
+
+## Backend Auth Provider Boundary
+
+- public browser route は current の GitHub first contract を維持する
+  - `GET /auth/github/login`
+  - `GET /auth/github/callback`
+- backend 内部では provider descriptor が少なくとも次の責務を持つ
+  - authorization URL generation
+  - callback code exchange
+  - provider response から normalized identity claim への変換
+- normalized identity claim は少なくとも次を持たなければならない
+  - `provider`
+  - `subject`
+  - `login` または display name
+  - `email`
+- session 発行、invite 検証、role bind、`account_identity` 永続化は
+  provider 実装ではなく backend app responsibility とする
+- current GitHub login は access token を得た後に provider API から identity claim を取得する
+  OAuth provider として扱う
+- 将来の Google login のように ID token を返す provider は、
+  OAuth transport に加えて OIDC identity verification を持つ provider として扱う
+
+## Supported Library Policy
+
+- OAuth provider の authorization URL generation と token exchange は
+  supported library で扱わなければならない
+  - current first provider の GitHub は `golang.org/x/oauth2`
+- OIDC provider の ID token verification と claim validation は
+  supported library で扱わなければならない
+  - future provider seam は `github.com/coreos/go-oidc/v3/oidc` を前提にしてよい
+- OAuth transport と OIDC identity verification は同じ責務として潰さず、
+  transport は全 provider 共通、ID token verification は capability を持つ provider だけが要求する
+- frontend は provider library を持たず、backend redirect / callback / session contract に依存する
 
 ## Authorization Boundary
 

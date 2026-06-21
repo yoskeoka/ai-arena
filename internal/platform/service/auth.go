@@ -21,6 +21,8 @@ const (
 	authModeDisabled = "disabled"
 	authModeEnabled  = "enabled"
 
+	authProviderGitHub = "github"
+
 	sessionCookieName      = "arena_session"
 	pendingAuthCookieName  = "arena_github_oauth_pending"
 	defaultSessionLifetime = 24 * time.Hour
@@ -37,6 +39,8 @@ var (
 	ErrSignupInviteRequired = errors.New("signup invite is required")
 	// ErrInvalidSignupInvite indicates that the supplied invite token is invalid, expired, or already claimed.
 	ErrInvalidSignupInvite = errors.New("signup invite is invalid or expired")
+	// ErrIdentityLookupFailed indicates that provider-specific identity resolution failed after token exchange.
+	ErrIdentityLookupFailed = errors.New("identity lookup failed")
 )
 
 // AuthConfig describes the runtime configuration required for GitHub-backed auth.
@@ -50,23 +54,24 @@ type AuthConfig struct {
 
 // AuthStore persists account identities, sessions, and signup invites.
 type AuthStore interface {
-	ResolveGitHubLogin(ctx context.Context, profile GitHubUserProfile, inviteToken string, now time.Time) (AuthPrincipal, error)
+	ResolveIdentityLogin(ctx context.Context, identity AuthIdentity, inviteToken string, now time.Time) (AuthPrincipal, error)
 	CreateSession(ctx context.Context, accountID string, expiresAt time.Time) (string, error)
 	GetSession(ctx context.Context, sessionToken string, now time.Time) (AuthPrincipal, error)
 	DeleteSession(ctx context.Context, sessionToken string) error
 }
 
-// GitHubOAuthClient exchanges GitHub authorization codes and fetches the authenticated user profile.
-type GitHubOAuthClient interface {
-	ExchangeCode(ctx context.Context, code string, redirectURI string) (string, error)
-	FetchUser(ctx context.Context, accessToken string) (GitHubUserProfile, error)
+// AuthIdentity is the provider-normalized identity claim used for account linking.
+type AuthIdentity struct {
+	Provider string
+	Subject  string
+	Login    string
+	Email    string
 }
 
-// GitHubUserProfile is the subset of GitHub identity data needed for account linking.
-type GitHubUserProfile struct {
-	Subject string
-	Login   string
-	Email   string
+// OAuthIdentityProvider exchanges provider authorization codes and resolves normalized identity claims.
+type OAuthIdentityProvider interface {
+	AuthorizationURL(redirectURI string, state string) string
+	ExchangeIdentity(ctx context.Context, code string, redirectURI string) (AuthIdentity, error)
 }
 
 // AuthPrincipal is the authenticated account identity returned to operator clients.
@@ -88,16 +93,15 @@ type SessionStatusResponse struct {
 // AuthService coordinates GitHub OAuth, session issuance, and operator access control.
 type AuthService struct {
 	store                AuthStore
-	github               GitHubOAuthClient
-	clientID             string
-	clientSecret         string
+	github               OAuthIdentityProvider
 	allowedReturnOrigins map[string]struct{}
 	sessionTTL           time.Duration
 	cookieSigningSecret  []byte
 	now                  func() time.Time
 }
 
-type pendingGitHubAuth struct {
+type pendingAuth struct {
+	Provider    string    `json:"provider"`
 	StateNonce  string    `json:"state_nonce"`
 	ReturnTo    string    `json:"return_to"`
 	InviteToken string    `json:"invite_token,omitempty"`
@@ -105,12 +109,12 @@ type pendingGitHubAuth struct {
 }
 
 // NewAuthService constructs an auth service from the configured store and GitHub client.
-func NewAuthService(cfg AuthConfig, store AuthStore, github GitHubOAuthClient) (*AuthService, error) {
+func NewAuthService(cfg AuthConfig, store AuthStore, github OAuthIdentityProvider) (*AuthService, error) {
 	if store == nil {
 		return nil, fmt.Errorf("service: auth store is required")
 	}
 	if github == nil {
-		return nil, fmt.Errorf("service: github oauth client is required")
+		return nil, fmt.Errorf("service: github auth provider is required")
 	}
 	if strings.TrimSpace(cfg.GitHubClientID) == "" || strings.TrimSpace(cfg.GitHubClientSecret) == "" {
 		return nil, fmt.Errorf("service: github oauth client id and secret are required")
@@ -143,8 +147,6 @@ func NewAuthService(cfg AuthConfig, store AuthStore, github GitHubOAuthClient) (
 	return &AuthService{
 		store:                store,
 		github:               github,
-		clientID:             strings.TrimSpace(cfg.GitHubClientID),
-		clientSecret:         strings.TrimSpace(cfg.GitHubClientSecret),
 		allowedReturnOrigins: allowed,
 		sessionTTL:           cfg.SessionTTL,
 		cookieSigningSecret:  []byte(signingSecret),
@@ -186,7 +188,8 @@ func (a *AuthService) GitHubLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	pending := pendingGitHubAuth{
+	pending := pendingAuth{
+		Provider:    authProviderGitHub,
 		StateNonce:  nonce,
 		ReturnTo:    returnTo,
 		InviteToken: strings.TrimSpace(r.URL.Query().Get("invite_token")),
@@ -196,18 +199,9 @@ func (a *AuthService) GitHubLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	redirectURI := callbackURL(r)
-	target := (&url.URL{
-		Scheme: "https",
-		Host:   "github.com",
-		Path:   "/login/oauth/authorize",
-	}).String()
-	params := url.Values{}
-	params.Set("client_id", a.clientID)
-	params.Set("redirect_uri", redirectURI)
-	params.Set("state", nonce)
-	params.Set("scope", "read:user")
-	http.Redirect(w, r, target+"?"+params.Encode(), http.StatusFound)
+	redirectURL := a.github.AuthorizationURL(callbackURLForProvider(r, authProviderGitHub), nonce)
+	// #nosec G710 -- the provider returns a GitHub authorize URL; return_to validation happens before this redirect.
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 // GitHubCallback completes the GitHub OAuth flow and issues the operator session cookie.
@@ -232,17 +226,20 @@ func (a *AuthService) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		a.redirectLoginError(w, r, pending.ReturnTo, pending.InviteToken, "missing_code")
 		return
 	}
-	accessToken, err := a.github.ExchangeCode(r.Context(), code, callbackURL(r))
+	if pending.Provider != authProviderGitHub {
+		a.redirectLoginError(w, r, pending.ReturnTo, pending.InviteToken, "login_failed")
+		return
+	}
+	identity, err := a.github.ExchangeIdentity(r.Context(), code, callbackURLForProvider(r, pending.Provider))
 	if err != nil {
+		if errors.Is(err, ErrIdentityLookupFailed) {
+			a.redirectLoginError(w, r, pending.ReturnTo, pending.InviteToken, "github_profile_failed")
+			return
+		}
 		a.redirectLoginError(w, r, pending.ReturnTo, pending.InviteToken, "token_exchange_failed")
 		return
 	}
-	profile, err := a.github.FetchUser(r.Context(), accessToken)
-	if err != nil {
-		a.redirectLoginError(w, r, pending.ReturnTo, pending.InviteToken, "github_profile_failed")
-		return
-	}
-	principal, err := a.store.ResolveGitHubLogin(r.Context(), profile, pending.InviteToken, a.now().UTC())
+	principal, err := a.store.ResolveIdentityLogin(r.Context(), identity, pending.InviteToken, a.now().UTC())
 	if err != nil {
 		loginError := "login_failed"
 		switch {
@@ -338,14 +335,17 @@ func (a *AuthService) validatedReturnTo(raw string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (a *AuthService) pendingAuth(r *http.Request) (pendingGitHubAuth, error) {
+func (a *AuthService) pendingAuth(r *http.Request) (pendingAuth, error) {
 	cookie, err := r.Cookie(pendingAuthCookieName)
 	if err != nil {
-		return pendingGitHubAuth{}, err
+		return pendingAuth{}, err
 	}
-	var pending pendingGitHubAuth
+	var pending pendingAuth
 	if err := a.decodeSignedValue(cookie.Value, &pending); err != nil {
-		return pendingGitHubAuth{}, err
+		return pendingAuth{}, err
+	}
+	if strings.TrimSpace(pending.Provider) == "" {
+		pending.Provider = authProviderGitHub
 	}
 	return pending, nil
 }
@@ -446,7 +446,7 @@ func (a *AuthService) clearCookie(w http.ResponseWriter, r *http.Request, name s
 	})
 }
 
-func callbackURL(r *http.Request) string {
+func callbackURLForProvider(r *http.Request, provider string) string {
 	scheme := "https"
 	if !isHTTPSRequest(r) {
 		scheme = "http"
@@ -455,7 +455,7 @@ func callbackURL(r *http.Request) string {
 	if !isHTTPSRequest(r) {
 		host = strings.Replace(host, "127.0.0.1", "localhost", 1)
 	}
-	return scheme + "://" + host + "/auth/github/callback"
+	return scheme + "://" + host + "/auth/" + provider + "/callback"
 }
 
 func isHTTPSRequest(r *http.Request) bool {
