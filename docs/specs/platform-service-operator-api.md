@@ -2,11 +2,11 @@
 
 ## 目的
 
-このドキュメントは、Phase 6 の first remote landing で
+このドキュメントは、Phase 7 の operator browser workflow で
 `arena-service` が expose する operator-facing HTTP API を定義する。
 
 対象は private / operator surface であり、spectator 向け public API ではない。
-この spec が固定するのは route contract、preset queue 入口、
+この spec が固定するのは route contract、general registration / request / ranking read 入口、
 match request / run follow-up 操作、active/completed polling shape、
 および completed detail の返却形である。
 
@@ -17,8 +17,9 @@ match request / run follow-up 操作、active/completed polling shape、
 - backend process の HTTP route 一覧
 - game registration / AI submission registration route
 - match request route
+- ranking snapshot read route
 - preset match enqueue request/response contract
-- retry / rerun / correction route
+- queued cancel / retry / rerun / correction route
 - active/completed polling response shape
 - completed match detail の response shape
 - `Cloudflare Pages` hosted operator UI からの cross-origin access contract
@@ -193,6 +194,32 @@ response は少なくとも次を返す:
 - `official_run_id`
 - `lifecycle_state`
 
+## Ranking Snapshot Read
+
+- `GET /api/v1/rankings`
+  - 目的:
+    1 scope 分の current durable ranking snapshot を返す
+
+query parameter は少なくとも次を要求してよい:
+
+- `game_id`
+- `game_version`
+- `ruleset_version`
+
+response は少なくとも次を返す:
+
+- `locator`
+- `snapshot`
+  - `scope`
+  - `completed_matches`
+  - `entries[]`
+  - `applied_run_ids[]`
+  - `applied_match_ids[]`
+
+ranking snapshot がまだ存在しない scope には `404 Not Found` を返してよい。
+browser UI はこの route を read-only surface として使い、
+recompute や repair を直接 trigger してはならない。
+
 ## Preset Match Enqueue
 
 - `POST /api/v1/preset-matches`
@@ -231,6 +258,25 @@ preset lane は queue mutation の直前に、
 general `match request` と同じ scheduling 入口へ正規化されなければならない。
 
 ## Run Follow-Up Routes
+
+### Queued Cancel
+
+- `POST /api/v1/runs/{run_id}/cancel`
+  - 目的:
+    queued run を `canceled` へ進める
+
+response は少なくとも次を返す:
+
+- canceled run の `run_id`
+- `match_id`
+- `attempt_count`
+- `official`
+- `lifecycle_state`
+
+制約:
+
+- target run は `queued` でなければならない
+- `leased|running|persisting|completed|failed|canceled` を cancel target にしてはならない
 
 ### Retry
 
@@ -355,6 +401,8 @@ backend process 内の worker loop は少なくとも次を満たす。
 - queue が空のときは異常終了せず、次回 poll を待つ
 - 1 件の run failure により process 全体を停止させない
 - worker loop が lifecycle を進めた結果は、active/completed polling route から観測できなければならない
+- queued cancel / retry / rerun / correction の結果は、
+  active/completed polling route または run detail route から観測できなければならない
 - completed run が automatic official promotion 対象かどうかは、
   same `match_id` の existing official 状態を見て判断しなければならない
 

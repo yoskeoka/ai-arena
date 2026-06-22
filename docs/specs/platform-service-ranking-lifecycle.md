@@ -206,17 +206,21 @@ single-worker 前提の短い不整合窓を許容してよい。
 
 ## Ranking Read Surface
 
-first ranking read surface は CLI-first とする。
+first ranking read surface は CLI と authenticated operator HTTP read の併用とする。
 
-- `get`:
+- CLI `get`:
   current durable snapshot を 1 scope 分返す
-- `recompute`:
+- CLI `recompute`:
   run record と compact summary から rebuilt snapshot を返す
-- `verify`:
+- CLI `verify`:
   stored snapshot と rebuilt snapshot の一致可否を返す
+- authenticated operator HTTP `GET`:
+  `game_id`、`game_version`、`ruleset_version` で 1 scope を指定し、
+  current durable snapshot を返す
 
-この surface は ranking aggregate 自体を返す。
-public HTTP API、operator UI、pagination、history diff viewer は後続へ送る。
+HTTP read surface は current durable snapshot の参照だけを責務にする。
+recompute や snapshot repair を browser から直接叩く route は
+この milestone では持たない。
 
 ## Leaderboard Family への引き継ぎ境界
 

@@ -3,7 +3,12 @@ import { expect, test } from "@playwright/test";
 test("operator route alias serves the same operator surface", async ({ page }) => {
   await page.goto("/operator");
 
-  await expect(page.getByRole("heading", { name: "AI Arena Minimal Operator UI" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI Arena Operator Console" })).toBeVisible();
+  await expect(page.getByTestId("operator-nav-overview")).toBeVisible();
+  await expect(page.getByTestId("operator-nav-games")).toBeVisible();
+  await expect(page.getByTestId("operator-nav-submissions")).toBeVisible();
+  await expect(page.getByTestId("operator-nav-requests")).toBeVisible();
+  await expect(page.getByTestId("operator-nav-rankings")).toBeVisible();
   await expect(page.getByTestId("operator-panel-preset-queue")).toBeVisible();
   await expect(page.getByTestId("operator-panel-active-matches")).toBeVisible();
   await expect(page.getByTestId("operator-panel-completed-matches")).toBeVisible();
@@ -16,7 +21,7 @@ test("local operator UI browser lane covers queue, active, completed detail, and
 
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "AI Arena Minimal Operator UI" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI Arena Operator Console" })).toBeVisible();
   await expect(page.getByTestId("operator-panel-preset-queue")).toBeVisible();
   await expect(page.getByTestId("operator-panel-active-matches")).toBeVisible();
   await expect(page.getByTestId("operator-panel-completed-matches")).toBeVisible();

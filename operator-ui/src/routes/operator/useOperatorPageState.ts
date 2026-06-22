@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { MatchDetailResponse, OperatorApiClient, ResultListItem } from "../../api";
-import { defaultBaseUrl, EnqueueState, isAbortError, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
+import { EnqueueState, isAbortError, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
 const ACTIVE_POLL_MS = 5_000;
 const COMPLETED_POLL_MS = 10_000;
 const DETAIL_POLL_MS = 15_000;
 
-export function useOperatorPageState() {
-  const [baseUrl, setBaseUrl] = useState(() => defaultBaseUrl());
+export function useOperatorPageState(baseUrl: string) {
   const client = useMemo(() => new OperatorApiClient(normalizeBaseUrl(baseUrl)), [baseUrl]);
 
   const [activeItems, setActiveItems] = useState<ResultListItem[]>([]);
@@ -154,8 +153,6 @@ export function useOperatorPageState() {
   };
 
   return {
-    baseUrl,
-    setBaseUrl,
     activeItems,
     completedItems,
     activeState,

@@ -2,31 +2,32 @@
 
 ## 目的
 
-このドキュメントは、Phase 6 first landing で `Cloudflare Pages` から配信する
-minimal operator UI contract を定義する。
+このドキュメントは、Phase 7 operator browser workflow として
+`Cloudflare Pages` から配信する operator UI contract を定義する。
 
-対象は operator が active/completed match の確認、preset queue、
-completed artifact access を行う最小 surface である。
-表現や design system は固定せず、state model、polling cadence、
-artifact access の扱いだけを定義する。
+対象は operator が game registration、AI submission、match request、
+run follow-up、ranking snapshot、artifact access を 1 つの route family で辿れる最小 surface である。
+表現や design system は固定せず、nav / route shape、state model、polling cadence、
+browser verification が依存してよい observation surface を定義する。
 
 ## この spec の責務範囲
 
 この spec が定義するもの:
 
-- minimal operator UI の画面要素
-- active/completed/detail の client-side polling contract
-- preset queue action の最小 interaction
+- operator nav / route shape
+- page-local fetch / polling / mutation contract
+- general registration / request / ranking read surface
+- preset queue / run follow-up action の最小 interaction
 - delegated artifact access metadata の表示順と refresh 振る舞い
-- local browser verification が依存してよい stable observation surface
+- browser verification が依存してよい stable observation surface
 
 この spec が定義しないもの:
 
 - spectator replay/viewer
 - real-time push update
 - advanced filtering、search、pagination
-- upload UI
-- ranking / tournament UI
+- public upload UI
+- public leaderboard / tournament UI
 - Pages Functions や server-side rendering
 - 特定 AI agent / interactive skill の導入必須化
 
@@ -41,38 +42,59 @@ artifact access の扱いだけを定義する。
 
 first landing の operator UI は `Cloudflare Pages` から配信する static app とする。
 
-この surface は broader frontend の `operator` page family に属する 1 route / 1 page として扱う。
+この surface は broader frontend の `operator` page family に属する shallow route family として扱う。
 
 - rendering は browser 上の client-side application で完結してよい
 - data fetch は operator-facing HTTP API へ直接行う
 - server-side rendering、Server Components、Pages Functions は前提にしない
 - implementation は後続 task の view 拡張を見越して component-based UI を採用してよい
 - broader frontend の route-first rule に従い、page-specific state、polling、presentation は
-  `operator` page 配下へ閉じてよい
+  `operator` route family 配下へ閉じてよい
 - concrete router library は first landing contract に含めない
-- first route seam は current `/` entry から same observation surface を提供しつつ、
-  `operator` page family を app shell 配下へ収められればよい
+- current `/` entry は `/operator` alias または redirect として扱ってよい
+
+Phase 7 の operator route family は少なくとも次を持たなければならない。
+
+- `/operator`
+  - overview
+- `/operator/games`
+  - game registration list / create
+- `/operator/submissions`
+  - AI submission list / create
+- `/operator/requests`
+  - match request list / create
+- `/operator/rankings`
+  - ranking snapshot read
+- `/operator/runs/{run_id}`
+  - one run detail と follow-up action
 
 ## Screen Model
 
-minimal operator UI は 1 画面内に少なくとも次を持つ。
+minimal operator UI は nav 上で少なくとも次の page/surface を持つ。
 
-- preset queue panel:
-  server-known preset 一覧と enqueue action
-- active matches panel:
-  `queued|leased|running|persisting` の compact row 一覧
-- completed matches panel:
-  `completed|failed|canceled` の compact row 一覧
-- detail panel:
-  selected submission の compact summary、submitted players、
-  replay input locator group、artifact access action
+- overview page:
+  preset queue、active runs、completed runs、selected run summary
+- games page:
+  registered game list と create form
+- submissions page:
+  admitted AI list と create form
+- requests page:
+  accepted match request list と create form
+- rankings page:
+  selected scope の durable ranking snapshot read
+- run detail page:
+  compact summary、submitted players、replay input locator group、
+  artifact access、queued cancel / retry / rerun / promote action
 
-local browser verification は、少なくとも次の acceptance surface を同一画面で観測できなければならない。
+browser verification は、少なくとも次の acceptance surface を route 遷移込みで観測できなければならない。
 
-- preset queue panel が visible で、少なくとも 1 件の enqueue action を押せる
-- active matches panel が visible で、`queued|leased|running|persisting` item を 0 件以上表示できる
-- completed matches panel が visible で、`completed|failed|canceled` item を 0 件以上表示できる
-- completed detail panel が visible で、selected submission の `result_summary` と artifact access entry を表示できる
+- operator nav が visible で、`Overview`、`Games`、`Submissions`、`Requests`、`Rankings` を辿れる
+- overview page で preset queue panel、active runs panel、completed runs panel を表示できる
+- games page で registered game を 1 件以上作成し、list へ反映できる
+- submissions page で AI submission を 1 件以上作成し、list へ反映できる
+- requests page で manual match request を 1 件以上作成し、accepted request と latest run を表示できる
+- run detail page で selected run の `result_summary` と artifact access entry を表示できる
+- rankings page で completed official run の scope を選び、snapshot entry を表示できる
 
 auth-enabled GitHub regression lane では、
 上記 operator surface に到達する前段として次も acceptance surface に含めなければならない。
@@ -108,7 +130,7 @@ current public login hand の regression capture を目的とする。
   login 完了後、
   backend callback が session cookie を発行すること
 - callback 後に browser が `/operator` へ戻り、
-  protected panel surface を表示できること
+  protected operator nav と overview surface を表示できること
 - `GET /auth/session` が authenticated principal を返すこと
 - logout 後は `/login` へ戻り、
   protected route が再度 session を要求すること
@@ -119,24 +141,27 @@ backend 側へ持ち込んでよい override は GitHub provider base URL だけ
 test double の authorize/token/user 実装や fixed user catalog を
 `arena-service` の HTTP serve path へ混在させてはならない。
 
-初期表示では completed matches panel の先頭 item を自動選択してよい。
-completed item がない場合は、detail panel は empty state を表示してよい。
+overview 初期表示では completed runs panel の先頭 item を自動選択してよい。
+completed item がない場合は、run detail surface は empty state を表示してよい。
 
 ## State Model
 
 UI は少なくとも次の client state を持つ。
 
 - operator API base URL
+- selected operator route / selected run identity
 - preset catalog read model
-- active match items
-- completed match items
-- selected submission identity
+- active run items
+- completed run items
+- registered game items
+- admitted AI items
+- accepted match request items
+- selected ranking scope
+- selected ranking snapshot
 - selected detail response
-- list fetch status:
+- read status:
   `idle|loading|ready|error`
-- detail fetch status:
-  `idle|loading|ready|error`
-- preset enqueue status:
+- write status:
   `idle|submitting|success|error`
 
 state は browser reload をまたいで永続化しなくてよい。
@@ -152,18 +177,18 @@ build-time 設定で固定しなければならない。
 
 ## Polling Contract
 
-- active matches:
+- overview active runs:
   5 秒 cadence で `GET /api/v1/matches/active` を poll してよい
-- completed matches:
+- overview completed runs:
   10 秒 cadence で `GET /api/v1/matches/completed` を poll してよい
-- selected detail:
-  submission が選択されている間、15 秒 cadence で
-  `GET /api/v1/matches/{submission_id}` を再取得してよい
+- selected run detail:
+  run が選択されている間、15 秒 cadence で
+  `GET /api/v1/runs/{run_id}` を再取得してよい
 
 list polling と detail polling は independent timer でよい。
 1 回の request failure で polling loop 全体を停止してはならない。
 失敗時は最後に成功した表示を維持しつつ、panel ごとに error state を表示してよい。
-list/detail endpoint が expected JSON shape を返さない場合も、blank page や uncaught exception
+list/detail/ranking endpoint が expected JSON shape を返さない場合も、blank page や uncaught exception
 ではなく panel-local error state へ落とさなければならない。
 
 ## Preset Queue Interaction
@@ -185,6 +210,33 @@ real local inspection/capture lane と dedicated CI browser lane では、
 preset queue action のあと actual service backend が `queued|leased|running|persisting|completed`
 のいずれかへ進むことを backend poll で待ち、
 browser reload または subsequent polling により completed row / detail 表示まで到達できなければならない。
+
+## General Registration / Request / Ranking Interaction
+
+games page、submissions page、requests page は、
+operator-facing write route を使う minimal form surface を持たなければならない。
+
+- game registration create は `game_id`、`game_version`、`ruleset_version` を受け付けてよい
+- AI submission create は `game_registration_id`、`artifact_ref`、`display_name` を受け付けてよい
+- match request create は `game_registration_id`、participant list、`output_dir` を受け付けてよい
+- successful create 後は、対応 list を即時 refresh してよい
+- requests page の item は `latest_run_id` を run detail deep-link として表示してよい
+- rankings page は completed official run の scope または operator-selected scope から
+  `GET /api/v1/rankings` を呼び、stored snapshot を read-only 表示してよい
+
+run detail page は follow-up action を visibility とともに提供してよい。
+
+- `queued` run:
+  cancel action
+- `failed` run:
+  retry action
+- `completed` run:
+  rerun action
+- non-official completed run:
+  promote action
+
+successful follow-up action 後は、overview / requests / run detail / rankings の関連 read model を
+即時 refresh してよい。
 
 ## Detail And Artifact Access
 
@@ -218,18 +270,31 @@ styling や copy edit で壊れやすい箇所には、最小限の machine-read
 
 first landing の operator UI は、少なくとも次の hook family を stable contract として持つ。
 
-- panel root:
+- nav item:
+  `data-testid="operator-nav-<name>"`
+- route root:
   `data-testid="operator-panel-<name>"`
+- create form:
+  `data-testid="operator-form-<name>"`
 - preset queue action:
   `data-testid="preset-queue-action-<preset-id>"`
 - active / completed row:
   `data-testid="match-row-<run-id>"`
 - detail root:
   `data-testid="match-detail-<run-id>"`
+- request row:
+  `data-testid="request-row-<request-id>"`
+- ranking scope option:
+  `data-testid="ranking-scope-<scope-id>"`
+- ranking entry:
+  `data-testid="ranking-entry-<competitor-ref>"`
+- run follow-up action:
+  `data-testid="run-action-<kind>"`
 - artifact entry:
   `data-testid="artifact-entry-<artifact-kind>"`
 
-ここで `<name>` は `preset-queue`、`active-matches`、`completed-matches`、
+ここで `<name>` は少なくとも `overview`、`games`、`submissions`、`requests`、
+`rankings`、`preset-queue`、`active-matches`、`completed-matches`、
 `completed-detail` のいずれかを使う。
 
 machine-readable hook の役割は browser verification の stable targeting に限る。
