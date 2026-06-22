@@ -24,7 +24,7 @@ func main() {
 
 	logger := log.New(os.Stdout, "github-oauth-test-double: ", log.LstdFlags)
 	if err := authtest.SeedGitHubOAuthTestUsersFromEnv(context.Background(), *postgresDSN, time.Now().UTC()); err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 	server := &http.Server{
 		Addr:              strings.TrimSpace(*listenAddr),
@@ -33,7 +33,7 @@ func main() {
 	}
 	logger.Printf("listening on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 }
 

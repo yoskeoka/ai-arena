@@ -116,7 +116,7 @@ func (c *DefaultGitHubAuthProvider) ExchangeIdentity(ctx context.Context, code s
 }
 
 func (c *DefaultGitHubAuthProvider) fetchUser(ctx context.Context, accessToken string) (AuthIdentity, error) {
-	// #nosec G704 -- the provider endpoint is validated by validatedProviderEndpointURL and limited to GitHub HTTPS or localhost test doubles.
+	// #nosec G704 -- the provider endpoint is validated by validatedProviderEndpointURL and limited to HTTPS or localhost test doubles.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.userURL, nil)
 	if err != nil {
 		return AuthIdentity{}, err
@@ -129,6 +129,9 @@ func (c *DefaultGitHubAuthProvider) fetchUser(ctx context.Context, accessToken s
 		return AuthIdentity{}, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return AuthIdentity{}, fmt.Errorf("github user lookup failed with status %s", resp.Status)
+	}
 	var body struct {
 		ID    int64  `json:"id"`
 		Login string `json:"login"`
@@ -136,9 +139,6 @@ func (c *DefaultGitHubAuthProvider) fetchUser(ctx context.Context, accessToken s
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		return AuthIdentity{}, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return AuthIdentity{}, fmt.Errorf("github user lookup failed with status %s", resp.Status)
 	}
 	if body.ID == 0 || strings.TrimSpace(body.Login) == "" {
 		return AuthIdentity{}, fmt.Errorf("github user lookup returned incomplete identity")
@@ -155,6 +155,9 @@ func validatedProviderEndpointURL(raw string) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return "", fmt.Errorf("invalid GitHub auth provider endpoint %q", raw)
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("unsupported GitHub auth provider endpoint %q", raw)
 	}
 	switch parsed.Scheme {
 	case "https":

@@ -314,3 +314,10 @@
 - Pattern: 履歴保持や再実行モデルを考えるとき、データ構造の一般名詞で済ませてしまい、operator が何を判断・切替する entity なのかが名前だけでは伝わらない
 - Rule: rerun / retry / correction のような運用操作を伴う仕様では、まず `logical match`、`run`、`official run` のように operator の判断単位が名前から読める語彙を固定する。`lineage` のような抽象語は、その具体語彙で置き換えられない場合だけ使う
 - Applied: `docs/specs/platform-service-match-request-scheduling.md`、`docs/specs/platform-service-ranking-lifecycle.md`、`docs/specs/platform-service-operator-api.md`、今後の lifecycle / audit / correction 系 spec と実装命名
+
+## [2026-06-23] provider 拡張 seam では verify 強化と provider 固定を混同しない
+
+- Mistake: GitHub OAuth provider endpoint の validation を見直す際、`https` endpoint 全体に対する hygiene 強化と、provider host を GitHub 専用に固定する話を同じ修正候補として扱いかけた
+- Pattern: current provider が GitHub でも、将来 provider 追加 seam を残したい変更では、当面の product 事情に引っ張られて validation policy を provider 固有 host に寄せすぎやすい
+- Rule: provider endpoint validation を tighten するときは、まず `userinfo` / `query` / `fragment` のような URL hygiene と、`http localhost only` のような transport 制約を分けて考える。将来 provider 追加 seam を残す方針があるなら、`https host` は product 固有 host へ不用意に固定しない
+- Applied: `internal/platform/service/auth_github.go` の provider endpoint validation、今後の OAuth/OIDC provider seam と config validation 全般

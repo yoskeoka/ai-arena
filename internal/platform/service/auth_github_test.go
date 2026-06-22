@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -65,5 +67,59 @@ func TestGitHubAuthProviderUsesConfiguredEndpoints(t *testing.T) {
 	}
 	if identity.Provider != authProviderGitHub || identity.Subject != "424242" || identity.Login != "playwright-operator" {
 		t.Fatalf("ExchangeIdentity() = %+v, want configured test identity", identity)
+	}
+}
+
+func TestGitHubAuthProviderRejectsProviderEndpointQueryFragmentAndUserinfo(t *testing.T) {
+	t.Parallel()
+
+	testCases := []string{
+		"https://github.com/login/oauth?via=test",
+		"https://token@example.com/login/oauth",
+		"https://api.github.com#fragment",
+	}
+	for _, raw := range testCases {
+		raw := raw
+		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := NewGitHubAuthProvider(GitHubAuthProviderConfig{
+				ClientID:     "client-id",
+				ClientSecret: "client-secret",
+				OAuthBaseURL: raw,
+			})
+			if err == nil {
+				t.Fatalf("NewGitHubAuthProvider(%q) error = nil, want validation error", raw)
+			}
+		})
+	}
+}
+
+func TestGitHubAuthProviderFetchUserReturnsStatusErrorBeforeDecode(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "bad gateway", http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	provider, err := NewGitHubAuthProvider(GitHubAuthProviderConfig{
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		APIBaseURL:   server.URL,
+	})
+	if err != nil {
+		t.Fatalf("NewGitHubAuthProvider() error = %v", err)
+	}
+
+	_, err = provider.fetchUser(context.Background(), "token-1")
+	if err == nil {
+		t.Fatal("fetchUser() error = nil, want status error")
+	}
+	if !strings.Contains(err.Error(), "502 Bad Gateway") {
+		t.Fatalf("fetchUser() error = %v, want HTTP status in message", err)
+	}
+	if errors.Is(err, context.Canceled) {
+		t.Fatalf("fetchUser() error = %v, want provider status error", err)
 	}
 }
