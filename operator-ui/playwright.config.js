@@ -6,10 +6,12 @@ const reportDir = process.env.OPERATOR_UI_REPORT_DIR ?? "./playwright-report";
 const backendPort = process.env.OPERATOR_UI_BACKEND_PORT ?? "10000";
 const frontendPort = process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173";
 const frontendHost = process.env.OPERATOR_UI_FRONTEND_HOST ?? "127.0.0.1";
+const authMockPort = process.env.OPERATOR_UI_AUTH_MOCK_PORT ?? "10001";
 const browserChannel = testScenario === "ci" ? process.env.OPERATOR_UI_BROWSER_CHANNEL ?? "chrome" : undefined;
 const usesFixtureBackend = testScenario === "local";
 const usesManagedBackend = !usesFixtureBackend;
 const usesRemoteServers = testScenario === "remote";
+const authEnabled = process.env.OPERATOR_UI_TEST_AUTH === "1";
 const remoteBaseURL = process.env.OPERATOR_UI_BASE_URL;
 const captureArtifacts = process.env.OPERATOR_UI_CAPTURE_ARTIFACTS === "1";
 
@@ -37,6 +39,17 @@ export default defineConfig({
   webServer: usesRemoteServers
     ? undefined
     : [
+        ...(authEnabled
+          ? [
+              {
+                command: "./tools/dev/github-oauth-test-double.sh",
+                cwd: "..",
+                reuseExistingServer: !process.env.CI,
+                timeout: 120_000,
+                url: `http://127.0.0.1:${authMockPort}/healthz`,
+              },
+            ]
+          : []),
         {
           command:
             usesManagedBackend

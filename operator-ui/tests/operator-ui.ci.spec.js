@@ -12,6 +12,8 @@ const delegatedDownloadExpectation = process.env.OPERATOR_UI_EXPECT_DELEGATED_DO
 const captureArtifacts = process.env.OPERATOR_UI_CAPTURE_ARTIFACTS === "1";
 const artifactDir = process.env.OPERATOR_UI_ARTIFACT_DIR ?? "./test-results";
 const authEnabled = process.env.OPERATOR_UI_TEST_AUTH === "1";
+const authMockUserID = process.env.OPERATOR_UI_AUTH_MOCK_USER_ID ?? "operator-user01";
+const authMockLogin = process.env.OPERATOR_UI_AUTH_MOCK_LOGIN ?? authMockUserID;
 
 test.setTimeout(90_000);
 
@@ -33,8 +35,9 @@ test("service-backed operator UI browser lane covers queue, active, completed de
     await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
     await page.getByRole("link", { name: "Continue with GitHub" }).click();
     await expect(page.getByRole("heading", { name: "GitHub OAuth Test Double" })).toBeVisible();
-    await page.getByRole("button", { name: "Continue as @playwright-operator" }).click();
-    await expect(page.getByText("Signed in as @playwright-operator", { exact: true })).toBeVisible();
+    await page.getByLabel("User ID").fill(authMockUserID);
+    await page.getByRole("button", { name: "Login" }).click();
+    await expect(page.getByText(`Signed in as @${authMockLogin}`, { exact: true })).toBeVisible();
     await expect
       .poll(async () =>
         page.evaluate(async () => {
@@ -45,7 +48,7 @@ test("service-backed operator UI browser lane covers queue, active, completed de
       .toMatchObject({
         auth_mode: "enabled",
         authenticated: true,
-        principal: { provider_login: "playwright-operator" },
+        principal: { provider_login: authMockLogin },
       });
   }
 

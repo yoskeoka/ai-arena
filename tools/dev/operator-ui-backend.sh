@@ -7,6 +7,7 @@ mode=${OPERATOR_UI_BACKEND_MODE:-file-backed}
 port=${OPERATOR_UI_BACKEND_PORT:-10000}
 frontend_port=${OPERATOR_UI_FRONTEND_PORT:-4173}
 frontend_host=${OPERATOR_UI_FRONTEND_HOST:-127.0.0.1}
+auth_mock_port=${OPERATOR_UI_AUTH_MOCK_PORT:-10001}
 log_to_file=${OPERATOR_UI_LOG_TO_FILE:-}
 
 if [ -z "$log_to_file" ]; then
@@ -57,9 +58,11 @@ case "$mode" in
     export PORT="${PORT:-$port}"
     export ARENA_GITHUB_OAUTH_CLIENT_ID="${ARENA_GITHUB_OAUTH_CLIENT_ID:-playwright-client-id}"
     export ARENA_GITHUB_OAUTH_CLIENT_SECRET="${ARENA_GITHUB_OAUTH_CLIENT_SECRET:-playwright-client-secret}"
-    export ARENA_AUTH_GITHUB_TEST_DOUBLE="${ARENA_AUTH_GITHUB_TEST_DOUBLE:-1}"
+    export ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL="${ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL:-http://127.0.0.1:${auth_mock_port}}"
+    export ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL="${ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL:-http://127.0.0.1:${auth_mock_port}}"
     export ARENA_AUTH_ALLOWED_RETURN_ORIGINS="${ARENA_AUTH_ALLOWED_RETURN_ORIGINS:-http://${frontend_host}:${frontend_port},http://127.0.0.1:${frontend_port},http://localhost:${frontend_port},http://127.0.0.1:5173,http://localhost:5173}"
     make postgres-schema-apply
+    go run ./cmd/github-oauth-test-seed --postgres-dsn "$ARENA_SERVICE_POSTGRES_DSN"
     ;;
   postgres)
     export AI_ARENA_PG_TEST_DSN="${AI_ARENA_PG_TEST_DSN:-postgres://arena:arena@127.0.0.1:5432/arena_service?sslmode=disable}"

@@ -13,7 +13,7 @@ func TestGitHubAuthProviderUsesConfiguredEndpoints(t *testing.T) {
 	t.Parallel()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/oauth/access_token", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("token method = %s, want POST", r.Method)
 		}
@@ -43,9 +43,8 @@ func TestGitHubAuthProviderUsesConfiguredEndpoints(t *testing.T) {
 	provider, err := NewGitHubAuthProvider(GitHubAuthProviderConfig{
 		ClientID:     "client-id",
 		ClientSecret: "client-secret",
-		AuthURL:      server.URL + "/oauth/authorize",
-		TokenURL:     server.URL + "/oauth/token",
-		UserURL:      server.URL + "/api/user",
+		OAuthBaseURL: server.URL + "/oauth",
+		APIBaseURL:   server.URL + "/api",
 	})
 	if err != nil {
 		t.Fatalf("NewGitHubAuthProvider() error = %v", err)

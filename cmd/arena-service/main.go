@@ -4,7 +4,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -327,7 +326,6 @@ func newQueueStore(postgresDSN string) (service.QueueStore, func(), error) {
 }
 
 func newAuthService(postgresDSN string) (*service.AuthService, func(), error) {
-	ensureGitHubOAuthProviderEnv(os.Getenv("PORT"))
 	clientID := strings.TrimSpace(os.Getenv("ARENA_GITHUB_OAUTH_CLIENT_ID"))
 	clientSecret := strings.TrimSpace(os.Getenv("ARENA_GITHUB_OAUTH_CLIENT_SECRET"))
 	if clientID == "" && clientSecret == "" {
@@ -341,10 +339,6 @@ func newAuthService(postgresDSN string) (*service.AuthService, func(), error) {
 	}
 	store, err := service.NewPostgresAuthStore(context.Background(), postgresDSN)
 	if err != nil {
-		return nil, nil, err
-	}
-	if err := seedAuthTestPrincipal(context.Background(), store); err != nil {
-		store.Close()
 		return nil, nil, err
 	}
 	cfg := service.AuthConfig{
@@ -370,64 +364,9 @@ func githubAuthProviderFromEnv(clientID string, clientSecret string) (service.OA
 	return service.NewGitHubAuthProvider(service.GitHubAuthProviderConfig{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		AuthURL:      os.Getenv("ARENA_AUTH_GITHUB_PROVIDER_AUTH_URL"),
-		TokenURL:     os.Getenv("ARENA_AUTH_GITHUB_PROVIDER_TOKEN_URL"),
-		UserURL:      os.Getenv("ARENA_AUTH_GITHUB_PROVIDER_USER_URL"),
+		OAuthBaseURL: os.Getenv("ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL"),
+		APIBaseURL:   os.Getenv("ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL"),
 	})
-}
-
-func seedAuthTestPrincipal(ctx context.Context, store *service.PostgresAuthStore) error {
-	if strings.TrimSpace(os.Getenv("ARENA_AUTH_GITHUB_TEST_DOUBLE")) == "" {
-		return nil
-	}
-	identity := service.AuthIdentity{
-		Provider: serviceAuthProviderGitHub(),
-		Subject:  authTestSubject(),
-		Login:    authTestLogin(),
-		Email:    authTestEmail(),
-	}
-	now := time.Now().UTC()
-	_, err := store.ResolveIdentityLogin(ctx, identity, "", now)
-	switch {
-	case err == nil:
-		return nil
-	case !errors.Is(err, service.ErrSignupInviteRequired):
-		return err
-	}
-	invite, err := store.CreateSignupInvite(ctx, "operator", now.Add(24*time.Hour))
-	if err != nil {
-		return err
-	}
-	_, err = store.ResolveIdentityLogin(ctx, identity, invite.InviteToken, now)
-	return err
-}
-
-func serviceAuthProviderGitHub() string {
-	return "github"
-}
-
-func authTestSubject() string {
-	value := strings.TrimSpace(os.Getenv("ARENA_AUTH_TEST_GITHUB_SUBJECT"))
-	if value == "" {
-		return "424242"
-	}
-	return value
-}
-
-func authTestLogin() string {
-	value := strings.TrimSpace(os.Getenv("ARENA_AUTH_TEST_GITHUB_LOGIN"))
-	if value == "" {
-		return "playwright-operator"
-	}
-	return value
-}
-
-func authTestEmail() string {
-	value := strings.TrimSpace(os.Getenv("ARENA_AUTH_TEST_GITHUB_EMAIL"))
-	if value == "" {
-		return "playwright-operator@example.com"
-	}
-	return value
 }
 
 func (a *cliApp) close() {
@@ -551,7 +490,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	}
 	server := &http.Server{
 		Addr:              listenAddr,
-		Handler:           withGitHubOAuthTestDouble(api.Handler(), listenAddr),
+		Handler:           api.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

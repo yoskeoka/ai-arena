@@ -219,13 +219,25 @@ provider 固有 subject や login name は `account` に混ぜず、
   public route を変えずに provider upstream だけ repo-owned test double へ切り替えてよい
 - この seam は verification 専用であり、
   product に local 専用 login provider や別 public login button を増やしてはならない
-- provider test double は次の最小 contract だけを持てばよい
+- backend は provider endpoint override として次だけを受け取ってよい
+  - `ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL`
+  - `ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL`
+- endpoint override は local / CI verification seam のためにだけ使ってよく、
+  authorize / token / user の個別 URL override を product contract に増やしてはならない
+- provider test double は backend process と別 process で起動し、
+  次の最小 contract だけを持てばよい
   - browser が到達する authorize form
   - backend が呼ぶ token exchange endpoint
   - backend が呼ぶ identity/profile endpoint
-- auth regression lane の canonical seed は
-  first signup invite 常用ではなく、
-  backend 起動時に用意される fixed tester account とする
+- provider test double は canonical test user catalog を自前で持ってよい
+  - 例:
+    `spectator-user01`、`developer-user01`、`operator-user01`
+  - browser form は password を要求せず、
+    `user_id` text input と login button だけでよい
+  - available test users の一覧を form 上に hint 表示してよい
+- auth regression lane の backend 側 bootstrap は、
+  provider test double と同じ test user catalog を使って
+  role 付き account / identity を事前作成してよい
   - first signup invite flow は別 verification scenario として分離してよい
 - auth regression lane を起動する entrypoint は、
   auth table 未作成で詰まらないよう schema apply bootstrap を明示的に担わなければならない

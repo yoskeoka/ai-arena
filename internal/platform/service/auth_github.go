@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -23,9 +24,8 @@ type DefaultGitHubAuthProvider struct {
 type GitHubAuthProviderConfig struct {
 	ClientID     string
 	ClientSecret string
-	AuthURL      string
-	TokenURL     string
-	UserURL      string
+	OAuthBaseURL string
+	APIBaseURL   string
 	HTTPClient   *http.Client
 }
 
@@ -35,28 +35,31 @@ func NewGitHubAuthProvider(cfg GitHubAuthProviderConfig) (*DefaultGitHubAuthProv
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
-	authURL := strings.TrimSpace(cfg.AuthURL)
-	if authURL == "" {
-		authURL = "https://github.com/login/oauth/authorize"
+	oauthBaseURL := strings.TrimSpace(cfg.OAuthBaseURL)
+	if oauthBaseURL == "" {
+		oauthBaseURL = "https://github.com/login/oauth"
 	}
-	tokenURL := strings.TrimSpace(cfg.TokenURL)
-	if tokenURL == "" {
-		// #nosec G101 -- OAuth endpoint URLs are public protocol constants, not embedded secrets.
-		tokenURL = "https://github.com/login/oauth/access_token"
+	apiBaseURL := strings.TrimSpace(cfg.APIBaseURL)
+	if apiBaseURL == "" {
+		apiBaseURL = "https://api.github.com"
 	}
-	userURL := strings.TrimSpace(cfg.UserURL)
-	if userURL == "" {
-		userURL = "https://api.github.com/user"
-	}
-	authURL, err := validatedProviderEndpointURL(authURL)
+	oauthBaseURL, err := validatedProviderEndpointURL(oauthBaseURL)
 	if err != nil {
 		return nil, err
 	}
-	tokenURL, err = validatedProviderEndpointURL(tokenURL)
+	apiBaseURL, err = validatedProviderEndpointURL(apiBaseURL)
 	if err != nil {
 		return nil, err
 	}
-	userURL, err = validatedProviderEndpointURL(userURL)
+	authURL, err := appendProviderEndpointPath(oauthBaseURL, "authorize")
+	if err != nil {
+		return nil, err
+	}
+	tokenURL, err := appendProviderEndpointPath(oauthBaseURL, "access_token")
+	if err != nil {
+		return nil, err
+	}
+	userURL, err := appendProviderEndpointPath(apiBaseURL, "user")
 	if err != nil {
 		return nil, err
 	}
@@ -113,14 +116,14 @@ func (c *DefaultGitHubAuthProvider) ExchangeIdentity(ctx context.Context, code s
 }
 
 func (c *DefaultGitHubAuthProvider) fetchUser(ctx context.Context, accessToken string) (AuthIdentity, error) {
-	// #nosec G704 -- the provider endpoint is validated by mustProviderEndpointURL and limited to GitHub HTTPS or localhost test doubles.
+	// #nosec G704 -- the provider endpoint is validated by validatedProviderEndpointURL and limited to GitHub HTTPS or localhost test doubles.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.userURL, nil)
 	if err != nil {
 		return AuthIdentity{}, err
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
-	// #nosec G704 -- the provider endpoint is validated by mustProviderEndpointURL and limited to GitHub HTTPS or localhost test doubles.
+	// #nosec G704 -- the provider endpoint is validated by validatedProviderEndpointURL and limited to GitHub HTTPS or localhost test doubles.
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return AuthIdentity{}, err
@@ -163,4 +166,13 @@ func validatedProviderEndpointURL(raw string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("unsupported GitHub auth provider endpoint %q", raw)
+}
+
+func appendProviderEndpointPath(baseURL string, suffix string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return "", err
+	}
+	parsed.Path = path.Join("/", parsed.Path, suffix)
+	return parsed.String(), nil
 }

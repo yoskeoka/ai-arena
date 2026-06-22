@@ -164,8 +164,9 @@ pnpm run verify:local:auth
 - Playwright Chromium executable が missing なときだけ browser install helper
 - local compose 管理の Postgres を reset-first で張り直す
 - `make postgres-schema-apply`
-- auth-enabled backend 用の fixed tester account seed
-- provider test double を有効にした `arena-service` 起動
+- canonical test user catalog を auth store へ seed
+- repo-owned mock GitHub OAuth server を別 process で起動
+- provider base URL override を注入した `arena-service` 起動
 - `pnpm exec vite --host 127.0.0.1 --port 4173 --strictPort`
 - Playwright で login page、provider form、callback、session、logout を検証
 
@@ -173,12 +174,27 @@ pnpm run verify:local:auth
 dummy client id/secret と repo-owned provider test double を使う。
 人手の GitHub OAuth secret は不要とする。
 
+auth regression lane の backend へ注入してよい endpoint override は次だけとする。
+
+- `ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL`
+- `ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL`
+
+authorize / token / user の個別 URL env は local/CI verification contract に含めない。
+mock GitHub server 側は code-embedded catalog として
+`spectator-user01`、`developer-user01`、`operator-user01`
+のような test user を保持してよい。
+browser form は `user_id` text input と login button の最小 UI でよい。
+
 auth regression artifact は `operator-ui/` 配下に出す。
 
 - screenshots:
   `operator-ui/test-results/auth-local/`
 - traces:
   `operator-ui/test-results/auth-local/`
+- backend log:
+  `operator-ui/test-results/auth-local/backend.log`
+- mock GitHub log:
+  `operator-ui/test-results/auth-local/github-oauth-test-double.log`
 - HTML report:
   `operator-ui/playwright-report/auth-local/`
 

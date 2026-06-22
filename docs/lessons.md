@@ -219,6 +219,13 @@
 
 ## [2026-05-31] spec には現在の契約だけを書き、plan の達成文脈を混ぜない
 
+## [2026-06-22] local auth seam は app 本体へ test double 実装を持ち込まない
+
+- Mistake: GitHub auth regression lane を急いで通す中で、`arena-service` の `main.go` と同一 process に provider test double 実装と fixed tester seed 責務まで持ち込んだ
+- Pattern: verification seam を作るときに、「public route は変えない」と「app 本体に test-only 実装を混在させない」を分けず、backend env override の先に mock 実装そのものを埋め込みやすい
+- Rule: local / CI の OAuth verification seam では、app 本体へ注入してよいのは provider base URL など最小の endpoint override だけに留める。authorize/token/user の test double 実装、test user catalog、role seed は別 process または別 bootstrap helper へ分離する
+- Applied: `cmd/arena-service/main.go` の auth bootstrap、`cmd/github-oauth-test-double`、`tools/dev/operator-ui-backend.sh`、今後の provider mock / local auth harness 全般
+
 ## [2026-06-14] 開発環境 bootstrap は service spec に入れない
 
 - Mistake: fresh worktree 向けの dependency / Playwright bootstrap 方針を `docs/specs/contributor-bootstrap-entrypoints.md` と service-adjacent spec wording に入れた

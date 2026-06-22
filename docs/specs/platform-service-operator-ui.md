@@ -92,7 +92,7 @@ browser verification lane は少なくとも次の 3 系統で同じ acceptance 
   actual operator API request により preset queue から started/completed state を作り、
   同じ panel / detail / artifact observation surface を継続検証する lane
 - auth-enabled GitHub regression lane:
-  auth-enabled backend と repo-owned provider test double を使い、
+  auth-enabled backend と別 process の repo-owned provider test double を使い、
   `/login -> /auth/github/login -> provider form -> callback -> session cookie -> /operator`
   を通したうえで同じ operator surface を確認する lane
 
@@ -104,7 +104,8 @@ auth-enabled GitHub regression lane は、
 current public login hand の regression capture を目的とする。
 
 - login page の `Continue with GitHub` から provider authorize form へ進めること
-- fixed tester account で login 完了後、
+- provider form 上の available test users から target `user_id` を選び、
+  login 完了後、
   backend callback が session cookie を発行すること
 - callback 後に browser が `/operator` へ戻り、
   protected panel surface を表示できること
@@ -114,6 +115,9 @@ current public login hand の regression capture を目的とする。
 
 この lane は product login hand を増やすものではない。
 provider test double は local / CI verification seam に限ってよい。
+backend 側へ持ち込んでよい override は GitHub provider base URL だけであり、
+test double の authorize/token/user 実装や fixed user catalog を
+`arena-service` の HTTP serve path へ混在させてはならない。
 
 初期表示では completed matches panel の先頭 item を自動選択してよい。
 completed item がない場合は、detail panel は empty state を表示してよい。
