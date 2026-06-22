@@ -37,7 +37,6 @@ test("service-backed operator UI browser lane covers queue, active, completed de
     await expect(page.getByRole("heading", { name: "GitHub OAuth Test Double" })).toBeVisible();
     await page.getByLabel("User ID").fill(authMockUserID);
     await page.getByRole("button", { name: "Login" }).click();
-    await expect(page.getByText(`Signed in as @${authMockLogin}`, { exact: true })).toBeVisible();
     await expect
       .poll(async () =>
         page.evaluate(async () => {
@@ -50,6 +49,8 @@ test("service-backed operator UI browser lane covers queue, active, completed de
         authenticated: true,
         principal: { provider_login: authMockLogin },
       });
+    await expect(page).toHaveURL(/\/($|operator$)/);
+    await expect(page.getByText(`Signed in as @${authMockLogin}`)).toBeVisible();
   }
 
   await expect(page.getByRole("heading", { name: "AI Arena Minimal Operator UI" })).toBeVisible();

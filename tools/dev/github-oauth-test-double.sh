@@ -4,6 +4,7 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 artifact_dir=${OPERATOR_UI_ARTIFACT_DIR:-"$repo_root/operator-ui/test-results"}
 port=${OPERATOR_UI_AUTH_MOCK_PORT:-10001}
+postgres_dsn=${ARENA_SERVICE_POSTGRES_DSN:-${AI_ARENA_PG_TEST_DSN:-postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable}}
 log_to_file=${OPERATOR_UI_LOG_TO_FILE:-}
 
 if [ -z "$log_to_file" ]; then
@@ -32,4 +33,4 @@ export GOMODCACHE="${GOMODCACHE:-$GOPATH/pkg/mod}"
 export GOCACHE="${GOCACHE:-/tmp/ai-arena-operator-ui-go-build}"
 mkdir -p "$GOPATH" "$GOMODCACHE" "$GOCACHE"
 
-exec go run ./cmd/github-oauth-test-double --listen-addr "127.0.0.1:$port"
+exec go run ./cmd/github-oauth-test-double --listen-addr "127.0.0.1:$port" --postgres-dsn "$postgres_dsn"

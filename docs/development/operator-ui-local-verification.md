@@ -164,8 +164,8 @@ pnpm run verify:local:auth
 - Playwright Chromium executable が missing なときだけ browser install helper
 - local compose 管理の Postgres を reset-first で張り直す
 - `make postgres-schema-apply`
-- canonical test user catalog を auth store へ seed
 - repo-owned mock GitHub OAuth server を別 process で起動
+  - `ARENA_SERVICE_POSTGRES_DSN` があるときは canonical test user catalog を idempotent seed
 - provider base URL override を注入した `arena-service` 起動
 - `pnpm exec vite --host 127.0.0.1 --port 4173 --strictPort`
 - Playwright で login page、provider form、callback、session、logout を検証

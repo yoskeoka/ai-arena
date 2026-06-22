@@ -2,8 +2,14 @@
 package authtest
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"os"
 	"strings"
+	"time"
+
+	"github.com/yoskeoka/ai-arena/internal/platform/service"
 )
 
 // GitHubOAuthTestUser describes one repo-owned OAuth identity for local and CI verification.
@@ -71,4 +77,52 @@ func LookupGitHubOAuthTestUser(userID string) (GitHubOAuthTestUser, bool) {
 // ProviderSubject returns the normalized provider subject persisted in auth storage.
 func (u GitHubOAuthTestUser) ProviderSubject() string {
 	return fmt.Sprintf("%d", u.NumericID)
+}
+
+// SeedGitHubOAuthTestUsers seeds the canonical test users into the auth store if they do not already exist.
+func SeedGitHubOAuthTestUsers(ctx context.Context, store *service.PostgresAuthStore, now time.Time) error {
+	for _, user := range GitHubOAuthTestUsers() {
+		if err := seedGitHubOAuthTestUser(ctx, store, user, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SeedGitHubOAuthTestUsersFromEnv seeds the canonical test users when a Postgres DSN is available.
+func SeedGitHubOAuthTestUsersFromEnv(ctx context.Context, postgresDSN string, now time.Time) error {
+	if strings.TrimSpace(postgresDSN) == "" {
+		postgresDSN = strings.TrimSpace(os.Getenv("ARENA_SERVICE_POSTGRES_DSN"))
+	}
+	if strings.TrimSpace(postgresDSN) == "" {
+		return nil
+	}
+	store, err := service.NewPostgresAuthStore(ctx, postgresDSN)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	return SeedGitHubOAuthTestUsers(ctx, store, now)
+}
+
+func seedGitHubOAuthTestUser(ctx context.Context, store *service.PostgresAuthStore, user GitHubOAuthTestUser, now time.Time) error {
+	identity := service.AuthIdentity{
+		Provider: "github",
+		Subject:  user.ProviderSubject(),
+		Login:    user.Login,
+		Email:    user.Email,
+	}
+	_, err := store.ResolveIdentityLogin(ctx, identity, "", now)
+	switch {
+	case err == nil:
+		return nil
+	case !errors.Is(err, service.ErrSignupInviteRequired):
+		return err
+	}
+	invite, err := store.CreateSignupInvite(ctx, user.Role, now.Add(24*time.Hour))
+	if err != nil {
+		return err
+	}
+	_, err = store.ResolveIdentityLogin(ctx, identity, invite.InviteToken, now)
+	return err
 }

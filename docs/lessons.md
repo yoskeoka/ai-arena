@@ -226,6 +226,13 @@
 - Rule: local / CI の OAuth verification seam では、app 本体へ注入してよいのは provider base URL など最小の endpoint override だけに留める。authorize/token/user の test double 実装、test user catalog、role seed は別 process または別 bootstrap helper へ分離する
 - Applied: `cmd/arena-service/main.go` の auth bootstrap、`cmd/github-oauth-test-double`、`tools/dev/operator-ui-backend.sh`、今後の provider mock / local auth harness 全般
 
+## [2026-06-22] mock catalog を使う seed は mock process に寄せる
+
+- Mistake: canonical test user catalog を `cmd/github-oauth-test-double` と別の `cmd/github-oauth-test-seed` で二段起動させ、同じ catalog を持つ process を分けすぎた
+- Pattern: test user catalog の source of truth は 1 つでも、その catalog を使う bootstrap を別 entrypoint に切り出しすぎると local/manual verify の導線が増えて責務が見えにくくなる
+- Rule: mock OAuth process 自身が canonical test user catalog を持つなら、Postgres seed もその process 起動時に idempotent に寄せる。別 CLI は catalog や起動 surface が本当に別でない限り増やさない
+- Applied: `cmd/github-oauth-test-double` の startup seed、`internal/platform/authtest`、今後の local auth mock/bootstrap 設計
+
 ## [2026-06-14] 開発環境 bootstrap は service spec に入れない
 
 - Mistake: fresh worktree 向けの dependency / Playwright bootstrap 方針を `docs/specs/contributor-bootstrap-entrypoints.md` と service-adjacent spec wording に入れた

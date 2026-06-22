@@ -14,6 +14,7 @@ const usesRemoteServers = testScenario === "remote";
 const authEnabled = process.env.OPERATOR_UI_TEST_AUTH === "1";
 const remoteBaseURL = process.env.OPERATOR_UI_BASE_URL;
 const captureArtifacts = process.env.OPERATOR_UI_CAPTURE_ARTIFACTS === "1";
+const reuseManagedServers = !process.env.CI && !authEnabled;
 
 if (usesRemoteServers && !remoteBaseURL) {
   throw new Error("OPERATOR_UI_BASE_URL is required when OPERATOR_UI_TEST_SCENARIO=remote");
@@ -39,24 +40,13 @@ export default defineConfig({
   webServer: usesRemoteServers
     ? undefined
     : [
-        ...(authEnabled
-          ? [
-              {
-                command: "./tools/dev/github-oauth-test-double.sh",
-                cwd: "..",
-                reuseExistingServer: !process.env.CI,
-                timeout: 120_000,
-                url: `http://127.0.0.1:${authMockPort}/healthz`,
-              },
-            ]
-          : []),
         {
           command:
             usesManagedBackend
               ? "./tools/dev/operator-ui-backend.sh"
               : `GOPATH=/tmp/ai-arena-operator-ui-go GOMODCACHE=/tmp/ai-arena-operator-ui-go/pkg/mod GOCACHE=/tmp/ai-arena-operator-ui-go-build go run ./cmd/operator-ui-fixture --listen-addr 127.0.0.1:${backendPort}`,
           cwd: "..",
-          reuseExistingServer: !process.env.CI,
+          reuseExistingServer: usesManagedBackend ? reuseManagedServers : !process.env.CI,
           timeout: 120_000,
           url: `http://127.0.0.1:${backendPort}/healthz`,
         },
@@ -66,9 +56,20 @@ export default defineConfig({
               ? "./tools/dev/operator-ui-frontend.sh"
               : `pnpm_config_store_dir=/tmp/pnpm-store-ai-arena pnpm exec vite --host ${frontendHost} --port ${frontendPort} --strictPort`,
           cwd: usesManagedBackend ? ".." : ".",
-          reuseExistingServer: !process.env.CI,
+          reuseExistingServer: usesManagedBackend ? reuseManagedServers : !process.env.CI,
           timeout: 120_000,
           url: `http://${frontendHost}:${frontendPort}`,
         },
+        ...(authEnabled
+          ? [
+              {
+                command: "./tools/dev/github-oauth-test-double.sh",
+                cwd: "..",
+                reuseExistingServer: reuseManagedServers,
+                timeout: 120_000,
+                url: `http://127.0.0.1:${authMockPort}/healthz`,
+              },
+            ]
+          : []),
       ],
 });

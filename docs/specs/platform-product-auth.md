@@ -238,6 +238,7 @@ provider 固有 subject や login name は `account` に混ぜず、
 - auth regression lane の backend 側 bootstrap は、
   provider test double と同じ test user catalog を使って
   role 付き account / identity を事前作成してよい
+  - provider test double 起動時に same catalog を idempotent seed してよい
   - first signup invite flow は別 verification scenario として分離してよい
 - auth regression lane を起動する entrypoint は、
   auth table 未作成で詰まらないよう schema apply bootstrap を明示的に担わなければならない

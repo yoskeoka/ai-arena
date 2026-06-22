@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -18,9 +19,13 @@ import (
 
 func main() {
 	listenAddr := flag.String("listen-addr", "127.0.0.1:10001", "listen address")
+	postgresDSN := flag.String("postgres-dsn", "", "optional PostgreSQL DSN for seeding canonical auth test users")
 	flag.Parse()
 
 	logger := log.New(os.Stdout, "github-oauth-test-double: ", log.LstdFlags)
+	if err := authtest.SeedGitHubOAuthTestUsersFromEnv(context.Background(), *postgresDSN, time.Now().UTC()); err != nil {
+		log.Fatal(err)
+	}
 	server := &http.Server{
 		Addr:              strings.TrimSpace(*listenAddr),
 		Handler:           newHandler(),
