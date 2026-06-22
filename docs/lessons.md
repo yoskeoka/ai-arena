@@ -219,6 +219,20 @@
 
 ## [2026-05-31] spec には現在の契約だけを書き、plan の達成文脈を混ぜない
 
+## [2026-06-22] local auth seam は app 本体へ test double 実装を持ち込まない
+
+- Mistake: GitHub auth regression lane を急いで通す中で、`arena-service` の `main.go` と同一 process に provider test double 実装と fixed tester seed 責務まで持ち込んだ
+- Pattern: verification seam を作るときに、「public route は変えない」と「app 本体に test-only 実装を混在させない」を分けず、backend env override の先に mock 実装そのものを埋め込みやすい
+- Rule: local / CI の OAuth verification seam では、app 本体へ注入してよいのは provider base URL など最小の endpoint override だけに留める。authorize/token/user の test double 実装、test user catalog、role seed は別 process または別 bootstrap helper へ分離する
+- Applied: `cmd/arena-service/main.go` の auth bootstrap、`cmd/github-oauth-test-double`、`tools/dev/operator-ui-backend.sh`、今後の provider mock / local auth harness 全般
+
+## [2026-06-22] mock catalog を使う seed は mock process に寄せる
+
+- Mistake: canonical test user catalog を `cmd/github-oauth-test-double` と別の `cmd/github-oauth-test-seed` で二段起動させ、同じ catalog を持つ process を分けすぎた
+- Pattern: test user catalog の source of truth は 1 つでも、その catalog を使う bootstrap を別 entrypoint に切り出しすぎると local/manual verify の導線が増えて責務が見えにくくなる
+- Rule: mock OAuth process 自身が canonical test user catalog を持つなら、Postgres seed もその process 起動時に idempotent に寄せる。別 CLI は catalog や起動 surface が本当に別でない限り増やさない
+- Applied: `cmd/github-oauth-test-double` の startup seed、`internal/platform/authtest`、今後の local auth mock/bootstrap 設計
+
 ## [2026-06-14] 開発環境 bootstrap は service spec に入れない
 
 - Mistake: fresh worktree 向けの dependency / Playwright bootstrap 方針を `docs/specs/contributor-bootstrap-entrypoints.md` と service-adjacent spec wording に入れた
@@ -300,3 +314,10 @@
 - Pattern: 履歴保持や再実行モデルを考えるとき、データ構造の一般名詞で済ませてしまい、operator が何を判断・切替する entity なのかが名前だけでは伝わらない
 - Rule: rerun / retry / correction のような運用操作を伴う仕様では、まず `logical match`、`run`、`official run` のように operator の判断単位が名前から読める語彙を固定する。`lineage` のような抽象語は、その具体語彙で置き換えられない場合だけ使う
 - Applied: `docs/specs/platform-service-match-request-scheduling.md`、`docs/specs/platform-service-ranking-lifecycle.md`、`docs/specs/platform-service-operator-api.md`、今後の lifecycle / audit / correction 系 spec と実装命名
+
+## [2026-06-23] provider 拡張 seam では verify 強化と provider 固定を混同しない
+
+- Mistake: GitHub OAuth provider endpoint の validation を見直す際、`https` endpoint 全体に対する hygiene 強化と、provider host を GitHub 専用に固定する話を同じ修正候補として扱いかけた
+- Pattern: current provider が GitHub でも、将来 provider 追加 seam を残したい変更では、当面の product 事情に引っ張られて validation policy を provider 固有 host に寄せすぎやすい
+- Rule: provider endpoint validation を tighten するときは、まず `userinfo` / `query` / `fragment` のような URL hygiene と、`http localhost only` のような transport 制約を分けて考える。将来 provider 追加 seam を残す方針があるなら、`https host` は product 固有 host へ不用意に固定しない
+- Applied: `internal/platform/service/auth_github.go` の provider endpoint validation、今後の OAuth/OIDC provider seam と config validation 全般

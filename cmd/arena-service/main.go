@@ -347,12 +347,26 @@ func newAuthService(postgresDSN string) (*service.AuthService, func(), error) {
 		AllowedReturnOrigins: splitCSV(os.Getenv("ARENA_AUTH_ALLOWED_RETURN_ORIGINS")),
 		CookieSigningSecret:  strings.TrimSpace(os.Getenv("ARENA_AUTH_COOKIE_SIGNING_SECRET")),
 	}
-	auth, err := service.NewAuthService(cfg, store, service.NewDefaultGitHubAuthProvider(clientID, clientSecret))
+	provider, err := githubAuthProviderFromEnv(clientID, clientSecret)
+	if err != nil {
+		store.Close()
+		return nil, nil, err
+	}
+	auth, err := service.NewAuthService(cfg, store, provider)
 	if err != nil {
 		store.Close()
 		return nil, nil, err
 	}
 	return auth, store.Close, nil
+}
+
+func githubAuthProviderFromEnv(clientID string, clientSecret string) (service.OAuthIdentityProvider, error) {
+	return service.NewGitHubAuthProvider(service.GitHubAuthProviderConfig{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		OAuthBaseURL: os.Getenv("ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL"),
+		APIBaseURL:   os.Getenv("ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL"),
+	})
 }
 
 func (a *cliApp) close() {

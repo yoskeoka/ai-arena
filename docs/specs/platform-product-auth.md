@@ -208,6 +208,41 @@ provider 固有 subject や login name は `account` に混ぜず、
 - auth env が未注入の lightweight fixture lane では、
   login flow を前提にしない verification を維持してよい
 
+## Browser Verification Seam
+
+- current public login hand は GitHub login first のまま維持しなければならない
+  - `/auth/github/login`
+  - provider authorize
+  - `/auth/github/callback`
+  - backend session cookie
+- local / CI の auth regression lane では、
+  public route を変えずに provider upstream だけ repo-owned test double へ切り替えてよい
+- この seam は verification 専用であり、
+  product に local 専用 login provider や別 public login button を増やしてはならない
+- backend は provider endpoint override として次だけを受け取ってよい
+  - `ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL`
+  - `ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL`
+- endpoint override は local / CI verification seam のためにだけ使ってよく、
+  authorize / token / user の個別 URL override を product contract に増やしてはならない
+- provider test double は backend process と別 process で起動し、
+  次の最小 contract だけを持てばよい
+  - browser が到達する authorize form
+  - backend が呼ぶ token exchange endpoint
+  - backend が呼ぶ identity/profile endpoint
+- provider test double は canonical test user catalog を自前で持ってよい
+  - 例:
+    `spectator-user01`、`developer-user01`、`operator-user01`
+  - browser form は password を要求せず、
+    `user_id` text input と login button だけでよい
+  - available test users の一覧を form 上に hint 表示してよい
+- auth regression lane の backend 側 bootstrap は、
+  provider test double と同じ test user catalog を使って
+  role 付き account / identity を事前作成してよい
+  - provider test double 起動時に same catalog を idempotent seed してよい
+  - first signup invite flow は別 verification scenario として分離してよい
+- auth regression lane を起動する entrypoint は、
+  auth table 未作成で詰まらないよう schema apply bootstrap を明示的に担わなければならない
+
 ## Deferred Follow-Ups
 
 - Google login

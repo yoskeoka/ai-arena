@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -15,23 +17,78 @@ import (
 type DefaultGitHubAuthProvider struct {
 	client      *http.Client
 	oauthConfig *oauth2.Config
+	userURL     string
+}
+
+// GitHubAuthProviderConfig configures the GitHub OAuth transport and user lookup endpoints.
+type GitHubAuthProviderConfig struct {
+	ClientID     string
+	ClientSecret string
+	OAuthBaseURL string
+	APIBaseURL   string
+	HTTPClient   *http.Client
+}
+
+// NewGitHubAuthProvider constructs a GitHub auth provider from the supplied config.
+func NewGitHubAuthProvider(cfg GitHubAuthProviderConfig) (*DefaultGitHubAuthProvider, error) {
+	client := cfg.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	oauthBaseURL := strings.TrimSpace(cfg.OAuthBaseURL)
+	if oauthBaseURL == "" {
+		oauthBaseURL = "https://github.com/login/oauth"
+	}
+	apiBaseURL := strings.TrimSpace(cfg.APIBaseURL)
+	if apiBaseURL == "" {
+		apiBaseURL = "https://api.github.com"
+	}
+	oauthBaseURL, err := validatedProviderEndpointURL(oauthBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	apiBaseURL, err = validatedProviderEndpointURL(apiBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	authURL, err := appendProviderEndpointPath(oauthBaseURL, "authorize")
+	if err != nil {
+		return nil, err
+	}
+	tokenURL, err := appendProviderEndpointPath(oauthBaseURL, "access_token")
+	if err != nil {
+		return nil, err
+	}
+	userURL, err := appendProviderEndpointPath(apiBaseURL, "user")
+	if err != nil {
+		return nil, err
+	}
+	return &DefaultGitHubAuthProvider{
+		client: client,
+		oauthConfig: &oauth2.Config{
+			ClientID:     strings.TrimSpace(cfg.ClientID),
+			ClientSecret: strings.TrimSpace(cfg.ClientSecret),
+			// #nosec G101 -- OAuth endpoint URLs are public protocol constants, not embedded secrets.
+			Endpoint: oauth2.Endpoint{
+				AuthURL:  authURL,
+				TokenURL: tokenURL,
+			},
+			Scopes: []string{"read:user"},
+		},
+		userURL: userURL,
+	}, nil
 }
 
 // NewDefaultGitHubAuthProvider constructs the default GitHub auth provider.
 func NewDefaultGitHubAuthProvider(clientID string, clientSecret string) *DefaultGitHubAuthProvider {
-	return &DefaultGitHubAuthProvider{
-		client: &http.Client{Timeout: 10 * time.Second},
-		oauthConfig: &oauth2.Config{
-			ClientID:     strings.TrimSpace(clientID),
-			ClientSecret: strings.TrimSpace(clientSecret),
-			// #nosec G101 -- OAuth endpoint URLs are public protocol constants, not embedded secrets.
-			Endpoint: oauth2.Endpoint{
-				AuthURL:  "https://github.com/login/oauth/authorize",
-				TokenURL: "https://github.com/login/oauth/access_token",
-			},
-			Scopes: []string{"read:user"},
-		},
+	provider, err := NewGitHubAuthProvider(GitHubAuthProviderConfig{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+	})
+	if err != nil {
+		panic(err)
 	}
+	return provider
 }
 
 // AuthorizationURL builds the GitHub authorization URL for the current login attempt.
@@ -59,17 +116,22 @@ func (c *DefaultGitHubAuthProvider) ExchangeIdentity(ctx context.Context, code s
 }
 
 func (c *DefaultGitHubAuthProvider) fetchUser(ctx context.Context, accessToken string) (AuthIdentity, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user", nil)
+	// #nosec G704 -- the provider endpoint is validated by validatedProviderEndpointURL and limited to HTTPS or localhost test doubles.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.userURL, nil)
 	if err != nil {
 		return AuthIdentity{}, err
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+	// #nosec G704 -- the provider endpoint is validated by validatedProviderEndpointURL and limited to GitHub HTTPS or localhost test doubles.
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return AuthIdentity{}, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return AuthIdentity{}, fmt.Errorf("github user lookup failed with status %s", resp.Status)
+	}
 	var body struct {
 		ID    int64  `json:"id"`
 		Login string `json:"login"`
@@ -77,9 +139,6 @@ func (c *DefaultGitHubAuthProvider) fetchUser(ctx context.Context, accessToken s
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		return AuthIdentity{}, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return AuthIdentity{}, fmt.Errorf("github user lookup failed with status %s", resp.Status)
 	}
 	if body.ID == 0 || strings.TrimSpace(body.Login) == "" {
 		return AuthIdentity{}, fmt.Errorf("github user lookup returned incomplete identity")
@@ -90,4 +149,33 @@ func (c *DefaultGitHubAuthProvider) fetchUser(ctx context.Context, accessToken s
 		Login:    body.Login,
 		Email:    body.Email,
 	}, nil
+}
+
+func validatedProviderEndpointURL(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("invalid GitHub auth provider endpoint %q", raw)
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("unsupported GitHub auth provider endpoint %q", raw)
+	}
+	switch parsed.Scheme {
+	case "https":
+		return parsed.String(), nil
+	case "http":
+		host := parsed.Hostname()
+		if host == "localhost" || host == "127.0.0.1" {
+			return parsed.String(), nil
+		}
+	}
+	return "", fmt.Errorf("unsupported GitHub auth provider endpoint %q", raw)
+}
+
+func appendProviderEndpointPath(baseURL string, suffix string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return "", err
+	}
+	parsed.Path = path.Join("/", parsed.Path, suffix)
+	return parsed.String(), nil
 }
