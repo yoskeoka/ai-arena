@@ -246,17 +246,19 @@ function createRequestAPI(request) {
 }
 
 function createBrowserAPI(page) {
+  const usesRemoteServers = process.env.OPERATOR_UI_TEST_SCENARIO === "remote";
   return {
     async getJSON(url) {
       const target = new URL(url);
-      return page.evaluate(async (relativeTarget) => {
-        const response = await fetch(relativeTarget, { credentials: "include" });
+      const fetchTarget = usesRemoteServers ? target.toString() : `${target.pathname}${target.search}`;
+      return page.evaluate(async (requestURL) => {
+        const response = await fetch(requestURL, { credentials: "include" });
         return {
           ok: response.ok,
           status: response.status,
           json: await response.json(),
         };
-      }, `${target.pathname}${target.search}`);
+      }, fetchTarget);
     },
   };
 }
