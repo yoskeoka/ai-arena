@@ -287,6 +287,10 @@ func (a *OperatorAPI) handleRankings(w http.ResponseWriter, r *http.Request) {
 		GameVersion:    strings.TrimSpace(r.URL.Query().Get("game_version")),
 		RulesetVersion: strings.TrimSpace(r.URL.Query().Get("ruleset_version")),
 	}
+	if scope.GameID == "" || scope.GameVersion == "" || scope.RulesetVersion == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("service: game_id, game_version, and ruleset_version are required"))
+		return
+	}
 	snapshot, err := a.rankings.Get(r.Context(), scope)
 	if err != nil {
 		writeError(w, statusCodeForServiceError(err), err)
