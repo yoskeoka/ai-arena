@@ -18,6 +18,8 @@ const authMockUserID = process.env.OPERATOR_UI_AUTH_MOCK_USER_ID ?? "operator-us
 const authMockLogin = process.env.OPERATOR_UI_AUTH_MOCK_LOGIN ?? authMockUserID;
 const authSignupUserID = process.env.OPERATOR_UI_AUTH_SIGNUP_USER_ID ?? "operator-signup-user01";
 const authSignupLogin = process.env.OPERATOR_UI_AUTH_SIGNUP_LOGIN ?? authSignupUserID;
+const frontendHost = process.env.OPERATOR_UI_FRONTEND_HOST ?? "127.0.0.1";
+const frontendPort = process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const artifactRef = process.env.OPERATOR_UI_TEST_ARTIFACT_REF ?? path.resolve(testDir, "../../testdata/ai/echo/echo-ai-2turn");
 
@@ -314,13 +316,13 @@ function createSignupInvite() {
     cwd: path.resolve(testDir, "../.."),
     env: {
       ...process.env,
-      LOCAL_AUTH_FRONTEND_ORIGIN: `http://localhost:${process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173"}`,
+      LOCAL_AUTH_FRONTEND_ORIGIN: `http://${frontendHost}:${frontendPort}`,
     },
     encoding: "utf8",
   });
   const payloadStart = stdout.indexOf("{");
   if (payloadStart === -1) {
-    throw new Error(`signup invite helper returned unexpected output: ${stdout}`);
+    throw new Error("signup invite helper returned unexpected output");
   }
   return JSON.parse(stdout.slice(payloadStart));
 }

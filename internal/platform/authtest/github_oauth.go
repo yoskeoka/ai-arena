@@ -93,7 +93,7 @@ func (u GitHubOAuthTestUser) ProviderSubject() string {
 	return fmt.Sprintf("%d", u.NumericID)
 }
 
-// SeedGitHubOAuthTestUsers seeds the canonical test users into the auth store if they do not already exist.
+// SeedGitHubOAuthTestUsers seeds the canonical auth-store users into the auth store if they do not already exist.
 func SeedGitHubOAuthTestUsers(ctx context.Context, store *service.PostgresAuthStore, now time.Time) error {
 	for _, user := range GitHubOAuthTestUsers() {
 		if !user.SeedAccount {
