@@ -36,7 +36,7 @@ REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtim
 REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
 REVIVE_PACKAGE_DIRS = $(shell $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
-.PHONY: up down migrate local-dummy-fixture local-invite-url start-local start-backend-local start-frontend-local test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-preset-bots render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: up down migrate local-dummy-fixture local-invite-url start-backend-local start-frontend-local test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-preset-bots render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 export COMPOSE_BAKE = false
 
@@ -187,10 +187,6 @@ render-start:
 	./app serve \
 		--listen-addr "0.0.0.0:$${PORT:-10000}" \
 		--preset-config "$${ARENA_SERVICE_PRESET_CONFIG:-./config/platform-service/presets.remote-bootstrap.json}"
-
-start-local:
-	@OPERATOR_UI_BACKEND_MODE=local OPERATOR_UI_LOG_TO_FILE=0 \
-	bash ./tools/dev/operator-ui-backend.sh
 
 start-backend-local:
 	@OPERATOR_UI_BACKEND_MODE=local OPERATOR_UI_LOG_TO_FILE=0 \
