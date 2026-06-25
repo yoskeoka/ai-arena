@@ -1,3 +1,5 @@
+import { ReactNode } from "react";
+
 import { MatchDetailResponse } from "../../api";
 import { Badge } from "../../shared/ui/Badge";
 import { Meta } from "../../shared/ui/Meta";
@@ -9,6 +11,11 @@ type CompletedDetailPanelProps = {
   detailState: LoadState;
   detailError?: string;
   onRefreshDetail: () => void;
+  title?: string;
+  subtitle?: string;
+  testId?: string;
+  actions?: ReactNode;
+  emptyMessage?: string;
 };
 
 export function CompletedDetailPanel({
@@ -16,17 +23,22 @@ export function CompletedDetailPanel({
   detailState,
   detailError,
   onRefreshDetail,
+  title = "Completed Detail",
+  subtitle = "Result-summary first, delegated artifacts second.",
+  testId = "operator-panel-completed-detail",
+  actions,
+  emptyMessage,
 }: CompletedDetailPanelProps) {
   const artifactEntries = Object.entries(detail?.artifact_access ?? {});
 
   return (
     <Panel
-      title="Completed Detail"
-      subtitle="Result-summary first, delegated artifacts second."
+      title={title}
+      subtitle={subtitle}
       status={detailState}
       error={detailError}
       hint={hintFor(detailError)}
-      testId="operator-panel-completed-detail"
+      testId={testId}
     >
       {detail ? (
         <div className="space-y-5" data-testid={`match-detail-${detail.run_id}`}>
@@ -45,6 +57,7 @@ export function CompletedDetailPanel({
               <Meta label="Output Dir" value={detail.output_dir} />
               <Meta label="Result Summary" value={detail.result_summary_path ?? "n/a"} />
             </dl>
+            {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
@@ -153,16 +166,16 @@ export function CompletedDetailPanel({
           </section>
         </div>
       ) : (
-        <EmptyDetailState />
+        <EmptyDetailState message={emptyMessage} />
       )}
     </Panel>
   );
 }
 
-function EmptyDetailState() {
+function EmptyDetailState({ message }: { message?: string }) {
   return (
     <div className="rounded-3xl border border-dashed border-black/15 bg-paper p-8 text-center text-sm text-black/60">
-      Select a completed run to inspect result-summary, replay inputs, and delegated artifact links.
+      {message ?? "Select a completed run to inspect result-summary, replay inputs, and delegated artifact links."}
     </div>
   );
 }

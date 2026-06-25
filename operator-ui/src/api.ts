@@ -87,12 +87,126 @@ export type SessionStatusResponse = {
   principal?: AuthPrincipal;
 };
 
+export type GameRegistration = {
+  registration_id: string;
+  game: {
+    game_id: string;
+    game_version: string;
+    ruleset_version: string;
+  };
+  build_mode: string;
+  builder_id: string;
+  supported_rulesets: string[];
+  source?: string;
+  source_id?: string;
+};
+
+export type AISubmission = {
+  ai_submission_id: string;
+  game_registration_id: string;
+  game: {
+    game_id: string;
+    game_version: string;
+    ruleset_version: string;
+  };
+  artifact_ref: string;
+  display_name: string;
+  runtime_kind: string;
+  ai_id: string;
+  validation_state: string;
+  source?: string;
+  source_id?: string;
+};
+
+export type MatchRequestParticipant = {
+  player_id: string;
+  ai_submission_id: string;
+};
+
+export type MatchRequest = {
+  request_id: string;
+  game_registration_id: string;
+  game: {
+    game_id: string;
+    game_version: string;
+    ruleset_version: string;
+  };
+  participants: MatchRequestParticipant[];
+  output_dir: string;
+  source?: string;
+  source_id?: string;
+  match_id: string;
+  latest_run_id: string;
+  official_run_id?: string;
+  lifecycle_state: LifecycleState;
+};
+
+export type RankingScope = {
+  game_id: string;
+  game_version: string;
+  ruleset_version: string;
+};
+
+export type RankingEntry = {
+  competitor_ref: string;
+  last_player_id: string;
+  matches_played: number;
+  first_places: number;
+  placement_counts?: Record<string, number>;
+  last_run_id: string;
+  last_match_id: string;
+  last_status: string;
+};
+
+export type RankingSnapshot = {
+  scope: RankingScope;
+  applied_run_ids?: string[];
+  applied_match_ids?: string[];
+  last_applied_run_id?: string;
+  last_applied_match_id?: string;
+  completed_matches: number;
+  entries?: RankingEntry[];
+};
+
+export type StoredRankingSnapshot = {
+  locator: string;
+  snapshot: RankingSnapshot;
+};
+
 type ListResponse = {
   items: ResultListItem[];
 };
 
+type GenericListResponse<T> = {
+  items: T[];
+};
+
 type EnqueuePayload = {
   preset_id: string;
+};
+
+type GameRegistrationPayload = {
+  registration_id?: string;
+  game: {
+    game_id: string;
+    game_version: string;
+    ruleset_version: string;
+  };
+};
+
+type AISubmissionPayload = {
+  ai_submission_id?: string;
+  game_registration_id: string;
+  artifact_ref: string;
+  display_name?: string;
+};
+
+type MatchRequestPayload = {
+  request_id?: string;
+  game_registration_id: string;
+  participants: MatchRequestParticipant[];
+  output_dir: string;
+  match_id?: string;
 };
 
 export class OperatorApiClient {
@@ -122,6 +236,66 @@ export class OperatorApiClient {
     return this.decodeList(response);
   }
 
+  async listGames(signal?: AbortSignal): Promise<GameRegistration[]> {
+    const response = await fetch(this.url("/api/v1/game-registrations"), {
+      signal,
+      credentials: "include",
+    });
+    return this.decodeTypedList<GameRegistration>(response);
+  }
+
+  async createGame(payload: GameRegistrationPayload): Promise<GameRegistration> {
+    const response = await fetch(this.url("/api/v1/game-registrations"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    return this.decodeJSON<GameRegistration>(response);
+  }
+
+  async listAISubmissions(signal?: AbortSignal): Promise<AISubmission[]> {
+    const response = await fetch(this.url("/api/v1/ai-submissions"), {
+      signal,
+      credentials: "include",
+    });
+    return this.decodeTypedList<AISubmission>(response);
+  }
+
+  async createAISubmission(payload: AISubmissionPayload): Promise<AISubmission> {
+    const response = await fetch(this.url("/api/v1/ai-submissions"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    return this.decodeJSON<AISubmission>(response);
+  }
+
+  async listMatchRequests(signal?: AbortSignal): Promise<MatchRequest[]> {
+    const response = await fetch(this.url("/api/v1/match-requests"), {
+      signal,
+      credentials: "include",
+    });
+    return this.decodeTypedList<MatchRequest>(response);
+  }
+
+  async createMatchRequest(payload: MatchRequestPayload): Promise<MatchRequest> {
+    const response = await fetch(this.url("/api/v1/match-requests"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    return this.decodeJSON<MatchRequest>(response);
+  }
+
   async getMatchDetail(runId: string, signal?: AbortSignal): Promise<MatchDetailResponse> {
     const response = await fetch(this.url(`/api/v1/runs/${encodeURIComponent(runId)}`), {
       signal,
@@ -140,6 +314,31 @@ export class OperatorApiClient {
       body: JSON.stringify({ preset_id: presetId } satisfies EnqueuePayload),
     });
     return this.decodeJSON<ResultListItem>(response);
+  }
+
+  async getRanking(scope: RankingScope, signal?: AbortSignal): Promise<StoredRankingSnapshot> {
+    const params = new URLSearchParams(scope);
+    const response = await fetch(this.url(`/api/v1/rankings?${params.toString()}`), {
+      signal,
+      credentials: "include",
+    });
+    return this.decodeJSON<StoredRankingSnapshot>(response);
+  }
+
+  async cancelRun(runId: string): Promise<ResultListItem> {
+    return this.postRunAction(runId, "cancel");
+  }
+
+  async retryRun(runId: string): Promise<ResultListItem> {
+    return this.postRunAction(runId, "retry");
+  }
+
+  async rerunRun(runId: string): Promise<ResultListItem> {
+    return this.postRunAction(runId, "rerun");
+  }
+
+  async promoteRun(runId: string): Promise<ResultListItem> {
+    return this.postRunAction(runId, "promote");
   }
 
   async logout(): Promise<void> {
@@ -168,6 +367,14 @@ export class OperatorApiClient {
     return payload.items;
   }
 
+  private async decodeTypedList<T>(response: Response): Promise<T[]> {
+    const payload = await this.decodeJSON<GenericListResponse<T>>(response);
+    if (!isListResponse(payload)) {
+      throw new Error("operator API returned an unexpected list payload");
+    }
+    return payload.items as T[];
+  }
+
   private async decodeJSON<T>(response: Response): Promise<T> {
     const payload = await decodeResponseBody<T>(response);
     if (!response.ok) {
@@ -189,6 +396,14 @@ export class OperatorApiClient {
     }
     const base = trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
     return `${base}${pathname}`;
+  }
+
+  private async postRunAction(runId: string, action: "cancel" | "retry" | "rerun" | "promote"): Promise<ResultListItem> {
+    const response = await fetch(this.url(`/api/v1/runs/${encodeURIComponent(runId)}/${action}`), {
+      method: "POST",
+      credentials: "include",
+    });
+    return this.decodeJSON<ResultListItem>(response);
   }
 }
 

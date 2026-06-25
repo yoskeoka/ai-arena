@@ -81,6 +81,7 @@ type OperatorAPI struct {
 	queries        *QueryService
 	general        *GeneralSubmissionService
 	requests       *MatchRequestService
+	rankings       *RankingService
 	presets        PresetCatalog
 	artifactAccess ArtifactAccessIssuer
 	auth           *AuthService
@@ -120,6 +121,7 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, general *Ge
 		queries:        queries,
 		general:        general,
 		requests:       requests,
+		rankings:       rankingService,
 		presets:        presets,
 		artifactAccess: artifactAccess,
 		auth:           auth,
@@ -140,7 +142,9 @@ func (a *OperatorAPI) Handler() http.Handler {
 	protected.HandleFunc("/api/v1/game-registrations", a.handleGameRegistrations)
 	protected.HandleFunc("/api/v1/ai-submissions", a.handleAISubmissions)
 	protected.HandleFunc("/api/v1/match-requests", a.handleMatchRequests)
+	protected.HandleFunc("GET /api/v1/rankings", a.handleRankings)
 	protected.HandleFunc("POST /api/v1/preset-matches", a.handlePresetMatches)
+	protected.HandleFunc("POST /api/v1/runs/{run_id}/cancel", a.handleRunCancel)
 	protected.HandleFunc("POST /api/v1/runs/{run_id}/retry", a.handleRunRetry)
 	protected.HandleFunc("POST /api/v1/runs/{run_id}/rerun", a.handleRunRerun)
 	protected.HandleFunc("POST /api/v1/runs/{run_id}/promote", a.handleRunPromote)
@@ -273,6 +277,28 @@ func (a *OperatorAPI) handleMatchRequests(w http.ResponseWriter, r *http.Request
 	}
 }
 
+func (a *OperatorAPI) handleRankings(w http.ResponseWriter, r *http.Request) {
+	if a.rankings == nil {
+		writeError(w, http.StatusNotFound, ErrRankingSnapshotNotFound)
+		return
+	}
+	scope := RankingScope{
+		GameID:         strings.TrimSpace(r.URL.Query().Get("game_id")),
+		GameVersion:    strings.TrimSpace(r.URL.Query().Get("game_version")),
+		RulesetVersion: strings.TrimSpace(r.URL.Query().Get("ruleset_version")),
+	}
+	if scope.GameID == "" || scope.GameVersion == "" || scope.RulesetVersion == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("service: game_id, game_version, and ruleset_version are required"))
+		return
+	}
+	snapshot, err := a.rankings.Get(r.Context(), scope)
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, snapshot)
+}
+
 func (a *OperatorAPI) handleActiveMatches(w http.ResponseWriter, r *http.Request) {
 	a.handleMatchList(w, r, map[LifecycleState]struct{}{
 		StateQueued:     {},
@@ -280,6 +306,20 @@ func (a *OperatorAPI) handleActiveMatches(w http.ResponseWriter, r *http.Request
 		StateRunning:    {},
 		StatePersisting: {},
 	})
+}
+
+func (a *OperatorAPI) handleRunCancel(w http.ResponseWriter, r *http.Request) {
+	record, err := a.commands.Cancel(r.Context(), r.PathValue("run_id"))
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	item, _, err := buildResultListItem(r.Context(), record, a.queries.reader)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
 }
 
 func (a *OperatorAPI) handleRunRetry(w http.ResponseWriter, r *http.Request) {
@@ -396,7 +436,7 @@ func writeError(w http.ResponseWriter, status int, err error) {
 
 func statusCodeForServiceError(err error) int {
 	switch {
-	case errors.Is(err, ErrQueueRecordNotFound), errors.Is(err, ErrPresetNotFound), errors.Is(err, ErrGameRegistrationNotFound), errors.Is(err, ErrAISubmissionNotFound):
+	case errors.Is(err, ErrQueueRecordNotFound), errors.Is(err, ErrPresetNotFound), errors.Is(err, ErrGameRegistrationNotFound), errors.Is(err, ErrAISubmissionNotFound), errors.Is(err, ErrRankingSnapshotNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, ErrConflict):
 		return http.StatusConflict

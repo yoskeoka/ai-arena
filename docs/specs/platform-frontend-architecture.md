@@ -151,17 +151,25 @@ session rotation、CSRF 対策詳細、role-specific guard placement は別途 d
 
 ## Current Application
 
-Phase 6 first landing の `operator-ui` は、
+Phase 7 の `operator-ui` は、
 broader frontend architecture の最初の `operator` page family として位置づける。
 
-- current minimal operator surface は `operator` route 配下の 1 page として扱ってよい
-- first refactor では `operator` page を app shell 配下へ再配置し、
-  current `/` entry から到達できる observation surface を維持してよい
-- product auth first landing では `login` route を追加してよい
+- public entry は `login` route と protected `operator` route family を持ってよい
   - protected operator route の default return target は `/operator` としてよい
-- active/completed/detail/preset queue の state と polling は page-local default に従う
+- operator route family は shallow な domain-first navigation を先に固定してよい
+  - `/operator`
+  - `/operator/games`
+  - `/operator/submissions`
+  - `/operator/requests`
+  - `/operator/rankings`
+  - `/operator/runs/{run_id}` は deep-link detail route として持ってよい
+- current `/` entry は、operator surface の alias または `/operator` への redirect として扱ってよい
+- route registration は app shell 内の pathname dispatch のままでよく、
+  Phase 7 では router library 導入を必須にしない
+- active/completed/detail の polling と、games/submissions/requests/rankings の fetch は
+  page-local default に従う
 - `shared/ui` へ逃がしてよいのは primitive だけであり、
-  operator 固有 panel や artifact entry は route/page 配下に残す
+  operator 固有 panel、ranking entry、artifact entry、form section は route/page 配下に残す
 - 後続 refactor は current file size ではなく、この route-first boundary に従って進める
 
 ## Deferred Decisions

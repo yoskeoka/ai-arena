@@ -114,8 +114,18 @@ func (b *fixtureBackend) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", b.api)
 	mux.Handle("/api/", b.api)
+	mux.HandleFunc("/auth/session", b.handleSessionStatus)
 	mux.HandleFunc("/fixture-artifacts/result-summary.json", b.handleResultSummaryDownload)
 	return mux
+}
+
+func (b *fixtureBackend) handleSessionStatus(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(service.SessionStatusResponse{
+		AuthMode:      "disabled",
+		Authenticated: false,
+	})
 }
 
 func (b *fixtureBackend) handleResultSummaryDownload(w http.ResponseWriter, _ *http.Request) {

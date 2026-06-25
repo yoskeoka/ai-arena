@@ -1,4 +1,6 @@
+import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 
 if (process.env.OPERATOR_UI_TEST_SCENARIO === "remote" && !process.env.OPERATOR_UI_BACKEND_BASE_URL) {
@@ -7,17 +9,18 @@ if (process.env.OPERATOR_UI_TEST_SCENARIO === "remote" && !process.env.OPERATOR_
 
 const backendBaseURL =
   process.env.OPERATOR_UI_BACKEND_BASE_URL ?? `http://127.0.0.1:${process.env.OPERATOR_UI_BACKEND_PORT ?? "10000"}`;
-const presetId = process.env.OPERATOR_UI_PRESET_ID ?? "echo-reference";
 const delegatedDownloadExpectation = process.env.OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD ?? "0";
 const captureArtifacts = process.env.OPERATOR_UI_CAPTURE_ARTIFACTS === "1";
 const artifactDir = process.env.OPERATOR_UI_ARTIFACT_DIR ?? "./test-results";
 const authEnabled = process.env.OPERATOR_UI_TEST_AUTH === "1";
 const authMockUserID = process.env.OPERATOR_UI_AUTH_MOCK_USER_ID ?? "operator-user01";
 const authMockLogin = process.env.OPERATOR_UI_AUTH_MOCK_LOGIN ?? authMockUserID;
+const testDir = path.dirname(fileURLToPath(import.meta.url));
+const artifactRef = process.env.OPERATOR_UI_TEST_ARTIFACT_REF ?? path.resolve(testDir, "../../testdata/ai/echo/echo-ai-2turn");
 
-test.setTimeout(90_000);
+test.setTimeout(120_000);
 
-test("service-backed operator UI browser lane covers queue, active, completed detail, and artifact access", async ({
+test("service-backed operator UI browser lane covers registration, request execution, ranking correction, and artifact access", async ({
   context,
   page,
   request,
@@ -26,6 +29,7 @@ test("service-backed operator UI browser lane covers queue, active, completed de
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
   }
 
+  const api = authEnabled ? createBrowserAPI(page) : createRequestAPI(request);
   const health = await request.get(`${backendBaseURL}/healthz`);
   expect(health.ok()).toBeTruthy();
 
@@ -53,98 +57,95 @@ test("service-backed operator UI browser lane covers queue, active, completed de
     await expect(page.getByText(`Signed in as @${authMockLogin}`)).toBeVisible();
   }
 
-  await expect(page.getByRole("heading", { name: "AI Arena Minimal Operator UI" })).toBeVisible();
-  await expect(page.getByTestId("operator-panel-preset-queue")).toBeVisible();
-  await expect(page.getByTestId("operator-panel-active-matches")).toBeVisible();
-  await expect(page.getByTestId("operator-panel-completed-matches")).toBeVisible();
-  await expect(page.getByTestId("operator-panel-completed-detail")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI Arena Operator Console" })).toBeVisible();
+  await expect(page.getByTestId("operator-nav-overview")).toBeVisible();
+  await expect(page.getByTestId("operator-nav-games")).toBeVisible();
+  await expect(page.getByTestId("operator-nav-submissions")).toBeVisible();
+  await expect(page.getByTestId("operator-nav-requests")).toBeVisible();
+  await expect(page.getByTestId("operator-nav-rankings")).toBeVisible();
 
-  const api = authEnabled ? page.context().request : request;
-  const activePanel = page.getByTestId("operator-panel-active-matches");
-  const completedPanel = page.getByTestId("operator-panel-completed-matches");
-  if (authEnabled) {
-    const activeRows = activePanel.locator('[data-testid^="match-row-"]');
-    const completedRows = completedPanel.locator('[data-testid^="match-row-"]');
-    const initialActiveRows = await activeRows.count();
-    const initialCompletedRows = await completedRows.count();
+  const suffix = Date.now().toString();
+  const registrationID = `echo-count-ui-${suffix}`;
+  const aiSubmissionID1 = `ai-ui-${suffix}-01`;
+  const aiSubmissionID2 = `ai-ui-${suffix}-02`;
+  const requestOutputDir = path.join(os.tmpdir(), `operator-ui-request-${suffix}`);
 
-    await page.getByTestId(`preset-queue-action-${presetId}`).click();
+  await page.getByTestId("operator-nav-games").click();
+  await expect(page.getByTestId("operator-form-games")).toBeVisible();
+  await page.getByLabel("Registration ID").fill(registrationID);
+  await page.getByLabel("Game ID").fill("echo-count");
+  await page.getByLabel("Game Version").fill("2.0.0");
+  await page.getByLabel("Ruleset Version").fill("phase2-simultaneous-2turn");
+  await page.getByRole("button", { name: "Create game registration" }).click();
+  await expect(page.getByTestId(`game-row-${registrationID}`)).toBeVisible();
 
-    await expect
-      .poll(async () => (await activeRows.count()) + (await completedRows.count()), { timeout: 30_000 })
-      .toBeGreaterThan(initialActiveRows + initialCompletedRows);
+  await page.getByTestId("operator-nav-submissions").click();
+  await expect(page.getByTestId("operator-form-submissions")).toBeVisible();
+  await createAISubmission(page, {
+    submissionID: aiSubmissionID1,
+    registrationID,
+    artifactRef,
+    displayName: "Echo UI Alpha",
+  });
+  await expect(page.getByTestId(`submission-row-${aiSubmissionID1}`)).toBeVisible();
+  await createAISubmission(page, {
+    submissionID: aiSubmissionID2,
+    registrationID,
+    artifactRef,
+    displayName: "Echo UI Beta",
+  });
+  await expect(page.getByTestId(`submission-row-${aiSubmissionID2}`)).toBeVisible();
 
-    await expect.poll(async () => completedRows.count(), { timeout: 30_000 }).toBeGreaterThan(initialCompletedRows);
-    await page.reload();
+  await page.getByTestId("operator-nav-requests").click();
+  await expect(page.getByTestId("operator-form-requests")).toBeVisible();
+  await page.getByLabel("Game Registration ID").fill(registrationID);
+  await page.getByLabel("Output Dir").fill(requestOutputDir);
+  await page.getByLabel("Player 1 ID").fill("alpha");
+  await page.getByLabel("Player 1 AI Submission ID").fill(aiSubmissionID1);
+  await page.getByLabel("Player 2 ID").fill("beta");
+  await page.getByLabel("Player 2 AI Submission ID").fill(aiSubmissionID2);
+  await page.getByRole("button", { name: "Create match request" }).click();
 
-    const completedRow = completedPanel.locator('[data-testid^="match-row-"]').first();
-    await expect(completedRow).toBeVisible();
-    await completedRow.click();
+  const createdRequest = await waitForRequest(api, registrationID, requestOutputDir);
+  await expect(page.getByTestId(`request-row-${createdRequest.request_id}`)).toBeVisible();
 
-    const detail = page.locator('[data-testid^="match-detail-"]').first();
-    await expect(detail).toBeVisible();
-    await expect(detail.getByText("Status", { exact: true })).toBeVisible();
-    await expect(detail.getByText("completed", { exact: true })).toBeVisible();
+  const initialRun = await waitForRunState(api, createdRequest.latest_run_id, "completed");
 
-    const resultSummaryArtifact = detail.getByTestId("artifact-entry-result-summary");
-    await expect(resultSummaryArtifact).toBeVisible();
-    await expect(resultSummaryArtifact.getByRole("link", { name: "open delegated download" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Open latest run detail" }).click();
+  await expect(page).toHaveURL(new RegExp(`/operator/runs/${initialRun.run_id}$`));
+  await expect(page.getByTestId(`match-detail-${initialRun.run_id}`)).toBeVisible();
+  await expect(page.getByTestId("run-action-rerun")).toBeVisible();
+  await page.getByTestId("run-action-rerun").click();
+
+  const rerunRequest = await waitForLatestRunChange(api, createdRequest.request_id, initialRun.run_id);
+  const rerunRun = await waitForRunState(api, rerunRequest.latest_run_id, "completed");
+
+  await page.goto(`/operator/runs/${rerunRun.run_id}`);
+  await expect(page.getByTestId(`match-detail-${rerunRun.run_id}`)).toBeVisible();
+  await expect(page.getByTestId("run-action-promote")).toBeVisible();
+  await page.getByTestId("run-action-promote").click();
+  await expect.poll(async () => getRunDetail(api, rerunRun.run_id)).toMatchObject({ run_id: rerunRun.run_id, official: true });
+
+  await page.getByTestId("operator-nav-rankings").click();
+  const quickScopeId = scopeTestId(rerunRun.game_id, rerunRun.game_version, rerunRun.ruleset_version);
+  await expect(page.getByTestId(`ranking-scope-${quickScopeId}`)).toBeVisible();
+  await page.getByTestId(`ranking-scope-${quickScopeId}`).click();
+  await expect(page.getByText(`last applied run: ${rerunRun.run_id}`)).toBeVisible();
+  await expect(page.getByTestId(`ranking-entry-${encodeURIComponent(artifactRef)}`)).toBeVisible();
+
+  await page.goto(`/operator/runs/${rerunRun.run_id}`);
+  const resultSummaryArtifact = page.getByTestId("artifact-entry-result-summary");
+  await expect(resultSummaryArtifact).toBeVisible();
+  const downloadLink = resultSummaryArtifact.getByRole("link", { name: "open delegated download" });
+  const expectsDelegatedDownload =
+    delegatedDownloadExpectation === "auto"
+      ? (rerunRun.result_summary_path ?? "").startsWith("s3://")
+      : delegatedDownloadExpectation === "1";
+  if (expectsDelegatedDownload) {
+    await expect(downloadLink).toBeVisible();
+    await expect(downloadLink).toHaveAttribute("href", /http:\/\//);
   } else {
-    const knownRunIDs = await currentRunIDs(api);
-
-    await page.getByTestId(`preset-queue-action-${presetId}`).click();
-
-    const created = await waitForRecord(api, async () => {
-      const activeItems = await listItems(api, `${backendBaseURL}/api/v1/matches/active`);
-      const activeRecord = activeItems.find((item) => !knownRunIDs.has(item.run_id));
-      if (activeRecord) {
-        return { record: activeRecord, source: "active" };
-      }
-      const completedItems = await listItems(api, `${backendBaseURL}/api/v1/matches/completed`);
-      const completedRecord = completedItems.find((item) => !knownRunIDs.has(item.run_id));
-      if (completedRecord) {
-        return { record: completedRecord, source: "completed" };
-      }
-      return null;
-    }, "new submission after preset enqueue");
-
-    if (created.source === "active") {
-      await expect(activePanel.getByTestId(`match-row-${created.record.run_id}`)).toBeVisible();
-    }
-
-    const completedRecord = await waitForRecord(api, async () => {
-      const completedItems = await listItems(api, `${backendBaseURL}/api/v1/matches/completed`);
-      return completedItems.find((item) => item.run_id === created.record.run_id);
-    }, "completed submission in completed list");
-
-    await page.reload();
-
-    const completedRow = completedPanel.getByTestId(`match-row-${completedRecord.run_id}`);
-    await expect(completedRow).toBeVisible();
-    await completedRow.click();
-
-    const detail = page.getByTestId(`match-detail-${completedRecord.run_id}`);
-    await expect(detail).toBeVisible();
-    await expect(detail.getByRole("heading", { name: completedRecord.match_id, exact: true })).toBeVisible();
-    await expect(detail.getByText(completedRecord.run_id, { exact: true })).toBeVisible();
-    await expect(detail.getByText("Status", { exact: true })).toBeVisible();
-    await expect(detail.getByText("completed", { exact: true })).toBeVisible();
-
-    const resultSummaryArtifact = detail.getByTestId("artifact-entry-result-summary");
-    await expect(resultSummaryArtifact).toBeVisible();
-    await expect(resultSummaryArtifact.getByText(completedRecord.result_summary_path ?? "", { exact: true })).toBeVisible();
-
-    const downloadLink = resultSummaryArtifact.getByRole("link", { name: "open delegated download" });
-    const expectsDelegatedDownload =
-      delegatedDownloadExpectation === "auto"
-        ? (completedRecord.result_summary_path ?? "").startsWith("s3://")
-        : delegatedDownloadExpectation === "1";
-    if (expectsDelegatedDownload) {
-      await expect(downloadLink).toBeVisible();
-      await expect(downloadLink).toHaveAttribute("href", /http:\/\//);
-    } else {
-      await expect(downloadLink).toHaveCount(0);
-    }
+    await expect(downloadLink).toHaveCount(0);
   }
 
   if (captureArtifacts) {
@@ -163,21 +164,54 @@ test("service-backed operator UI browser lane covers queue, active, completed de
   }
 });
 
-async function currentRunIDs(api) {
-  const activeItems = await listItems(api, `${backendBaseURL}/api/v1/matches/active`);
-  const completedItems = await listItems(api, `${backendBaseURL}/api/v1/matches/completed`);
-  return new Set([...activeItems, ...completedItems].map((item) => item.run_id));
+async function createAISubmission(page, { submissionID, registrationID, artifactRef, displayName }) {
+  await page.getByLabel("AI Submission ID").fill(submissionID);
+  await page.getByLabel("Game Registration ID").fill(registrationID);
+  await page.getByLabel("Artifact Ref").fill(artifactRef);
+  await page.getByLabel("Display Name").fill(displayName);
+  await page.getByRole("button", { name: "Create AI submission" }).click();
+}
+
+async function waitForRequest(api, registrationID, outputDir) {
+  return waitForRecord(api, async () => {
+    const items = await listItems(api, `${backendBaseURL}/api/v1/match-requests`);
+    return items.find((item) => item.game_registration_id === registrationID && item.output_dir === outputDir);
+  }, "created match request");
+}
+
+async function waitForLatestRunChange(api, requestID, previousRunID) {
+  return waitForRecord(api, async () => {
+    const items = await listItems(api, `${backendBaseURL}/api/v1/match-requests`);
+    const item = items.find((candidate) => candidate.request_id === requestID);
+    if (!item || item.latest_run_id === previousRunID) {
+      return null;
+    }
+    return item;
+  }, "rerun latest run id update");
+}
+
+async function waitForRunState(api, runID, lifecycleState) {
+  return waitForRecord(api, async () => {
+    const detail = await getRunDetail(api, runID);
+    return detail.lifecycle_state === lifecycleState ? detail : null;
+  }, `run ${runID} reaching ${lifecycleState}`);
+}
+
+async function getRunDetail(api, runID) {
+  const response = await api.getJSON(`${backendBaseURL}/api/v1/runs/${runID}`);
+  expect(response.ok).toBeTruthy();
+  return response.json;
 }
 
 async function listItems(api, url) {
-  const response = await api.get(url);
-  expect(response.ok()).toBeTruthy();
-  const payload = await response.json();
+  const response = await api.getJSON(url);
+  expect(response.ok).toBeTruthy();
+  const payload = response.json;
   return payload.items ?? [];
 }
 
 async function waitForRecord(api, probe, description) {
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const record = await probe(api);
     if (record) {
@@ -188,8 +222,43 @@ async function waitForRecord(api, probe, description) {
   throw new Error(`timed out waiting for ${description}`);
 }
 
+function scopeTestId(gameID, gameVersion, rulesetVersion) {
+  return `${gameID}-${gameVersion}-${rulesetVersion}`.replace(/[^a-zA-Z0-9_-]+/g, "_");
+}
+
 function pageWait(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function createRequestAPI(request) {
+  return {
+    async getJSON(url) {
+      const response = await request.get(url);
+      return {
+        ok: response.ok(),
+        status: response.status(),
+        json: await response.json(),
+      };
+    },
+  };
+}
+
+function createBrowserAPI(page) {
+  const usesRemoteServers = process.env.OPERATOR_UI_TEST_SCENARIO === "remote";
+  return {
+    async getJSON(url) {
+      const target = new URL(url);
+      const fetchTarget = usesRemoteServers ? target.toString() : `${target.pathname}${target.search}`;
+      return page.evaluate(async (requestURL) => {
+        const response = await fetch(requestURL, { credentials: "include" });
+        return {
+          ok: response.ok,
+          status: response.status,
+          json: await response.json(),
+        };
+      }, fetchTarget);
+    },
+  };
 }

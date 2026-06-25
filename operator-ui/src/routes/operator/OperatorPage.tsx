@@ -1,29 +1,22 @@
-import { AuthPrincipal } from "../../api";
+import { ReactNode } from "react";
+
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor } from "./operatorPageSupport";
 import { CompletedDetailPanel } from "./CompletedDetailPanel";
 import { MatchTable } from "./MatchTable";
-import { OperatorHeader } from "./OperatorHeader";
 import { PresetQueuePanel } from "./PresetQueuePanel";
 import { useOperatorPageState } from "./useOperatorPageState";
 
 type OperatorPageProps = {
-  principal?: AuthPrincipal;
-  onLogout?: () => void;
+  baseUrl: string;
+  detailActions?: ReactNode;
 };
 
-export function OperatorPage({ principal, onLogout }: OperatorPageProps) {
-  const state = useOperatorPageState();
+export function OperatorPage({ baseUrl, detailActions }: OperatorPageProps) {
+  const state = useOperatorPageState(baseUrl);
 
   return (
     <>
-      <OperatorHeader
-        baseUrl={state.baseUrl}
-        onBaseUrlChange={state.setBaseUrl}
-        providerLogin={principal?.provider_login}
-        onLogout={onLogout}
-      />
-
       <section className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         <PresetQueuePanel
           enqueueState={state.enqueueState}
@@ -36,6 +29,7 @@ export function OperatorPage({ principal, onLogout }: OperatorPageProps) {
           detailState={state.detailState}
           detailError={state.detailError}
           onRefreshDetail={state.reloadDetail}
+          actions={detailActions}
         />
       </section>
 
