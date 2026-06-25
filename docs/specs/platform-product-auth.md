@@ -232,6 +232,8 @@ provider 固有 subject や login name は `account` に混ぜず、
 - provider test double は canonical test user catalog を自前で持ってよい
   - 例:
     `spectator-user01`、`developer-user01`、`operator-user01`
+  - catalog は seed 済み existing account user と
+    ai-arena account をまだ持たない signup-only user を分けて持ってよい
   - browser form は password を要求せず、
     `user_id` text input と login button だけでよい
   - available test users の一覧を form 上に hint 表示してよい
@@ -239,6 +241,8 @@ provider 固有 subject や login name は `account` に混ぜず、
   provider test double と同じ test user catalog を使って
   role 付き account / identity を事前作成してよい
   - provider test double 起動時に same catalog を idempotent seed してよい
+  - signup-only user は seed 対象から外し、
+    first signup invite flow の callback で初めて account bootstrap されなければならない
   - first signup invite flow は別 verification scenario として分離してよい
 - auth regression lane を起動する entrypoint は、
   auth table 未作成で詰まらないよう schema apply bootstrap を明示的に担わなければならない

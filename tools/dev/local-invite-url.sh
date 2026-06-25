@@ -11,7 +11,7 @@ make render-build >/dev/null
 echo "creating local invite URL: operator signup invite"
 
 create_invite() {
-  if command -v direnv >/dev/null 2>&1; then
+  if [ -z "${OPERATOR_UI_TEST_SCENARIO:-}" ] && command -v direnv >/dev/null 2>&1; then
     direnv exec "$repo_root" ./app signup-invite-create --postgres-dsn "$postgres_dsn" --role operator
     return
   fi

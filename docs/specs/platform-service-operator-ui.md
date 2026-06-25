@@ -102,6 +102,7 @@ auth-enabled GitHub regression lane では、
 - `/login` page の heading と GitHub login CTA
 - provider authorize form の submit action
 - callback 完了後の authenticated principal 表示
+- invite token 付き `/login` から signup-only GitHub user で first signup を完了できること
 
 browser verification lane は少なくとも次の 3 系統で同じ acceptance surface を共有しなければならない。
 
@@ -126,9 +127,13 @@ auth-enabled GitHub regression lane は、
 current public login hand の regression capture を目的とする。
 
 - login page の `Continue with GitHub` から provider authorize form へ進めること
-- provider form 上の available test users から target `user_id` を選び、
+- existing account scenario では、
+  provider form 上の available test users から seed 済み `user_id` を選び、
   login 完了後、
   backend callback が session cookie を発行すること
+- first signup scenario では、
+  invite token 付き `/login` から signup-only `user_id` を選び、
+  callback 中に account bootstrap / role bind / session cookie 発行まで完了すること
 - callback 後に browser が `/operator` へ戻り、
   protected operator nav と overview surface を表示できること
 - `GET /auth/session` が authenticated principal を返すこと

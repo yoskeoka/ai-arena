@@ -1,4 +1,5 @@
 import os from "node:os";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
@@ -15,10 +16,54 @@ const artifactDir = process.env.OPERATOR_UI_ARTIFACT_DIR ?? "./test-results";
 const authEnabled = process.env.OPERATOR_UI_TEST_AUTH === "1";
 const authMockUserID = process.env.OPERATOR_UI_AUTH_MOCK_USER_ID ?? "operator-user01";
 const authMockLogin = process.env.OPERATOR_UI_AUTH_MOCK_LOGIN ?? authMockUserID;
+const authSignupUserID = process.env.OPERATOR_UI_AUTH_SIGNUP_USER_ID ?? "operator-signup-user01";
+const authSignupLogin = process.env.OPERATOR_UI_AUTH_SIGNUP_LOGIN ?? authSignupUserID;
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const artifactRef = process.env.OPERATOR_UI_TEST_ARTIFACT_REF ?? path.resolve(testDir, "../../testdata/ai/echo/echo-ai-2turn");
 
 test.setTimeout(120_000);
+
+test("auth-enabled signup lane bootstraps a signup-only GitHub user via invite", async ({ page }) => {
+  test.skip(!authEnabled, "auth-only scenario");
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
+  await expect
+    .poll(async () =>
+      page.evaluate(async () => {
+        const response = await fetch("/auth/session", { credentials: "include" });
+        return response.json();
+      }),
+    )
+    .toMatchObject({
+      auth_mode: "enabled",
+      authenticated: false,
+    });
+
+  const invite = createSignupInvite();
+  await page.goto(invite.invite_url);
+  await expect(page.getByText("Invite token detected.")).toBeVisible();
+  await page.getByRole("link", { name: "Continue with GitHub" }).click();
+  await expect(page.getByRole("heading", { name: "GitHub OAuth Test Double" })).toBeVisible();
+  await page.getByLabel("User ID").fill(authSignupUserID);
+  await page.getByRole("button", { name: "Login" }).click();
+  await expect
+    .poll(async () =>
+      page.evaluate(async () => {
+        const response = await fetch("/auth/session", { credentials: "include" });
+        return response.json();
+      }),
+    )
+    .toMatchObject({
+      auth_mode: "enabled",
+      authenticated: true,
+      principal: { provider_login: authSignupLogin, roles: ["operator"] },
+    });
+  await expect(page).toHaveURL(/\/($|operator$)/);
+  await expect(page.getByText(`Signed in as @${authSignupLogin}`)).toBeVisible();
+  await page.getByRole("button", { name: "Logout" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
+});
 
 test("service-backed operator UI browser lane covers registration, request execution, ranking correction, and artifact access", async ({
   context,
@@ -261,4 +306,21 @@ function createBrowserAPI(page) {
       }, fetchTarget);
     },
   };
+}
+
+function createSignupInvite() {
+  const scriptPath = path.resolve(testDir, "../../tools/dev/local-invite-url.sh");
+  const stdout = execFileSync(scriptPath, {
+    cwd: path.resolve(testDir, "../.."),
+    env: {
+      ...process.env,
+      LOCAL_AUTH_FRONTEND_ORIGIN: `http://localhost:${process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173"}`,
+    },
+    encoding: "utf8",
+  });
+  const payloadStart = stdout.indexOf("{");
+  if (payloadStart === -1) {
+    throw new Error(`signup invite helper returned unexpected output: ${stdout}`);
+  }
+  return JSON.parse(stdout.slice(payloadStart));
 }

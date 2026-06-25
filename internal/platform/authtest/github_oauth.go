@@ -19,6 +19,7 @@ type GitHubOAuthTestUser struct {
 	Login           string
 	Email           string
 	Role            string
+	SeedAccount     bool
 	DisplayLabel    string
 	DisplayHintLine string
 }
@@ -30,6 +31,7 @@ var githubOAuthTestUsers = []GitHubOAuthTestUser{
 		Login:           "spectator-user01",
 		Email:           "spectator-user01@example.com",
 		Role:            "participant",
+		SeedAccount:     true,
 		DisplayLabel:    "Spectator User 01",
 		DisplayHintLine: "spectator-user01 (participant role)",
 	},
@@ -39,6 +41,7 @@ var githubOAuthTestUsers = []GitHubOAuthTestUser{
 		Login:           "developer-user01",
 		Email:           "developer-user01@example.com",
 		Role:            "developer",
+		SeedAccount:     true,
 		DisplayLabel:    "Developer User 01",
 		DisplayHintLine: "developer-user01 (developer role)",
 	},
@@ -48,8 +51,19 @@ var githubOAuthTestUsers = []GitHubOAuthTestUser{
 		Login:           "operator-user01",
 		Email:           "operator-user01@example.com",
 		Role:            "operator",
+		SeedAccount:     true,
 		DisplayLabel:    "Operator User 01",
 		DisplayHintLine: "operator-user01 (operator role)",
+	},
+	{
+		UserID:          "operator-signup-user01",
+		NumericID:       710004,
+		Login:           "operator-signup-user01",
+		Email:           "operator-signup-user01@example.com",
+		Role:            "operator",
+		SeedAccount:     false,
+		DisplayLabel:    "Operator Signup User 01",
+		DisplayHintLine: "operator-signup-user01 (signup-only operator role)",
 	},
 }
 
@@ -82,6 +96,9 @@ func (u GitHubOAuthTestUser) ProviderSubject() string {
 // SeedGitHubOAuthTestUsers seeds the canonical test users into the auth store if they do not already exist.
 func SeedGitHubOAuthTestUsers(ctx context.Context, store *service.PostgresAuthStore, now time.Time) error {
 	for _, user := range GitHubOAuthTestUsers() {
+		if !user.SeedAccount {
+			continue
+		}
 		if err := seedGitHubOAuthTestUser(ctx, store, user, now); err != nil {
 			return err
 		}
