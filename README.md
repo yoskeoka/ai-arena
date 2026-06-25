@@ -6,6 +6,13 @@ The value is a fair, exciting benchmark for real engineering skill (not prompt-o
 
 For contributor setup, local secrets, and manual GitHub login verification, see [DEVELOPMENT.md](./DEVELOPMENT.md).
 
+### Installation
+
+```sh
+cd operator-ui
+pnpm install
+```
+
 ### Run `arena-runner`
 
 Use `arena-runner` when you want to execute one match directly without the online service layer.
@@ -31,100 +38,47 @@ go run ./cmd/arena-runner \
   --player p2=./testdata/ai/echo/echo-ai
 ```
 
-### Run `arena-service`
+### Run `arena-service` backend
 
-Use `arena-service` when you want the local online-service shape: operator HTTP API, queue store, and in-process worker loop.
-
-For deploy-shaped local verification, start the Docker Postgres harness first, bootstrap the SeaweedFS object-storage harness, and then launch the service against both backends:
+This runs the local ai-arena online service backend.
 
 ```sh
-make postgres-up
-make postgres-schema-apply
+make up
+make migrate
 make seaweed-bootstrap
-make render-build
-ARENA_SERVICE_POSTGRES_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable \
-ARENA_SERVICE_PRESET_CONFIG=./config/platform-service/presets.remote-bootstrap.json \
-ARENA_SERVICE_ARTIFACT_BACKEND=r2 \
-ARENA_SERVICE_ARTIFACT_R2_BUCKET=ai-arena-local \
-ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT=http://127.0.0.1:8333 \
-ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID=admin \
-ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY=secret \
-PORT=10000 \
-make render-start
+make start-backend-local
 ```
 
 This starts `arena-service serve` on `http://127.0.0.1:10000`.
-For the current route surface and payload contract, use the specs under `docs/specs/` instead of treating this README as an endpoint catalog.
 
-Before opening the frontend, verify the backend is actually up:
-
-```sh
-curl http://127.0.0.1:10000/healthz
-```
-
-This should return `200 OK`.
-
-The default local Postgres harness DSN is:
-
-```text
-postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable
-```
-
-The Docker Postgres harness definition lives in `docs/development/platform-service-postgres.md`.
-The SeaweedFS object-storage harness and delegated artifact verification flow live in `docs/development/platform-service-object-storage.md`.
-`./config/platform-service/presets.remote-bootstrap.json` is the deploy-shaped preset catalog.
-`./config/platform-service/presets.example.json` remains the lightweight contributor example and is not the staging/production canonical value.
-When you are done with the local backends, stop them with:
+To connect local Postgres, use psql
 
 ```sh
-make postgres-down
-make seaweed-down
+psql "postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable"
 ```
 
-If you explicitly want the lightweight queue-only lane instead of the deploy-shaped Postgres lane, omit `ARENA_SERVICE_POSTGRES_DSN` and start `arena-service` with the in-memory store.
-If you want the lightweight artifact lane as well, omit `ARENA_SERVICE_ARTIFACT_BACKEND` and the service keeps the local filesystem backend.
-In that lightweight lane, it is fine to point `ARENA_SERVICE_PRESET_CONFIG` at `./config/platform-service/presets.example.json`.
-
-The equivalent direct command is:
+### Stop `arena-service` backend
 
 ```sh
-ARENA_SERVICE_POSTGRES_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable \
-ARENA_SERVICE_ARTIFACT_BACKEND=r2 \
-ARENA_SERVICE_ARTIFACT_R2_BUCKET=ai-arena-local \
-ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT=http://127.0.0.1:8333 \
-ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID=admin \
-ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY=secret \
-go run ./cmd/arena-service serve \
-  --listen-addr 0.0.0.0:10000 \
-  --preset-config ./config/platform-service/presets.remote-bootstrap.json
+make down
 ```
 
-### Run the operator UI
-
-To verify the UI added in this task, start the local frontend dev server in a second terminal:
+### Run `arena-service` frontend
 
 ```sh
-cd operator-ui
-pnpm install
-pnpm run dev
+make start-frontend-local
 ```
 
-Then open the local Vite URL printed by the command, usually `http://127.0.0.1:5173`.
-Keep `arena-service` running while the UI is open so the polling panels and preset queue actions can talk to the local API.
-For local development, the Vite dev server proxies `/api` and `/healthz` to `http://127.0.0.1:10000`, so you can leave the UI's base URL field blank.
+### Run automated verification test on local
 
-For the repo-owned local browser verification lane, use the Playwright harness instead of a manual browser loop:
+**Prerequisite**: stop arena-service backend and arena-service frontend before run the verification. This command will run backend and frontend inside.
+
+For local browser verification, use the Playwright harness instead of a manual browser test:
 
 ```sh
 cd operator-ui
 pnpm run verify:local
 ```
-
-This command self-bootstraps missing `operator-ui` dependencies and the local Playwright Chromium browser,
-then starts a Go fixture backend, starts the local Vite frontend, and verifies
-the preset queue / active matches / completed detail / artifact access surface automatically.
-The detailed runbook lives in `docs/development/operator-ui-local-verification.md`.
-If Playwright still fails after browser bootstrap, check the runbook for host-library troubleshooting.
 
 ## Release flow
 
@@ -157,6 +111,9 @@ Use one JSON object per line:
 `pattern` is JavaScript regular-expression source text stored inside JSON.
 The example above uses `\\b`, which means "word boundary", so it matches the standalone word `taxonomy` but not `taxonomyMap`.
 
+<details>
+<summary>Pattern Details</summary>
+
 Common pattern building blocks:
 
 - `\\bword\\b`: match a standalone English word
@@ -183,3 +140,5 @@ Local commands:
 - `pnpm run textlint:file -- docs/specs/platform.md`: run against specific Markdown files
 
 Both commands self-bootstrap missing root dependencies before invoking `textlint`.
+
+</details>
