@@ -40,7 +40,7 @@ go run ./cmd/arena-runner \
 
 ### Run `arena-service` backend
 
-ai-arena online service.
+This runs the local ai-arena online service backend.
 
 ```sh
 make up
