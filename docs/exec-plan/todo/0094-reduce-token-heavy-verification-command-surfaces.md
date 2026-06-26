@@ -1,5 +1,5 @@
 # reduce-token-heavy-verification-command-surfaces
-> **Execution**: Use `/execute-task` to implement this plan.
+**Execution**: Use `/execute-task` to implement this plan.
 
 ## Objective
 
@@ -56,7 +56,7 @@ Addresses: `docs/issues/0034-reduce-token-heavy-verification-command-surfaces.md
 - lane ごとの artifact 保存責務は残しつつ、
   operator/human/AI agent が長い env var 列を覚えなくてよい前提を明記する。
 
-## Code Changes
+## Expected Code Changes
 
 ### `Makefile`
 
@@ -96,9 +96,10 @@ Addresses: `docs/issues/0034-reduce-token-heavy-verification-command-surfaces.md
 
 Past decisions reviewed before planning:
 
-- `ai-arena/docs/design-decisions/core-beliefs.md` は
+- `docs/design-decisions/core-beliefs.md` は
   AI-first と correctness over speed を最優先にしている。
-- `docs/issues/0034...` 自体が、
+- `docs/issues/0034-reduce-token-heavy-verification-command-surfaces.md`
+  自体が、
   repo-owned verification surface を短くし、
   success 時 output を抑える方針を既に整理している。
 - `docs/development/operator-ui-local-verification.md` は
@@ -146,7 +147,9 @@ project-plan の product architecture 判断を変えない。
 - [ ] [depends on: helper update] success 時 summary / failure 時 log path の
       出力 contract を verification docs と一致させる。
 - [ ] [depends on: all above] relevant local verification と docs/spec parity
-      check を実行し、`docs/issues/0034...` を `done/` へ move できる状態にする。
+      check を実行し、
+      `docs/issues/0034-reduce-token-heavy-verification-command-surfaces.md`
+      を `done/` へ move できる状態にする。
 
 ## Parallelism
 
