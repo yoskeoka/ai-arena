@@ -9,6 +9,7 @@ frontend_port=${OPERATOR_UI_FRONTEND_PORT:-4173}
 frontend_host=${OPERATOR_UI_FRONTEND_HOST:-127.0.0.1}
 auth_mock_port=${OPERATOR_UI_AUTH_MOCK_PORT:-10001}
 log_to_file=${OPERATOR_UI_LOG_TO_FILE:-}
+reset_postgres=${OPERATOR_UI_RESET_POSTGRES:-0}
 
 if [ -z "$log_to_file" ]; then
   if [ -n "${OPERATOR_UI_TEST_SCENARIO:-}" ]; then
@@ -81,6 +82,10 @@ case "$mode" in
     make seaweed-bootstrap
     ;;
   local|real-local)
+    if [ "$reset_postgres" = "1" ]; then
+      make postgres-down
+    fi
+    make postgres-up
     export AI_ARENA_PG_TEST_DSN="${AI_ARENA_PG_TEST_DSN:-postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable}"
     export AI_ARENA_PG_ATLAS_DEV_DSN="${AI_ARENA_PG_ATLAS_DEV_DSN:-postgres://arena:arena@127.0.0.1:55432/postgres?sslmode=disable}"
     export ARENA_SERVICE_POSTGRES_DSN="${ARENA_SERVICE_POSTGRES_DSN:-$AI_ARENA_PG_TEST_DSN}"
@@ -90,6 +95,10 @@ case "$mode" in
     export ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT="${ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT:-http://127.0.0.1:8333}"
     export ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID="${ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID:-admin}"
     export ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY="${ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY:-secret}"
+    make postgres-schema-apply
+    if ! make seaweed-up || ! make seaweed-bootstrap; then
+      export ARENA_SERVICE_ARTIFACT_BACKEND=file
+    fi
     ;;
   *)
     echo "unsupported OPERATOR_UI_BACKEND_MODE: $mode" >&2

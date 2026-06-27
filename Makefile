@@ -4,6 +4,7 @@ RUSTUP ?= rustup
 ATLAS_VERSION ?= 0.30.0
 SQLC_VERSION ?= 1.31.0
 CACHE_ROOT ?= /tmp/ai-arena-go-quality-gates
+XDG_CACHE_HOME ?= $(CACHE_ROOT)/xdg-cache
 GOPATH = $(CACHE_ROOT)/go
 GOMODCACHE = $(GOPATH)/pkg/mod
 GOCACHE = $(CACHE_ROOT)/go-build
@@ -31,10 +32,11 @@ POSTGRES_MIGRATION_REVISIONS_SCHEMA ?=
 POSTGRES_SCHEMA_URL ?= file://$(POSTGRES_SCHEMA_DIR)
 POSTGRES_MIGRATIONS_URL ?= file://$(POSTGRES_MIGRATIONS_DIR)
 GO_ENV = GOPATH=$(GOPATH) GOMODCACHE=$(GOMODCACHE) GOCACHE=$(GOCACHE)
+GO_TEST_ENV = env -u ARENA_GITHUB_OAUTH_CLIENT_ID -u ARENA_GITHUB_OAUTH_CLIENT_SECRET $(GO_ENV)
 GOFILES = $(shell git ls-files -- '*.go' | while read -r file; do if [ -f "$$file" ]; then printf '%s ' "$$file"; fi; done)
 REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtime/testdata | while read -r file; do if [ -f "$$file" ] && printf '%s' "$$file" | grep -q '\.go$$'; then dirname "$$file"; fi; done | sort -u | tr '\n' ' ')
 REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
-REVIVE_PACKAGE_DIRS = $(shell $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
+REVIVE_PACKAGE_DIRS = $(shell mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)" >/dev/null 2>&1; env GOPATH="$(GOPATH)" GOMODCACHE="$(GOMODCACHE)" GOCACHE="$(GOCACHE)" $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
 .PHONY: up down migrate local-dummy-fixture local-invite-url start-backend-local start-frontend-local test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-preset-bots render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
@@ -58,13 +60,13 @@ local-invite-url:
 	./tools/dev/local-invite-url.sh
 
 test:
-	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	$(GO_ENV) $(GO) test ./...
+	@mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	@./tools/dev/run-quiet-command.sh "make test" $(GO_TEST_ENV) $(GO) test ./...
 
 test-postgres:
-	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	$(MAKE) postgres-schema-apply
-	AI_ARENA_PG_TEST_DSN="$(AI_ARENA_PG_TEST_DSN)" $(GO_ENV) $(GO) test ./...
+	@mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	@$(MAKE) postgres-schema-apply
+	@./tools/dev/run-quiet-command.sh "make test-postgres" env -u ARENA_GITHUB_OAUTH_CLIENT_ID -u ARENA_GITHUB_OAUTH_CLIENT_SECRET AI_ARENA_PG_TEST_DSN="$(AI_ARENA_PG_TEST_DSN)" $(GO_ENV) $(GO) test ./...
 
 postgres-up:
 	docker compose -f tools/dev/postgres-compose.yml up -d postgres
@@ -144,9 +146,9 @@ fmt:
 lint: lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive
 
 lint-goimports:
-	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	if [ -n "$(GOFILES)" ]; then \
-		output="$$( $(GO_ENV) $(GO) tool goimports -l $(GOFILES) )"; \
+	@mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	@if [ -n "$(GOFILES)" ]; then \
+		output="$$( env $(GO_ENV) $(GO) tool goimports -l $(GOFILES) )"; \
 		if [ -n "$$output" ]; then \
 			printf '%s\n' "$$output"; \
 			exit 1; \
@@ -154,25 +156,24 @@ lint-goimports:
 	fi
 
 lint-vet:
-	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	$(GO_ENV) $(GO) vet ./...
+	@mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	@./tools/dev/run-quiet-command.sh "lint-vet" env $(GO_ENV) $(GO) vet ./...
 
 lint-noctx:
-	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	noctx_bin="$$( $(GO_ENV) $(GO) tool -n noctx )"; \
-	$(GO_ENV) $(GO) vet -vettool="$$noctx_bin" ./...
+	@mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	@./tools/dev/run-quiet-command.sh "lint-noctx" sh -eu -c 'noctx_bin="$$(env $$1 $$2 $$3 $$4 tool -n noctx)"; env $$1 $$2 $$3 $$4 vet -vettool="$$noctx_bin" ./...' sh "GOPATH=$(GOPATH)" "GOMODCACHE=$(GOMODCACHE)" "GOCACHE=$(GOCACHE)" "$(GO)"
 
 lint-staticcheck:
-	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	$(GO_ENV) $(GO) tool staticcheck ./...
+	@mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)" "$(XDG_CACHE_HOME)"
+	@./tools/dev/run-quiet-command.sh "lint-staticcheck" env XDG_CACHE_HOME="$(XDG_CACHE_HOME)" $(GO_ENV) $(GO) tool staticcheck ./...
 
 lint-gosec:
-	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	$(GO_ENV) $(GO) tool gosec -exclude-dir=.cache ./...
+	@mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)" "$(XDG_CACHE_HOME)"
+	@./tools/dev/run-quiet-command.sh "lint-gosec" env XDG_CACHE_HOME="$(XDG_CACHE_HOME)" $(GO_ENV) $(GO) tool gosec -exclude-dir=.cache ./...
 
 lint-revive:
-	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	$(GO_ENV) $(GO) tool revive -config revive.toml $(REVIVE_PACKAGE_DIRS) $(REVIVE_TESTDATA_DIRS)
+	@mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	@./tools/dev/run-quiet-command.sh "lint-revive" env $(GO_ENV) $(GO) tool revive -config revive.toml $(REVIVE_PACKAGE_DIRS) $(REVIVE_TESTDATA_DIRS)
 
 build-preset-bots:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
