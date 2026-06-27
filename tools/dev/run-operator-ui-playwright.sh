@@ -95,8 +95,7 @@ fi
 
 artifact_dir=$(resolve_operator_ui_path "${OPERATOR_UI_ARTIFACT_DIR:-./test-results}")
 report_dir=$(resolve_operator_ui_path "${OPERATOR_UI_REPORT_DIR:-./playwright-report}")
-playwright_log=$(mktemp /tmp/operator-ui-playwright.XXXXXX.log)
-
+playwright_log=$(mktemp /tmp/operator-ui-playwright-XXXXXX)
 mkdir -p "$store_dir" "$xdg_data_home" "$pnpm_home"
 mkdir -p "$artifact_dir" "$report_dir"
 export XDG_DATA_HOME="$xdg_data_home"
