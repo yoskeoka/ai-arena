@@ -13,7 +13,7 @@ if [ "${VERBOSE:-0}" = "1" ]; then
   exec "$@"
 fi
 
-log_path=$(mktemp "/tmp/$(printf '%s' "$label" | tr ' /:' '---').XXXXXX.log")
+log_path=$(mktemp "/tmp/$(printf '%s' "$label" | tr ' /:' '---').XXXXXX")
 
 if "$@" >"$log_path" 2>&1; then
   rm -f "$log_path"
