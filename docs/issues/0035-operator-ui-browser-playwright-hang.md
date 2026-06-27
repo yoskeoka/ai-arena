@@ -56,7 +56,7 @@ CI browser lane 固有の cause を切り分ける必要がある。
 
 - `PR276` で `verify:ci:file-backed` / `verify:ci:postgres` が
   direct `playwright test` から
-  `tools/dev/run-operator-ui-playwright.sh` 経由へ変わった
+  `operator-ui/package.json` 経由で `../tools/dev/run-operator-ui-playwright.sh` を呼ぶ形へ変わった
 - 同 helper は CI でも `tools/dev/ensure-operator-ui-playwright-browser.sh`
   を常に呼び、`pnpm exec playwright install chromium` を実行しうる
 - job log では download progress が 100% になった後に helper process が戻らず、
