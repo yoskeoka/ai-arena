@@ -95,9 +95,9 @@ fi
 
 artifact_dir=$(resolve_operator_ui_path "${OPERATOR_UI_ARTIFACT_DIR:-./test-results}")
 report_dir=$(resolve_operator_ui_path "${OPERATOR_UI_REPORT_DIR:-./playwright-report}")
-playwright_log=$(mktemp /tmp/operator-ui-playwright-XXXXXX)
 mkdir -p "$store_dir" "$xdg_data_home" "$pnpm_home"
 mkdir -p "$artifact_dir" "$report_dir"
+playwright_log="$artifact_dir/playwright.exec.log"
 export XDG_DATA_HOME="$xdg_data_home"
 export PNPM_HOME="$pnpm_home"
 
@@ -113,16 +113,16 @@ fi
 
 : >"$playwright_log"
 if pnpm exec playwright test "$@" >"$playwright_log" 2>&1; then
-  rm -f "$playwright_log"
   printf 'operator-ui %s passed\n' "${lane:-playwright}"
+  printf 'log: %s\n' "$playwright_log"
   printf 'artifacts: %s\n' "$artifact_dir"
   printf 'report: %s\n' "$report_dir"
   exit 0
 fi
 
-cat "$playwright_log" >&2
-rm -f "$playwright_log"
 printf 'operator-ui %s failed\n' "${lane:-playwright}" >&2
+printf 'log: %s\n' "$playwright_log" >&2
+printf "hint: inspect targeted lines first, e.g. grep -niE 'error|fail' %s\n" "$playwright_log" >&2
 printf 'artifacts: %s\n' "$artifact_dir" >&2
 printf 'report: %s\n' "$report_dir" >&2
 exit 1

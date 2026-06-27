@@ -16,12 +16,12 @@ fi
 log_path=$(mktemp "/tmp/$(printf '%s' "$label" | tr ' /:' '---').XXXXXX")
 
 if "$@" >"$log_path" 2>&1; then
-  rm -f "$log_path"
   printf '%s passed\n' "$label"
+  printf 'log: %s\n' "$log_path"
   exit 0
 fi
 
-cat "$log_path" >&2
-rm -f "$log_path"
 printf '%s failed\n' "$label" >&2
+printf 'log: %s\n' "$log_path" >&2
+printf "hint: inspect targeted lines first, e.g. grep -niE 'error|fail' %s\n" "$log_path" >&2
 exit 1

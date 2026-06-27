@@ -18,6 +18,7 @@
   - dedicated Rust-WASM evaluation lane として、Rust-WASM `janken` e2e を実行する
 
 default UX は quiet mode とし、成功時は gate 名ごとの summary を返す。
+成功時も exec log path は返し、必要なときだけ詳細を辿れるようにする。
 詳細な tool 出力が必要なときだけ `VERBOSE=1` を付けてよい。
 
 ```sh
@@ -25,8 +26,9 @@ VERBOSE=1 make test
 VERBOSE=1 make lint
 ```
 
-failure 時は wrapper が該当 gate の full output をそのまま返し、
-追加の診断先がある場合だけ短い path summary を添えてよい。
+failure 時は wrapper が該当 gate の exec log path を返し、
+全文をそのまま貼り返すのではなく、まず `grep -niE 'error|fail'` などで
+relevant な行だけを抽出して診断してよい。
 
 ## Formatter
 

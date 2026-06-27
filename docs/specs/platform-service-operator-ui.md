@@ -127,7 +127,10 @@ contributor / operator / AI agent が依存してよい canonical local entrypoi
 - `pnpm run verify:local:auth`
 
 lane の mode 実装詳細、artifact dir 既定値、auth/mock distinction は helper 側へ閉じ込めなければならない。
-default 成功時 output は quiet summary とし、full diagnostic は failure 時または explicit verbose opt-in 時だけ露出してよい。
+default 成功時 output は quiet summary と exec log path に留め、
+full diagnostic は explicit verbose opt-in 時だけ常時露出してよい。
+failure 時も wrapper は full output の貼り返しではなく、
+exec log path と短い診断導線だけを返してよい。
 
 dedicated CI browser lane は、browser runtime を repo checkout 外の
 pinned Playwright 公式 image へ載せてもよい。

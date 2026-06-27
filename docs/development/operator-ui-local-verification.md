@@ -42,7 +42,7 @@ canonical command surface は次を正本とする。
 長い env var 列は helper 側へ閉じ込め、
 human と AI agent は既存 script 名をそのまま使えばよい。
 
-default は quiet mode とし、成功時は lane summary だけを返す。
+default は quiet mode とし、成功時は lane summary と exec log path だけを返す。
 詳細な tool 出力が必要なときだけ `VERBOSE=1` を付けてよい。
 
 ```sh
@@ -50,7 +50,9 @@ cd operator-ui
 VERBOSE=1 pnpm run verify:local
 ```
 
-failure 時は wrapper が relevant artifact path と log path を返さなければならない。
+failure 時は wrapper が relevant artifact path と exec log path を返さなければならない。
+全文をそのまま返すのではなく、まず `grep -niE 'error|fail'` などで
+relevant な行だけを抽出して診断する。
 backend / frontend / Playwright の full log は artifact path 側を正本として追う。
 
 ## Fixture local regression lane
