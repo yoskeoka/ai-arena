@@ -8,6 +8,7 @@ const frontendPort = process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173";
 const frontendHost = process.env.OPERATOR_UI_FRONTEND_HOST ?? "127.0.0.1";
 const authMockPort = process.env.OPERATOR_UI_AUTH_MOCK_PORT ?? "10001";
 const browserChannel = testScenario === "ci" ? process.env.OPERATOR_UI_BROWSER_CHANNEL ?? "chrome" : undefined;
+const reporterName = process.env.OPERATOR_UI_PLAYWRIGHT_REPORTER ?? "dot";
 const usesFixtureBackend = testScenario === "local";
 const usesManagedBackend = !usesFixtureBackend;
 const usesRemoteServers = testScenario === "remote";
@@ -23,7 +24,7 @@ if (usesRemoteServers && !remoteBaseURL) {
 export default defineConfig({
   testDir: "./tests",
   outputDir: artifactDir,
-  reporter: [["list"], ["html", { open: "never", outputFolder: reportDir }]],
+  reporter: [[reporterName], ["html", { open: "never", outputFolder: reportDir }]],
   testMatch: usesFixtureBackend ? /^(?!.*\.ci\.spec\.js$).*\.spec\.js$/ : /.*\.ci\.spec\.js/,
   use: {
     baseURL: usesRemoteServers ? remoteBaseURL : `http://${frontendHost}:${frontendPort}`,

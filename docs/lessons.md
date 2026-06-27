@@ -321,3 +321,10 @@
 - Pattern: current provider が GitHub でも、将来 provider 追加 seam を残したい変更では、当面の product 事情に引っ張られて validation policy を provider 固有 host に寄せすぎやすい
 - Rule: provider endpoint validation を tighten するときは、まず `userinfo` / `query` / `fragment` のような URL hygiene と、`http localhost only` のような transport 制約を分けて考える。将来 provider 追加 seam を残す方針があるなら、`https host` は product 固有 host へ不用意に固定しない
 - Applied: `internal/platform/service/auth_github.go` の provider endpoint validation、今後の OAuth/OIDC provider seam と config validation 全般
+
+## [2026-06-27] command surface を短くしたいときは既存入口を置き換える
+
+- Mistake: token-heavy な verification surface を短くする作業で、既存の長い入口を quiet 化する代わりに `Makefile` へ別名の短い target を追加した
+- Pattern: 「正しい新入口を用意すれば移行される」と見積もって、既存入口が残ること自体の運用コストを過小評価する
+- Rule: human / AI agent が既に使っている verification command を改善したいときは、まず既存入口そのものを短く・静かに置き換える。冗長な別名 surface は、互換性のために一時的に必要な場合を除き増やさない
+- Applied: `operator-ui/package.json` の `verify:local*` script、`Makefile` の verification target 設計、今後の repo-owned command surface 整理全般

@@ -17,6 +17,21 @@
 - `make test-wasm-rust`
   - dedicated Rust-WASM evaluation lane として、Rust-WASM `janken` e2e を実行する
 
+default UX は quiet mode とし、成功時は gate 名ごとの summary を返す。
+成功時も exec log path は返し、必要なときだけ詳細を辿れるようにする。
+詳細な tool 出力が必要なときだけ `VERBOSE=1` を付けてよい。
+ただし CI では wrapper を bypass し、job log に tool の標準出力をそのまま流してよい。
+
+```sh
+VERBOSE=1 make test
+VERBOSE=1 make lint
+```
+
+failure 時は wrapper が該当 gate の exec log path を返し、
+全文をそのまま貼り返すのではなく、まず `grep -niE 'error|fail'` などで
+relevant な行だけを抽出して診断してよい。
+CI failure はこの local wrapper contract の対象外であり、workflow log をそのまま診断の正本としてよい。
+
 ## Formatter
 
 - formatter は `goimports` を唯一の正規 formatter とする
@@ -70,6 +85,7 @@ checked-in generated code は comment policy の対象外としてよい。
 - local default は `ww` で分かれた worktree 間でも再利用できる stable path として扱う
 - `Makefile` は `GOPATH` / `GOMODCACHE` / `GOCACHE` を個別に override できなければならない
 - ローカル開発では plain `make test` / `make fmt` / `make lint` が追加オプションなしで動かなければならない
+- plain `make test` / `make lint` は成功時に常時 verbose log を返してはならない
 - CI は workflow から `GOPATH` / `GOMODCACHE` / `GOCACHE` を上書きし、runner 標準の Go cache path を使ってよい
 - CI の override 手段は workflow env または `make` の variable assignment でよい
 - local default と CI override のどちらでも quality gate の入口は `make test` / `make fmt` / `make lint` に揃える

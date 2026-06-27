@@ -119,6 +119,19 @@ browser verification lane は少なくとも次の 3 系統で同じ acceptance 
   `/login -> /auth/github/login -> provider form -> callback -> session cookie -> /operator`
   を通したうえで同じ operator surface を確認する lane
 
+contributor / operator / AI agent が依存してよい canonical local entrypoint は、
+長い env var 列ではなく次の既存 repo-owned command とする。
+
+- `pnpm run verify:local`
+- `pnpm run verify:local:real`
+- `pnpm run verify:local:auth`
+
+lane の mode 実装詳細、artifact dir 既定値、auth/mock distinction は helper 側へ閉じ込めなければならない。
+default 成功時 output は quiet summary と exec log path に留め、
+full diagnostic は explicit verbose opt-in 時だけ常時露出してよい。
+failure 時も wrapper は full output の貼り返しではなく、
+exec log path と短い診断導線だけを返してよい。
+
 dedicated CI browser lane は、browser runtime を repo checkout 外の
 pinned Playwright 公式 image へ載せてもよい。
 ただし image version は repo が使う `@playwright/test` version と一致しなければならない。
