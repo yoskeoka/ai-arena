@@ -6,18 +6,16 @@ Addresses: `docs/issues/0035-operator-ui-browser-playwright-hang.md`
 ## Objective
 
 `operator-ui-browser` workflow の Playwright hang について、
-`PR276` で導入した repo-owned helper が direct cause か、
-あるいは dedicated CI browser lane 自体を Docker runtime へ寄せるべきかを
-切り分けたうえで、browser CI を安定に継続実行できる状態へ戻す。
+まず `PR276` で導入した repo-owned helper / bootstrap 変更が direct cause かを切り分け、
+今の dedicated CI browser job failure を最短で解消する。
 
 最初の到達点は次の 2 つである。
 
 - `operator-ui-browser-file-backed` / `operator-ui-browser-postgres` の両 lane で、
   現在どこで hang しているかを CI log 上で因果追跡できるようにする
-- remediation を lane ごとに固定する
-  - helper/bootstrap 修正で十分なのか
-  - `file-backed` だけ Docker 化するのか
-  - `postgres` も Docker 化するなら service topology をどう変えるのか
+- host-runner 前提を維持したまま、
+  helper/bootstrap 修正または workflow-managed provisioning で
+  current job failure を止血する
 
 ## Context
 
@@ -42,14 +40,14 @@ Addresses: `docs/issues/0035-operator-ui-browser-playwright-hang.md`
 - `PR276` helper 導入前後で CI lane の browser provisioning contract が
   どう変わったかを整理する
 - dedicated CI browser lane 向けに、
-  opaque delegated browser bootstrap を避ける runtime contract を定める
-- 必要なら `operator-ui-browser-file-backed` / `operator-ui-browser-postgres` を
-  別 remediation に分ける
+  opaque delegated browser bootstrap を避ける最小 remediation を定める
 - docs/spec に
   `local canonical lane` と `dedicated CI browser lane` の runtime 役割差を反映する
 
 この plan では以下を扱わない。
 
+- local / CI / Postgres / SeaweedFS bootstrap topology の全面再整理
+- `operator-ui-browser` 全体の Playwright Docker runtime 再設計
 - local canonical lane の全面 Docker 化
 - remote staging verify lane の再変更
 - operator UI の新規 feature 拡張
@@ -76,6 +74,7 @@ Addresses: `docs/issues/0035-operator-ui-browser-playwright-hang.md`
 - 欠点:
   - dedicated browser CI が 2 種類の runtime contract を持つ
   - docs/spec で lane 差を明確にしないと保守が混乱する
+  - local / CI / Postgres / SeaweedFS の bootstrap 責務整理まで着手しないと中途半端になりやすい
 
 ### Option C: `operator-ui-browser.yml` 全体を Playwright Docker runtime へ再設計する
 
@@ -86,20 +85,22 @@ Addresses: `docs/issues/0035-operator-ui-browser-playwright-hang.md`
   - `postgres` lane では Postgres service、SeaweedFS、Go/Node bootstrap、
     artifact upload まで含めた service topology を再設計する必要がある
   - 今回の direct cause が helper regression だけなら過剰変更になりうる
+  - runtime / bootstrap 整理の別計画がないと、現在の stop-the-bleeding scope を超える
 
 ## Recommendation
 
-Option A を first path とし、
-実装中に `file-backed` lane だけは Option B へ切り替え可能な plan にする。
+Option A を採る。
 
 理由:
 
 - 現在の job log は `playwright test` 本体ではなく helper 内 bootstrap で止まっており、
   `PR276` 由来の regression をまず外すのが最短である
-- `postgres` lane は `make seaweed-up` を含むため、
-  staging verify と同じ job container 化を即採用すると scope が不必要に広がる
-- 一方で `file-backed` lane は topology が軽いので、
-  helper fix だけで安定しない場合の Docker fallback 候補として plan に残す価値がある
+- `postgres` lane は `make seaweed-up` を含み、
+  local / CI / Postgres / SeaweedFS の bootstrap 責務整理なしに
+  staging verify と同じ job container 化へ進むと scope が不必要に広がる
+- broader runtime/topology 整理は
+  `0096-operator-ui-browser-playwright-hang-runtime-alignment.md`
+  で後続計画として確保し、この plan は current failure stop-the-bleeding に集中する
 
 ## Spec Changes
 
@@ -131,9 +132,8 @@ Option A を first path とし、
 
 - `.github/workflows/operator-ui-browser.yml`
   - browser provisioning を helper 任せにせず、
-    workflow-managed step か lane 別 container runtime へ整理する
+    workflow-managed step か明示的 bootstrap へ整理する
   - 必要なら hang point を切り分ける timing / process / version logging を追加する
-  - `file-backed` と `postgres` で runtime contract を分けるなら、その差を job 定義へ明示する
 - `tools/dev/run-operator-ui-playwright.sh`
   - CI lane で local helper と同じ browser bootstrap を必ず走らせる前提を見直す
   - CI では delegated bootstrap を skip できるか、
@@ -156,8 +156,6 @@ Option A を first path とし、
       local lane と CI lane に分けて棚卸しする
 - [ ] [parallel] CI log で hang point が見えるように
       workflow / helper instrumentation 案を決める
-- [ ] [parallel] `file-backed` lane と `postgres` lane の
-      Docker 化難度と topology 制約を整理する
 - [ ] [depends on: contract inventory] remediation 方針を lane ごとに固定する
 - [ ] [depends on: remediation decision] docs/spec と workflow/helper 実装を更新する
 - [ ] [depends on: implementation] dedicated CI browser lane の relevant verification と
@@ -165,25 +163,23 @@ Option A を first path とし、
 
 ## Parallelism
 
-- [parallel] log evidence の整理と lane topology 制約の棚卸しは並行できる
 - [parallel] docs/spec wording 叩き台と workflow instrumentation 案の整理は並行できる
-- remediation の最終選択は evidence と topology 整理の両方に depends on する
+- remediation の最終選択は evidence と contract inventory に depends on する
 
 ## Dependencies
 
 - depends on: `0069-platform-online-foundation-03-05-operator-ui-verification-02-ci-postgres-browser-lane.md`
 - depends on: `0084-staging-verify-playwright-docker.md`
 - context from: `0094-reduce-token-heavy-verification-command-surfaces.md`
+- follow-up sibling plan: `0096-operator-ui-browser-playwright-hang-runtime-alignment.md`
 
 ## Risks and Mitigations
 
-- root cause を見誤って先に全面 Docker 化すると、`postgres` lane の topology 変更が過剰になる
-  - mitigation: helper regression と lane topology を分けて判断する
+- root cause を見誤って broader topology 整理までこの plan に混ぜると、current fix が遅れる
+  - mitigation: helper regression の止血と runtime/topology 再整理を別 plan に分ける
 - CI lane と local lane の browser provisioning contract が曖昧だと、
   将来また helper 側へ opaque bootstrap が戻りやすい
   - mitigation: docs/spec で local canonical lane と dedicated CI browser lane の差を固定する
-- `file-backed` と `postgres` の remediation を分けると docs が複雑になる
-  - mitigation: runtime だけ差分として扱い、acceptance surface と artifact contract は共通化する
 
 ## Design Decisions
 
@@ -193,8 +189,8 @@ Option A を first path とし、
 - `operator-ui-browser-postgres` lane は、
   `SeaweedFS` と service bootstrap の制約を無視して
   staging verify と同形の Docker 化へ飛ばない
-- remediation は lane ごとに分けてよく、
-  最小変更で戻せるなら helper/bootstrap 修正を優先する
+- broader runtime/topology 再整理は sibling plan へ切り分け、
+  この plan では helper/bootstrap 修正を優先する
 
 ## Verification
 
