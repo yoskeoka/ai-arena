@@ -44,6 +44,7 @@ human と AI agent は既存 script 名をそのまま使えばよい。
 
 default は quiet mode とし、成功時は lane summary と exec log path だけを返す。
 詳細な tool 出力が必要なときだけ `VERBOSE=1` を付けてよい。
+ただし CI browser lane では wrapper を bypass し、Playwright の標準出力を job log にそのまま流してよい。
 
 ```sh
 cd operator-ui
@@ -54,6 +55,7 @@ failure 時は wrapper が relevant artifact path と exec log path を返さな
 全文をそのまま返すのではなく、まず `grep -niE 'error|fail'` などで
 relevant な行だけを抽出して診断する。
 backend / frontend / Playwright の full log は artifact path 側を正本として追う。
+CI browser lane の診断正本は workflow job log と uploaded artifacts とする。
 
 ## Fixture local regression lane
 

@@ -20,6 +20,7 @@
 default UX は quiet mode とし、成功時は gate 名ごとの summary を返す。
 成功時も exec log path は返し、必要なときだけ詳細を辿れるようにする。
 詳細な tool 出力が必要なときだけ `VERBOSE=1` を付けてよい。
+ただし CI では wrapper を bypass し、job log に tool の標準出力をそのまま流してよい。
 
 ```sh
 VERBOSE=1 make test
@@ -29,6 +30,7 @@ VERBOSE=1 make lint
 failure 時は wrapper が該当 gate の exec log path を返し、
 全文をそのまま貼り返すのではなく、まず `grep -niE 'error|fail'` などで
 relevant な行だけを抽出して診断してよい。
+CI failure はこの local wrapper contract の対象外であり、workflow log をそのまま診断の正本としてよい。
 
 ## Formatter
 

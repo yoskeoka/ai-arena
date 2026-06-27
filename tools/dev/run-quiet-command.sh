@@ -9,7 +9,7 @@ if [ "$#" -eq 0 ]; then
   exit 1
 fi
 
-if [ "${VERBOSE:-0}" = "1" ]; then
+if [ "${VERBOSE:-0}" = "1" ] || [ -n "${CI:-}" ]; then
   exec "$@"
 fi
 

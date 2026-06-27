@@ -107,7 +107,7 @@ export PNPM_HOME="$pnpm_home"
 cd "$operator_ui_dir"
 export pnpm_config_store_dir="$store_dir"
 
-if [ "${VERBOSE:-0}" = "1" ]; then
+if [ "${VERBOSE:-0}" = "1" ] || [ -n "${CI:-}" ]; then
   exec pnpm exec playwright test "$@"
 fi
 
