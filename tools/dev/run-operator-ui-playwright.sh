@@ -89,7 +89,7 @@ if [ -n "$lane" ]; then
   esac
 fi
 
-if [ "${VERBOSE:-0}" = "1" ] && [ -n "${OPERATOR_UI_PLAYWRIGHT_REPORTER:-}" ] && [ "$OPERATOR_UI_PLAYWRIGHT_REPORTER" = "dot" ]; then
+if [ "${VERBOSE:-0}" = "1" ] && [ "${OPERATOR_UI_PLAYWRIGHT_REPORTER:-dot}" = "dot" ]; then
   export OPERATOR_UI_PLAYWRIGHT_REPORTER=list
 fi
 
