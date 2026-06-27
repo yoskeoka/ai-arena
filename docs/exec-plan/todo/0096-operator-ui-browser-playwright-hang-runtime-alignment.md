@@ -73,6 +73,20 @@ CI / remote 向け runtime は workflow/service-first に寄せる。
 これにより、Playwright browser・Postgres・SeaweedFS の責務を
 人間にも agent にも説明しやすい contract にできる。
 
+実装へ進む前提条件として、
+最終 command surface を human と明示合意してから着手する。
+少なくとも次を先に固定する。
+
+- human contributor が日常的に叩く command
+- AI agent が標準で叩く command
+- local canonical lane として self-bootstrap を許す command
+- CI/workflow が専用に使う command
+- helper / env 切替を共有してよい surface と、
+  分離すべき surface
+
+この合意なしに、
+helper 内 env 切替だけで実装を先に進めてはならない。
+
 ## Spec Changes
 
 ### `docs/specs/platform-service-operator-ui.md`
@@ -105,6 +119,14 @@ CI / remote 向け runtime は workflow/service-first に寄せる。
 
 ## Sub-tasks
 
+- [ ] human と合意すべき command surface の論点を整理する
+  - human contributor が叩く command
+  - AI agent が叩く command
+  - local canonical lane
+  - CI/workflow 専用 lane
+  - shared helper / env switch で吸収してよい境界
+- [ ] [depends on: command-surface agreement prep] 実装前に、
+      上記 command surface の最終系を human と合意する
 - [ ] local / CI / remote lane の runtime ownership を棚卸しする
 - [ ] Postgres / SeaweedFS / browser provisioning の責務境界を決める
 - [ ] `file-backed` と `postgres` lane の service topology 差を整理する
@@ -113,9 +135,11 @@ CI / remote 向け runtime は workflow/service-first に寄せる。
 
 ## Parallelism
 
-- [parallel] docs/spec の ownership 叩き台と現状棚卸しは並行できる
+- command-surface agreement は implementation gate として先行させる
+- [parallel] docs/spec の ownership 叩き台と現状棚卸しは、
+  command-surface agreement prep と並行できる
 - [parallel] Postgres / SeaweedFS topology 整理と browser provisioning 境界整理は並行できる
-- 最終実装は ownership decision に depends on する
+- 最終実装は command-surface agreement と ownership decision の両方に depends on する
 
 ## Dependencies
 
@@ -131,6 +155,9 @@ CI / remote 向け runtime は workflow/service-first に寄せる。
   - mitigation: local helper bootstrap は残しつつ、CI/runtime contract と分離する
 - topology 再設計を先にやりすぎると immediate fix と競合する
   - mitigation: `0095` を先に片付けてから着手する
+- human / agent / CI の command surface 合意なしに helper 実装だけ先に進めると、
+  後から canonical command を再設計する二度手間になる
+  - mitigation: command-surface agreement を implementation gate として plan に明記する
 
 ## Design Decisions
 
@@ -138,6 +165,8 @@ CI / remote 向け runtime は workflow/service-first に寄せる。
 - Postgres と SeaweedFS の扱いの不揃いは incidental detail ではなく、
   future Docker/runtime redesign の主要論点として扱う
 - local / CI / remote で runtime ownership を説明可能な contract にする
+- runtime ownership 再整理の実装は、
+  human / AI agent / CI が叩く最終 command surface を合意してから始める
 
 ## Verification
 
