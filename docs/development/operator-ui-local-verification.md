@@ -56,6 +56,9 @@ failure 時は wrapper が relevant artifact path と exec log path を返さな
 relevant な行だけを抽出して診断する。
 backend / frontend / Playwright の full log は artifact path 側を正本として追う。
 CI browser lane の診断正本は workflow job log と uploaded artifacts とする。
+dedicated CI browser lane では local helper の browser bootstrap を使わず、
+workflow-managed `chrome` runtime を version / executable log つきで供給し、
+`OPERATOR_UI_SKIP_BROWSER_BOOTSTRAP=1` で helper fallback を bypass する。
 
 ## Fixture local regression lane
 
