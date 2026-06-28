@@ -57,7 +57,10 @@ jobs:
       - name: Verify browser runtime
         run: |
           pnpm exec playwright --version
-          command -v google-chrome
+          if ! command -v google-chrome >/dev/null 2>&1; then
+            echo "google-chrome is not available on this runner; operator-ui-browser CI requires a workflow-managed Chrome runtime." >&2
+            exit 1
+          fi
           google-chrome --version
         working-directory: operator-ui
 
@@ -127,7 +130,10 @@ jobs:
       - name: Verify browser runtime
         run: |
           pnpm exec playwright --version
-          command -v google-chrome
+          if ! command -v google-chrome >/dev/null 2>&1; then
+            echo "google-chrome is not available on this runner; operator-ui-browser CI requires a workflow-managed Chrome runtime." >&2
+            exit 1
+          fi
           google-chrome --version
         working-directory: operator-ui
 

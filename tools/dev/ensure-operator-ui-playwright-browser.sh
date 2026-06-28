@@ -15,7 +15,7 @@ export PNPM_HOME="$pnpm_home"
 "$repo_root/tools/dev/ensure-pnpm-install.sh" "$operator_ui_dir"
 
 if [ "$skip_bootstrap" = "1" ]; then
-  echo "skipping Playwright browser bootstrap; expecting workflow-managed browser runtime"
+  echo "skipping Playwright browser bootstrap; expecting a pre-provisioned browser runtime"
   exit 0
 fi
 
