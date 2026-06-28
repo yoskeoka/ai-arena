@@ -1,7 +1,7 @@
 # operator-ui-browser-playwright-hang
 **Execution**: Use `/execute-task` to implement this plan.
 
-Addresses: `docs/issues/0035-operator-ui-browser-playwright-hang.md`
+Addresses: `docs/issues/done/0035-operator-ui-browser-playwright-hang.md`
 
 ## Objective
 

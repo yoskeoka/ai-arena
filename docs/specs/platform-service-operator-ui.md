@@ -132,6 +132,15 @@ full diagnostic は explicit verbose opt-in 時だけ常時露出してよい。
 failure 時も wrapper は full output の貼り返しではなく、
 exec log path と短い診断導線だけを返してよい。
 
+dedicated CI browser lane の browser provisioning は、
+local canonical lane の Playwright browser bootstrap helper へ隠してはならない。
+
+- current host-runner lane は workflow-managed `chrome` runtime を使ってよい
+- workflow は browser version と executable presence を job log 上で明示しなければならない
+- dedicated CI lane は `OPERATOR_UI_SKIP_BROWSER_BOOTSTRAP=1` により
+  local helper の `playwright install chromium` fallback を bypass しなければならない
+- lane ごとに runtime が異なっても、acceptance surface と artifact contract は共通に保たなければならない
+
 dedicated CI browser lane は、browser runtime を repo checkout 外の
 pinned Playwright 公式 image へ載せてもよい。
 ただし image version は repo が使う `@playwright/test` version と一致しなければならない。

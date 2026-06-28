@@ -112,3 +112,4 @@ checked-in generated code は comment policy の対象外としてよい。
 - file-backed browser lane は actual `arena-service` を filesystem artifact backend + in-memory queue store で起動してよい
 - durable browser lane は actual `arena-service` を Postgres metadata backend + S3-compatible artifact backend で起動し、schema apply と object-storage bootstrap を browser run 前に完了しなければならない
 - dedicated browser lane の canonical frontend command は `operator-ui/` の `pnpm` scripts とし、failure artifact は Playwright output と backend/frontend logs を upload する
+- host-runner の dedicated browser lane は local browser bootstrap helper に browser install を委譲せず、workflow 上で browser runtime の executable presence / version を診断可能にしなければならない
