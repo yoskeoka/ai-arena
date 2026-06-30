@@ -1,27 +1,29 @@
 {
-  "PostToolUse": [
-    {
-      "matcher": "^(apply_patch|Edit|Write)$",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "\"$(git rev-parse --show-toplevel)/tools/codex-hook-post-tool-use.sh\"",
-          "timeout": 30,
-          "statusMessage": "Running ai-arena formatter hook"
-        }
-      ]
-    }
-  ],
-  "Stop": [
-    {
-      "hooks": [
-        {
-          "type": "command",
-          "command": "\"$(git rev-parse --show-toplevel)/tools/codex-hook-stop.sh\"",
-          "timeout": 180,
-          "statusMessage": "Running ai-arena quality gates"
-        }
-      ]
-    }
-  ]
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "^(apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel)/tools/codex-hook-post-tool-use.sh\"",
+            "timeout": 30,
+            "statusMessage": "Running ai-arena formatter hook"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel)/tools/codex-hook-stop.sh\"",
+            "timeout": 180,
+            "statusMessage": "Running ai-arena quality gates"
+          }
+        ]
+      }
+    ]
+  }
 }
