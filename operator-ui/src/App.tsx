@@ -7,6 +7,7 @@ import { OperatorLayout } from "./routes/operator/OperatorLayout";
 import { OperatorPage } from "./routes/operator/OperatorPage";
 import { defaultBaseUrl, messageOf, normalizeBaseUrl } from "./routes/operator/operatorPageSupport";
 import { parseOperatorRoute, OperatorRoute } from "./routes/operator/operatorRoutes";
+import { InvitesPage } from "./routes/operator/InvitesPage";
 import { RankingsPage } from "./routes/operator/RankingsPage";
 import { RequestsPage } from "./routes/operator/RequestsPage";
 import { RunDetailPage } from "./routes/operator/RunDetailPage";
@@ -110,6 +111,8 @@ function OperatorRoutePage({ route, baseUrl }: { route: OperatorRoute; baseUrl: 
   switch (route.kind) {
     case "overview":
       return <OperatorPage baseUrl={baseUrl} />;
+    case "invites":
+      return <InvitesPage baseUrl={baseUrl} />;
     case "games":
       return <GamesPage baseUrl={baseUrl} />;
     case "submissions":
@@ -129,8 +132,9 @@ function UnknownRoute({ pathname }: { pathname: string }) {
       <p className="text-sm font-medium uppercase tracking-[0.2em] text-teal">Unknown Route</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-tight">No page is registered for this path.</h1>
       <p className="mt-3 text-sm text-black/70">
-        The current operator UI is available at <code>/</code>, <code>/operator</code>, <code>/operator/games</code>,{" "}
-        <code>/operator/submissions</code>, <code>/operator/requests</code>, <code>/operator/rankings</code>, and <code>/login</code>.
+        The current operator UI is available at <code>/</code>, <code>/operator</code>, <code>/operator/invites</code>,{" "}
+        <code>/operator/games</code>, <code>/operator/submissions</code>, <code>/operator/requests</code>, <code>/operator/rankings</code>, and{" "}
+        <code>/login</code>.
       </p>
       <p className="mt-2 text-sm text-black/60">Path: {pathname}</p>
     </section>

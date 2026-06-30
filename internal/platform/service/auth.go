@@ -23,9 +23,10 @@ const (
 
 	authProviderGitHub = "github"
 
-	sessionCookieName      = "arena_session"
-	pendingAuthCookieName  = "arena_github_oauth_pending"
-	defaultSessionLifetime = 24 * time.Hour
+	sessionCookieName           = "arena_session"
+	pendingAuthCookieName       = "arena_github_oauth_pending"
+	defaultSessionLifetime      = 24 * time.Hour
+	defaultSignupInviteLifetime = 24 * time.Hour
 )
 
 var (
@@ -58,6 +59,7 @@ type AuthStore interface {
 	CreateSession(ctx context.Context, accountID string, expiresAt time.Time) (string, error)
 	GetSession(ctx context.Context, sessionToken string, now time.Time) (AuthPrincipal, error)
 	DeleteSession(ctx context.Context, sessionToken string) error
+	CreateSignupInvite(ctx context.Context, role string, expiresAt time.Time) (SignupInviteRecord, error)
 }
 
 // AuthIdentity is the provider-normalized identity claim used for account linking.
@@ -81,6 +83,18 @@ type AuthPrincipal struct {
 	ProviderLogin string   `json:"provider_login"`
 	ProviderEmail string   `json:"provider_email,omitempty"`
 	Roles         []string `json:"roles"`
+}
+
+// SignupInviteRequest describes the operator API payload for creating an invite.
+type SignupInviteRequest struct {
+	Role string `json:"role"`
+	TTL  string `json:"ttl,omitempty"`
+}
+
+// SignupInviteResponse returns the raw invite token and a frontend-relative login URL.
+type SignupInviteResponse struct {
+	SignupInviteRecord
+	InviteURL string `json:"invite_url"`
 }
 
 // SessionStatusResponse reports whether the current browser session is authenticated.
@@ -170,6 +184,24 @@ func (a *AuthService) SessionStatus(w http.ResponseWriter, r *http.Request) {
 		Authenticated: true,
 		Principal:     &principal,
 	})
+}
+
+// CreateSignupInvite creates a single-use invite for one of the durable roles.
+func (a *AuthService) CreateSignupInvite(ctx context.Context, role string, ttl time.Duration) (SignupInviteRecord, error) {
+	if a == nil {
+		return SignupInviteRecord{}, ErrAuthDisabled
+	}
+	role = strings.TrimSpace(role)
+	if err := validateSignupInviteRole(role); err != nil {
+		return SignupInviteRecord{}, err
+	}
+	if ttl < 0 {
+		return SignupInviteRecord{}, fmt.Errorf("service: invite ttl must not be negative")
+	}
+	if ttl == 0 {
+		ttl = defaultSignupInviteLifetime
+	}
+	return a.store.CreateSignupInvite(ctx, role, a.now().UTC().Add(ttl))
 }
 
 // GitHubLogin starts the GitHub OAuth authorization-code flow.
@@ -370,6 +402,21 @@ func (a *AuthService) redirectLoginError(w http.ResponseWriter, r *http.Request,
 	params.Set("error", errorCode)
 	loginURL.RawQuery = params.Encode()
 	http.Redirect(w, r, loginURL.String(), http.StatusFound)
+}
+
+func validateSignupInviteRole(role string) error {
+	switch strings.TrimSpace(role) {
+	case "participant", "developer", "operator":
+		return nil
+	default:
+		return fmt.Errorf("service: invite role must be participant, developer, or operator")
+	}
+}
+
+func signupInviteURL(inviteToken string) string {
+	params := url.Values{}
+	params.Set("invite_token", strings.TrimSpace(inviteToken))
+	return (&url.URL{Path: "/login", RawQuery: params.Encode()}).String()
 }
 
 func (a *AuthService) setSessionCookie(w http.ResponseWriter, r *http.Request, token string, ttl time.Duration) {

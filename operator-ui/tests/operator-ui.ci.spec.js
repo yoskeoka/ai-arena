@@ -105,11 +105,24 @@ test("service-backed operator UI browser lane covers registration, request execu
   }
 
   await expect(page.getByRole("heading", { name: "AI Arena Operator Console" })).toBeVisible();
+  await expect(page.getByTestId("operator-nav-invites")).toBeVisible();
   await expect(page.getByTestId("operator-nav-overview")).toBeVisible();
   await expect(page.getByTestId("operator-nav-games")).toBeVisible();
   await expect(page.getByTestId("operator-nav-submissions")).toBeVisible();
   await expect(page.getByTestId("operator-nav-requests")).toBeVisible();
   await expect(page.getByTestId("operator-nav-rankings")).toBeVisible();
+
+  await page.getByTestId("operator-nav-invites").click();
+  await expect(page.getByTestId("operator-form-invites")).toBeVisible();
+  if (authEnabled) {
+    await page.getByLabel("Role").selectOption("developer");
+    await page.getByLabel("TTL").fill("12h");
+    await page.getByRole("button", { name: "Create invite" }).click();
+    await expect(page.getByTestId("signup-invite-result")).toBeVisible();
+    await expect(page.getByTestId("signup-invite-role")).toHaveText("developer");
+    await expect(page.getByTestId("signup-invite-token")).toHaveText(/.+/);
+    await expect(page.getByTestId("signup-invite-url")).toHaveAttribute("href", /\/login\?invite_token=/);
+  }
 
   const suffix = Date.now().toString();
   const registrationID = `echo-count-ui-${suffix}`;

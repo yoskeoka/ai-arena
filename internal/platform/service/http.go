@@ -139,6 +139,7 @@ func (a *OperatorAPI) Handler() http.Handler {
 		mux.HandleFunc("POST /auth/logout", a.auth.Logout)
 	}
 	protected := http.NewServeMux()
+	protected.HandleFunc("POST /api/v1/signup-invites", a.handleSignupInvites)
 	protected.HandleFunc("/api/v1/game-registrations", a.handleGameRegistrations)
 	protected.HandleFunc("/api/v1/ai-submissions", a.handleAISubmissions)
 	protected.HandleFunc("/api/v1/match-requests", a.handleMatchRequests)
@@ -169,6 +170,44 @@ func (a *OperatorAPI) handleSessionStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 	a.auth.SessionStatus(w, r)
+}
+
+func (a *OperatorAPI) handleSignupInvites(w http.ResponseWriter, r *http.Request) {
+	if a.auth == nil {
+		writeError(w, http.StatusServiceUnavailable, ErrAuthDisabled)
+		return
+	}
+	req, err := decodeJSON[SignupInviteRequest](r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	role := strings.TrimSpace(req.Role)
+	if err := validateSignupInviteRole(role); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	ttl := defaultSignupInviteLifetime
+	if strings.TrimSpace(req.TTL) != "" {
+		ttl, err = time.ParseDuration(strings.TrimSpace(req.TTL))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if ttl <= 0 {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("service: invite ttl must be greater than zero"))
+			return
+		}
+	}
+	record, err := a.auth.CreateSignupInvite(r.Context(), role, ttl)
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, SignupInviteResponse{
+		SignupInviteRecord: record,
+		InviteURL:          signupInviteURL(record.InviteToken),
+	})
 }
 
 func (a *OperatorAPI) handleGameRegistrations(w http.ResponseWriter, r *http.Request) {
