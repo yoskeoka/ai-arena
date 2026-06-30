@@ -87,6 +87,15 @@ export type SessionStatusResponse = {
   principal?: AuthPrincipal;
 };
 
+export type SignupInviteRole = "participant" | "developer" | "operator";
+
+export type SignupInviteResponse = {
+  invite_token: string;
+  role: SignupInviteRole;
+  expires_at: string;
+  invite_url: string;
+};
+
 export type GameRegistration = {
   registration_id: string;
   game: {
@@ -209,6 +218,11 @@ type MatchRequestPayload = {
   match_id?: string;
 };
 
+type SignupInvitePayload = {
+  role: SignupInviteRole;
+  ttl?: string;
+};
+
 export class OperatorApiClient {
   constructor(private readonly baseUrl: string) {}
 
@@ -294,6 +308,18 @@ export class OperatorApiClient {
       body: JSON.stringify(payload),
     });
     return this.decodeJSON<MatchRequest>(response);
+  }
+
+  async createSignupInvite(payload: SignupInvitePayload): Promise<SignupInviteResponse> {
+    const response = await fetch(this.url("/api/v1/signup-invites"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    return this.decodeJSON<SignupInviteResponse>(response);
   }
 
   async getMatchDetail(runId: string, signal?: AbortSignal): Promise<MatchDetailResponse> {

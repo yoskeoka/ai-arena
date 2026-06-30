@@ -22,7 +22,7 @@ export function OperatorLayout({ route, baseUrl, onBaseUrlChange, principal, onL
               <p className="text-sm font-medium uppercase tracking-[0.2em] text-teal">Phase 7 Operator Surface</p>
               <h1 className="text-3xl font-semibold tracking-tight">AI Arena Operator Console</h1>
               <p className="max-w-3xl text-sm text-black/70">
-                Registration, submission, request, run follow-up, and ranking verification in one route family.
+                Registration, invite issuance, submission, request, run follow-up, and ranking verification in one route family.
               </p>
             </div>
             <div className="flex min-w-80 flex-col gap-3 text-sm">

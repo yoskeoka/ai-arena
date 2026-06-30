@@ -160,6 +160,88 @@ func TestOperatorAPIPresetLifecycle(t *testing.T) {
 	}
 }
 
+func TestOperatorAPICreateSignupInvite(t *testing.T) {
+	queue := NewInMemoryQueueStore()
+	commands := newTestCommandServiceWithStore(t, queue)
+	queries, err := NewQueryService(queue)
+	if err != nil {
+		t.Fatalf("NewQueryService() error = %v", err)
+	}
+	general := newTestGeneralSubmissionService(t)
+	requests := newTestMatchRequestService(t, general, commands, queue)
+	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
+		{
+			PresetID: "echo-reference",
+			Game: contract.GameMetadata{
+				GameID:         "echo-count",
+				GameVersion:    "2.0.0",
+				RulesetVersion: "phase2-simultaneous-2turn",
+			},
+			Players: []SubmittedPlayer{
+				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
+			},
+			OutputDir: t.TempDir(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
+	}
+	authStore := &memoryAuthStore{
+		identities: map[string]AuthPrincipal{
+			authIdentityKey(AuthIdentity{Provider: authProviderGitHub, Subject: "12345"}): {
+				AccountID:     "account-operator",
+				Provider:      "github",
+				ProviderLogin: "operator-dev",
+				Roles:         []string{"operator"},
+			},
+		},
+	}
+	auth, err := NewAuthService(AuthConfig{
+		GitHubClientID:     "client-id",
+		GitHubClientSecret: "client-secret",
+	}, authStore, fakeGitHubAuthProvider{})
+	if err != nil {
+		t.Fatalf("NewAuthService() error = %v", err)
+	}
+	api, err := NewOperatorAPI(commands, queries, general, requests, presets, DirectArtifactAccessIssuer{}, auth)
+	if err != nil {
+		t.Fatalf("NewOperatorAPI() error = %v", err)
+	}
+	sessionToken, err := authStore.CreateSession(context.Background(), "account-operator", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/signup-invites", bytes.NewBufferString(`{"role":"developer","ttl":"48h"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken})
+	resp := httptest.NewRecorder()
+	api.Handler().ServeHTTP(resp, req)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("POST /api/v1/signup-invites status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+
+	var invite SignupInviteResponse
+	if err := json.Unmarshal(resp.Body.Bytes(), &invite); err != nil {
+		t.Fatalf("json.Unmarshal(invite) error = %v", err)
+	}
+	if invite.Role != "developer" {
+		t.Fatalf("invite.Role = %q, want developer", invite.Role)
+	}
+	if invite.InviteToken == "" {
+		t.Fatal("invite.InviteToken = empty, want issued token")
+	}
+	if invite.InviteURL != signupInviteURL(invite.InviteToken) {
+		t.Fatalf("invite.InviteURL = %q, want login URL for token", invite.InviteURL)
+	}
+	if got := authStore.invites[invite.InviteToken]; got != "developer" {
+		t.Fatalf("invite store role = %q, want developer", got)
+	}
+	if !invite.ExpiresAt.After(time.Now().UTC().Add(24 * time.Hour)) {
+		t.Fatalf("invite.ExpiresAt = %s, want TTL longer than 24h", invite.ExpiresAt)
+	}
+}
+
 func TestOperatorAPIRejectsUnknownPreset(t *testing.T) {
 	commands := newTestCommandService(t)
 	queries, err := NewQueryService(NewInMemoryQueueStore())

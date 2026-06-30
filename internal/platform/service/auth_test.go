@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -253,6 +254,52 @@ func TestAuthServiceRequireOperatorRejectsAnonymousAndNonOperator(t *testing.T) 
 	}
 }
 
+func TestAuthServiceCreateSignupInviteAllowsDurableRoles(t *testing.T) {
+	t.Parallel()
+
+	store := &memoryAuthStore{}
+	auth, err := NewAuthService(AuthConfig{
+		GitHubClientID:     "client-id",
+		GitHubClientSecret: "client-secret",
+	}, store, fakeGitHubAuthProvider{})
+	if err != nil {
+		t.Fatalf("NewAuthService() error = %v", err)
+	}
+
+	record, err := auth.CreateSignupInvite(context.Background(), "developer", 2*time.Hour)
+	if err != nil {
+		t.Fatalf("CreateSignupInvite() error = %v", err)
+	}
+	if record.Role != "developer" {
+		t.Fatalf("CreateSignupInvite() role = %q, want developer", record.Role)
+	}
+	if record.InviteToken == "" {
+		t.Fatal("CreateSignupInvite() invite token = empty, want issued invite")
+	}
+	if got := store.invites[record.InviteToken]; got != "developer" {
+		t.Fatalf("memory invite store role = %q, want developer", got)
+	}
+	if !record.ExpiresAt.After(time.Now().UTC().Add(time.Hour)) {
+		t.Fatalf("CreateSignupInvite() expires_at = %s, want future expiry", record.ExpiresAt)
+	}
+}
+
+func TestAuthServiceCreateSignupInviteRejectsUnknownRole(t *testing.T) {
+	t.Parallel()
+
+	auth, err := NewAuthService(AuthConfig{
+		GitHubClientID:     "client-id",
+		GitHubClientSecret: "client-secret",
+	}, &memoryAuthStore{}, fakeGitHubAuthProvider{})
+	if err != nil {
+		t.Fatalf("NewAuthService() error = %v", err)
+	}
+
+	if _, err := auth.CreateSignupInvite(context.Background(), "admin", time.Hour); err == nil {
+		t.Fatal("CreateSignupInvite() error = nil, want role validation failure")
+	}
+}
+
 func TestAuthServiceGitHubLoginAllowsDefaultLocalReturnOrigin(t *testing.T) {
 	t.Parallel()
 
@@ -404,6 +451,23 @@ func (s *memoryAuthStore) GetSession(_ context.Context, sessionToken string, _ t
 func (s *memoryAuthStore) DeleteSession(_ context.Context, sessionToken string) error {
 	delete(s.sessions, sessionToken)
 	return nil
+}
+
+func (s *memoryAuthStore) CreateSignupInvite(_ context.Context, role string, expiresAt time.Time) (SignupInviteRecord, error) {
+	if s.invites == nil {
+		s.invites = map[string]string{}
+	}
+	role = strings.TrimSpace(role)
+	if err := validateSignupInviteRole(role); err != nil {
+		return SignupInviteRecord{}, err
+	}
+	token := fmt.Sprintf("invite-%s-%d", role, len(s.invites)+1)
+	s.invites[token] = role
+	return SignupInviteRecord{
+		InviteToken: token,
+		Role:        role,
+		ExpiresAt:   expiresAt,
+	}, nil
 }
 
 func authIdentityKey(identity AuthIdentity) string {
