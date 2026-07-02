@@ -133,6 +133,8 @@ current split-origin では first landing の正本にしない。
   - invite に紐づく role binding 付与
   - invite token 失効
 - invalid / expired / consumed invite token では first signup を成立させてはならない
+- invite 発行の durable role は `participant|developer|operator` のみとしてよい
+- authenticated operator は repo-owned helper または operator API から invite を発行してよい
 - operator の first signup を実地確認するため、
   repo-owned CLI から invite token を発行してよい
 
@@ -198,6 +200,8 @@ provider 固有 subject や login name は `account` に混ぜず、
 - auth 未設定の local fixture lane では、
   operator API を auth-disabled mode で動かしてよい
   - ただし this mode は login flow の正本 verification とはみなさない
+- first operator bootstrap を remote Postgres DSN に対して実行するため、
+  repo-owned helper から operator invite token を発行してよい
 
 ## Local Development Contract
 
@@ -250,7 +254,7 @@ provider 固有 subject や login name は `account` に混ぜず、
 ## Deferred Follow-Ups
 
 - Google login
-- invite 発行 / 再送 UI
+- invite resend / history UI
 - session rotation と refresh policy の hardening
 - CSRF detail hardening
 - frontend same-origin proxy / custom domain 化

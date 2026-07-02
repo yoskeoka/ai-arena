@@ -197,7 +197,7 @@ func usageFor(subcommand string) string {
 	case "ranking-verify":
 		return "arena-service ranking-verify --game-id <id> --game-version <version> --ruleset-version <version> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "signup-invite-create":
-		return "arena-service signup-invite-create [--role <operator|participant|developer>] [--ttl <duration>] [--postgres-dsn <dsn>]"
+		return "arena-service signup-invite-create [--role <participant|developer|operator>] [--ttl <duration>] [--postgres-dsn <dsn>]"
 	default:
 		return "arena-service <submit|run-once|submit-cancel|list|get|read|serve|ranking-get|ranking-recompute|ranking-verify|signup-invite-create> ..."
 	}
@@ -602,6 +602,9 @@ func splitCSV(raw string) []string {
 func createSignupInvite(stdout io.Writer, postgresDSN string, role string, ttl time.Duration) error {
 	if strings.TrimSpace(postgresDSN) == "" {
 		return fmt.Errorf("--postgres-dsn or ARENA_SERVICE_POSTGRES_DSN is required")
+	}
+	if ttl <= 0 {
+		return fmt.Errorf("--ttl must be greater than zero")
 	}
 	store, err := service.NewPostgresAuthStore(context.Background(), postgresDSN)
 	if err != nil {

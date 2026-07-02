@@ -128,8 +128,8 @@ func (s *PostgresAuthStore) DeleteSession(ctx context.Context, sessionToken stri
 // CreateSignupInvite creates a new single-use signup invite for the requested role.
 func (s *PostgresAuthStore) CreateSignupInvite(ctx context.Context, role string, expiresAt time.Time) (SignupInviteRecord, error) {
 	role = strings.TrimSpace(role)
-	if role == "" {
-		return SignupInviteRecord{}, fmt.Errorf("service: invite role is required")
+	if err := validateSignupInviteRole(role); err != nil {
+		return SignupInviteRecord{}, err
 	}
 	token, err := randomToken(24)
 	if err != nil {

@@ -1,5 +1,6 @@
 export type OperatorRoute =
   | { kind: "overview" }
+  | { kind: "invites" }
   | { kind: "games" }
   | { kind: "submissions" }
   | { kind: "requests" }
@@ -8,6 +9,7 @@ export type OperatorRoute =
 
 export const operatorNavItems = [
   { kind: "overview", label: "Overview", href: "/operator", testId: "operator-nav-overview" },
+  { kind: "invites", label: "Invites", href: "/operator/invites", testId: "operator-nav-invites" },
   { kind: "games", label: "Games", href: "/operator/games", testId: "operator-nav-games" },
   { kind: "submissions", label: "Submissions", href: "/operator/submissions", testId: "operator-nav-submissions" },
   { kind: "requests", label: "Requests", href: "/operator/requests", testId: "operator-nav-requests" },
@@ -18,6 +20,9 @@ export function parseOperatorRoute(pathname: string): OperatorRoute | undefined 
   const normalized = normalizePathname(pathname);
   if (normalized === "/" || normalized === "/operator") {
     return { kind: "overview" };
+  }
+  if (normalized === "/operator/invites") {
+    return { kind: "invites" };
   }
   if (normalized === "/operator/games") {
     return { kind: "games" };
@@ -42,6 +47,8 @@ export function operatorRouteTitle(route: OperatorRoute) {
   switch (route.kind) {
     case "overview":
       return "Overview";
+    case "invites":
+      return "Invites";
     case "games":
       return "Games";
     case "submissions":

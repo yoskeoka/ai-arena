@@ -723,6 +723,11 @@ current path では custom domain を導入しない。
   `0.0.0.0:$PORT` へ bind する。`PORT` 未設定時だけ `10000` を fallback に使う
 - preset catalog は server-known participant set のみを持ち、
   operator request は `preset_id` と optional `submission_id` / `match_id` / `output_dir` override までに留める
+- first operator bootstrap 用の repo-owned helper は
+  `./tools/dev/invite-remote.sh` とし、
+  remote Postgres DSN と frontend origin を渡して operator invite を 1 回で発行できるようにしてよい
+  - 例:
+    `./tools/dev/invite-remote.sh "$ARENA_SERVICE_POSTGRES_DSN" "https://staging.ai-arena.pages.dev"`
 - 2026-06-02 の `render services --confirm -o json` 観測では、
   `ai-arena-service` / `ai-arena-stg` ともに build command は `go build -tags netgo -ldflags '-s -w' -o app`、
   start command は `./app` のままだった。

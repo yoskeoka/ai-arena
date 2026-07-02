@@ -5,6 +5,7 @@ test("operator route alias serves the same operator surface", async ({ page }) =
 
   await expect(page.getByRole("heading", { name: "AI Arena Operator Console" })).toBeVisible();
   await expect(page.getByTestId("operator-nav-overview")).toBeVisible();
+  await expect(page.getByTestId("operator-nav-invites")).toBeVisible();
   await expect(page.getByTestId("operator-nav-games")).toBeVisible();
   await expect(page.getByTestId("operator-nav-submissions")).toBeVisible();
   await expect(page.getByTestId("operator-nav-requests")).toBeVisible();
@@ -13,6 +14,10 @@ test("operator route alias serves the same operator surface", async ({ page }) =
   await expect(page.getByTestId("operator-panel-active-matches")).toBeVisible();
   await expect(page.getByTestId("operator-panel-completed-matches")).toBeVisible();
   await expect(page.getByTestId("operator-panel-completed-detail")).toBeVisible();
+
+  await page.getByTestId("operator-nav-invites").click();
+  await expect(page.getByTestId("operator-form-invites")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Issue Signup Invite" })).toBeVisible();
 });
 
 test("local operator UI browser lane covers queue, active, completed detail, and artifact access", async ({ page, request }) => {
