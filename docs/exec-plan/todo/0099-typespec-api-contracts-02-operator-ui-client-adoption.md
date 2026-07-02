@@ -3,7 +3,7 @@
 
 ## Objective
 
-`0097-typespec-api-contracts-01-foundation.md` で導入した TypeSpec-generated client を
+`0098-typespec-api-contracts-01-foundation.md` で導入した TypeSpec-generated client を
 `operator-ui` から実際に利用するよう refactor し、
 current handwritten `operator-ui/src/api.ts` を
 generated contract + thin browser adapter へ置き換える。
@@ -159,7 +159,7 @@ Option B を採る。
 
 ## Dependencies
 
-- depends on: `0097-typespec-api-contracts-01-foundation.md`
+- depends on: `0098-typespec-api-contracts-01-foundation.md`
 
 ## Verification
 

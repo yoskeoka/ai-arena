@@ -24,7 +24,7 @@ operator 向け、public/external 向け、operator-ui 以外の private consume
 - operator group 向けに OpenAPI artifact と frontend-consumable client generation seam が定義されている
 - `docs/specs/platform-service-operator-api.md` は behavioral summary + TypeSpec 参照へ整理されている
 - `docs/specs/platform-service-operator-ui.md` は API 呼び出し詳細を重複保持せず、必要箇所だけ TypeSpec-owned contract を参照する
-- `ai-arena/AGENTS.md` に
+- `AGENTS.md` に
   「API schema は TypeSpec で管理し、`docs/specs/` は外形的振る舞いを書く」
   ルールが追記されている
 
@@ -91,7 +91,7 @@ Option B を採る。
 - OpenAPI emit と frontend-consumable client generation の command/output seam を決める
 - `docs/specs/platform-service-operator-api.md` を behavioral summary へ整理する
 - `docs/specs/platform-service-operator-ui.md` から API call 詳細の重複記述を減らす
-- `ai-arena/AGENTS.md` に API spec management rule を追加する
+- `AGENTS.md` に API spec management rule を追加する
 
 この plan では以下を扱わない。
 
@@ -109,7 +109,7 @@ Option B を採る。
   - API-referencing UI contract, lines 35-40, 42-72, 180-297
 - `docs/specs/platform-frontend-architecture.md`
   - API family boundary and operator route-first boundary, lines 120-131, 152-190
-- `ai-arena/AGENTS.md`
+- `AGENTS.md`
   - spec-writing discipline and child-repo doc policy, lines 1-38
 - `internal/platform/service/http.go`
   - `OperatorAPI`, `Handler`, route handlers, CORS/error contract, lines 14-160, 175-213, 239-513
@@ -140,7 +140,7 @@ Option B を採る。
   - shrink Markdown to behavioral contract and TypeSpec source-of-truth references
 - `docs/specs/platform-service-operator-ui.md` (MODIFY)
   - remove duplicated request/response detail prose and point to TypeSpec-owned operator contract
-- `ai-arena/AGENTS.md` (MODIFY)
+- `AGENTS.md` (MODIFY)
   - add API schema management rule that TypeSpec owns wire contracts outside `docs/specs/`
 
 ## Spec Changes
@@ -160,7 +160,7 @@ Option B を採る。
 - [ ] current operator API family の route / request / response schema を TypeSpec へ移す
 - [ ] `docs/specs/platform-service-operator-api.md` を behavioral summary へ整理する
 - [ ] `docs/specs/platform-service-operator-ui.md` から API call detail の重複を外す
-- [ ] `ai-arena/AGENTS.md` へ API spec management rule を追加する
+- [ ] `AGENTS.md` へ API spec management rule を追加する
 
 ## Parallelism
 
@@ -183,7 +183,7 @@ Option B を採る。
 - operator group 向け OpenAPI artifact が repo-owned command で再生成できる
 - operator group 向け frontend client artifact が repo-owned command で再生成できる
 - `docs/specs/platform-service-operator-api.md` に wire-level schema の重複が残っていない
-- `ai-arena/AGENTS.md` から
+- `AGENTS.md` から
   API wire contract は TypeSpec、
   `docs/specs/` は observable behavior という境界が読める
 
