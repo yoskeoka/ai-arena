@@ -2,8 +2,7 @@
 
 ## 目的
 
-このドキュメントは、`ai-arena` の browser-facing frontend を
-どの責務境界で増やしていくかの正本を定義する。
+このドキュメントは、`ai-arena` の browser-facing frontend をどの責務境界で増やしていくかを定義する。
 
 ここで固定するのは durable な route / module / API / auth boundary であり、
 特定 framework feature、viewer 実装方式、query cache library の採用有無は固定しない。
@@ -70,7 +69,7 @@ route registration の実装方式はこの段階では固定しない。
 - pathname dispatch を app shell 内で手書きしてもよい
 - router library を採用してもよい
 - ただし最初の refactor では、route 配置規則を先に固定し、
-  deep-linking や nested route 機能要求が固まる前に library choice を contract にしてはならない
+  deep-linking や nested route 機能要求が明確になってからlibraryを選定する。
 
 ## Import And Export Rule
 
@@ -127,7 +126,7 @@ frontend が使う HTTP/API contract は、external/public API と同一であ�
 - backend 内部ロジック、storage access、domain rule は共有してよい
 - transport layer と response shaping は分け、frontend 都合を public API contract へ直接漏らしてはならない
 
-GraphQL はこの時点の既定にしない。
+GraphQL は採用予定は現時点では存在しない。
 必要な read/write は HTTP route または同等の explicit contract で分けてよい。
 
 ## Browser Auth Boundary
@@ -148,30 +147,6 @@ first landing の browser auth では backend-origin cookie + credentials 付き
 
 この spec が今固定するのは boundary だけであり、
 session rotation、CSRF 対策詳細、role-specific guard placement は別途 decision とする。
-
-## Current Application
-
-Phase 7 の `operator-ui` は、
-broader frontend architecture の最初の `operator` page family として位置づける。
-
-- public entry は `login` route と protected `operator` route family を持ってよい
-  - protected operator route の default return target は `/operator` としてよい
-- operator route family は shallow な domain-first navigation を先に固定してよい
-  - `/operator`
-  - `/operator/invites`
-  - `/operator/games`
-  - `/operator/submissions`
-  - `/operator/requests`
-  - `/operator/rankings`
-  - `/operator/runs/{run_id}` は deep-link detail route として持ってよい
-- current `/` entry は、operator surface の alias または `/operator` への redirect として扱ってよい
-- route registration は app shell 内の pathname dispatch のままでよく、
-  Phase 7 では router library 導入を必須にしない
-- active/completed/detail の polling と、games/submissions/requests/rankings の fetch は
-  page-local default に従う
-- `shared/ui` へ逃がしてよいのは primitive だけであり、
-  operator 固有 panel、ranking entry、artifact entry、form section は route/page 配下に残す
-- 後続 refactor は current file size ではなく、この route-first boundary に従って進める
 
 ## Deferred Decisions
 

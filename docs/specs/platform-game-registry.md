@@ -2,9 +2,7 @@
 
 ## 目的
 
-このドキュメントは、AI Arena が複数 game を registered game として扱うための
-registry contract を定義する。Phase 3 では plugin 機構までは入れず、repo 内にある game を
-共通の descriptor 入口で lookup / build / replay できることを正本化する。
+このドキュメントは、AI Arena が複数 game を registered game として扱うためのregistry contract を定義する。
 
 ## この spec の責務範囲
 
@@ -55,9 +53,8 @@ registry の lookup key は `game_id + game_version major` の組とする。
 
 ## persisted descriptor record
 
-永続化 backend に保存する registered game metadata は、runtime の function を含まない
-plain data として扱う。この spec では、その保存単位を安定した抽象概念として
-`DescriptorRecord` と呼ぶ。
+永続化 backend に保存する registered game metadata は、runtime の function を含まない plain data として扱う。
+この spec では、その保存単位を`DescriptorRecord` と呼ぶ。
 
 `DescriptorRecord` は少なくとも以下を持つ。
 
@@ -71,13 +68,10 @@ canonical な一意キーは `game_id + game_version_major` の composite key �
 必要なら `registry_key` という論理名を持ってよいが、これは composite key の derived /
 denormalized field として扱う。
 
-Phase 3 の in-memory 実装でも、hard-coded registration は最終的に保存可能な record として
-store へ渡す。将来 DB-backed store へ差し替える場合も、保存対象はこの shape までとする。
-
 runner-local な dev overlay は、この persisted `DescriptorRecord` を増やさない。
 consumer-supplied manifest から一時的な local-subprocess descriptor を構築する経路は、
 runner process 内だけで完結する overlay として扱い、DB / catalog へ official registration を
-追加したものと見なしてはならない。
+追加しない。
 
 official registration path は、runner-local overlay path とは別の admission policy に従う。
 運営が review して built-in game として取り込む経路、制約付き runtime に載せて platform 管理下で
@@ -162,22 +156,20 @@ build 入口を持つ。
 
 game program との接続形態は capability flag ではなく descriptor の動作モードとして保持する。
 
-最低でも次を表現できること:
+サポートする形式:
 
 - `in-process`
 - `local-subprocess`
 - `future-external-adapter`
 
 1 つの registered game は 1 つの `BuildMode` を持つ。
-Phase 3 時点では、既存 repo 内 game master は `in-process` だけで登録してよい。
 fixture 検証のために別接続形態も試したい場合は、`echo-count` と `echo-count-subprocess` のように
 別 `game_id` の registered game として分ける。
 
-consumer-supplied manifest overlay は、このうち `local-subprocess` だけを初期スコープとする。
-`future-external-adapter` やその他 runtime kind の一時 overlay は後続へ送る。
+consumer-supplied manifest overlay は、このうち `local-subprocess` だけを現時点ではサポートする。
+`future-external-adapter` やその他 runtime kind の一時 overlay は未対応。
 
-official registration で許可する `BuildMode` は、dev-only overlay と同一とは限らない。
-現時点の admission policy は少なくとも次を想定する。
+official registration で許可する `BuildMode` は次の想定。
 
 - `official built-in`
   - 運営自身が実装した game master
@@ -193,8 +185,7 @@ official registration で許可する `BuildMode` は、dev-only overlay と同�
   - persisted record の `BuildMode` は `future-external-adapter` とする
 
 `docker` / OCI container を将来 `official sandboxed submission` に加える場合でも、
-少なくとも network isolation、filesystem / capability 制限、resource limit、image / dependency scan を
-admission 条件として要求する。これらの要件を満たす具体例が出るまでは、未サポート候補として扱う。
+少なくとも network isolation、filesystem / capability 制限、resource limit、image / dependency scan をadmission 条件として要求する。これらの要件を満たす具体例が出るまでは、未サポート候補として扱う。
 
 operator-facing game registration validation は、少なくとも次を同期的に確認しなければならない。
 

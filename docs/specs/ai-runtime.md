@@ -2,9 +2,7 @@
 
 ## 目的
 
-このドキュメントは、AI player runtime の公式 contract を定義する。platform / runner / AI sample は
-この spec を正本として、runtime kind、manifest schema、標準 stream 契約、sandbox と resource limit
-の境界を共有する。
+このドキュメントは、AI player runtime の公式 contract を定義する。platform / runner / AI sample はこの spec を参照して、runtime kind、manifest schema、標準 stream 契約、sandbox と resource limitの境界を定義する。
 
 ## この spec の責務範囲
 
