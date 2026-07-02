@@ -54,7 +54,7 @@ registry の lookup key は `game_id + game_version major` の組とする。
 ## persisted descriptor record
 
 永続化 backend に保存する registered game metadata は、runtime の function を含まない plain data として扱う。
-この spec では、その保存単位を`DescriptorRecord` と呼ぶ。
+この spec では、その保存単位を `DescriptorRecord` と呼ぶ。
 
 `DescriptorRecord` は少なくとも以下を持つ。
 
