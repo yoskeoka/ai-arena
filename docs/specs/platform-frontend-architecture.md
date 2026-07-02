@@ -69,7 +69,7 @@ route registration の実装方式はこの段階では固定しない。
 - pathname dispatch を app shell 内で手書きしてもよい
 - router library を採用してもよい
 - ただし最初の refactor では、route 配置規則を先に固定し、
-  deep-linking や nested route 機能要求が明確になってからlibraryを選定する。
+  deep-linking や nested route 機能要求が明確になってから library を選定する。
 
 ## Import And Export Rule
 
