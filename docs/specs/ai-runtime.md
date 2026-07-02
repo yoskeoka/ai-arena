@@ -27,7 +27,7 @@
 
 AI 実行物の横に `<entry>.arena.json` を置く。
 
-online service skeleton の admission validation が local artifact locator を受ける場合も、sidecar 発見規則はこの
+online service の admission validation が local artifact locator を受ける場合も、sidecar 発見規則はこの
 `<entry>.arena.json` を使う。validation 段階では manifest / runtime の互換性確認と entrypoint 解決だけを行い、
 実際の match 実行開始は queue claim 後の worker / runner 責務に留める。
 

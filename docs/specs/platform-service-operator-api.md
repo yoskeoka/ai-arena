@@ -33,7 +33,6 @@ match request / run follow-up 操作、active/completed polling shape、
 
 ## 参照関係
 
-- `docs/specs/platform-service-skeleton.md`: submission / admission / queue lifecycle の正本
 - `docs/specs/platform-service-read-model.md`: compact row / detail view の正本
 - `docs/specs/platform-service-persistence.md`: durable write model と locator 保存境界の正本
 - `docs/specs/platform-service-general-submission.md`: general operator lane entity / validation の正本
