@@ -2,9 +2,7 @@
 
 ## 目的
 
-このドキュメントは、AI player runtime の公式 contract を定義する。platform / runner / AI sample は
-この spec を正本として、runtime kind、manifest schema、標準 stream 契約、sandbox と resource limit
-の境界を共有する。
+このドキュメントは、AI player runtime の公式 contract を定義する。platform / runner / AI sample はこの spec を参照して、runtime kind、manifest schema、標準 stream 契約、sandbox と resource limitの境界を定義する。
 
 ## この spec の責務範囲
 
@@ -29,7 +27,7 @@
 
 AI 実行物の横に `<entry>.arena.json` を置く。
 
-online service skeleton の admission validation が local artifact locator を受ける場合も、sidecar 発見規則はこの
+online service の admission validation が local artifact locator を受ける場合も、sidecar 発見規則はこの
 `<entry>.arena.json` を使う。validation 段階では manifest / runtime の互換性確認と entrypoint 解決だけを行い、
 実際の match 実行開始は queue claim 後の worker / runner 責務に留める。
 

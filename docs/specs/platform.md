@@ -54,7 +54,7 @@ Phase 4 では AI 実行 runtime を正式 contract として固定し、`local-
 - trusted external game backend への実ネットワーク接続実装
 - runner 自身による queue ownership、retry policy、自動 rematch 判定
 
-service skeleton が runner を包むとき、
+service が runner を包むとき、
 runner の terminal match status と service 側 queue lifecycle は分離して扱う。
 runner が `failed` や timeout reason 付き `canceled` の source-of-truth `record.json` を返しても、
 service 側の artifact persist が成功したなら queue lifecycle は `completed` に進めてよい。
@@ -104,7 +104,6 @@ game master sidecar については、platform と sidecar が共有してよい
 ## 参照関係
 
 - `docs/specs/platform-common-contract.md`: metadata / action status / failure 分類 / record core schema の正本
-- `docs/specs/platform-service-skeleton.md`: online service skeleton の submission / admission / queue lifecycle 契約
 - `docs/specs/platform-service-persistence.md`: online service write model と terminal locator 保存単位の正本
 - `docs/specs/platform-service-read-model.md`: operator-facing result list / detail / artifact read contract の正本
 - `docs/specs/game-master.md`: game master 開発者向けの論理 API と transport 契約
@@ -164,7 +163,7 @@ match execution へ流す。
 `--game-master-manifest` は引き続き `--game` / `--game-version` / `--ruleset` とは排他的とする。
 一方で replay/debug input flag との組み合わせは許可してよい。
 
-service skeleton が runner result を file-backed first で受け取るとき、標準 artifact layout は
+service が runner result を file-backed first で受け取るとき、標準 artifact layout は
 `record.json`、`result-summary.json`、`snapshot.json`、`exported-snapshot.json`、`history.json`
 を match directory に保存し、player stderr は `<player-id>-stderr.log` として同じ directory に分離保存する。
 
@@ -758,8 +757,8 @@ artifact hierarchy:
 - `exported-snapshot.json` は `record.json.exported_snapshot` をそのまま抜き出した derived exported snapshot とする
 - `result-summary.json` は human / AI Agent の既定観察導線向け compact derived artifact とし、少なくとも `status`、placement、artifact path 参照を含める
 - `structured-log.ndjson` は `stdout` に流れる structured log と同じ NDJSON record を保存する
-- online service skeleton が terminal persist を行うときも、最低限この `record.json` と `result-summary.json` を正本 / summary artifact として残す
-- online service skeleton は各 player の captured stderr を `<player-id>-stderr.log` として同じ match directory へ保存してよい
+- online service が terminal persist を行うときも、最低限この `record.json` と `result-summary.json` を正本 / summary artifact として残す
+- online service は各 player の captured stderr を `<player-id>-stderr.log` として同じ match directory へ保存してよい
 
 service persisted state から replay / resume / audit 入力を引くときの既定 locator group は次とする。
 
@@ -800,8 +799,8 @@ artifact 読取既定順:
 
 - local verification と AI Agent 実装時の既定読取順は `result-summary.json` -> `exported-snapshot.json` / `snapshot.json` -> `structured-log.ndjson` / `record.json` / `history.json` とする
 - `record.json.event_log` と `history.json` は source-of-truth / replay 用に保持するが、通常の結果確認では既定の最初の入口にしない
-- online service skeleton の CLI acceptance でも同じ読取順を使い、operator-facing queue record は artifact path 参照だけを返す
-- online service skeleton の operator query では、service lifecycle state と runner terminal status を別 field として見せ分ける
+- online service の CLI acceptance でも同じ読取順を使い、operator-facing queue record は artifact path 参照だけを返す
+- online service の operator query では、service lifecycle state と runner terminal status を別 field として見せ分ける
 
 AI metadata 読み取り:
 

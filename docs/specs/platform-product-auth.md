@@ -191,26 +191,10 @@ provider 固有 subject や login name は `account` に混ぜず、
   transport は全 provider 共通、ID token verification は capability を持つ provider だけが要求する
 - frontend は provider library を持たず、backend redirect / callback / session contract に依存する
 
-## Authorization Boundary
-
-- operator API は authenticated session を要求しなければならない
-- first landing の operator API write/read surface は `operator` role を要求してよい
-- authenticated でも `operator` role を持たない account は
-  operator API を成功させてはならない
-- auth 未設定の local fixture lane では、
-  operator API を auth-disabled mode で動かしてよい
-  - ただし this mode は login flow の正本 verification とはみなさない
-- first operator bootstrap を remote Postgres DSN に対して実行するため、
-  repo-owned helper から operator invite token を発行してよい
-
 ## Local Development Contract
 
 - local backend callback URL は
   `http://localhost:10000/auth/github/callback`
-- agent は `.env` を直接読まず、
-  `direnv exec` または同等の shell hook 経由で human-managed local secret を読む
-- auth env が未注入の lightweight fixture lane では、
-  login flow を前提にしない verification を維持してよい
 
 ## Browser Verification Seam
 
