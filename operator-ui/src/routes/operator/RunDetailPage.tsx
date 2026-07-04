@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { MatchDetailResponse, OperatorApiClient } from "../../api";
+import { MatchDetailResponse, OperatorApiClient } from "../../lib/operatorApiClient";
 import { CompletedDetailPanel } from "./CompletedDetailPanel";
 import { EnqueueState, isAbortError, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
@@ -18,27 +18,33 @@ export function RunDetailPage({ baseUrl, runId }: RunDetailPageProps) {
   const [actionError, setActionError] = useState<string>();
   const [reloadToken, setReloadToken] = useState(0);
 
-  const load = async (signal?: AbortSignal) => {
-    setDetailState((current) => (current === "ready" ? current : "loading"));
-    try {
-      const response = await client.getMatchDetail(runId, signal);
-      setDetail(response);
-      setDetailState("ready");
-      setDetailError(undefined);
-    } catch (error) {
-      if (isAbortError(error)) {
-        return;
-      }
-      setDetail(undefined);
-      setDetailState("error");
-      setDetailError(messageOf(error));
-    }
-  };
-
   useEffect(() => {
+    let canceled = false;
     const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
+    const loadWithGuard = async () => {
+      try {
+        const response = await client.getRun(runId, controller.signal);
+        if (canceled) {
+          return;
+        }
+        setDetail(response);
+        setDetailState("ready");
+        setDetailError(undefined);
+      } catch (error) {
+        if (canceled || isAbortError(error)) {
+          return;
+        }
+        setDetail(undefined);
+        setDetailState("error");
+        setDetailError(messageOf(error));
+      }
+    };
+    setDetailState((current) => (current === "ready" ? current : "loading"));
+    void loadWithGuard();
+    return () => {
+      canceled = true;
+      controller.abort();
+    };
   }, [client, reloadToken, runId]);
 
   const runAction = async (action: "cancel" | "retry" | "rerun" | "promote") => {
@@ -97,13 +103,13 @@ function RunActionButtons({
   onAction: (action: "cancel" | "retry" | "rerun" | "promote") => void;
 }) {
   const actions: Array<{ kind: "cancel" | "retry" | "rerun" | "promote"; label: string }> = [];
-  if (detail.lifecycle_state === "queued") {
+  if (detail.lifecycleState === "queued") {
     actions.push({ kind: "cancel", label: "Cancel queued run" });
   }
-  if (detail.lifecycle_state === "failed") {
+  if (detail.lifecycleState === "failed") {
     actions.push({ kind: "retry", label: "Retry failed run" });
   }
-  if (detail.lifecycle_state === "completed") {
+  if (detail.lifecycleState === "completed") {
     actions.push({ kind: "rerun", label: "Create rerun candidate" });
     if (!detail.official) {
       actions.push({ kind: "promote", label: "Promote as official" });

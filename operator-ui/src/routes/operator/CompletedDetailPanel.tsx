@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 
-import { MatchDetailResponse } from "../../api";
+import { MatchDetailResponse } from "../../lib/operatorApiClient";
 import { Badge } from "../../shared/ui/Badge";
 import { Meta } from "../../shared/ui/Meta";
 import { Panel } from "../../shared/ui/Panel";
@@ -29,7 +29,7 @@ export function CompletedDetailPanel({
   actions,
   emptyMessage,
 }: CompletedDetailPanelProps) {
-  const artifactEntries = Object.entries(detail?.artifact_access ?? {});
+  const artifactEntries = Object.entries(detail?.artifactAccess ?? {});
 
   return (
     <Panel
@@ -41,21 +41,21 @@ export function CompletedDetailPanel({
       testId={testId}
     >
       {detail ? (
-        <div className="space-y-5" data-testid={`match-detail-${detail.run_id}`}>
+        <div className="space-y-5" data-testid={`match-detail-${detail.runId}`}>
           <div className="rounded-3xl bg-ink p-5 text-paper">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge>service: {detail.lifecycle_state}</Badge>
-              {detail.terminal_status ? <Badge tone="teal">match: {detail.terminal_status}</Badge> : null}
+              <Badge>service: {detail.lifecycleState}</Badge>
+              {detail.terminalStatus ? <Badge tone="teal">match: {detail.terminalStatus}</Badge> : null}
               {detail.official ? <Badge tone="moss">official</Badge> : null}
             </div>
-            <h2 className="mt-4 text-xl font-semibold">{detail.match_id}</h2>
-            <p className="mt-1 text-sm text-paper/70">{detail.run_id}</p>
+            <h2 className="mt-4 text-xl font-semibold">{detail.matchId}</h2>
+            <p className="mt-1 text-sm text-paper/70">{detail.runId}</p>
             <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-              <Meta label="Attempt" value={String(detail.attempt_count)} />
-              <Meta label="Game" value={`${detail.game_id}@${detail.game_version}`} />
-              <Meta label="Ruleset" value={detail.ruleset_version} />
-              <Meta label="Output Dir" value={detail.output_dir} />
-              <Meta label="Result Summary" value={detail.result_summary_path ?? "n/a"} />
+              <Meta label="Attempt" value={String(detail.attemptCount)} />
+              <Meta label="Game" value={`${detail.gameId}@${detail.gameVersion}`} />
+              <Meta label="Ruleset" value={detail.rulesetVersion} />
+              <Meta label="Output Dir" value={detail.outputDir} />
+              <Meta label="Result Summary" value={detail.resultSummaryPath ?? "n/a"} />
             </dl>
             {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
           </div>
@@ -63,20 +63,19 @@ export function CompletedDetailPanel({
           <div className="grid gap-4 xl:grid-cols-2">
             <section className="rounded-3xl border border-black/10 bg-white p-4">
               <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-teal">Summary</h3>
-              {detail.result_summary ? (
+              {detail.resultSummary ? (
                 <div className="mt-3 space-y-3 text-sm">
                   <dl className="grid gap-3">
-                    <Meta label="Status" value={detail.result_summary.status} />
-                    <Meta label="Turn" value={String(detail.result_summary.turn)} />
-                    <Meta label="Error" value={detail.result_summary.error ?? "none"} />
+                    <Meta label="Status" value={detail.resultSummary.status} />
+                    <Meta label="Turn" value={String(detail.resultSummary.turn)} />
+                    <Meta label="Error" value={detail.resultSummary.error ?? "none"} />
                   </dl>
                   <div>
                     <p className="font-medium">Placements</p>
                     <ul className="mt-2 space-y-2">
-                      {(detail.result_summary.placements ?? []).map((placement) => (
-                        <li key={placement.player_id} className="rounded-2xl bg-paper px-3 py-2">
-                          {placement.rank}. {placement.player_id}
-                          {typeof placement.score === "number" ? ` (${placement.score})` : ""}
+                      {(detail.resultSummary.placements ?? []).map((placement) => (
+                        <li key={placement.playerId} className="rounded-2xl bg-paper px-3 py-2">
+                          {placement.place}. {placement.playerId}
                         </li>
                       ))}
                     </ul>
@@ -94,9 +93,9 @@ export function CompletedDetailPanel({
               <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-teal">Players</h3>
               <ul className="mt-3 space-y-2 text-sm">
                 {detail.players.map((player) => (
-                  <li key={player.player_id} className="rounded-2xl bg-paper px-3 py-2">
-                    <p className="font-medium">{player.player_id}</p>
-                    <p className="mt-1 break-all text-black/65">{player.artifact_ref}</p>
+                  <li key={player.playerId} className="rounded-2xl bg-paper px-3 py-2">
+                    <p className="font-medium">{player.playerId}</p>
+                    <p className="mt-1 break-all text-black/65">{player.artifactRef}</p>
                   </li>
                 ))}
               </ul>
@@ -122,17 +121,17 @@ export function CompletedDetailPanel({
                   <article key={kind} className="rounded-2xl bg-paper p-3 text-sm" data-testid={`artifact-entry-${kind}`}>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold">{kind}</span>
-                      <Badge tone={artifact.download_url ? "teal" : "moss"}>{artifact.status ?? "unknown"}</Badge>
+                      <Badge tone={artifact.downloadUrl ? "teal" : "moss"}>{artifact.status ?? "unknown"}</Badge>
                     </div>
                     <p className="mt-2 break-all text-black/70">{artifact.locator}</p>
                     <div className="mt-2 flex flex-wrap gap-4 text-xs text-black/60">
                       <span>issuer: {artifact.issuer ?? "n/a"}</span>
-                      <span>expiry: {artifact.expires_at ?? "n/a"}</span>
+                      <span>expiry: {artifact.expiresAt ?? "n/a"}</span>
                     </div>
-                    {artifact.download_url ? (
+                    {artifact.downloadUrl ? (
                       <a
                         className="mt-3 inline-flex rounded-full bg-teal px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white no-underline transition hover:bg-ink"
-                        href={artifact.download_url}
+                        href={artifact.downloadUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -148,16 +147,16 @@ export function CompletedDetailPanel({
           <section className="rounded-3xl border border-black/10 bg-white p-4">
             <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-teal">Replay Inputs</h3>
             <dl className="mt-3 grid gap-3 text-sm md:grid-cols-2">
-              <Meta label="Record" value={detail.replay_inputs?.record_path ?? detail.record_path ?? "n/a"} />
-              <Meta label="Snapshot" value={detail.replay_inputs?.snapshot_path ?? "n/a"} />
-              <Meta label="History" value={detail.replay_inputs?.history_path ?? "n/a"} />
-              <Meta label="Exported Snapshot" value={detail.replay_inputs?.exported_snapshot_path ?? "n/a"} />
+              <Meta label="Record" value={detail.replayInputs?.recordPath ?? detail.recordPath ?? "n/a"} />
+              <Meta label="Snapshot" value={detail.replayInputs?.snapshotPath ?? "n/a"} />
+              <Meta label="History" value={detail.replayInputs?.historyPath ?? "n/a"} />
+              <Meta label="Exported Snapshot" value={detail.replayInputs?.exportedSnapshotPath ?? "n/a"} />
             </dl>
-            {detail.replay_inputs?.verification?.issues?.length ? (
+            {detail.replayInputs?.verification?.issues?.length ? (
               <div className="mt-4 rounded-2xl border border-accent/30 bg-accent/10 p-3 text-sm text-black/80">
                 <p className="font-medium">Verification issues</p>
                 <ul className="mt-2 space-y-1">
-                  {detail.replay_inputs.verification.issues.map((issue) => (
+                  {detail.replayInputs.verification.issues.map((issue) => (
                     <li key={issue}>{issue}</li>
                   ))}
                 </ul>

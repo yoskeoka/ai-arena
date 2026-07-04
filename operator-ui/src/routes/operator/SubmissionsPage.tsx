@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { AISubmission, OperatorApiClient } from "../../api";
+import { AiSubmission, OperatorApiClient } from "../../lib/operatorApiClient";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
@@ -10,7 +10,7 @@ type SubmissionsPageProps = {
 
 export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
   const client = useMemo(() => new OperatorApiClient(normalizeBaseUrl(baseUrl)), [baseUrl]);
-  const [items, setItems] = useState<AISubmission[]>([]);
+  const [items, setItems] = useState<AiSubmission[]>([]);
   const [listState, setListState] = useState<LoadState>("loading");
   const [listError, setListError] = useState<string>();
   const [writeState, setWriteState] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -23,7 +23,7 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
   const load = async () => {
     setListState((current) => (current === "ready" ? current : "loading"));
     try {
-      const response = await client.listAISubmissions();
+      const response = await client.listAiSubmissions();
       setItems(response);
       setListState("ready");
       setListError(undefined);
@@ -42,11 +42,11 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
     setWriteState("submitting");
     setWriteError(undefined);
     try {
-      await client.createAISubmission({
-        ai_submission_id: submissionID.trim() || undefined,
-        game_registration_id: gameRegistrationID.trim(),
-        artifact_ref: artifactRef.trim(),
-        display_name: displayName.trim() || undefined,
+      await client.createAiSubmission({
+        aiSubmissionId: submissionID.trim() || undefined,
+        gameRegistrationId: gameRegistrationID.trim(),
+        artifactRef: artifactRef.trim(),
+        displayName: displayName.trim() || undefined,
       });
       setWriteState("success");
       await load();
@@ -97,27 +97,27 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
           <div className="space-y-3">
             {items.map((item) => (
               <article
-                key={item.ai_submission_id}
+                key={item.aiSubmissionId}
                 className="rounded-3xl border border-black/10 bg-paper p-4"
-                data-testid={`submission-row-${item.ai_submission_id}`}
+                data-testid={`submission-row-${item.aiSubmissionId}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold">{item.display_name}</p>
-                    <p className="mt-1 text-xs text-black/60">{item.ai_submission_id}</p>
+                    <p className="font-semibold">{item.displayName}</p>
+                    <p className="mt-1 text-xs text-black/60">{item.aiSubmissionId}</p>
                   </div>
                   <div className="text-xs text-black/60">
-                    <span>{item.validation_state}</span>
+                    <span>{item.validationState}</span>
                   </div>
                 </div>
                 <p className="mt-2 text-sm text-black/70">
-                  {item.game.game_id}@{item.game.game_version} / {item.game.ruleset_version}
+                  {item.game.gameId}@{item.game.gameVersion} / {item.game.rulesetVersion}
                 </p>
-                <p className="mt-2 break-all text-sm text-black/65">{item.artifact_ref}</p>
+                <p className="mt-2 break-all text-sm text-black/65">{item.artifactRef}</p>
                 <div className="mt-3 flex flex-wrap gap-4 text-xs text-black/60">
-                  <span>game registration: {item.game_registration_id}</span>
-                  <span>runtime: {item.runtime_kind}</span>
-                  <span>ai id: {item.ai_id}</span>
+                  <span>game registration: {item.gameRegistrationId}</span>
+                  <span>runtime: {item.runtimeKind}</span>
+                  <span>ai id: {item.aiId}</span>
                 </div>
               </article>
             ))}

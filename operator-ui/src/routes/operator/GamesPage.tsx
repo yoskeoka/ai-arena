@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { GameRegistration, OperatorApiClient } from "../../api";
+import { GameRegistration, OperatorApiClient } from "../../lib/operatorApiClient";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
@@ -23,7 +23,7 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
   const load = async () => {
     setListState((current) => (current === "ready" ? current : "loading"));
     try {
-      const response = await client.listGames();
+      const response = await client.listGameRegistrations();
       setItems(response);
       setListState("ready");
       setListError(undefined);
@@ -42,12 +42,12 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
     setWriteState("submitting");
     setWriteError(undefined);
     try {
-      await client.createGame({
-        registration_id: registrationID.trim() || undefined,
+      await client.createGameRegistration({
+        registrationId: registrationID.trim() || undefined,
         game: {
-          game_id: gameID.trim(),
-          game_version: gameVersion.trim(),
-          ruleset_version: rulesetVersion.trim(),
+          gameId: gameID.trim(),
+          gameVersion: gameVersion.trim(),
+          rulesetVersion: rulesetVersion.trim(),
         },
       });
       setWriteState("success");
@@ -99,18 +99,18 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
           <div className="space-y-3">
             {items.map((item) => (
               <article
-                key={item.registration_id}
+                key={item.registrationId}
                 className="rounded-3xl border border-black/10 bg-paper p-4"
-                data-testid={`game-row-${item.registration_id}`}
+                data-testid={`game-row-${item.registrationId}`}
               >
-                <p className="font-semibold">{item.registration_id}</p>
+                <p className="font-semibold">{item.registrationId}</p>
                 <p className="mt-1 text-sm text-black/70">
-                  {item.game.game_id}@{item.game.game_version} / {item.game.ruleset_version}
+                  {item.game.gameId}@{item.game.gameVersion} / {item.game.rulesetVersion}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-4 text-xs text-black/60">
-                  <span>build: {item.build_mode}</span>
-                  <span>builder: {item.builder_id}</span>
-                  <span>rulesets: {item.supported_rulesets.join(", ") || "n/a"}</span>
+                  <span>build: {item.buildMode}</span>
+                  <span>builder: {item.builderId}</span>
+                  <span>rulesets: {item.supportedRulesets.join(", ") || "n/a"}</span>
                 </div>
               </article>
             ))}

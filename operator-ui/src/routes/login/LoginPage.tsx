@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { OperatorApiClient } from "../../api";
+import { OperatorApiClient } from "../../lib/operatorApiClient";
 import { defaultBaseUrl, messageOf, normalizeBaseUrl } from "../operator/operatorPageSupport";
 
 type LoginPageProps = {
@@ -25,11 +25,11 @@ export function LoginPage({ onAuthenticatedReturn }: LoginPageProps) {
         if (canceled) {
           return;
         }
-        if (session.auth_mode === "enabled" && session.authenticated) {
+        if (session.authMode === "enabled" && session.authenticated) {
           onAuthenticatedReturn(returnTo);
           return;
         }
-        setAuthMode(session.auth_mode);
+        setAuthMode(session.authMode);
         setState("ready");
       } catch (error) {
         if (canceled) {

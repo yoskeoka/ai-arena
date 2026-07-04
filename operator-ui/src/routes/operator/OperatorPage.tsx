@@ -45,7 +45,7 @@ export function OperatorPage({ baseUrl, detailActions }: OperatorPageProps) {
           <MatchTable
             items={state.activeItems}
             emptyMessage="No active runs are currently queued or running."
-            onSelect={(item) => state.setSelectedRunId(item.run_id)}
+            onSelect={(item) => state.setSelectedRunId(item.runId)}
             selectedRunId={state.selectedRunId}
           />
         </Panel>
@@ -61,7 +61,7 @@ export function OperatorPage({ baseUrl, detailActions }: OperatorPageProps) {
           <MatchTable
             items={state.completedItems}
             emptyMessage="No completed runs yet."
-            onSelect={(item) => state.setSelectedRunId(item.run_id)}
+            onSelect={(item) => state.setSelectedRunId(item.runId)}
             selectedRunId={state.selectedRunId}
           />
         </Panel>

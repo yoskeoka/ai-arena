@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { MatchDetailResponse, OperatorApiClient, ResultListItem } from "../../api";
+import { MatchDetailResponse, OperatorApiClient, ResultListItem } from "../../lib/operatorApiClient";
 import { EnqueueState, isAbortError, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
 const ACTIVE_POLL_MS = 5_000;
@@ -31,7 +31,7 @@ export function useOperatorPageState(baseUrl: string) {
     const load = async () => {
       setActiveState((current) => (current === "ready" ? current : "loading"));
       try {
-        const items = await client.listActive();
+        const items = await client.listActiveMatches();
         if (canceled) {
           return;
         }
@@ -63,14 +63,14 @@ export function useOperatorPageState(baseUrl: string) {
     const load = async () => {
       setCompletedState((current) => (current === "ready" ? current : "loading"));
       try {
-        const items = await client.listCompleted();
+        const items = await client.listCompletedMatches();
         if (canceled) {
           return;
         }
         setCompletedItems(items);
         setCompletedState("ready");
         setCompletedError(undefined);
-        setSelectedRunId((current) => current ?? items[0]?.run_id);
+        setSelectedRunId((current) => current ?? items[0]?.runId);
       } catch (error) {
         if (canceled) {
           return;
@@ -109,7 +109,7 @@ export function useOperatorPageState(baseUrl: string) {
       inFlightController = controller;
       setDetailState((current) => (current === "ready" ? current : "loading"));
       try {
-        const response = await client.getMatchDetail(selectedRunId, controller.signal);
+        const response = await client.getRun(selectedRunId, controller.signal);
         if (canceled || requestSequence !== detailRequestSequence.current) {
           return;
         }
@@ -142,7 +142,7 @@ export function useOperatorPageState(baseUrl: string) {
     try {
       await client.enqueuePreset(presetId);
       setEnqueueState("success");
-      const items = await client.listActive();
+      const items = await client.listActiveMatches();
       setActiveItems(items);
       setActiveState("ready");
       setActiveError(undefined);

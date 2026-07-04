@@ -36,6 +36,7 @@
 - `typespec/generated/openapi/operator/openapi.json`: operator route family の emitted OpenAPI artifact
 - `typespec/namespaces/operator/api.tsp`: operator route family の TypeSpec source
 - `operator-ui/src/generated/operator-api/`: operator surface で使う emitted client seam
+- `operator-ui/src/lib/operatorApiClient.ts`: browser-specific adapter seam。generated contract を route family へ接続し、base URL / credentials / login URL / UI-facing error normalization を local ownership に留める
 - `docs/specs/platform-service-read-model.md`: compact row / detail view の正本
 - `docs/specs/platform-service-skeleton.md`: first landing topology と Pages 配置方針の正本
 
@@ -47,11 +48,13 @@ first landing の operator UI は `Cloudflare Pages` から配信する static a
 
 - rendering は browser 上の client-side application で完結してよい
 - data fetch は operator-facing HTTP API へ直接行う
+- route page と shared hook は handwritten DTO / handwritten path assembly を source-of-truth にしてはならず、operator route family 向けに emit された TypeSpec-generated contract を使わなければならない
 - server-side rendering、Server Components、Pages Functions は前提にしない
 - implementation は後続 task の view 拡張を見越して component-based UI を採用してよい
 - broader frontend の route-first rule に従い、page-specific state、polling、presentation は `operator` route family 配下へ閉じてよい
 - concrete router library は first landing contract に含めない
 - current `/` entry は `/operator` alias または redirect として扱ってよい
+- browser-specific concern である base URL normalize、credentialed fetch policy、GitHub login URL assembly、HTTP error message normalization は thin local adapter に閉じ込めてよい
 
 Phase 7 の operator route family は少なくとも次を持たなければならない。
 

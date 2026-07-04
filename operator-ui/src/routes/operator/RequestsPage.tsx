@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { MatchRequest, MatchRequestParticipant, OperatorApiClient } from "../../api";
+import { MatchRequest, MatchRequestParticipant, OperatorApiClient } from "../../lib/operatorApiClient";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 import { hrefForRunDetail } from "./operatorRoutes";
@@ -21,8 +21,8 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
   const [gameRegistrationID, setGameRegistrationID] = useState("");
   const [outputDir, setOutputDir] = useState("");
   const [participants, setParticipants] = useState<EditableParticipant[]>([
-    { id: "p1", player_id: "p1", ai_submission_id: "" },
-    { id: "p2", player_id: "p2", ai_submission_id: "" },
+    { id: "p1", playerId: "p1", aiSubmissionId: "" },
+    { id: "p2", playerId: "p2", aiSubmissionId: "" },
   ]);
 
   const load = async () => {
@@ -48,11 +48,11 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
     setWriteError(undefined);
     try {
       await client.createMatchRequest({
-        game_registration_id: gameRegistrationID.trim(),
-        output_dir: outputDir.trim(),
-        participants: participants.map(({ player_id, ai_submission_id }) => ({
-          player_id: player_id.trim(),
-          ai_submission_id: ai_submission_id.trim(),
+        gameRegistrationId: gameRegistrationID.trim(),
+        outputDir: outputDir.trim(),
+        participants: participants.map(({ playerId, aiSubmissionId }) => ({
+          playerId: playerId.trim(),
+          aiSubmissionId: aiSubmissionId.trim(),
         })),
       });
       setWriteState("success");
@@ -63,7 +63,7 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
     }
   };
 
-  const updateParticipant = (id: string, field: "player_id" | "ai_submission_id", value: string) => {
+  const updateParticipant = (id: string, field: "playerId" | "aiSubmissionId", value: string) => {
     setParticipants((current) => current.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
@@ -92,15 +92,15 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
               <div key={participant.id} className="grid gap-3 rounded-3xl border border-black/10 bg-paper p-4 md:grid-cols-2">
                 <TextField
                   label={`Player ${index + 1} ID`}
-                  value={participant.player_id}
-                  onChange={(value) => updateParticipant(participant.id, "player_id", value)}
+                  value={participant.playerId}
+                  onChange={(value) => updateParticipant(participant.id, "playerId", value)}
                   placeholder={`p${index + 1}`}
                   required
                 />
                 <TextField
                   label={`Player ${index + 1} AI Submission ID`}
-                  value={participant.ai_submission_id}
-                  onChange={(value) => updateParticipant(participant.id, "ai_submission_id", value)}
+                  value={participant.aiSubmissionId}
+                  onChange={(value) => updateParticipant(participant.id, "aiSubmissionId", value)}
                   placeholder="ai-..."
                   required
                 />
@@ -127,35 +127,35 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
           <div className="space-y-3">
             {items.map((item) => (
               <article
-                key={item.request_id}
+                key={item.requestId}
                 className="rounded-3xl border border-black/10 bg-paper p-4"
-                data-testid={`request-row-${item.request_id}`}
+                data-testid={`request-row-${item.requestId}`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold">{item.request_id}</p>
+                    <p className="font-semibold">{item.requestId}</p>
                     <p className="mt-1 text-sm text-black/70">
-                      {item.game.game_id}@{item.game.game_version} / {item.game.ruleset_version}
+                      {item.game.gameId}@{item.game.gameVersion} / {item.game.rulesetVersion}
                     </p>
                   </div>
                   <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-black/65">
-                    {item.lifecycle_state}
+                    {item.lifecycleState}
                   </span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-4 text-xs text-black/60">
-                  <span>match: {item.match_id}</span>
-                  <span>latest run: {item.latest_run_id}</span>
-                  <span>official run: {item.official_run_id || "n/a"}</span>
+                  <span>match: {item.matchId}</span>
+                  <span>latest run: {item.latestRunId}</span>
+                  <span>official run: {item.officialRunId || "n/a"}</span>
                 </div>
                 <ul className="mt-3 space-y-2 text-sm">
                   {item.participants.map((participant) => (
-                    <li key={`${item.request_id}-${participant.player_id}`} className="rounded-2xl bg-white px-3 py-2">
-                      {participant.player_id}: {participant.ai_submission_id}
+                    <li key={`${item.requestId}-${participant.playerId}`} className="rounded-2xl bg-white px-3 py-2">
+                      {participant.playerId}: {participant.aiSubmissionId}
                     </li>
                   ))}
                 </ul>
                 <div className="mt-3">
-                  <a className="text-sm font-semibold text-teal no-underline hover:text-ink" href={hrefForRunDetail(item.latest_run_id)}>
+                  <a className="text-sm font-semibold text-teal no-underline hover:text-ink" href={hrefForRunDetail(item.latestRunId)}>
                     Open latest run detail
                   </a>
                 </div>
