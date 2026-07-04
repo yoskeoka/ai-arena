@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 
-import { AuthPrincipal } from "../../api";
+import { AuthPrincipal } from "../../lib/operatorApiClient";
 import { operatorNavItems, OperatorRoute, operatorRouteTitle } from "./operatorRoutes";
 
 type OperatorLayoutProps = {
@@ -37,7 +37,7 @@ export function OperatorLayout({ route, baseUrl, onBaseUrlChange, principal, onL
               </label>
               {principal ? (
                 <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-paper px-4 py-3">
-                  <span className="text-black/65">Signed in as @{principal.provider_login}</span>
+                  <span className="text-black/65">Signed in as @{principal.providerLogin}</span>
                   {onLogout ? (
                     <button
                       className="rounded-full border border-black/15 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-black/70 transition hover:border-black/30 hover:text-black"

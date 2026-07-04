@@ -1,12 +1,14 @@
 import { FormEvent, useMemo, useState } from "react";
 
-import { OperatorApiClient, SignupInviteResponse, SignupInviteRole } from "../../api";
+import { OperatorApiClient, SignupInviteRequest, SignupInviteResponse } from "../../lib/operatorApiClient";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
 type InvitesPageProps = {
   baseUrl: string;
 };
+
+type SignupInviteRole = SignupInviteRequest["role"];
 
 const roleOptions: Array<{ value: SignupInviteRole; label: string; description: string }> = [
   { value: "participant", label: "Participant", description: "Default external player access." },
@@ -27,7 +29,7 @@ export function InvitesPage({ baseUrl }: InvitesPageProps) {
     setWriteState("submitting");
     setWriteError(undefined);
     try {
-      const payload: { role: SignupInviteRole; ttl?: string } = { role };
+      const payload: SignupInviteRequest = { role };
       const trimmedTTL = ttl.trim();
       if (trimmedTTL !== "") {
         payload.ttl = trimmedTTL;
@@ -89,13 +91,13 @@ export function InvitesPage({ baseUrl }: InvitesPageProps) {
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-black/55">Latest Invite</p>
             <dl className="mt-3 grid gap-3 text-sm">
               <ResultField label="Role" value={invite.role} testId="signup-invite-role" />
-              <ResultField label="Invite Token" value={invite.invite_token} monospace testId="signup-invite-token" />
-              <ResultField label="Expires At" value={invite.expires_at} monospace testId="signup-invite-expires-at" />
+              <ResultField label="Invite Token" value={invite.inviteToken} monospace testId="signup-invite-token" />
+              <ResultField label="Expires At" value={invite.expiresAt} monospace testId="signup-invite-expires-at" />
               <div className="grid gap-1">
                 <dt className="font-medium text-black/70">Invite URL</dt>
                 <dd className="break-all">
-                  <a className="font-mono text-sm text-teal no-underline hover:text-ink" href={invite.invite_url} data-testid="signup-invite-url">
-                    {invite.invite_url}
+                  <a className="font-mono text-sm text-teal no-underline hover:text-ink" href={invite.inviteUrl} data-testid="signup-invite-url">
+                    {invite.inviteUrl}
                   </a>
                 </dd>
               </div>

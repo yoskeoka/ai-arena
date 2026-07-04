@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { AuthPrincipal, OperatorApiClient } from "./api";
+import { AuthPrincipal, OperatorApiClient } from "./lib/operatorApiClient";
 import { LoginPage } from "./routes/login/LoginPage";
 import { GamesPage } from "./routes/operator/GamesPage";
 import { OperatorLayout } from "./routes/operator/OperatorLayout";
@@ -56,7 +56,7 @@ function ProtectedOperatorRoute({ route, targetPath }: { route: OperatorRoute; t
         if (canceled) {
           return;
         }
-        if (session.auth_mode === "enabled" && !session.authenticated) {
+        if (session.authMode === "enabled" && !session.authenticated) {
           navigateTo(loginURLForTarget(targetPath));
           return;
         }
