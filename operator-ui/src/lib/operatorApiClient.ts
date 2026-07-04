@@ -170,29 +170,29 @@ export class OperatorApiClient {
     const response = await this.post(
       "/api/v1/preset-matches",
       jsonPresetMatchRequestToTransportTransform(body),
-      [200, 201, 202],
+      [201],
       signal,
     );
     return jsonResultListItemToApplicationTransform(response.body)!;
   }
 
   async cancelRun(runId: string, signal?: AbortSignal): Promise<ResultListItem> {
-    const response = await this.post(`/api/v1/runs/${encodeURIComponent(runId)}/cancel`, undefined, [200, 202], signal);
+    const response = await this.post(`/api/v1/runs/${encodeURIComponent(runId)}/cancel`, undefined, [200], signal);
     return jsonResultListItemToApplicationTransform(response.body)!;
   }
 
   async retryRun(runId: string, signal?: AbortSignal): Promise<ResultListItem> {
-    const response = await this.post(`/api/v1/runs/${encodeURIComponent(runId)}/retry`, undefined, [200, 201, 202], signal);
+    const response = await this.post(`/api/v1/runs/${encodeURIComponent(runId)}/retry`, undefined, [201], signal);
     return jsonResultListItemToApplicationTransform(response.body)!;
   }
 
   async rerunRun(runId: string, signal?: AbortSignal): Promise<ResultListItem> {
-    const response = await this.post(`/api/v1/runs/${encodeURIComponent(runId)}/rerun`, undefined, [200, 201, 202], signal);
+    const response = await this.post(`/api/v1/runs/${encodeURIComponent(runId)}/rerun`, undefined, [201], signal);
     return jsonResultListItemToApplicationTransform(response.body)!;
   }
 
   async promoteRun(runId: string, signal?: AbortSignal): Promise<ResultListItem> {
-    const response = await this.post(`/api/v1/runs/${encodeURIComponent(runId)}/promote`, undefined, [200, 201, 202], signal);
+    const response = await this.post(`/api/v1/runs/${encodeURIComponent(runId)}/promote`, undefined, [200], signal);
     return jsonResultListItemToApplicationTransform(response.body)!;
   }
 
