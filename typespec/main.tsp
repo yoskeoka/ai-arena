@@ -12,5 +12,7 @@ using Http;
 using Rest;
 
 @service(#{ title: "AI Arena Operator API" })
-@server("https://arena-service.example.com", "Operator API origin")
+@server("https://{endpoint}", "Operator API origin", {
+  endpoint: string,
+})
 namespace AiArena;

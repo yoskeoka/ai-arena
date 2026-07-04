@@ -9,13 +9,13 @@ export class RestError extends Error {
   public response: HttpResponse;
   public status: string;
   public body: any;
-  public headers: RawHttpHeaders;constructor(
-    message: string,
-    response: HttpResponse,
-  ) {
+  public headers: RawHttpHeaders;
+  constructor(message: string, response: HttpResponse) {
     // Create an error message that includes relevant details.
-    super(`${message} - HTTP ${response.status} received for ${response.request.method} ${response.request.url}`);
-    this.name = 'RestError';
+    super(
+      `${message} - HTTP ${response.status} received for ${response.request.method} ${response.request.url}`,
+    );
+    this.name = "RestError";
     this.request = response.request;
     this.response = response;
     this.status = response.status;

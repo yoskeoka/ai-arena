@@ -1,19 +1,18 @@
 import type {
   AiSubmission,
+  AiSubmissionListResponse,
   AiSubmissionRequest,
   ArtifactAccessMetadata,
   AuthPrincipal,
   GameMetadata,
   GameRegistration,
+  GameRegistrationListResponse,
   GameRegistrationRequest,
   HealthResponse,
-  ListResponse,
-  ListResponse_2,
-  ListResponse_3,
-  ListResponse_4,
   MatchDetailResponse,
   MatchRequest,
   MatchRequestCreateRequest,
+  MatchRequestListResponse,
   MatchRequestParticipant,
   PathRefs,
   Placement,
@@ -24,6 +23,7 @@ import type {
   ReplayInputs,
   ResultListItem,
   ResultSummary,
+  RunListResponse,
   SessionStatusResponse,
   SignupInviteRequest,
   SignupInviteResponse,
@@ -185,8 +185,8 @@ export function decodeBase64(value: string): Uint8Array | undefined {
   }
 
   return _transformedArray as any;
-}export function jsonListResponseToTransportTransform(
-  input_?: ListResponse | null,
+}export function jsonGameRegistrationListResponseToTransportTransform(
+  input_?: GameRegistrationListResponse | null,
 ): any {
   if(!input_) {
     return input_ as any;
@@ -194,9 +194,9 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return {
     items: jsonArrayGameRegistrationToTransportTransform(input_.items)
   }!;
-}export function jsonListResponseToApplicationTransform(
+}export function jsonGameRegistrationListResponseToApplicationTransform(
   input_?: any,
-): ListResponse {
+): GameRegistrationListResponse {
   if(!input_) {
     return input_ as any;
   }
@@ -285,8 +285,8 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return {
     registrationId: input_.registration_id,game: jsonGameMetadataToApplicationTransform(input_.game)
   }!;
-}export function jsonListResponseToTransportTransform_2(
-  input_?: ListResponse_2 | null,
+}export function jsonAiSubmissionListResponseToTransportTransform(
+  input_?: AiSubmissionListResponse | null,
 ): any {
   if(!input_) {
     return input_ as any;
@@ -294,9 +294,9 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return {
     items: jsonArrayAiSubmissionToTransportTransform(input_.items)
   }!;
-}export function jsonListResponseToApplicationTransform_2(
+}export function jsonAiSubmissionListResponseToApplicationTransform(
   input_?: any,
-): ListResponse_2 {
+): AiSubmissionListResponse {
   if(!input_) {
     return input_ as any;
   }
@@ -367,8 +367,8 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return {
     aiSubmissionId: input_.ai_submission_id,gameRegistrationId: input_.game_registration_id,artifactRef: input_.artifact_ref,displayName: input_.display_name
   }!;
-}export function jsonListResponseToTransportTransform_3(
-  input_?: ListResponse_3 | null,
+}export function jsonMatchRequestListResponseToTransportTransform(
+  input_?: MatchRequestListResponse | null,
 ): any {
   if(!input_) {
     return input_ as any;
@@ -376,9 +376,9 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return {
     items: jsonArrayMatchRequestToTransportTransform(input_.items)
   }!;
-}export function jsonListResponseToApplicationTransform_3(
+}export function jsonMatchRequestListResponseToApplicationTransform(
   input_?: any,
-): ListResponse_3 {
+): MatchRequestListResponse {
   if(!input_) {
     return input_ as any;
   }
@@ -953,8 +953,8 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return {
     locator: input_.locator,downloadUrl: input_.download_url,issuer: input_.issuer,status: input_.status,expiresAt: input_.expires_at
   }!;
-}export function jsonListResponseToTransportTransform_4(
-  input_?: ListResponse_4 | null,
+}export function jsonRunListResponseToTransportTransform(
+  input_?: RunListResponse | null,
 ): any {
   if(!input_) {
     return input_ as any;
@@ -962,9 +962,9 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return {
     items: jsonArrayResultListItemToTransportTransform(input_.items)
   }!;
-}export function jsonListResponseToApplicationTransform_4(
+}export function jsonRunListResponseToApplicationTransform(
   input_?: any,
-): ListResponse_4 {
+): RunListResponse {
   if(!input_) {
     return input_ as any;
   }

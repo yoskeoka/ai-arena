@@ -222,6 +222,18 @@ model StoredRankingSnapshot {
   snapshot: RankingSnapshot;
 }
 
-model ListResponse<T> {
-  items: T[];
+model GameRegistrationListResponse {
+  items: GameRegistration[];
+}
+
+model AISubmissionListResponse {
+  items: AISubmission[];
+}
+
+model MatchRequestListResponse {
+  items: MatchRequest[];
+}
+
+model RunListResponse {
+  items: ResultListItem[];
 }

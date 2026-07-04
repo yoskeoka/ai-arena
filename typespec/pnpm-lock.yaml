@@ -23,6 +23,9 @@ importers:
       '@typespec/rest':
         specifier: 0.83.0
         version: 0.83.0(@typespec/compiler@1.13.0(@types/node@26.1.0))(@typespec/http@1.13.0(@typespec/compiler@1.13.0(@types/node@26.1.0)))
+      prettier:
+        specifier: 3.9.4
+        version: 3.9.4
 
 packages:
 

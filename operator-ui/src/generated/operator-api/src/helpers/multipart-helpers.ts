@@ -1,6 +1,15 @@
 export interface File {
-  contents: FileContents; contentType?: string; filename?: string;
-}export type FileContents = string | NodeJS.ReadableStream | ReadableStream<Uint8Array> | Uint8Array | Blob;export function createFilePartDescriptor(
+  contents: FileContents;
+  contentType?: string;
+  filename?: string;
+}
+export type FileContents =
+  | string
+  | NodeJS.ReadableStream
+  | ReadableStream<Uint8Array>
+  | Uint8Array
+  | Blob;
+export function createFilePartDescriptor(
   partName: string,
   fileInput: any,
   defaultContentType?: string,

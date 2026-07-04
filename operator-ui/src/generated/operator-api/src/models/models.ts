@@ -21,7 +21,7 @@ export interface AuthPrincipal {
   providerEmail?: string;
   roles: Array<string>;
 }
-export interface ListResponse {
+export interface GameRegistrationListResponse {
   items: Array<GameRegistration>;
 }
 export interface GameRegistration {
@@ -42,7 +42,7 @@ export interface GameRegistrationRequest {
   registrationId?: string;
   game: GameMetadata;
 }
-export interface ListResponse_2 {
+export interface AiSubmissionListResponse {
   items: Array<AiSubmission>;
 }
 export interface AiSubmission {
@@ -63,7 +63,7 @@ export interface AiSubmissionRequest {
   artifactRef: string;
   displayName?: string;
 }
-export interface ListResponse_3 {
+export interface MatchRequestListResponse {
   items: Array<MatchRequest>;
 }
 export interface MatchRequest {
@@ -77,7 +77,14 @@ export interface MatchRequest {
   matchId: string;
   latestRunId: string;
   officialRunId?: string;
-  lifecycleState: "queued" | "leased" | "running" | "persisting" | "completed" | "failed" | "canceled";
+  lifecycleState:
+    | "queued"
+    | "leased"
+    | "running"
+    | "persisting"
+    | "completed"
+    | "failed"
+    | "canceled";
 }
 export interface MatchRequestParticipant {
   playerId: string;
@@ -159,7 +166,14 @@ export interface ResultListItem {
   gameId: string;
   gameVersion: string;
   rulesetVersion: string;
-  lifecycleState: "queued" | "leased" | "running" | "persisting" | "completed" | "failed" | "canceled";
+  lifecycleState:
+    | "queued"
+    | "leased"
+    | "running"
+    | "persisting"
+    | "completed"
+    | "failed"
+    | "canceled";
   workerId?: string;
   terminalStatus?: string;
   error?: string;
@@ -220,6 +234,6 @@ export interface ArtifactAccessMetadata {
   status?: string;
   expiresAt?: string;
 }
-export interface ListResponse_4 {
+export interface RunListResponse {
   items: Array<ResultListItem>;
 }

@@ -53,8 +53,8 @@ import type {
 
 export class OperatorClient {
   #context: OperatorClientContext
-  constructor(options?: OperatorClientOptions) {
-    this.#context = createOperatorClientContext(options);
+  constructor(endpoint: string, options?: OperatorClientOptions) {
+    this.#context = createOperatorClientContext(endpoint, options);
 
   }
   async healthz(options?: HealthzOptions) {

@@ -11,7 +11,7 @@ namespace AiArena.Operator;
 
 @route("/api/v1/game-registrations")
 @get
-op listGameRegistrations(): ListResponse<GameRegistration>;
+op listGameRegistrations(): GameRegistrationListResponse;
 
 @route("/api/v1/game-registrations")
 @post
@@ -19,7 +19,7 @@ op createGameRegistration(@body body: GameRegistrationRequest): GameRegistration
 
 @route("/api/v1/ai-submissions")
 @get
-op listAISubmissions(): ListResponse<AISubmission>;
+op listAISubmissions(): AISubmissionListResponse;
 
 @route("/api/v1/ai-submissions")
 @post
@@ -27,7 +27,7 @@ op createAISubmission(@body body: AISubmissionRequest): AISubmission;
 
 @route("/api/v1/match-requests")
 @get
-op listMatchRequests(): ListResponse<MatchRequest>;
+op listMatchRequests(): MatchRequestListResponse;
 
 @route("/api/v1/match-requests")
 @post
@@ -67,11 +67,11 @@ op promoteRun(@path run_id: string): ResultListItem;
 
 @route("/api/v1/matches/active")
 @get
-op listActiveMatches(): ListResponse<ResultListItem>;
+op listActiveMatches(): RunListResponse;
 
 @route("/api/v1/matches/completed")
 @get
-op listCompletedMatches(): ListResponse<ResultListItem>;
+op listCompletedMatches(): RunListResponse;
 
 @route("/api/v1/runs/{run_id}")
 @get

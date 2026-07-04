@@ -18,7 +18,7 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       uri-template:
-        specifier: ^2.0.0
+        specifier: 2.0.0
         version: 2.0.0
     devDependencies:
       '@playwright/test':

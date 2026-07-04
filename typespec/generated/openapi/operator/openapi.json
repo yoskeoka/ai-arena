@@ -16,18 +16,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "items"
-                  ],
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Shared.AISubmission"
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/Shared.AISubmissionListResponse"
                 }
               }
             }
@@ -71,18 +60,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "items"
-                  ],
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Shared.GameRegistration"
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/Shared.GameRegistrationListResponse"
                 }
               }
             }
@@ -126,18 +104,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "items"
-                  ],
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Shared.MatchRequest"
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/Shared.MatchRequestListResponse"
                 }
               }
             }
@@ -181,18 +148,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "items"
-                  ],
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Shared.ResultListItem"
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/Shared.RunListResponse"
                 }
               }
             }
@@ -210,18 +166,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "items"
-                  ],
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Shared.ResultListItem"
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/Shared.RunListResponse"
                 }
               }
             }
@@ -552,28 +497,32 @@
           },
           "validation_state": {
             "type": "string",
-            "enum": [
-              "ready"
-            ]
+            "enum": ["ready"]
           },
           "source": {
             "type": "string",
-            "enum": [
-              "manual",
-              "preset"
-            ]
+            "enum": ["manual", "preset"]
           },
           "source_id": {
             "type": "string"
           }
         }
       },
+      "Shared.AISubmissionListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.AISubmission"
+            }
+          }
+        }
+      },
       "Shared.AISubmissionRequest": {
         "type": "object",
-        "required": [
-          "game_registration_id",
-          "artifact_ref"
-        ],
+        "required": ["game_registration_id", "artifact_ref"],
         "properties": {
           "ai_submission_id": {
             "type": "string"
@@ -591,9 +540,7 @@
       },
       "Shared.ArtifactAccessMetadata": {
         "type": "object",
-        "required": [
-          "locator"
-        ],
+        "required": ["locator"],
         "properties": {
           "locator": {
             "type": "string"
@@ -614,12 +561,7 @@
       },
       "Shared.AuthPrincipal": {
         "type": "object",
-        "required": [
-          "account_id",
-          "provider",
-          "provider_login",
-          "roles"
-        ],
+        "required": ["account_id", "provider", "provider_login", "roles"],
         "properties": {
           "account_id": {
             "type": "string"
@@ -643,11 +585,7 @@
       },
       "Shared.GameMetadata": {
         "type": "object",
-        "required": [
-          "game_id",
-          "game_version",
-          "ruleset_version"
-        ],
+        "required": ["game_id", "game_version", "ruleset_version"],
         "properties": {
           "game_id": {
             "type": "string"
@@ -690,21 +628,28 @@
           },
           "source": {
             "type": "string",
-            "enum": [
-              "manual",
-              "preset"
-            ]
+            "enum": ["manual", "preset"]
           },
           "source_id": {
             "type": "string"
           }
         }
       },
+      "Shared.GameRegistrationListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.GameRegistration"
+            }
+          }
+        }
+      },
       "Shared.GameRegistrationRequest": {
         "type": "object",
-        "required": [
-          "game"
-        ],
+        "required": ["game"],
         "properties": {
           "registration_id": {
             "type": "string"
@@ -716,9 +661,7 @@
       },
       "Shared.HealthResponse": {
         "type": "object",
-        "required": [
-          "status"
-        ],
+        "required": ["status"],
         "properties": {
           "status": {
             "type": "string"
@@ -727,10 +670,7 @@
       },
       "Shared.MatchDetailResponse": {
         "type": "object",
-        "required": [
-          "players",
-          "output_dir"
-        ],
+        "required": ["players", "output_dir"],
         "properties": {
           "players": {
             "type": "array",
@@ -805,10 +745,7 @@
           },
           "source": {
             "type": "string",
-            "enum": [
-              "manual",
-              "preset"
-            ]
+            "enum": ["manual", "preset"]
           },
           "source_id": {
             "type": "string"
@@ -838,11 +775,7 @@
       },
       "Shared.MatchRequestCreateRequest": {
         "type": "object",
-        "required": [
-          "game_registration_id",
-          "participants",
-          "output_dir"
-        ],
+        "required": ["game_registration_id", "participants", "output_dir"],
         "properties": {
           "request_id": {
             "type": "string"
@@ -864,12 +797,21 @@
           }
         }
       },
+      "Shared.MatchRequestListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.MatchRequest"
+            }
+          }
+        }
+      },
       "Shared.MatchRequestParticipant": {
         "type": "object",
-        "required": [
-          "player_id",
-          "ai_submission_id"
-        ],
+        "required": ["player_id", "ai_submission_id"],
         "properties": {
           "player_id": {
             "type": "string"
@@ -908,10 +850,7 @@
       },
       "Shared.Placement": {
         "type": "object",
-        "required": [
-          "player_id",
-          "place"
-        ],
+        "required": ["player_id", "place"],
         "properties": {
           "player_id": {
             "type": "string"
@@ -924,9 +863,7 @@
       },
       "Shared.PresetMatchRequest": {
         "type": "object",
-        "required": [
-          "preset_id"
-        ],
+        "required": ["preset_id"],
         "properties": {
           "preset_id": {
             "type": "string"
@@ -988,11 +925,7 @@
       },
       "Shared.RankingScope": {
         "type": "object",
-        "required": [
-          "game_id",
-          "game_version",
-          "ruleset_version"
-        ],
+        "required": ["game_id", "game_version", "ruleset_version"],
         "properties": {
           "game_id": {
             "type": "string"
@@ -1007,10 +940,7 @@
       },
       "Shared.RankingSnapshot": {
         "type": "object",
-        "required": [
-          "scope",
-          "completed_matches"
-        ],
+        "required": ["scope", "completed_matches"],
         "properties": {
           "scope": {
             "$ref": "#/components/schemas/Shared.RankingScope"
@@ -1181,19 +1111,25 @@
           }
         }
       },
+      "Shared.RunListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.ResultListItem"
+            }
+          }
+        }
+      },
       "Shared.SessionStatusResponse": {
         "type": "object",
-        "required": [
-          "auth_mode",
-          "authenticated"
-        ],
+        "required": ["auth_mode", "authenticated"],
         "properties": {
           "auth_mode": {
             "type": "string",
-            "enum": [
-              "disabled",
-              "enabled"
-            ]
+            "enum": ["disabled", "enabled"]
           },
           "authenticated": {
             "type": "boolean"
@@ -1205,17 +1141,11 @@
       },
       "Shared.SignupInviteRequest": {
         "type": "object",
-        "required": [
-          "role"
-        ],
+        "required": ["role"],
         "properties": {
           "role": {
             "type": "string",
-            "enum": [
-              "participant",
-              "developer",
-              "operator"
-            ]
+            "enum": ["participant", "developer", "operator"]
           },
           "ttl": {
             "type": "string"
@@ -1224,23 +1154,14 @@
       },
       "Shared.SignupInviteResponse": {
         "type": "object",
-        "required": [
-          "invite_token",
-          "role",
-          "expires_at",
-          "invite_url"
-        ],
+        "required": ["invite_token", "role", "expires_at", "invite_url"],
         "properties": {
           "invite_token": {
             "type": "string"
           },
           "role": {
             "type": "string",
-            "enum": [
-              "participant",
-              "developer",
-              "operator"
-            ]
+            "enum": ["participant", "developer", "operator"]
           },
           "expires_at": {
             "type": "string"
@@ -1252,10 +1173,7 @@
       },
       "Shared.StoredRankingSnapshot": {
         "type": "object",
-        "required": [
-          "locator",
-          "snapshot"
-        ],
+        "required": ["locator", "snapshot"],
         "properties": {
           "locator": {
             "type": "string"
@@ -1267,10 +1185,7 @@
       },
       "Shared.SubmittedPlayer": {
         "type": "object",
-        "required": [
-          "player_id",
-          "artifact_ref"
-        ],
+        "required": ["player_id", "artifact_ref"],
         "properties": {
           "player_id": {
             "type": "string"
@@ -1282,9 +1197,7 @@
       },
       "Shared.VerificationSummary": {
         "type": "object",
-        "required": [
-          "issues"
-        ],
+        "required": ["issues"],
         "properties": {
           "issues": {
             "type": "array",
@@ -1298,9 +1211,13 @@
   },
   "servers": [
     {
-      "url": "https://arena-service.example.com",
+      "url": "https://{endpoint}",
       "description": "Operator API origin",
-      "variables": {}
+      "variables": {
+        "endpoint": {
+          "default": ""
+        }
+      }
     }
   ]
 }

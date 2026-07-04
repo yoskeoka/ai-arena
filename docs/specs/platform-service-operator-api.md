@@ -87,7 +87,7 @@ current remote landing では operator UI が `Pages`、backend が `Render` の
   - 目的:
     process が HTTP request を受け付けていることを確認する
   - success response:
-    `200 OK` with a JSON `status: "ok"` body
+    `200 OK` with `HealthResponse` 形状の JSON body
 
 health route は queue backend や artifact backend の full readiness probe を保証しない。
 
