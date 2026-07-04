@@ -34,8 +34,10 @@ Google login、email login、MFA、profile 編集は扱わない。
 
 - `docs/specs/platform-frontend-architecture.md`:
   route-first frontend と browser auth boundary の正本
-- `docs/specs/platform-service-operator-api.md`:
-  operator-facing HTTP route と CORS contract の正本
+- `docs/specs/index.md`:
+  operator/auth HTTP contract と JSON-RPC contract の lookup index
+- `typespec/namespaces/operator/auth.tsp`:
+  auth companion route の TypeSpec source
 - `docs/specs/platform-service-persistence.md`:
   durable write model と metadata backend の正本
 - `docs/development/platform-service-online-deploy.md`:

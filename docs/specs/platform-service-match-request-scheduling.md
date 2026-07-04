@@ -34,7 +34,8 @@
 
 - `docs/specs/platform-service-general-submission.md`: request が参照する durable identity の正本
 - `docs/specs/platform-service-skeleton.md`: queue へ入る single-run execution request の正本
-- `docs/specs/platform-service-operator-api.md`: operator-facing route contract の正本
+- `docs/specs/index.md`: operator-facing route contract の lookup index
+- `typespec/namespaces/operator/api.tsp`: request / run follow-up routes の TypeSpec source
 - `docs/specs/platform-service-ranking-lifecycle.md`: official run と ranking correction の正本
 - `docs/specs/platform-service-single-worker-assumptions.md`: single-worker 前提で許容している non-atomic path の正本
 

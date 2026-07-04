@@ -32,8 +32,9 @@
 ## 参照関係
 
 - `docs/specs/platform-frontend-architecture.md`: broader frontend の route / shared / API / auth boundary の正本
-- `docs/specs/platform-service-operator-api.md`: operator-facing HTTP route と TypeSpec source の正本
+- `docs/specs/index.md`: operator-facing HTTP contract と JSON-RPC contract の lookup index
 - `typespec/generated/openapi/operator/openapi.json`: operator route family の emitted OpenAPI artifact
+- `typespec/namespaces/operator/api.tsp`: operator route family の TypeSpec source
 - `operator-ui/src/generated/operator-api/`: operator surface で使う emitted client seam
 - `docs/specs/platform-service-read-model.md`: compact row / detail view の正本
 - `docs/specs/platform-service-skeleton.md`: first landing topology と Pages 配置方針の正本
