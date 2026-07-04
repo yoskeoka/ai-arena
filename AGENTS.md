@@ -27,6 +27,8 @@
 - In `docs/specs/*` and spec-oriented exec plans, write the contract in terms of responsibilities, boundaries, inputs/outputs, and observable behavior before introducing implementation symbols.
 - Keep concrete package, type, interface, function, or method names out of spec prose unless the name itself is a stable abstract concept or a transport/schema contract that readers must share.
 - When a concrete symbol name is unavoidable, explain the contract role it fixes in the same paragraph instead of assuming the current code structure is self-explanatory.
+- API wire contracts must live in the repo-owned TypeSpec project under `typespec/`; `docs/specs/` should keep only observable behavior, topology, and references to the emitted contract artifacts.
+- Do not duplicate request/response field inventories in `docs/specs/` when the same wire contract is already owned by TypeSpec. Point at the TypeSpec source or emitted artifact instead.
 
 ## Observation Discipline
 

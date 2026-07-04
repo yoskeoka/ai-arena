@@ -2,32 +2,42 @@
 
 ## 目的
 
-このドキュメントは、Phase 7 の operator browser workflow で
-`arena-service` が expose する operator-facing HTTP API を定義する。
+このドキュメントは、`arena-service` が operator surface として expose する HTTP API の observable behavior を定義する。
 
-対象は private / operator surface であり、spectator 向け public API ではない。
-この spec が固定するのは route contract、general registration / request / ranking read 入口、
-match request / run follow-up 操作、active/completed polling shape、
-および completed detail の返却形である。
+wire-level の request / response / route schema は `docs/specs/` ではなく repo-owned TypeSpec project を正本とし、この文書は topology、責務境界、auth companion の位置づけ、CORS、worker behavior、error class の使い分けだけを残す。
+
+## TypeSpec Source Of Truth
+
+operator API family の wire contract は次の TypeSpec project に置く。
+
+- `typespec/main.tsp`
+- `typespec/namespaces/shared.tsp`
+- `typespec/namespaces/operator/api.tsp`
+- `typespec/namespaces/operator/auth.tsp`
+- `typespec/namespaces/operator/health.tsp`
+
+emitted artifact は次を使う。
+
+- `typespec/generated/openapi/operator/openapi.json`
+- `operator-ui/src/generated/operator-api/`
 
 ## この spec の責務範囲
 
 この spec が定義するもの:
 
 - backend process の HTTP route 一覧
-- game registration / AI submission registration route
-- match request route
-- ranking snapshot read route
-- preset match enqueue request/response contract
-- queued cancel / retry / rerun / correction route
-- signup invite issuance route
-- active/completed polling response shape
-- completed match detail の response shape
-- `Cloudflare Pages` hosted operator UI からの cross-origin access contract
+- operator surface の topology
+- auth companion route の位置づけ
+- browser-based cross-origin access contract
+- preset / registration / request / ranking / follow-up / polling / detail の behavior
 - in-process worker loop と HTTP handler の責務境界
+- error class の使い分け
 
 この spec が定義しないもの:
 
+- request / response field inventory
+- DTO の型定義本体
+- generated client の import surface
 - public spectator API
 - delegated artifact access の provider-specific signing 実装
 
@@ -51,8 +61,7 @@ first remote landing の `arena-service` は、1 つの backend process に次�
 この process は single logical queue authority として振る舞う。
 複数 process / 複数 worker を同時 support 済みとは扱わない。
 
-HTTP request handling と queue progression は同じ process に同居してよいが、
-責務は次のように分ける。
+HTTP request handling と queue progression は同じ process に同居してよいが、責務は次のように分ける。
 
 - HTTP handler:
   request decode、preset lookup、service command / query 呼び出し、JSON response
@@ -63,8 +72,7 @@ HTTP request handling と queue progression は同じ process に同居してよ
 
 HTTP handler は `queued -> leased` 以降の状態を直接書き換えてはならない。
 
-current remote landing では operator UI が `Pages`、backend が `Render` の別 origin になるため、
-operator API は browser-based cross-origin access を許可しなければならない。
+current remote landing では operator UI が `Pages`、backend が `Render` の別 origin になるため、operator API は browser-based cross-origin access を許可しなければならない。
 
 - allow 対象 origin は current canonical operator frontend URL に限定してよい
   - `https://staging.ai-arena.pages.dev`
@@ -79,7 +87,7 @@ operator API は browser-based cross-origin access を許可しなければな�
   - 目的:
     process が HTTP request を受け付けていることを確認する
   - success response:
-    `200 OK`
+    `200 OK` with a JSON `status: "ok"` body
 
 health route は queue backend や artifact backend の full readiness probe を保証しない。
 
@@ -88,35 +96,25 @@ health route は queue backend や artifact backend の full readiness probe を
 operator surface と同じ backend process は、auth companion route を同居させてよい。
 
 - `GET /auth/session`
+- `POST /auth/logout`
 - `GET /auth/github/login`
 - `GET /auth/github/callback`
-- `POST /auth/logout`
 
-これらの route の detailed contract は
-`docs/specs/platform-product-auth.md` を正本とする。
+これらの route の detailed contract は `docs/specs/platform-product-auth.md` を正本とする。
 
-auth-enabled browser verification lane では、
-repo-owned provider test double を backend process と別 process で起動してよい。
+auth-enabled browser verification lane では、repo-owned provider test double を backend process と別 process で起動してよい。
 
 - これは verification seam であり、public operator API family ではない
 - provider test double process は local / CI bootstrap 時だけ有効でよい
-- backend auth provider は current `/auth/github/*` public route を維持したまま、
-  `ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL` と
-  `ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL` により
-  upstream authorize / token / identity call だけを test double へ向けてよい
+- backend auth provider は current `/auth/github/*` public route を維持したまま、`ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL` と `ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL` により upstream authorize / token / identity call だけを test double へ向けてよい
 - auth-enabled bootstrap entrypoint は HTTP serve 前に auth schema apply を完了していなければならない
-- role 付き test principal seed が必要な場合は、
-  backend 本体ではなく local / CI bootstrap helper または provider test double process がその責務を持ってよい
-- local / CI bootstrap helper は、
-  seed 済み existing account user と signup-only user を区別して扱ってよい
+- role 付き test principal seed が必要な場合は、backend 本体ではなく local / CI bootstrap helper または provider test double process がその責務を持ってよい
+- local / CI bootstrap helper は、seed 済み existing account user と signup-only user を区別して扱ってよい
   - existing account user:
     backend 起動前に auth store へ principal を idempotent seed してよい
   - signup-only user:
-    provider test double catalog には存在してよいが、
-    backend 起動前に auth store へ principal を seed してはならない
-- signup-only user を使う browser verification では、
-  helper は invite token 発行だけを担い、
-  account 作成自体は callback flow の責務として残さなければならない
+    provider test double catalog には存在してよいが、backend 起動前に auth store へ principal を seed してはならない
+- signup-only user を使う browser verification では、helper は invite token 発行だけを担い、account 作成自体は callback flow の責務として残さなければならない
 
 ## Signup Invite Route
 
@@ -126,26 +124,13 @@ auth-enabled mode の operator surface は、authenticated operator session で 
   - 目的:
     1 件の `signup_invite` を発行し、role 選択と first signup bootstrap を支える
 
-request body は少なくとも次を受け付けてよい:
-
-- `role`
-  - `participant|developer|operator`
-- `ttl`
-  - 省略可。duration string として受け付けてよい
-
-response は少なくとも次を返す:
-
-- `invite_token`
-- `role`
-- `expires_at`
-- `invite_url`
-  - frontend の `/login?invite_token=...` に対応する URL
-
-request の制約:
+request / response field は TypeSpec source を正とする。
+behavioral requirements は少なくとも次を満たす。
 
 - authenticated operator session が必要である
-- `role` は durable role set `participant|developer|operator` のみ受け付ける
+- durable role set は `participant|developer|operator` のみ受け付ける
 - `ttl` を省略した場合は既定の invite lifetime を使ってよい
+- response は invite token、role、expiry、frontend login URL を含んでよい
 
 ## General Registration Routes
 
@@ -160,20 +145,6 @@ request の制約:
   - 目的:
     1 件の `game registration` を validation して保存する
 
-request body は少なくとも次を受け付けてよい:
-
-- `registration_id`
-  - omit 時は service が deterministic default を補ってよい
-- `game`
-
-response は少なくとも次を返す:
-
-- accepted `registration_id`
-- `game`
-- `build_mode`
-- `builder_id`
-- `supported_rulesets`
-
 ### AI Submissions
 
 - `GET /api/v1/ai-submissions`
@@ -182,23 +153,6 @@ response は少なくとも次を返す:
 - `POST /api/v1/ai-submissions`
   - 目的:
     1 件の `AI submission` を validation して保存する
-
-request body は少なくとも次を受け付けてよい:
-
-- `ai_submission_id`
-  - omit 時は service が一意値を生成してよい
-- `game_registration_id`
-- `artifact_ref`
-- `display_name`
-
-response は少なくとも次を返す:
-
-- accepted `ai_submission_id`
-- `game_registration_id`
-- `game`
-- `ai_id`
-- `runtime_kind`
-- `validation_state`
 
 ## Match Requests
 
@@ -209,55 +163,16 @@ response は少なくとも次を返す:
   - 目的:
     1 件の `match request` を validation し、minimal scheduling policy で first run を queue へ流す
 
-request body は少なくとも次を受け付けてよい:
-
-- `request_id`
-  - omit 時は service が一意値を生成してよい
-- `game_registration_id`
-- `participants[]`
-  - `player_id`
-  - `ai_submission_id`
-- `output_dir`
-- `match_id`
-  - omit 時は service が logical match id を一意生成してよい
-
-response は少なくとも次を返す:
-
-- accepted `request_id`
-- `game_registration_id`
-- `game`
-- `participants[]`
-- `source`
-- `match_id`
-- `latest_run_id`
-- `official_run_id`
-- `lifecycle_state`
-
 ## Ranking Snapshot Read
 
 - `GET /api/v1/rankings`
   - 目的:
     1 scope 分の current durable ranking snapshot を返す
 
-query parameter は少なくとも次を要求してよい:
-
-- `game_id`
-- `game_version`
-- `ruleset_version`
-
-response は少なくとも次を返す:
-
-- `locator`
-- `snapshot`
-  - `scope`
-  - `completed_matches`
-  - `entries[]`
-  - `applied_run_ids[]`
-  - `applied_match_ids[]`
-
+query parameter の詳細は TypeSpec source を正とする。
+response は locator と snapshot body を返す。
 ranking snapshot がまだ存在しない scope には `404 Not Found` を返してよい。
-browser UI はこの route を read-only surface として使い、
-recompute や repair を直接 trigger してはならない。
+browser UI はこの route を read-only surface として使い、recompute や repair を直接 trigger してはならない。
 
 ## Preset Match Enqueue
 
@@ -265,36 +180,15 @@ recompute や repair を直接 trigger してはならない。
   - 目的:
     server-known preset definition から 1 件の logical match と first run を生成して queue へ積む
 
-request body は少なくとも次を受け付けてよい:
-
-- `preset_id`
-- `run_id`
-  - omit 時は service が一意値を生成してよい
-- `match_id`
-  - omit 時は service が logical match id を一意生成してよい
-- `output_dir`
-  - omit 時は preset default を使ってよい
-
-response は少なくとも次を返す:
-
-- accepted record の `run_id`
-- accepted record の `match_id`
-- `lifecycle_state`
-- `official`
-- compact row と同じ game metadata
-
-request の制約:
+request / response field は TypeSpec source を正とする。
+behavioral requirements は少なくとも次を満たす。
 
 - `preset_id` は server 側に登録済みの preset だけを受け付ける
 - request は preset definition 自体の player list や `artifact_ref` を override してはならない
-- queue へ積まれる時点では、具体化後の first run が
-  `docs/specs/platform-service-skeleton.md` の admission contract を満たしていなければならない
+- queue へ積まれる時点では、具体化後の first run が `docs/specs/platform-service-skeleton.md` の admission contract を満たしていなければならない
 
-preset lane は queue mutation の直前に、
-対応する `game registration` と participant `AI submission` を materialize してよい。
-この materialize は same-process 同期処理でよく、
-その後は `docs/specs/platform-service-match-request-scheduling.md` が定義する
-general `match request` と同じ scheduling 入口へ正規化されなければならない。
+preset lane は queue mutation の直前に、対応する `game registration` と participant `AI submission` を materialize してよい。
+この materialize は same-process 同期処理でよく、その後は `docs/specs/platform-service-match-request-scheduling.md` が定義する general `match request` と同じ scheduling 入口へ正規化されなければならない。
 
 ## Run Follow-Up Routes
 
@@ -304,37 +198,11 @@ general `match request` と同じ scheduling 入口へ正規化されなけれ�
   - 目的:
     queued run を `canceled` へ進める
 
-response は少なくとも次を返す:
-
-- canceled run の `run_id`
-- `match_id`
-- `attempt_count`
-- `official`
-- `lifecycle_state`
-
-制約:
-
-- target run は `queued` でなければならない
-- `leased|running|persisting|completed|failed|canceled` を cancel target にしてはならない
-
 ### Retry
 
 - `POST /api/v1/runs/{run_id}/retry`
   - 目的:
     failed run を対象に same `match_id` へ new retry run を append する
-
-response は少なくとも次を返す:
-
-- created retry run の `run_id`
-- `match_id`
-- `attempt_count`
-- `official`
-- `lifecycle_state`
-
-制約:
-
-- target run は `failed` でなければならない
-- target run が `completed` の場合は `409 Conflict` を返す
 
 ### Rerun
 
@@ -342,35 +210,11 @@ response は少なくとも次を返す:
   - 目的:
     completed run を対象に same `match_id` へ new rerun candidate を append する
 
-response は少なくとも次を返す:
-
-- created rerun run の `run_id`
-- `match_id`
-- `attempt_count`
-- `official`
-- `lifecycle_state`
-
-制約:
-
-- target run は `completed` でなければならない
-- created rerun candidate は success 後も automatic official replacement を行ってはならない
-
 ### Correction / Promote
 
 - `POST /api/v1/runs/{run_id}/promote`
   - 目的:
     completed run を same `match_id` の `official_run_id` へ切り替える
-
-response は少なくとも次を返す:
-
-- promoted run の `run_id`
-- `match_id`
-- resulting `official_run_id`
-
-制約:
-
-- target run は `completed` でなければならない
-- same `match_id` に属する他 run の `official` は false へ戻さなければならない
 
 ## Polling Routes
 
@@ -380,21 +224,11 @@ response は少なくとも次を返す:
   - 目的:
     `queued|leased|running|persisting` の run だけを compact row で返す
 
-response body は JSON object とし、少なくとも次を持つ:
-
-- `items`
-  - `docs/specs/platform-service-read-model.md` の compact row 配列
-
 ### Completed List
 
 - `GET /api/v1/matches/completed`
   - 目的:
     `completed|failed|canceled` の run だけを compact row で返す
-
-response body は JSON object とし、少なくとも次を持つ:
-
-- `items`
-  - `docs/specs/platform-service-read-model.md` の compact row 配列
 
 ### Completed Detail
 
@@ -402,17 +236,9 @@ response body は JSON object とし、少なくとも次を持つ:
   - 目的:
     1 run の detail view を返す
 
-response body は、`docs/specs/platform-service-read-model.md` の detail view に加えて、
-artifact kind ごとの derived delegated access metadata を含んでよい。
-
-detail response は少なくとも次の識別子を返さなければならない。
-
-- `run_id`
-- `match_id`
-- `attempt_count`
-- `official`
-
-delegated access metadata は少なくとも次の考え方を満たす:
+response body は `docs/specs/platform-service-read-model.md` の detail view に加えて、artifact kind ごとの derived delegated access metadata を含んでよい。
+detail response は少なくとも run identity を返さなければならない。
+delegated access metadata は少なくとも次の考え方を満たす。
 
 - stable locator は write model / detail view 側に残す
 - short-lived download URL や同等 token は request 時に派生させる
@@ -440,9 +266,7 @@ backend process 内の worker loop は少なくとも次を満たす。
 - queue が空のときは異常終了せず、次回 poll を待つ
 - 1 件の run failure により process 全体を停止させない
 - worker loop が lifecycle を進めた結果は、active/completed polling route から観測できなければならない
-- queued cancel / retry / rerun / correction の結果は、
-  active/completed polling route または run detail route から観測できなければならない
-- completed run が automatic official promotion 対象かどうかは、
-  same `match_id` の existing official 状態を見て判断しなければならない
+- queued cancel / retry / rerun / correction の結果は、active/completed polling route または run detail route から観測できなければならない
+- completed run が automatic official promotion 対象かどうかは、same `match_id` の existing official 状態を見て判断しなければならない
 
 first landing では 1 backend process あたり 1 worker identity で十分とする。

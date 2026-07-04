@@ -1,0 +1,15 @@
+{
+  "name": "@yoskeoka/ai-arena-typespec",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsp compile main.tsp"
+  },
+  "devDependencies": {
+    "@typespec/compiler": "1.13.0",
+    "@typespec/http": "1.13.0",
+    "@typespec/http-client-js": "0.15.0",
+    "@typespec/openapi3": "1.13.0",
+    "@typespec/rest": "0.83.0"
+  }
+}
