@@ -1,0 +1,11 @@
+emit:
+  - "@typespec/openapi3"
+  - "@typespec/http-client-js"
+options:
+  "@typespec/openapi3":
+    emitter-output-dir: "{project-root}/generated/openapi/operator"
+    file-type: json
+    output-file: openapi.json
+  "@typespec/http-client-js":
+    emitter-output-dir: "{project-root}/../operator-ui/src/generated/operator-api"
+    package-name: "@yoskeoka/ai-arena-operator-api"

@@ -1,0 +1,1223 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AI Arena Operator API",
+    "version": "0.0.0"
+  },
+  "tags": [],
+  "paths": {
+    "/api/v1/ai-submissions": {
+      "get": {
+        "operationId": "Operator_listAISubmissions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.AISubmissionListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Operator_createAISubmission",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.AISubmission"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Shared.AISubmissionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/game-registrations": {
+      "get": {
+        "operationId": "Operator_listGameRegistrations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.GameRegistrationListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Operator_createGameRegistration",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.GameRegistration"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Shared.GameRegistrationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/match-requests": {
+      "get": {
+        "operationId": "Operator_listMatchRequests",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.MatchRequestListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Operator_createMatchRequest",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.MatchRequest"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Shared.MatchRequestCreateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/matches/active": {
+      "get": {
+        "operationId": "Operator_listActiveMatches",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.RunListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/matches/completed": {
+      "get": {
+        "operationId": "Operator_listCompletedMatches",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.RunListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/preset-matches": {
+      "post": {
+        "operationId": "Operator_enqueuePreset",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.ResultListItem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Shared.PresetMatchRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rankings": {
+      "get": {
+        "operationId": "Operator_getRanking",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "game_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "ruleset_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.StoredRankingSnapshot"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}": {
+      "get": {
+        "operationId": "Operator_getRun",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.MatchDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/cancel": {
+      "post": {
+        "operationId": "Operator_cancelRun",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.ResultListItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/promote": {
+      "post": {
+        "operationId": "Operator_promoteRun",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.ResultListItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/rerun": {
+      "post": {
+        "operationId": "Operator_rerunRun",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.ResultListItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/retry": {
+      "post": {
+        "operationId": "Operator_retryRun",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.ResultListItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/signup-invites": {
+      "post": {
+        "operationId": "Operator_createSignupInvite",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.SignupInviteResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Shared.SignupInviteRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "Operator_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful. "
+          }
+        }
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "operationId": "Operator_session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.SessionStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "Operator_healthz",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Shared.AISubmission": {
+        "type": "object",
+        "required": [
+          "ai_submission_id",
+          "game_registration_id",
+          "game",
+          "artifact_ref",
+          "display_name",
+          "runtime_kind",
+          "ai_id",
+          "validation_state"
+        ],
+        "properties": {
+          "ai_submission_id": {
+            "type": "string"
+          },
+          "game_registration_id": {
+            "type": "string"
+          },
+          "game": {
+            "$ref": "#/components/schemas/Shared.GameMetadata"
+          },
+          "artifact_ref": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "runtime_kind": {
+            "type": "string"
+          },
+          "ai_id": {
+            "type": "string"
+          },
+          "validation_state": {
+            "type": "string",
+            "enum": ["ready"]
+          },
+          "source": {
+            "type": "string",
+            "enum": ["manual", "preset"]
+          },
+          "source_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.AISubmissionListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.AISubmission"
+            }
+          }
+        }
+      },
+      "Shared.AISubmissionRequest": {
+        "type": "object",
+        "required": ["game_registration_id", "artifact_ref"],
+        "properties": {
+          "ai_submission_id": {
+            "type": "string"
+          },
+          "game_registration_id": {
+            "type": "string"
+          },
+          "artifact_ref": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.ArtifactAccessMetadata": {
+        "type": "object",
+        "required": ["locator"],
+        "properties": {
+          "locator": {
+            "type": "string"
+          },
+          "download_url": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.AuthPrincipal": {
+        "type": "object",
+        "required": ["account_id", "provider", "provider_login", "roles"],
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_login": {
+            "type": "string"
+          },
+          "provider_email": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Shared.GameMetadata": {
+        "type": "object",
+        "required": ["game_id", "game_version", "ruleset_version"],
+        "properties": {
+          "game_id": {
+            "type": "string"
+          },
+          "game_version": {
+            "type": "string"
+          },
+          "ruleset_version": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.GameRegistration": {
+        "type": "object",
+        "required": [
+          "registration_id",
+          "game",
+          "build_mode",
+          "builder_id",
+          "supported_rulesets"
+        ],
+        "properties": {
+          "registration_id": {
+            "type": "string"
+          },
+          "game": {
+            "$ref": "#/components/schemas/Shared.GameMetadata"
+          },
+          "build_mode": {
+            "type": "string"
+          },
+          "builder_id": {
+            "type": "string"
+          },
+          "supported_rulesets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string",
+            "enum": ["manual", "preset"]
+          },
+          "source_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.GameRegistrationListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.GameRegistration"
+            }
+          }
+        }
+      },
+      "Shared.GameRegistrationRequest": {
+        "type": "object",
+        "required": ["game"],
+        "properties": {
+          "registration_id": {
+            "type": "string"
+          },
+          "game": {
+            "$ref": "#/components/schemas/Shared.GameMetadata"
+          }
+        }
+      },
+      "Shared.HealthResponse": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.MatchDetailResponse": {
+        "type": "object",
+        "required": ["players", "output_dir"],
+        "properties": {
+          "players": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.SubmittedPlayer"
+            }
+          },
+          "output_dir": {
+            "type": "string"
+          },
+          "match_dir": {
+            "type": "string"
+          },
+          "record_path": {
+            "type": "string"
+          },
+          "player_stderr_paths": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "result_summary": {
+            "$ref": "#/components/schemas/Shared.ResultSummary"
+          },
+          "replay_inputs": {
+            "$ref": "#/components/schemas/Shared.ReplayInputs"
+          },
+          "artifact_access": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Shared.ArtifactAccessMetadata"
+            }
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Shared.ResultListItem"
+          }
+        ]
+      },
+      "Shared.MatchRequest": {
+        "type": "object",
+        "required": [
+          "request_id",
+          "game_registration_id",
+          "game",
+          "participants",
+          "output_dir",
+          "match_id",
+          "latest_run_id",
+          "lifecycle_state"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "game_registration_id": {
+            "type": "string"
+          },
+          "game": {
+            "$ref": "#/components/schemas/Shared.GameMetadata"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.MatchRequestParticipant"
+            }
+          },
+          "output_dir": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["manual", "preset"]
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "match_id": {
+            "type": "string"
+          },
+          "latest_run_id": {
+            "type": "string"
+          },
+          "official_run_id": {
+            "type": "string"
+          },
+          "lifecycle_state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "leased",
+              "running",
+              "persisting",
+              "completed",
+              "failed",
+              "canceled"
+            ]
+          }
+        }
+      },
+      "Shared.MatchRequestCreateRequest": {
+        "type": "object",
+        "required": ["game_registration_id", "participants", "output_dir"],
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "game_registration_id": {
+            "type": "string"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.MatchRequestParticipant"
+            }
+          },
+          "output_dir": {
+            "type": "string"
+          },
+          "match_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.MatchRequestListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.MatchRequest"
+            }
+          }
+        }
+      },
+      "Shared.MatchRequestParticipant": {
+        "type": "object",
+        "required": ["player_id", "ai_submission_id"],
+        "properties": {
+          "player_id": {
+            "type": "string"
+          },
+          "ai_submission_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.PathRefs": {
+        "type": "object",
+        "required": [
+          "record",
+          "structured_log",
+          "snapshot",
+          "exported_snapshot",
+          "history"
+        ],
+        "properties": {
+          "record": {
+            "type": "string"
+          },
+          "structured_log": {
+            "type": "string"
+          },
+          "snapshot": {
+            "type": "string"
+          },
+          "exported_snapshot": {
+            "type": "string"
+          },
+          "history": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.Placement": {
+        "type": "object",
+        "required": ["player_id", "place"],
+        "properties": {
+          "player_id": {
+            "type": "string"
+          },
+          "place": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Shared.PresetMatchRequest": {
+        "type": "object",
+        "required": ["preset_id"],
+        "properties": {
+          "preset_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "match_id": {
+            "type": "string"
+          },
+          "output_dir": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.RankingEntry": {
+        "type": "object",
+        "required": [
+          "competitor_ref",
+          "last_player_id",
+          "matches_played",
+          "first_places",
+          "last_run_id",
+          "last_match_id",
+          "last_status"
+        ],
+        "properties": {
+          "competitor_ref": {
+            "type": "string"
+          },
+          "last_player_id": {
+            "type": "string"
+          },
+          "matches_played": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "first_places": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "placement_counts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "last_run_id": {
+            "type": "string"
+          },
+          "last_match_id": {
+            "type": "string"
+          },
+          "last_status": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.RankingScope": {
+        "type": "object",
+        "required": ["game_id", "game_version", "ruleset_version"],
+        "properties": {
+          "game_id": {
+            "type": "string"
+          },
+          "game_version": {
+            "type": "string"
+          },
+          "ruleset_version": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.RankingSnapshot": {
+        "type": "object",
+        "required": ["scope", "completed_matches"],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Shared.RankingScope"
+          },
+          "applied_run_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "applied_match_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "last_applied_run_id": {
+            "type": "string"
+          },
+          "last_applied_match_id": {
+            "type": "string"
+          },
+          "completed_matches": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.RankingEntry"
+            }
+          }
+        }
+      },
+      "Shared.ReplayInputs": {
+        "type": "object",
+        "properties": {
+          "record_path": {
+            "type": "string"
+          },
+          "snapshot_path": {
+            "type": "string"
+          },
+          "history_path": {
+            "type": "string"
+          },
+          "exported_snapshot_path": {
+            "type": "string"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/Shared.VerificationSummary"
+          }
+        }
+      },
+      "Shared.ResultListItem": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "match_id",
+          "attempt_count",
+          "official",
+          "game_id",
+          "game_version",
+          "ruleset_version",
+          "lifecycle_state"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "match_id": {
+            "type": "string"
+          },
+          "attempt_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "official": {
+            "type": "boolean"
+          },
+          "game_id": {
+            "type": "string"
+          },
+          "game_version": {
+            "type": "string"
+          },
+          "ruleset_version": {
+            "type": "string"
+          },
+          "lifecycle_state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "leased",
+              "running",
+              "persisting",
+              "completed",
+              "failed",
+              "canceled"
+            ]
+          },
+          "worker_id": {
+            "type": "string"
+          },
+          "terminal_status": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "placements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.Placement"
+            }
+          },
+          "result_summary_path": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.ResultSummary": {
+        "type": "object",
+        "required": [
+          "match_id",
+          "game_id",
+          "game_version",
+          "ruleset_version",
+          "status",
+          "turn",
+          "artifact_paths"
+        ],
+        "properties": {
+          "match_id": {
+            "type": "string"
+          },
+          "game_id": {
+            "type": "string"
+          },
+          "game_version": {
+            "type": "string"
+          },
+          "ruleset_version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "placements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.Placement"
+            }
+          },
+          "artifact_paths": {
+            "$ref": "#/components/schemas/Shared.PathRefs"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.RunListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.ResultListItem"
+            }
+          }
+        }
+      },
+      "Shared.SessionStatusResponse": {
+        "type": "object",
+        "required": ["auth_mode", "authenticated"],
+        "properties": {
+          "auth_mode": {
+            "type": "string",
+            "enum": ["disabled", "enabled"]
+          },
+          "authenticated": {
+            "type": "boolean"
+          },
+          "principal": {
+            "$ref": "#/components/schemas/Shared.AuthPrincipal"
+          }
+        }
+      },
+      "Shared.SignupInviteRequest": {
+        "type": "object",
+        "required": ["role"],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["participant", "developer", "operator"]
+          },
+          "ttl": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.SignupInviteResponse": {
+        "type": "object",
+        "required": ["invite_token", "role", "expires_at", "invite_url"],
+        "properties": {
+          "invite_token": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["participant", "developer", "operator"]
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "invite_url": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.StoredRankingSnapshot": {
+        "type": "object",
+        "required": ["locator", "snapshot"],
+        "properties": {
+          "locator": {
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/Shared.RankingSnapshot"
+          }
+        }
+      },
+      "Shared.SubmittedPlayer": {
+        "type": "object",
+        "required": ["player_id", "artifact_ref"],
+        "properties": {
+          "player_id": {
+            "type": "string"
+          },
+          "artifact_ref": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.VerificationSummary": {
+        "type": "object",
+        "required": ["issues"],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://{endpoint}",
+      "description": "Operator API origin",
+      "variables": {
+        "endpoint": {
+          "default": ""
+        }
+      }
+    }
+  ]
+}

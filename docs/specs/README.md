@@ -2,6 +2,10 @@
 
 `docs/specs/` は、`ai-arena` が提供する product / platform / runtime / game contract の正本を置く。
 
+通信契約の参照先を探すときは、まず `docs/specs/index.md` を読む。
+HTTP API は TypeSpec、AI Arena 固有 JSON-RPC は typed Go code を正本とし、
+`docs/specs/*.md` は observable behavior と責務境界を補足する。
+
 ここに置くべきもの:
 
 - platform / runner / runtime / registry / game master の公開契約

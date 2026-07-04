@@ -109,7 +109,9 @@ Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
     `local OIDC auth lane` を追加する
   - login page または local-only entrypoint の acceptance surface を定義する
   - multi-user tester account を切り替える acceptance surface を定義する
-- `docs/specs/platform-service-operator-api.md`
+- `docs/specs/index.md`
+  - operator/auth HTTP contract の lookup index として generic OIDC login/callback の参照先を追加する
+- `typespec/namespaces/operator/auth.tsp`
   - auth companion route に generic OIDC login/callback をどう置くかの contract を補足する
 - `docs/development/operator-ui-local-verification.md`
   - tester account、password、provider bootstrap、Playwright scenario を追記する

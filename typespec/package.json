@@ -1,0 +1,16 @@
+{
+  "name": "@yoskeoka/ai-arena-typespec",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsp compile main.tsp && prettier --write generated/openapi/operator/openapi.json ../operator-ui/src/generated/operator-api/src/**/*.ts ../operator-ui/src/generated/operator-api/package.json ../operator-ui/src/generated/operator-api/tsconfig.json"
+  },
+  "devDependencies": {
+    "@typespec/compiler": "1.13.0",
+    "@typespec/http": "1.13.0",
+    "@typespec/http-client-js": "0.15.0",
+    "@typespec/openapi3": "1.13.0",
+    "@typespec/rest": "0.83.0",
+    "prettier": "3.9.4"
+  }
+}

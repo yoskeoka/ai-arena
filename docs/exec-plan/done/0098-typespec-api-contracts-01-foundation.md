@@ -7,8 +7,9 @@
 operator-facing HTTP API の route / request / response schema を
 Markdown ではなく TypeSpec source で管理する基盤を成立させる。
 
-この plan のゴールは、`docs/specs/platform-service-operator-api.md` の
-wire-level contract をほぼ TypeSpec へ移し、
+この plan のゴールは、operator API の wire-level contract を
+`docs/specs/*.md` から外して TypeSpec へ移し、
+`docs/specs/index.md` から typed source of truth を辿れるようにしたうえで、
 `docs/specs/` には topology、責務境界、auth companion、polling/worker behavior のような
 behavioral contract だけを残すことにある。
 
@@ -22,7 +23,8 @@ operator 向け、public/external 向け、operator-ui 以外の private consume
 - `ai-arena` 配下に `docs/specs/` とは別の TypeSpec project が追加されている
 - current operator API family の request/response/route schema が TypeSpec source of truth へ移っている
 - operator group 向けに OpenAPI artifact と frontend-consumable client generation seam が定義されている
-- `docs/specs/platform-service-operator-api.md` は behavioral summary + TypeSpec 参照へ整理されている
+- `docs/specs/index.md` から operator HTTP contract と AI Arena JSON-RPC contract の typed source of truth を辿れる
+- `docs/specs/platform-service-operator-api.md` は削除され、API 仕様を読む入口が Markdown 一覧ではなく TypeSpec / typed code へ揃っている
 - `docs/specs/platform-service-operator-ui.md` は API 呼び出し詳細を重複保持せず、必要箇所だけ TypeSpec-owned contract を参照する
 - `AGENTS.md` に
   「API schema は TypeSpec で管理し、`docs/specs/` は外形的振る舞いを書く」
@@ -89,7 +91,8 @@ Option B を採る。
 - shared model / operator group / future sibling group を置ける source tree を決める
 - current operator API family の route / request / response schema を TypeSpec へ移す
 - OpenAPI emit と frontend-consumable client generation の command/output seam を決める
-- `docs/specs/platform-service-operator-api.md` を behavioral summary へ整理する
+- `docs/specs/index.md` を追加し、operator / JSON-RPC contract の参照入口を整理する
+- `docs/specs/platform-service-operator-api.md` を削除し、Markdown 一覧を source of truth にしない状態へ寄せる
 - `docs/specs/platform-service-operator-ui.md` から API call 詳細の重複記述を減らす
 - `AGENTS.md` に API spec management rule を追加する
 
@@ -104,7 +107,7 @@ Option B を採る。
 - `docs/specs/README.md`
   - spec placement rule, lines 1-21
 - `docs/specs/platform-service-operator-api.md`
-  - route/response contract summary, lines 1-449
+  - 削除前の route/response contract summary, lines 1-449
 - `docs/specs/platform-service-operator-ui.md`
   - API-referencing UI contract, lines 35-40, 42-72, 180-297
 - `docs/specs/platform-frontend-architecture.md`
@@ -136,8 +139,10 @@ Option B を採る。
   - checked-in emitted OpenAPI artifact for the operator group
 - `operator-ui/src/generated/operator-api/*` (NEW)
   - checked-in emitted frontend client/types for the operator group, without adoption refactor yet
-- `docs/specs/platform-service-operator-api.md` (MODIFY)
-  - shrink Markdown to behavioral contract and TypeSpec source-of-truth references
+- `docs/specs/index.md` (NEW)
+  - TypeSpec と typed Go contract の lookup index
+- `docs/specs/platform-service-operator-api.md` (DELETE)
+  - remove duplicated Markdown API inventory after TypeSpec/index migration
 - `docs/specs/platform-service-operator-ui.md` (MODIFY)
   - remove duplicated request/response detail prose and point to TypeSpec-owned operator contract
 - `AGENTS.md` (MODIFY)
@@ -145,9 +150,8 @@ Option B を採る。
 
 ## Spec Changes
 
-- `docs/specs/platform-service-operator-api.md`
-  - route/path/body/response schema の正本を TypeSpec へ移し、
-    Markdown には topology、auth companion route positioning、worker behavior、CORS/operator-surface boundary を残す
+- `docs/specs/index.md`
+  - route/path/body/response schema は TypeSpec、AI Arena JSON-RPC payload は typed Go code を見る導線を追加する
 - `docs/specs/platform-service-operator-ui.md`
   - UI が依存する route family や polling cadence は残しつつ、
     body/query/response field の重複説明は TypeSpec source を参照する形へ寄せる
@@ -158,7 +162,8 @@ Option B を採る。
 - [ ] shared model と group-specific namespace/file split の source tree を固定する
 - [ ] emitted OpenAPI と emitted frontend client の output path を固定する
 - [ ] current operator API family の route / request / response schema を TypeSpec へ移す
-- [ ] `docs/specs/platform-service-operator-api.md` を behavioral summary へ整理する
+- [ ] `docs/specs/index.md` を追加し、typed contract の lookup entry を固定する
+- [ ] `docs/specs/platform-service-operator-api.md` を削除し、TypeSpec / typed code を source of truth に揃える
 - [ ] `docs/specs/platform-service-operator-ui.md` から API call detail の重複を外す
 - [ ] `AGENTS.md` へ API spec management rule を追加する
 
@@ -182,7 +187,7 @@ Option B を採る。
 - `typespec/` project が compile できる
 - operator group 向け OpenAPI artifact が repo-owned command で再生成できる
 - operator group 向け frontend client artifact が repo-owned command で再生成できる
-- `docs/specs/platform-service-operator-api.md` に wire-level schema の重複が残っていない
+- `docs/specs/` 配下に operator API の field inventory Markdown が残っていない
 - `AGENTS.md` から
   API wire contract は TypeSpec、
   `docs/specs/` は observable behavior という境界が読める

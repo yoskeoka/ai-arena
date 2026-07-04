@@ -113,4 +113,4 @@ single-worker 前提でも、次は守らなければならない。
 
 - `docs/specs/platform-service-match-request-scheduling.md`
 - `docs/specs/platform-service-ranking-lifecycle.md`
-- `docs/specs/platform-service-operator-api.md`
+- `docs/specs/index.md`

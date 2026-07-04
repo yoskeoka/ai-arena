@@ -33,7 +33,8 @@ compact view と detail view の責務分離だけを固定する。
 - `docs/specs/platform-service-skeleton.md`: submission / lifecycle / worker orchestration の正本
 - `docs/specs/platform-service-persistence.md`: durable write model と artifact locator 保存単位の正本
 - `docs/specs/platform.md`: runner artifact layout と compact artifact 読取順の正本
-- `docs/specs/platform-service-operator-api.md`: operator-facing HTTP route の正本
+- `docs/specs/index.md`: operator-facing HTTP route contract の lookup index
+- `typespec/namespaces/operator/api.tsp`: active/completed/detail route の TypeSpec source
 - `docs/specs/platform-service-ranking-lifecycle.md`: ranking aggregate lifecycle の正本
 
 ## Query Surface

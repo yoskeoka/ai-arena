@@ -28,7 +28,8 @@
 
 - `docs/specs/platform-game-registry.md`: registered game lookup の正本
 - `docs/specs/platform-service-skeleton.md`: single-match `match submission` の正本
-- `docs/specs/platform-service-operator-api.md`: operator-facing HTTP route の正本
+- `docs/specs/index.md`: operator-facing HTTP contract の lookup index
+- `typespec/namespaces/operator/api.tsp`: registration routes の TypeSpec source
 - `docs/specs/platform-service-match-request-scheduling.md`: registration entity を参照する request/scheduling の正本
 
 ## エンティティ
