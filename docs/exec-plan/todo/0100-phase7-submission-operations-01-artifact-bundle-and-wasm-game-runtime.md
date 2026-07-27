@@ -5,14 +5,13 @@ Addresses: N/A
 
 ## Objective
 
-Phase 7 で game / AI の実体を online service へ提出できるよう、自己記述的な
-`arena-bundle/v1` ZIP、secure ingestion、content-addressed storage、worker materialization、
-WASM/WASI game-master runtime を platform contract として成立させる。
+Phase 7 の artifact submission の最初の実装単位として、game bundle の
+`arena-bundle/v1` contract、content-addressed storage、latest-release registry、
+WASM/WASI game-master runtime を platform foundation として成立させる。
 
-完了境界は、game と AI を別々の ZIP として upload し、service が manifest と module を検証して
-immutable artifact identity を返し、local filesystem と S3/R2 の双方から同じ digest の bundle を
-worker が materialize できることとする。game bundle は official sandboxed submission として
-WASM game master session を起動できなければならない。
+完了境界は、game ZIP を validate/pack でき、digest keyed local/S3 store と registry から
+WASM game-master session を解決できることとする。AI bundle admission、full archive hardening、
+service runtime wiring と worker dispatch は後続 plan に分離する。
 
 ## Artifact Decision
 
@@ -107,20 +106,21 @@ TypeSpec を正本とする。`docs/specs/` は layout の意味、validation、
 
 ## Sub-tasks
 
-- [ ] JSON Schema、typed model、ZIP layout、digest/size rules を spec-first で固定する。
-- [ ] bounded reader と secure extraction/materialization の negative matrix を実装する。
-- [ ] external repo が同じ schema/validator を利用できる `arena-artifact validate` CLI を追加する。
-- [ ] echo / janken の official WASM game bundle を生成する開発用 script を追加し、upload から worker 起動までの結合 fixture として使う。
-- [ ] filesystem と R2 に同じ content-addressed artifact contract を実装する。
-- [ ] TypeSpec upload API、generated artifacts、Go handler を追加する。
-- [ ] WASM game-master session と artifact-backed registry descriptor を追加する。
-- [ ] worker が game/AI bundle を digest 単位で materialize し、WASM runtime へ渡すようにする。
-- [ ] local S3-compatible lane で upload -> validate -> materialize -> game/AI start を検証する。
+- [x] JSON Schema、typed model、fixed ZIP layout、digest contract を foundation として固定する。
+- [x] external repo が同じ contract を利用できる `arena-artifact validate` CLI を追加する。
+- [x] echo / janken の WASM game bundle を生成する開発用 script を追加する。
+- [x] filesystem と S3/R2 の digest keyed bundle store を追加する。
+- [x] TypeSpec upload API、generated artifacts、Go handler を追加する。
+- [x] WASM game-master session と artifact-backed registry descriptor を追加する。
+- [ ] 0105: bounded reader、archive security negative matrix、wazero policy、service runtime wiring。
+- [ ] 0106: AI bundle admission、worker dispatch、match digest pinning。
+- [ ] 0107: local S3-compatible E2E と built-in/Reversi staging verification。
 
 ## Dependencies and Parallelism
 
-- [parallel] schema/negative fixture と storage adapter は contract 固定後に並行できる。
-- [parallel] WASM game-master session と HTTP upload schema は bundle model 固定後に並行できる。
+- blocks: `0105-phase7-artifact-admission-hardening-and-runtime-wiring.md`
+- blocks: `0106-phase7-artifact-backed-ai-submission-and-worker-dispatch.md`
+- informs: `0107-phase7-artifact-submission-e2e-staging.md`
 - informs: `reversi-ai-arena/docs/exec-plan/todo/0007-ai-arena-release-artifacts.md`
 - blocks: `0101-phase7-submission-operations-02-registration-bot-ownership.md`
 
