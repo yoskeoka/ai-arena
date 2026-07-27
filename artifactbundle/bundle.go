@@ -20,7 +20,10 @@ type Manifest struct {
 	ArtifactKind  string `json:"artifact_kind"`
 	GameID        string `json:"game_id"`
 	GameVersion   string `json:"game_version"`
-	Runtime       struct {
+	Rulesets      []struct {
+		RulesetVersion string `json:"ruleset_version"`
+	} `json:"rulesets,omitempty"`
+	Runtime struct {
 		Kind   string   `json:"kind"`
 		Module string   `json:"module"`
 		Args   []string `json:"args,omitempty"`
