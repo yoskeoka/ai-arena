@@ -50,6 +50,46 @@
         }
       }
     },
+    "/api/v1/game-bundles": {
+      "post": {
+        "operationId": "Operator_uploadGameBundle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.GameRegistration"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": ["bundle"]
+              },
+              "encoding": {
+                "bundle": {
+                  "contentType": "*/*"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/game-registrations": {
       "get": {
         "operationId": "Operator_listGameRegistrations",

@@ -42,9 +42,12 @@ import {
   type RetryRunOptions,
   session,
   type SessionOptions,
+  uploadGameBundle,
+  type UploadGameBundleOptions,
 } from "./api/operatorClientOperations.js";
 import type {
   AiSubmissionRequest,
+  File,
   GameRegistrationRequest,
   MatchRequestCreateRequest,
   PresetMatchRequest,
@@ -74,6 +77,14 @@ export class OperatorClient {
     options?: CreateGameRegistrationOptions,
   ) {
     return createGameRegistration(this.#context, body, options);
+  };
+  async uploadGameBundle(
+    body: {
+        bundle: File;
+      },
+    options?: UploadGameBundleOptions,
+  ) {
+    return uploadGameBundle(this.#context, body, options);
   };
   async listAiSubmissions(options?: ListAiSubmissionsOptions) {
     return listAiSubmissions(this.#context, options);

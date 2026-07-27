@@ -4,6 +4,7 @@ import type {
   AiSubmissionRequest,
   ArtifactAccessMetadata,
   AuthPrincipal,
+  File,
   GameMetadata,
   GameRegistration,
   GameRegistrationListResponse,
@@ -284,6 +285,20 @@ export function decodeBase64(value: string): Uint8Array | undefined {
   }
     return {
     registrationId: input_.registration_id,game: jsonGameMetadataToApplicationTransform(input_.game)
+  }!;
+}export function jsonFileToTransportTransform(input_?: File | null): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    contentType: input_.contentType,filename: input_.filename,contents: input_.contents
+  }!;
+}export function jsonFileToApplicationTransform(input_?: any): File {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    contentType: input_.contentType,filename: input_.filename,contents: input_.contents
   }!;
 }export function jsonAiSubmissionListResponseToTransportTransform(
   input_?: AiSubmissionListResponse | null,
