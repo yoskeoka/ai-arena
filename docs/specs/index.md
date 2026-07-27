@@ -29,6 +29,7 @@ operator-facing HTTP contract は TypeSpec を正本とする。
 
 関連する behavioral companion:
 
+- `docs/specs/platform-artifact-bundle.md`
 - `docs/specs/platform-service-operator-ui.md`
 - `docs/specs/platform-product-auth.md`
 - `docs/specs/platform-service-general-submission.md`
