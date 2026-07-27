@@ -5,14 +5,13 @@ Addresses: N/A
 
 ## Objective
 
-Phase 7 で game / AI の実体を online service へ提出できるよう、自己記述的な
-`arena-bundle/v1` ZIP、secure ingestion、content-addressed storage、worker materialization、
-WASM/WASI game-master runtime を platform contract として成立させる。
+Phase 7 の artifact submission の最初の実装単位として、game bundle の
+`arena-bundle/v1` contract、content-addressed storage、latest-release registry、
+WASM/WASI game-master runtime を platform foundation として成立させる。
 
-完了境界は、game と AI を別々の ZIP として upload し、service が manifest と module を検証して
-immutable artifact identity を返し、local filesystem と S3/R2 の双方から同じ digest の bundle を
-worker が materialize できることとする。game bundle は official sandboxed submission として
-WASM game master session を起動できなければならない。
+完了境界は、game ZIP を validate/pack でき、digest keyed local/S3 store と registry から
+WASM game-master session を解決できることとする。AI bundle admission、full archive hardening、
+service runtime wiring と worker dispatch は後続 plan に分離する。
 
 ## Artifact Decision
 
@@ -77,6 +76,8 @@ TypeSpec を正本とする。`docs/specs/` は layout の意味、validation、
   - public manifest models, ZIP reader, validation, digest, and safe materialization contract
 - `cmd/arena-artifact/` (NEW)
   - external game repositories and CI can run the exact platform pack/validate contract
+- `tools/dev/package-builtin-game-bundles.sh` (NEW)
+  - echo / janken を official submission と同じ WASM bundle として生成し、upload / registry / worker の結合検証 fixture にする
 - `docs/specs/platform-artifact-bundle.md` (NEW)
   - observable packaging, validation, storage, and execution behavior
 - `docs/specs/index.md` (MODIFY)
@@ -95,7 +96,7 @@ TypeSpec を正本とする。`docs/specs/` は layout の意味、validation、
 - `internal/platform/service/` artifact ingestion/materializer components (NEW)
   - bounded upload, validation, immutable persistence, worker cache/materialization
 - `internal/platform/registry/` (MODIFY)
-  - artifact-backed descriptor record/resolution and richer ruleset constraints
+  - artifact-backed descriptor record/resolution、同一 `game_id + major` 内で semver 最大 release を通常 lookup する規則、richer ruleset constraints
 - `internal/platform/gamemaster/` (MODIFY)
   - WASM/WASI game-master session using the existing logical JSON-RPC API
 - `cmd/arena-service/` (MODIFY)
@@ -105,19 +106,21 @@ TypeSpec を正本とする。`docs/specs/` は layout の意味、validation、
 
 ## Sub-tasks
 
-- [ ] JSON Schema、typed model、ZIP layout、digest/size rules を spec-first で固定する。
-- [ ] bounded reader と secure extraction/materialization の negative matrix を実装する。
-- [ ] external repo が同じ schema/validator を利用できる `arena-artifact validate` CLI を追加する。
-- [ ] filesystem と R2 に同じ content-addressed artifact contract を実装する。
-- [ ] TypeSpec upload API、generated artifacts、Go handler を追加する。
-- [ ] WASM game-master session と artifact-backed registry descriptor を追加する。
-- [ ] worker が game/AI bundle を digest 単位で materialize し、WASM runtime へ渡すようにする。
-- [ ] local S3-compatible lane で upload -> validate -> materialize -> game/AI start を検証する。
+- [x] JSON Schema、typed model、fixed ZIP layout、digest contract を foundation として固定する。
+- [x] external repo が同じ contract を利用できる `arena-artifact validate` CLI を追加する。
+- [x] echo / janken の WASM game bundle を生成する開発用 script を追加する。
+- [x] filesystem と S3/R2 の digest keyed bundle store を追加する。
+- [x] TypeSpec upload API、generated artifacts、Go handler を追加する。
+- [x] WASM game-master session と artifact-backed registry descriptor を追加する。
+- [ ] 0105: bounded reader、archive security negative matrix、wazero policy、service runtime wiring。
+- [ ] 0106: AI bundle admission、worker dispatch、match digest pinning。
+- [ ] 0107: local S3-compatible E2E と built-in/Reversi staging verification。
 
 ## Dependencies and Parallelism
 
-- [parallel] schema/negative fixture と storage adapter は contract 固定後に並行できる。
-- [parallel] WASM game-master session と HTTP upload schema は bundle model 固定後に並行できる。
+- blocks: `0105-phase7-artifact-admission-hardening-and-runtime-wiring.md`
+- blocks: `0106-phase7-artifact-backed-ai-submission-and-worker-dispatch.md`
+- informs: `0107-phase7-artifact-submission-e2e-staging.md`
 - informs: `reversi-ai-arena/docs/exec-plan/todo/0007-ai-arena-release-artifacts.md`
 - blocks: `0101-phase7-submission-operations-02-registration-bot-ownership.md`
 
@@ -145,3 +148,4 @@ TypeSpec を正本とする。`docs/specs/` は layout の意味、validation、
 - official Phase 7 artifact は AI/game とも WASM-only の separate versioned ZIP とする。
 - manifest は bundle 内の technical source of truth、form は control-plane metadata のみを所有する。
 - artifact bytes は immutable/content-addressed とし、client-supplied path/URL を online contract にしない。
+- game registry は `game_id + game_version major` を安定 lookup key とし、同一 key に複数 release がある場合は semver 最大の admitted release を通常 lookup で返す。旧 release は削除せず、監査と既存 match の artifact digest 再現のため保持する。

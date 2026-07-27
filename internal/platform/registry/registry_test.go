@@ -49,6 +49,23 @@ func TestLookupRejectsUnsupportedMajorForKnownGame(t *testing.T) {
 	}
 }
 
+func TestInMemoryStoreLookupSelectsLatestReleaseWithinMajor(t *testing.T) {
+	store, err := NewInMemoryStore(
+		DescriptorRecord{RegistryKey: RegistryKey{GameID: "test", GameVersionMajor: 2}, GameID: "test", GameVersion: "2.4.1", ArtifactID: "sha256:old", BuildMode: BuildModeInProcess, BuilderID: "test-builder", BuildConstraints: BuildConstraints{SupportedRulesets: []string{"regular"}}},
+		DescriptorRecord{RegistryKey: RegistryKey{GameID: "test", GameVersionMajor: 2}, GameID: "test", GameVersion: "2.10.0", ArtifactID: "sha256:new", BuildMode: BuildModeInProcess, BuilderID: "test-builder", BuildConstraints: BuildConstraints{SupportedRulesets: []string{"regular"}}},
+	)
+	if err != nil {
+		t.Fatalf("NewInMemoryStore: %v", err)
+	}
+	record, err := store.Lookup(context.Background(), RegistryKey{GameID: "test", GameVersionMajor: 2})
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if record.GameVersion != "2.10.0" || record.ArtifactID != "sha256:new" {
+		t.Fatalf("Lookup = %+v, want latest release", record)
+	}
+}
+
 func TestDescriptorBuildSessionReturnsRulesetError(t *testing.T) {
 	descriptor, err := Lookup(echo.GameID, echo.GameVersion)
 	if err != nil {

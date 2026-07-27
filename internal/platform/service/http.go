@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -29,6 +30,16 @@ type ArtifactAccessMetadata struct {
 type MatchDetailResponse struct {
 	MatchDetail
 	ArtifactAccess map[string]ArtifactAccessMetadata `json:"artifact_access,omitempty"`
+}
+
+// GameBundleAdmissionResponse is the operator-visible result of admitting one game bundle.
+type GameBundleAdmissionResponse struct {
+	GameID            string   `json:"game_id"`
+	GameVersion       string   `json:"game_version"`
+	ArtifactID        string   `json:"artifact_id"`
+	BuildMode         string   `json:"build_mode"`
+	BuilderID         string   `json:"builder_id"`
+	SupportedRulesets []string `json:"supported_rulesets"`
 }
 
 // ArtifactAccessIssuer derives per-artifact access metadata from stable locators.
@@ -76,15 +87,22 @@ func (DirectArtifactAccessIssuer) Issue(_ context.Context, detail MatchDetail) (
 
 // OperatorAPI exposes the remote operator-facing HTTP API.
 type OperatorAPI struct {
-	commands       *CommandService
-	runs           *RunCommandService
-	queries        *QueryService
-	general        *GeneralSubmissionService
-	requests       *MatchRequestService
-	rankings       *RankingService
-	presets        PresetCatalog
-	artifactAccess ArtifactAccessIssuer
-	auth           *AuthService
+	commands          *CommandService
+	runs              *RunCommandService
+	queries           *QueryService
+	general           *GeneralSubmissionService
+	requests          *MatchRequestService
+	rankings          *RankingService
+	presets           PresetCatalog
+	artifactAccess    ArtifactAccessIssuer
+	auth              *AuthService
+	artifactAdmission *ArtifactAdmissionService
+}
+
+// WithArtifactAdmission enables multipart official game-bundle upload.
+func (a *OperatorAPI) WithArtifactAdmission(admission *ArtifactAdmissionService) *OperatorAPI {
+	a.artifactAdmission = admission
+	return a
 }
 
 // NewOperatorAPI constructs the HTTP adapter for operator routes.
@@ -142,6 +160,7 @@ func (a *OperatorAPI) Handler() http.Handler {
 	protected.HandleFunc("POST /api/v1/signup-invites", a.handleSignupInvites)
 	protected.HandleFunc("/api/v1/game-registrations", a.handleGameRegistrations)
 	protected.HandleFunc("/api/v1/ai-submissions", a.handleAISubmissions)
+	protected.HandleFunc("POST /api/v1/game-bundles", a.handleGameBundleUpload)
 	protected.HandleFunc("/api/v1/match-requests", a.handleMatchRequests)
 	protected.HandleFunc("GET /api/v1/rankings", a.handleRankings)
 	protected.HandleFunc("POST /api/v1/preset-matches", a.handlePresetMatches)
@@ -158,6 +177,43 @@ func (a *OperatorAPI) Handler() http.Handler {
 		mux.Handle("/api/v1/", protected)
 	}
 	return withOperatorCORS(mux)
+}
+
+func (a *OperatorAPI) handleGameBundleUpload(w http.ResponseWriter, r *http.Request) {
+	if a.artifactAdmission == nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("service: artifact upload is not configured"))
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
+	// #nosec G120 -- MaxBytesReader above caps the complete request body.
+	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	file, _, err := r.FormFile("bundle")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("service: bundle file is required: %w", err))
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	record, err := a.artifactAdmission.RegisterGameBundle(r.Context(), data)
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, GameBundleAdmissionResponse{
+		GameID:            record.GameID,
+		GameVersion:       record.GameVersion,
+		ArtifactID:        record.ArtifactID,
+		BuildMode:         string(record.BuildMode),
+		BuilderID:         record.BuilderID,
+		SupportedRulesets: append([]string(nil), record.BuildConstraints.SupportedRulesets...),
+	})
 }
 
 func (a *OperatorAPI) handleHealthz(w http.ResponseWriter, _ *http.Request) {

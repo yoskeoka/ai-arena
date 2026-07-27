@@ -20,6 +20,8 @@ const (
 	BuildModeLocalSubprocess BuildMode = gamemaster.ModeLocalSubprocess
 	// BuildModeFutureExternalAdapter reserves an external adapter mode.
 	BuildModeFutureExternalAdapter BuildMode = gamemaster.ModeFutureExternalAdapter
+	// BuildModeWASMWASI runs an admitted game bundle in the WASI sandbox.
+	BuildModeWASMWASI BuildMode = gamemaster.ModeWASMWASI
 )
 
 // RegistryKey identifies one game id and supported semver major.
@@ -43,8 +45,14 @@ type BuildConstraints struct {
 
 // DescriptorRecord is the stored metadata for one game descriptor entry.
 type DescriptorRecord struct {
-	RegistryKey      RegistryKey
-	GameID           string
+	RegistryKey RegistryKey
+	GameID      string
+	// GameVersion is the exact admitted release version. Empty preserves the
+	// legacy built-in record behavior while artifact-backed records require it.
+	GameVersion      string
+	ArtifactID       string
+	RuntimeArgs      []string
+	MemoryLimitPages uint32
 	BuildMode        BuildMode
 	BuilderID        string
 	BuildConstraints BuildConstraints
@@ -54,6 +62,8 @@ type DescriptorRecord struct {
 type GameDescriptor struct {
 	RegistryKey              RegistryKey
 	GameID                   string
+	GameVersion              string
+	ArtifactID               string
 	BuilderID                string
 	BuildMode                BuildMode
 	BuildConstraints         BuildConstraints
@@ -78,6 +88,9 @@ type Registry struct {
 	resolver DescriptorResolver
 }
 
+// RecordRegistrar is implemented by stores that admit new game releases.
+type RecordRegistrar interface{ Register(DescriptorRecord) error }
+
 // New constructs a registry from a store and resolver.
 func New(store RegistryStore, resolver DescriptorResolver) (*Registry, error) {
 	if store == nil {
@@ -96,6 +109,15 @@ func (r *Registry) Lookup(ctx context.Context, key RegistryKey) (GameDescriptor,
 		return GameDescriptor{}, err
 	}
 	return r.resolver.Resolve(ctx, record)
+}
+
+// Register admits one descriptor release when the configured store is writable.
+func (r *Registry) Register(_ context.Context, record DescriptorRecord) error {
+	registrar, ok := r.store.(RecordRegistrar)
+	if !ok {
+		return fmt.Errorf("registry: configured store is read-only")
+	}
+	return registrar.Register(record)
 }
 
 // LookupVersion resolves a descriptor by game id and semver version string.
@@ -132,7 +154,7 @@ func validateRegistryKey(key RegistryKey) error {
 
 func validateBuildMode(mode BuildMode) error {
 	switch mode {
-	case BuildModeInProcess, BuildModeLocalSubprocess, BuildModeFutureExternalAdapter:
+	case BuildModeInProcess, BuildModeLocalSubprocess, BuildModeFutureExternalAdapter, BuildModeWASMWASI:
 		return nil
 	default:
 		if mode == "" {

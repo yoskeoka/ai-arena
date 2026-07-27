@@ -6,13 +6,73 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
+	"github.com/yoskeoka/ai-arena/internal/platform/registry"
 )
+
+func TestOperatorAPIAdmitsGameBundleWithCreatedResponse(t *testing.T) {
+	store, err := NewFilesystemBundleStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	registryStore, err := registry.NewInMemoryStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := registry.NewWASIResolver(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, err := registry.New(registryStore, resolver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admission, err := NewArtifactAdmissionService(store, reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("bundle", "game.arena.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(gameBundle(t)); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/game-bundles", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response := httptest.NewRecorder()
+	(&OperatorAPI{artifactAdmission: admission}).handleGameBundleUpload(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("POST /api/v1/game-bundles status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var admitted GameBundleAdmissionResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &admitted); err != nil {
+		t.Fatalf("json.Unmarshal(admitted) error = %v", err)
+	}
+	if admitted.GameID != "test" || admitted.GameVersion != "2.1.0" || admitted.ArtifactID == "" {
+		t.Fatalf("admitted = %+v", admitted)
+	}
+	if admitted.BuildMode != string(registry.BuildModeWASMWASI) || admitted.BuilderID == "" {
+		t.Fatalf("admitted runtime identity = %+v", admitted)
+	}
+	if len(admitted.SupportedRulesets) != 1 || admitted.SupportedRulesets[0] != "regular" {
+		t.Fatalf("admitted.SupportedRulesets = %v", admitted.SupportedRulesets)
+	}
+}
 
 func TestOperatorAPIPresetLifecycle(t *testing.T) {
 	store := NewInMemoryQueueStore()

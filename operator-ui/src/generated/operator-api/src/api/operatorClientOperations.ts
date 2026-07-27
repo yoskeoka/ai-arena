@@ -2,10 +2,12 @@ import { parse } from "uri-template";
 import type { OperatorClientContext } from "./operatorClientContext.js";
 import { createRestError } from "../helpers/error.js";
 import type { OperationOptions } from "../helpers/interfaces.js";
+import { createFilePartDescriptor } from "../helpers/multipart-helpers.js";
 import {
   jsonAiSubmissionListResponseToApplicationTransform,
   jsonAiSubmissionRequestToTransportTransform,
   jsonAiSubmissionToApplicationTransform,
+  jsonGameBundleAdmissionToApplicationTransform,
   jsonGameRegistrationListResponseToApplicationTransform,
   jsonGameRegistrationRequestToTransportTransform,
   jsonGameRegistrationToApplicationTransform,
@@ -26,6 +28,8 @@ import type {
   AiSubmission,
   AiSubmissionListResponse,
   AiSubmissionRequest,
+  File,
+  GameBundleAdmission,
   GameRegistration,
   GameRegistrationListResponse,
   GameRegistrationRequest,
@@ -151,6 +155,32 @@ export async function createGameRegistration(
     response.headers["content-type"]?.includes("application/json")
   ) {
     return jsonGameRegistrationToApplicationTransform(response.body)!;
+  }
+  throw createRestError(response);
+}
+export interface UploadGameBundleOptions extends OperationOptions {}
+export async function uploadGameBundle(
+  client: OperatorClientContext,
+  body: {
+    bundle: File;
+  },
+  options?: UploadGameBundleOptions,
+): Promise<GameBundleAdmission> {
+  const path = parse("/api/v1/game-bundles").expand({});
+  const httpRequestOptions = {
+    headers: {},
+    body: [createFilePartDescriptor("bundle", body.bundle)],
+  };
+  const response = await client.pathUnchecked(path).post(httpRequestOptions);
+
+  if (typeof options?.operationOptions?.onResponse === "function") {
+    options?.operationOptions?.onResponse(response);
+  }
+  if (
+    +response.status === 201 &&
+    response.headers["content-type"]?.includes("application/json")
+  ) {
+    return jsonGameBundleAdmissionToApplicationTransform(response.body)!;
   }
   throw createRestError(response);
 }

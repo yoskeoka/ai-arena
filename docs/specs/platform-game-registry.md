@@ -51,6 +51,20 @@ registry の lookup key は `game_id + game_version major` の組とする。
 `ruleset_version` は registry key に含めない。lookup 後に registered game の build 入口へ渡し、
 各 game が supported ruleset かどうかを検証する。
 
+### 同一 major の release 選択
+
+1 つの registry key には、同一互換系列の複数の admitted game release を保持してよい。
+release は bundle manifest の exact semantic `game_version` と immutable artifact digest を持つ。
+
+- 通常の registry lookup は、同一 `game_id + game_version major` に属する admitted release のうち、
+  semantic version が最大のものを返す。
+- 新しい同一-major release の登録は、旧 release を物理削除しない。旧 release は監査、障害調査、
+  既存 match が記録した artifact digest の再 materialize のため保持する。
+- match の実行時には、通常 lookup が選んだ release の artifact digest を記録する。後からより新しい
+  release が登録されても、記録済み match の game master bytes は変わってはならない。
+- prerelease を official registry に admission するか、同一 release を再 upload したときの
+  idempotency は artifact bundle contract が定める。通常 lookup は admission 済みの release だけを比較する。
+
 ## persisted descriptor record
 
 永続化 backend に保存する registered game metadata は、runtime の function を含まない plain data として扱う。

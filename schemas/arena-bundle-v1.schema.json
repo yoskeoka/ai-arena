@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-arena.dev/schemas/arena-bundle-v1.schema.json",
+  "title": "AI Arena bundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_kind", "runtime"],
+  "properties": {
+    "schema_version": {"const": "arena-bundle/v1"},
+    "artifact_kind": {"enum": ["game", "ai"]},
+    "game_id": {"type": "string", "minLength": 1},
+    "game_version": {"type": "string", "minLength": 1},
+    "rulesets": {"type": "array", "items": {"type": "object", "additionalProperties": true, "required": ["ruleset_version"], "properties": {"ruleset_version": {"type": "string", "minLength": 1}}}},
+    "runtime": {"type": "object", "additionalProperties": false, "required": ["kind", "module"], "properties": {"kind": {"const": "wasm-wasi"}, "module": {"type": "string", "pattern": "^[^/\\\\]+$"}, "args": {"type": "array", "items": {"type": "string"}}}}
+  }
+}

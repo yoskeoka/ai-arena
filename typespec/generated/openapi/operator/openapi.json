@@ -50,6 +50,46 @@
         }
       }
     },
+    "/api/v1/game-bundles": {
+      "post": {
+        "operationId": "Operator_uploadGameBundle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.GameBundleAdmission"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": ["bundle"]
+              },
+              "encoding": {
+                "bundle": {
+                  "contentType": "*/*"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/game-registrations": {
       "get": {
         "operationId": "Operator_listGameRegistrations",
@@ -576,6 +616,40 @@
             "type": "string"
           },
           "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Shared.GameBundleAdmission": {
+        "type": "object",
+        "required": [
+          "game_id",
+          "game_version",
+          "artifact_id",
+          "build_mode",
+          "builder_id",
+          "supported_rulesets"
+        ],
+        "properties": {
+          "game_id": {
+            "type": "string"
+          },
+          "game_version": {
+            "type": "string"
+          },
+          "artifact_id": {
+            "type": "string"
+          },
+          "build_mode": {
+            "type": "string"
+          },
+          "builder_id": {
+            "type": "string"
+          },
+          "supported_rulesets": {
             "type": "array",
             "items": {
               "type": "string"
