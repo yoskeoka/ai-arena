@@ -22,6 +22,8 @@ const (
 	ModeLocalSubprocess Mode = "local-subprocess"
 	// ModeFutureExternalAdapter reserves the external-adapter hosting mode.
 	ModeFutureExternalAdapter Mode = "future-external-adapter"
+	// ModeWASMWASI runs an admitted game master in the WASI sandbox.
+	ModeWASMWASI Mode = "wasm-wasi"
 )
 
 // Session is the platform-facing game-master session contract.
@@ -35,6 +37,28 @@ type Session interface {
 	CurrentExportedSnapshot(context.Context) (game.ExportedSnapshot, error)
 	CurrentResult(context.Context) (game.MatchResult, error)
 	Shutdown(context.Context) error
+}
+
+// WASIConfig configures an artifact-materialized WASI game master.
+type WASIConfig struct {
+	ExpectedMetadata catalog.GameMetadata
+	ModulePath       string
+	Dir              string
+	Args             []string
+	Players          []game.Player
+	RNGSeed          string
+	ResumeSnapshot   *game.Snapshot
+	MemoryLimitPages uint32
+	StderrLimitBytes int
+}
+
+// StartWASMWASI starts a WASI game-master using the same logical JSON-RPC session API.
+func StartWASMWASI(cfg WASIConfig) (Session, error) {
+	adapter, err := runtime.Start(context.Background(), runtime.Config{Kind: runtime.KindWASMWASI, ModulePath: cfg.ModulePath, Dir: cfg.Dir, Args: append([]string(nil), cfg.Args...), MemoryLimitPages: cfg.MemoryLimitPages, StderrLimitBytes: cfg.StderrLimitBytes})
+	if err != nil {
+		return nil, err
+	}
+	return &localSubprocessSession{meta: cfg.ExpectedMetadata, players: append([]game.Player(nil), cfg.Players...), rngSeed: cfg.RNGSeed, resumeSnapshot: cloneSnapshotPtr(cfg.ResumeSnapshot), adapter: adapter}, nil
 }
 
 // InitializeMatchParams contains the inputs for starting or resuming a match.

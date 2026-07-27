@@ -75,6 +75,8 @@ func (r *StaticResolver) Resolve(_ context.Context, record DescriptorRecord) (Ga
 	return GameDescriptor{
 		RegistryKey:              record.RegistryKey,
 		GameID:                   record.GameID,
+		GameVersion:              record.GameVersion,
+		ArtifactID:               record.ArtifactID,
 		BuilderID:                record.BuilderID,
 		BuildMode:                builder.BuildMode,
 		BuildConstraints:         copyBuildConstraints(builder.BuildConstraints),

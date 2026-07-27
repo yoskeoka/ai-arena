@@ -77,6 +77,8 @@ TypeSpec を正本とする。`docs/specs/` は layout の意味、validation、
   - public manifest models, ZIP reader, validation, digest, and safe materialization contract
 - `cmd/arena-artifact/` (NEW)
   - external game repositories and CI can run the exact platform pack/validate contract
+- `tools/dev/package-builtin-game-bundles.sh` (NEW)
+  - echo / janken を official submission と同じ WASM bundle として生成し、upload / registry / worker の結合検証 fixture にする
 - `docs/specs/platform-artifact-bundle.md` (NEW)
   - observable packaging, validation, storage, and execution behavior
 - `docs/specs/index.md` (MODIFY)
@@ -95,7 +97,7 @@ TypeSpec を正本とする。`docs/specs/` は layout の意味、validation、
 - `internal/platform/service/` artifact ingestion/materializer components (NEW)
   - bounded upload, validation, immutable persistence, worker cache/materialization
 - `internal/platform/registry/` (MODIFY)
-  - artifact-backed descriptor record/resolution and richer ruleset constraints
+  - artifact-backed descriptor record/resolution、同一 `game_id + major` 内で semver 最大 release を通常 lookup する規則、richer ruleset constraints
 - `internal/platform/gamemaster/` (MODIFY)
   - WASM/WASI game-master session using the existing logical JSON-RPC API
 - `cmd/arena-service/` (MODIFY)
@@ -108,6 +110,7 @@ TypeSpec を正本とする。`docs/specs/` は layout の意味、validation、
 - [ ] JSON Schema、typed model、ZIP layout、digest/size rules を spec-first で固定する。
 - [ ] bounded reader と secure extraction/materialization の negative matrix を実装する。
 - [ ] external repo が同じ schema/validator を利用できる `arena-artifact validate` CLI を追加する。
+- [ ] echo / janken の official WASM game bundle を生成する開発用 script を追加し、upload から worker 起動までの結合 fixture として使う。
 - [ ] filesystem と R2 に同じ content-addressed artifact contract を実装する。
 - [ ] TypeSpec upload API、generated artifacts、Go handler を追加する。
 - [ ] WASM game-master session と artifact-backed registry descriptor を追加する。
@@ -145,3 +148,4 @@ TypeSpec を正本とする。`docs/specs/` は layout の意味、validation、
 - official Phase 7 artifact は AI/game とも WASM-only の separate versioned ZIP とする。
 - manifest は bundle 内の technical source of truth、form は control-plane metadata のみを所有する。
 - artifact bytes は immutable/content-addressed とし、client-supplied path/URL を online contract にしない。
+- game registry は `game_id + game_version major` を安定 lookup key とし、同一 key に複数 release がある場合は semver 最大の admitted release を通常 lookup で返す。旧 release は削除せず、監査と既存 match の artifact digest 再現のため保持する。
