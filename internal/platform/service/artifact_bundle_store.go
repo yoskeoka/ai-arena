@@ -42,6 +42,8 @@ func (s *FilesystemBundleStore) Put(_ context.Context, bundle artifactbundle.Bun
 			return fmt.Errorf("service: digest collision for %s", bundle.Digest)
 		}
 		return nil
+	} else if !os.IsNotExist(err) {
+		return err
 	}
 	// #nosec G703 -- pathFor accepts only a fixed-root SHA-256 filename.
 	return os.WriteFile(path, bundle.Bytes, 0o600)

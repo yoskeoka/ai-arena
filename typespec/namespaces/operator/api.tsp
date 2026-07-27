@@ -19,7 +19,10 @@ op createGameRegistration(@body body: GameRegistrationRequest): GameRegistration
 
 @route("/api/v1/game-bundles")
 @post
-op uploadGameBundle(@multipartBody body: { bundle: HttpPart<File>; }): GameRegistration;
+op uploadGameBundle(@multipartBody body: { bundle: HttpPart<File>; }): {
+  @statusCode statusCode: 201;
+  @body body: GameBundleAdmission;
+};
 
 @route("/api/v1/ai-submissions")
 @get

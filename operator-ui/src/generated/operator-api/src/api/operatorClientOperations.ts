@@ -7,6 +7,7 @@ import {
   jsonAiSubmissionListResponseToApplicationTransform,
   jsonAiSubmissionRequestToTransportTransform,
   jsonAiSubmissionToApplicationTransform,
+  jsonGameBundleAdmissionToApplicationTransform,
   jsonGameRegistrationListResponseToApplicationTransform,
   jsonGameRegistrationRequestToTransportTransform,
   jsonGameRegistrationToApplicationTransform,
@@ -28,6 +29,7 @@ import type {
   AiSubmissionListResponse,
   AiSubmissionRequest,
   File,
+  GameBundleAdmission,
   GameRegistration,
   GameRegistrationListResponse,
   GameRegistrationRequest,
@@ -163,7 +165,7 @@ export async function uploadGameBundle(
     bundle: File;
   },
   options?: UploadGameBundleOptions,
-): Promise<GameRegistration> {
+): Promise<GameBundleAdmission> {
   const path = parse("/api/v1/game-bundles").expand({});
   const httpRequestOptions = {
     headers: {},
@@ -175,10 +177,10 @@ export async function uploadGameBundle(
     options?.operationOptions?.onResponse(response);
   }
   if (
-    +response.status === 200 &&
+    +response.status === 201 &&
     response.headers["content-type"]?.includes("application/json")
   ) {
-    return jsonGameRegistrationToApplicationTransform(response.body)!;
+    return jsonGameBundleAdmissionToApplicationTransform(response.body)!;
   }
   throw createRestError(response);
 }

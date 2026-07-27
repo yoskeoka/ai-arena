@@ -5,6 +5,7 @@ import type {
   ArtifactAccessMetadata,
   AuthPrincipal,
   File,
+  GameBundleAdmission,
   GameMetadata,
   GameRegistration,
   GameRegistrationListResponse,
@@ -299,6 +300,24 @@ export function decodeBase64(value: string): Uint8Array | undefined {
   }
     return {
     contentType: input_.contentType,filename: input_.filename,contents: input_.contents
+  }!;
+}export function jsonGameBundleAdmissionToTransportTransform(
+  input_?: GameBundleAdmission | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    game_id: input_.gameId,game_version: input_.gameVersion,artifact_id: input_.artifactId,build_mode: input_.buildMode,builder_id: input_.builderId,supported_rulesets: jsonArrayStringToTransportTransform(input_.supportedRulesets)
+  }!;
+}export function jsonGameBundleAdmissionToApplicationTransform(
+  input_?: any,
+): GameBundleAdmission {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    gameId: input_.game_id,gameVersion: input_.game_version,artifactId: input_.artifact_id,buildMode: input_.build_mode,builderId: input_.builder_id,supportedRulesets: jsonArrayStringToApplicationTransform(input_.supported_rulesets)
   }!;
 }export function jsonAiSubmissionListResponseToTransportTransform(
   input_?: AiSubmissionListResponse | null,

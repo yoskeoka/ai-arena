@@ -114,6 +114,14 @@ export interface File {
  * Represent a byte array
  */
 export type Bytes = Uint8Array;
+export interface GameBundleAdmission {
+  gameId: string;
+  gameVersion: string;
+  artifactId: string;
+  buildMode: string;
+  builderId: string;
+  supportedRulesets: Array<string>;
+}
 export interface AiSubmissionListResponse {
   items: Array<AiSubmission>;
 }

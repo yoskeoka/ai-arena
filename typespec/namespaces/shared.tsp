@@ -136,6 +136,15 @@ model GameRegistration {
   source_id?: string;
 }
 
+model GameBundleAdmission {
+  game_id: string;
+  game_version: string;
+  artifact_id: string;
+  build_mode: string;
+  builder_id: string;
+  supported_rulesets: string[];
+}
+
 model AISubmissionRequest {
   ai_submission_id?: string;
   game_registration_id: string;

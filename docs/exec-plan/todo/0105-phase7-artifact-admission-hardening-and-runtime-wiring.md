@@ -23,6 +23,7 @@ Addresses: N/A
 - `artifactbundle/` (MODIFY): bounded ZIP read, entry-size/compression/hash/case checks, JSON Schema parity, wazero compile/import policy
 - `schemas/arena-bundle-v1.schema.json` (MODIFY): complete game/AI manifest shapes and resource budget limits
 - `internal/platform/service/artifact_*.go` (MODIFY): idempotent filesystem/R2 persistence and secure materialization
+- `internal/platform/registry/`, `internal/platform/gamemaster/`, `internal/platform/service/worker_local.go` (MODIFY): match-lifecycle context (including timeout/cancellation) must be created before session construction and propagated to the WASI runtime; a resolver lookup context must not define a session lifetime
 - `cmd/arena-service/main.go` (MODIFY): configured bundle store, composite registry resolver, and upload admission injection
 - tests/fixtures (NEW/MODIFY): malicious archive, bad manifest/hash/import, oversize and local/R2 parity cases
 - `docs/specs/platform-artifact-bundle.md` (MODIFY): observable validation/error and runtime behavior
@@ -34,6 +35,7 @@ Addresses: N/A
 - [ ] Make JSON Schema and typed model parity testable.
 - [ ] Wire selected artifact backend, writable registry, resolver and operator API in `arena-service`.
 - [ ] Verify repeated bytes are idempotent and local/R2 produce the same digest/materialization result.
+- [ ] Propagate match timeout and cancellation through descriptor/session construction into the WASI runtime, without binding a session to a transient registry lookup context.
 
 ## Verification
 

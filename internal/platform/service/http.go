@@ -32,6 +32,16 @@ type MatchDetailResponse struct {
 	ArtifactAccess map[string]ArtifactAccessMetadata `json:"artifact_access,omitempty"`
 }
 
+// GameBundleAdmissionResponse is the operator-visible result of admitting one game bundle.
+type GameBundleAdmissionResponse struct {
+	GameID            string   `json:"game_id"`
+	GameVersion       string   `json:"game_version"`
+	ArtifactID        string   `json:"artifact_id"`
+	BuildMode         string   `json:"build_mode"`
+	BuilderID         string   `json:"builder_id"`
+	SupportedRulesets []string `json:"supported_rulesets"`
+}
+
 // ArtifactAccessIssuer derives per-artifact access metadata from stable locators.
 type ArtifactAccessIssuer interface {
 	Issue(context.Context, MatchDetail) (map[string]ArtifactAccessMetadata, error)
@@ -196,7 +206,14 @@ func (a *OperatorAPI) handleGameBundleUpload(w http.ResponseWriter, r *http.Requ
 		writeError(w, statusCodeForServiceError(err), err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, record)
+	writeJSON(w, http.StatusCreated, GameBundleAdmissionResponse{
+		GameID:            record.GameID,
+		GameVersion:       record.GameVersion,
+		ArtifactID:        record.ArtifactID,
+		BuildMode:         string(record.BuildMode),
+		BuilderID:         record.BuilderID,
+		SupportedRulesets: append([]string(nil), record.BuildConstraints.SupportedRulesets...),
+	})
 }
 
 func (a *OperatorAPI) handleHealthz(w http.ResponseWriter, _ *http.Request) {
