@@ -32,15 +32,18 @@ func (s *FilesystemBundleStore) Put(_ context.Context, bundle artifactbundle.Bun
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	// #nosec G703 -- pathFor accepts only a fixed-root SHA-256 filename.
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
+	// #nosec G304,G703 -- pathFor accepts only a fixed-root SHA-256 filename.
 	if existing, err := os.ReadFile(path); err == nil {
 		if string(existing) != string(bundle.Bytes) {
 			return fmt.Errorf("service: digest collision for %s", bundle.Digest)
 		}
 		return nil
 	}
+	// #nosec G703 -- pathFor accepts only a fixed-root SHA-256 filename.
 	return os.WriteFile(path, bundle.Bytes, 0o600)
 }
 
@@ -49,6 +52,7 @@ func (s *FilesystemBundleStore) Read(_ context.Context, digest string) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
+	// #nosec G304,G703 -- pathFor accepts only a fixed-root SHA-256 filename.
 	return os.ReadFile(path)
 }
 

@@ -175,6 +175,7 @@ func (a *OperatorAPI) handleGameBundleUpload(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
+	// #nosec G120 -- MaxBytesReader above caps the complete request body.
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
