@@ -191,7 +191,7 @@ func validateWASMImports(module []byte) error {
 		sectionID := module[offset]
 		offset++
 		size, next, err := readWASMU32(module, offset)
-		if err != nil || uint64(size) > uint64(len(module)-next) {
+		if err != nil || next > len(module) || int(size) > len(module)-next {
 			return fmt.Errorf("artifactbundle: invalid WASM section")
 		}
 		end := next + int(size)
@@ -256,7 +256,7 @@ func validateWASMImportSection(section []byte) error {
 
 func readWASMName(data []byte, offset int) (string, int, error) {
 	size, offset, err := readWASMU32(data, offset)
-	if err != nil || uint64(size) > uint64(len(data)-offset) {
+	if err != nil || offset > len(data) || int(size) > len(data)-offset {
 		return "", offset, fmt.Errorf("invalid name")
 	}
 	end := offset + int(size)
