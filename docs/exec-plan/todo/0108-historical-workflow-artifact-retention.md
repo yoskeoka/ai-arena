@@ -1,6 +1,6 @@
 # 完了済み workflow artifact の保持廃止
 
-> **Execution**: Use `/execute-task` to implement this plan. After implementation is complete, use `/review-task` to prepare and create the PR.
+> **実行**: `/execute-task` でこの plan を実装し、完了後は `/review-task` で PR を準備・作成する。
 
 ## 目的
 
