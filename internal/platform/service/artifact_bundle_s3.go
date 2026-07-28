@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -24,6 +25,14 @@ func (s *S3BundleStore) Put(ctx context.Context, bundle artifactbundle.Bundle) e
 	key, err := bundleObjectKey(bundle.Digest)
 	if err != nil {
 		return err
+	}
+	if existing, readErr := s.Read(ctx, bundle.Digest); readErr == nil {
+		if !bytes.Equal(existing, bundle.Bytes) {
+			return fmt.Errorf("service: digest collision for %s", bundle.Digest)
+		}
+		return nil
+	} else if !os.IsNotExist(readErr) {
+		return readErr
 	}
 	_, err = s.store.PutBytes(ctx, key, bundle.Bytes, "application/zip")
 	return err
@@ -57,6 +66,9 @@ func (s *S3BundleStore) Materialize(ctx context.Context, digest, destination str
 		return "", fmt.Errorf("service: bundle module missing")
 	}
 	path := filepath.Join(destination, bundle.Manifest.Runtime.Module)
+	if err := os.WriteFile(filepath.Join(destination, "manifest.json"), artifactbundle.ManifestJSON(bundle.Manifest), 0o600); err != nil {
+		return "", err
+	}
 	// #nosec G703 -- module name is validated as a single root entry by artifactbundle.Read.
 	if err := os.WriteFile(path, module, 0o600); err != nil {
 		return "", err

@@ -41,6 +41,7 @@ type Session interface {
 
 // WASIConfig configures an artifact-materialized WASI game master.
 type WASIConfig struct {
+	Context          context.Context
 	ExpectedMetadata catalog.GameMetadata
 	ModulePath       string
 	Dir              string
@@ -54,7 +55,11 @@ type WASIConfig struct {
 
 // StartWASMWASI starts a WASI game-master using the same logical JSON-RPC session API.
 func StartWASMWASI(cfg WASIConfig) (Session, error) {
-	adapter, err := runtime.Start(context.Background(), runtime.Config{Kind: runtime.KindWASMWASI, ModulePath: cfg.ModulePath, Dir: cfg.Dir, Args: append([]string(nil), cfg.Args...), MemoryLimitPages: cfg.MemoryLimitPages, StderrLimitBytes: cfg.StderrLimitBytes})
+	ctx := cfg.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	adapter, err := runtime.Start(ctx, runtime.Config{Kind: runtime.KindWASMWASI, ModulePath: cfg.ModulePath, Dir: cfg.Dir, Args: append([]string(nil), cfg.Args...), MemoryLimitPages: cfg.MemoryLimitPages, StderrLimitBytes: cfg.StderrLimitBytes})
 	if err != nil {
 		return nil, err
 	}

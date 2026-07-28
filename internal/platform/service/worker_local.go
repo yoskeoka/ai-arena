@@ -44,19 +44,26 @@ func NewLocalRunnerInvoker(baseDir string, reg *registry.Registry, matchTimeout 
 // Run builds one game session plus player sessions and executes a single match.
 func (i *LocalRunnerInvoker) Run(ctx context.Context, req ExecutionRequest) (ExecutionResult, error) {
 	submission := req.Submission
+	runCtx := ctx
+	cancel := func() {}
+	if i.matchTimeout > 0 {
+		runCtx, cancel = context.WithTimeout(ctx, i.matchTimeout)
+	}
+	defer cancel()
 
-	descriptor, err := i.registry.LookupVersion(ctx, submission.Game.GameID, submission.Game.GameVersion)
+	descriptor, err := i.registry.LookupVersion(runCtx, submission.Game.GameID, submission.Game.GameVersion)
 	if err != nil {
 		return ExecutionResult{}, err
 	}
 
-	players, sessions, err := i.loadPlayersAndSessions(ctx, submission)
+	players, sessions, err := i.loadPlayersAndSessions(runCtx, submission)
 	if err != nil {
 		return ExecutionResult{}, err
 	}
 	defer closeSessions(sessions)
 
 	master, err := descriptor.BuildSession(registry.BuildSpec{
+		Context:     runCtx,
 		GameVersion: submission.Game.GameVersion,
 		Ruleset:     submission.Game.RulesetVersion,
 		Players:     clonePlayers(players),
@@ -64,13 +71,6 @@ func (i *LocalRunnerInvoker) Run(ctx context.Context, req ExecutionRequest) (Exe
 	if err != nil {
 		return ExecutionResult{}, err
 	}
-
-	runCtx := ctx
-	cancel := func() {}
-	if i.matchTimeout > 0 {
-		runCtx, cancel = context.WithTimeout(ctx, i.matchTimeout)
-	}
-	defer cancel()
 
 	record, runErr := match.NewRunner(submission.MatchID, players, master, sessions).Run(runCtx)
 	return ExecutionResult{

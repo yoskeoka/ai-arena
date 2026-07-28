@@ -30,6 +30,33 @@ func TestReadRejectsUndeclaredEntry(t *testing.T) {
 	}
 }
 
+func TestReadRejectsUnsafeAndInvalidWASMEntries(t *testing.T) {
+	for _, tc := range []struct {
+		name, module   string
+		manifestModule string
+	}{
+		{name: "path", module: "module.wasm", manifestModule: "../module.wasm"},
+		{name: "version", module: "module.wasm", manifestModule: "module.wasm"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			writer := zip.NewWriter(&out)
+			entry, _ := writer.Create("manifest.json")
+			_, _ = entry.Write([]byte(`{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"test","game_version":"2.0.0","runtime":{"kind":"wasm-wasi","module":"` + tc.manifestModule + `"}}`))
+			entry, _ = writer.Create(tc.module)
+			wasm := []byte{0, 97, 115, 109, 1, 0, 0, 0}
+			if tc.name == "version" {
+				wasm[4] = 2
+			}
+			_, _ = entry.Write(wasm)
+			_ = writer.Close()
+			if _, err := Read(out.Bytes()); err == nil {
+				t.Fatal("Read accepted invalid bundle")
+			}
+		})
+	}
+}
+
 func testZIP(t *testing.T, manifest string) []byte {
 	t.Helper()
 	var out bytes.Buffer

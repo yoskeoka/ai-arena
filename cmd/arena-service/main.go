@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/yoskeoka/ai-arena/internal/platform/registry"
 	"github.com/yoskeoka/ai-arena/internal/platform/service"
 )
 
@@ -204,19 +205,21 @@ func usageFor(subcommand string) string {
 }
 
 type cliApp struct {
-	commands       *service.CommandService
-	queries        *service.QueryService
-	general        *service.GeneralSubmissionService
-	requests       *service.MatchRequestService
-	queue          service.QueueStore
-	reader         service.ArtifactReader
-	rankings       *service.RankingService
-	artifactAccess service.ArtifactAccessIssuer
-	persister      service.TerminalPersister
-	auth           *service.AuthService
-	baseDir        string
-	timeout        time.Duration
-	closeFn        func()
+	commands          *service.CommandService
+	queries           *service.QueryService
+	general           *service.GeneralSubmissionService
+	requests          *service.MatchRequestService
+	queue             service.QueueStore
+	reader            service.ArtifactReader
+	rankings          *service.RankingService
+	artifactAccess    service.ArtifactAccessIssuer
+	persister         service.TerminalPersister
+	auth              *service.AuthService
+	artifactAdmission *service.ArtifactAdmissionService
+	registry          *registry.Registry
+	baseDir           string
+	timeout           time.Duration
+	closeFn           func()
 }
 
 type artifactRuntimeConfig struct {
@@ -236,6 +239,7 @@ type artifactRuntime struct {
 	artifactAccess service.ArtifactAccessIssuer
 	persister      service.TerminalPersister
 	rankingStore   service.RankingSnapshotStore
+	bundles        service.BundleStore
 }
 
 func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, artifactRuntime artifactRuntimeConfig) (*cliApp, error) {
@@ -275,6 +279,14 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	if err != nil {
 		return nil, err
 	}
+	admissionRegistry, err := registry.NewWASIOverlay(runtime.bundles)
+	if err != nil {
+		return nil, err
+	}
+	artifactAdmission, err := service.NewArtifactAdmissionService(runtime.bundles, admissionRegistry)
+	if err != nil {
+		return nil, err
+	}
 	queries, err := service.NewQueryService(store, runtime.reader)
 	if err != nil {
 		return nil, err
@@ -294,18 +306,20 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	closeQueue = false
 	closeAuth = false
 	return &cliApp{
-		commands:       commands,
-		queries:        queries,
-		general:        general,
-		requests:       requests,
-		queue:          store,
-		reader:         runtime.reader,
-		rankings:       rankings,
-		artifactAccess: runtime.artifactAccess,
-		persister:      runtime.persister,
-		auth:           auth,
-		baseDir:        baseDir,
-		timeout:        matchTimeout,
+		commands:          commands,
+		queries:           queries,
+		general:           general,
+		requests:          requests,
+		queue:             store,
+		reader:            runtime.reader,
+		rankings:          rankings,
+		artifactAccess:    runtime.artifactAccess,
+		persister:         runtime.persister,
+		auth:              auth,
+		artifactAdmission: artifactAdmission,
+		registry:          admissionRegistry,
+		baseDir:           baseDir,
+		timeout:           matchTimeout,
 		closeFn: func() {
 			authCloseFn()
 			closeFn()
@@ -433,7 +447,7 @@ func (a *cliApp) read(ctx context.Context, runID string, artifactKind string, st
 }
 
 func (a *cliApp) newWorker() (*service.Worker, error) {
-	invoker, err := service.NewLocalRunnerInvoker(a.baseDir, nil, a.timeout)
+	invoker, err := service.NewLocalRunnerInvoker(a.baseDir, a.registry, a.timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -481,6 +495,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	if err != nil {
 		return err
 	}
+	api.WithArtifactAdmission(a.artifactAdmission)
 	logger := log.New(stderr, "arena-service: ", log.LstdFlags)
 	loop, err := service.NewWorkerLoop(worker, workerID, pollInterval, func(err error) {
 		logger.Printf("worker loop error: %v", err)
@@ -652,6 +667,10 @@ func loadArtifactRuntimeFromEnv() (artifactRuntimeConfig, error) {
 func newArtifactRuntime(ctx context.Context, baseDir string, cfg artifactRuntimeConfig) (artifactRuntime, error) {
 	switch cfg.backend {
 	case "", "filesystem":
+		bundles, err := service.NewFilesystemBundleStore(filepath.Join(baseDir, "artifact-bundles"))
+		if err != nil {
+			return artifactRuntime{}, err
+		}
 		reader := service.NewDefaultArtifactReader(nil)
 		rankingStore, err := service.NewLocalRankingSnapshotStore(baseDir)
 		if err != nil {
@@ -662,6 +681,7 @@ func newArtifactRuntime(ctx context.Context, baseDir string, cfg artifactRuntime
 			artifactAccess: service.DirectArtifactAccessIssuer{},
 			persister:      service.LocalTerminalPersister{},
 			rankingStore:   rankingStore,
+			bundles:        bundles,
 		}, nil
 	case "r2":
 		store, err := service.NewS3ArtifactStore(ctx, service.S3ArtifactConfig{
@@ -682,11 +702,16 @@ func newArtifactRuntime(ctx context.Context, baseDir string, cfg artifactRuntime
 			return artifactRuntime{}, err
 		}
 		reader := service.NewDefaultArtifactReader(store)
+		bundles, err := service.NewS3BundleStore(store)
+		if err != nil {
+			return artifactRuntime{}, err
+		}
 		return artifactRuntime{
 			reader:         reader,
 			artifactAccess: service.NewS3ArtifactAccessIssuer(store),
 			persister:      persister,
 			rankingStore:   rankingStore,
+			bundles:        bundles,
 		}, nil
 	default:
 		return artifactRuntime{}, fmt.Errorf("unsupported artifact backend %q", cfg.backend)
