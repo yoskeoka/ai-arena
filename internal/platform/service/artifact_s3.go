@@ -18,9 +18,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 const defaultArtifactPresignTTL = 5 * time.Minute
+
+var errS3ConditionalRequestConflict = errors.New("service: conditional S3 write conflict")
 
 // S3ArtifactConfig describes one S3-compatible artifact lane.
 type S3ArtifactConfig struct {
@@ -132,6 +135,36 @@ func (s *S3ArtifactStore) PutBytes(ctx context.Context, key string, body []byte,
 		return "", fmt.Errorf("service: put artifact object s3://%s/%s: %w", s.bucket, key, err)
 	}
 	return s.ObjectLocator(key), nil
+}
+
+// PutBytesIfAbsent stores one object only when its key does not already exist.
+func (s *S3ArtifactStore) PutBytesIfAbsent(ctx context.Context, key string, body []byte, contentType string) (bool, error) {
+	key = strings.TrimLeft(path.Clean(key), "/")
+	input := &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(key),
+		Body:        bytes.NewReader(body),
+		IfNoneMatch: aws.String("*"),
+	}
+	if strings.TrimSpace(contentType) == "" {
+		contentType = guessContentType(key)
+	}
+	if contentType != "" {
+		input.ContentType = aws.String(contentType)
+	}
+	if _, err := s.client.PutObject(ctx, input); err != nil {
+		var responseErr *smithyhttp.ResponseError
+		if errors.As(err, &responseErr) {
+			switch responseErr.HTTPStatusCode() {
+			case 409:
+				return false, errS3ConditionalRequestConflict
+			case 412:
+				return false, nil
+			}
+		}
+		return false, fmt.Errorf("service: conditionally put artifact object s3://%s/%s: %w", s.bucket, key, err)
+	}
+	return true, nil
 }
 
 // PresignGET derives a delegated download URL for one s3:// locator.

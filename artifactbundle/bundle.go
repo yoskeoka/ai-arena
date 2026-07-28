@@ -116,7 +116,7 @@ func Read(data []byte) (Bundle, error) {
 	if err := dec.Decode(&manifest); err != nil {
 		return Bundle{}, fmt.Errorf("artifactbundle: parse manifest: %w", err)
 	}
-	if err := validateManifest(manifest); err != nil {
+	if err := validateManifest(manifest, manifestBytes); err != nil {
 		return Bundle{}, err
 	}
 	module, ok := entries[manifest.Runtime.Module]
@@ -137,16 +137,37 @@ func Read(data []byte) (Bundle, error) {
 	return Bundle{Manifest: manifest, Digest: "sha256:" + hex.EncodeToString(sum[:]), Bytes: append([]byte(nil), data...)}, nil
 }
 
-func validateManifest(m Manifest) error {
+func validateManifest(m Manifest, raw []byte) error {
 	if m.SchemaVersion != SchemaVersion || (m.ArtifactKind != "game" && m.ArtifactKind != "ai") || m.GameID == "" || m.GameVersion == "" || m.Runtime.Kind != "wasm-wasi" || m.Runtime.Module == "" || m.Runtime.Module != path.Base(m.Runtime.Module) || strings.Contains(m.Runtime.Module, "\\") {
 		return fmt.Errorf("artifactbundle: unsupported manifest")
 	}
 	if m.Runtime.MemoryLimitPages > 1024 || m.Runtime.TimeoutMS > 600000 {
 		return fmt.Errorf("artifactbundle: runtime budget exceeds policy")
 	}
+	var numeric struct {
+		Rulesets []struct {
+			PlayerCount           *int `json:"player_count"`
+			MaxActiveBotsPerOwner *int `json:"max_active_bots_per_owner"`
+		} `json:"rulesets"`
+		Runtime struct {
+			MemoryLimitPages *uint32 `json:"memory_limit_pages"`
+			TimeoutMS        *uint32 `json:"timeout_ms"`
+		} `json:"runtime"`
+	}
+	if err := json.Unmarshal(raw, &numeric); err != nil {
+		return fmt.Errorf("artifactbundle: parse manifest numeric fields: %w", err)
+	}
+	if (numeric.Runtime.MemoryLimitPages != nil && *numeric.Runtime.MemoryLimitPages == 0) || (numeric.Runtime.TimeoutMS != nil && *numeric.Runtime.TimeoutMS == 0) {
+		return fmt.Errorf("artifactbundle: runtime budget must be positive when specified")
+	}
 	for _, ruleset := range m.Rulesets {
 		if ruleset.RulesetVersion == "" || ruleset.PlayerCount < 0 || ruleset.MaxActiveBotsPerOwner < 0 {
 			return fmt.Errorf("artifactbundle: invalid ruleset")
+		}
+	}
+	for _, ruleset := range numeric.Rulesets {
+		if (ruleset.PlayerCount != nil && *ruleset.PlayerCount == 0) || (ruleset.MaxActiveBotsPerOwner != nil && *ruleset.MaxActiveBotsPerOwner == 0) {
+			return fmt.Errorf("artifactbundle: ruleset limits must be positive when specified")
 		}
 	}
 	return nil
@@ -160,19 +181,126 @@ func validateWASM(module []byte) error {
 		return fmt.Errorf("artifactbundle: compile module: %w", err)
 	}
 	defer compiled.Close(context.Background())
-	for _, fn := range compiled.ImportedFunctions() {
-		moduleName, _, _ := fn.Import()
-		if moduleName != "wasi_snapshot_preview1" {
-			return fmt.Errorf("artifactbundle: unsupported WASM import module %q", moduleName)
+	return validateWASMImports(module)
+}
+
+// validateWASMImports inspects every import kind because wazero exposes only
+// imported functions and memories through CompiledModule.
+func validateWASMImports(module []byte) error {
+	for offset := 8; offset < len(module); {
+		sectionID := module[offset]
+		offset++
+		size, next, err := readWASMU32(module, offset)
+		if err != nil || uint64(size) > uint64(len(module)-next) {
+			return fmt.Errorf("artifactbundle: invalid WASM section")
 		}
-	}
-	for _, memory := range compiled.ImportedMemories() {
-		moduleName, _, _ := memory.Import()
-		if moduleName != "wasi_snapshot_preview1" {
-			return fmt.Errorf("artifactbundle: unsupported WASM import module %q", moduleName)
+		end := next + int(size)
+		if sectionID == 2 {
+			return validateWASMImportSection(module[next:end])
 		}
+		if sectionID != 0 && sectionID > 12 {
+			return fmt.Errorf("artifactbundle: invalid WASM section")
+		}
+		offset = end
 	}
 	return nil
+}
+
+func validateWASMImportSection(section []byte) error {
+	count, offset, err := readWASMU32(section, 0)
+	if err != nil {
+		return fmt.Errorf("artifactbundle: invalid WASM imports")
+	}
+	for range count {
+		moduleName, next, err := readWASMName(section, offset)
+		if err != nil {
+			return fmt.Errorf("artifactbundle: invalid WASM imports")
+		}
+		offset = next
+		if _, offset, err = readWASMName(section, offset); err != nil {
+			return fmt.Errorf("artifactbundle: invalid WASM imports")
+		}
+		if moduleName != "wasi_snapshot_preview1" {
+			return fmt.Errorf("artifactbundle: unsupported WASM import module %q", moduleName)
+		}
+		if offset >= len(section) {
+			return fmt.Errorf("artifactbundle: invalid WASM imports")
+		}
+		kind := section[offset]
+		offset++
+		switch kind {
+		case 0:
+			_, offset, err = readWASMU32(section, offset)
+		case 1:
+			offset, err = skipWASMTableType(section, offset)
+		case 2:
+			offset, err = skipWASMLimits(section, offset)
+		case 3:
+			if offset+2 > len(section) {
+				err = fmt.Errorf("truncated global type")
+			} else {
+				offset += 2
+			}
+		default:
+			err = fmt.Errorf("unknown import kind")
+		}
+		if err != nil {
+			return fmt.Errorf("artifactbundle: invalid WASM imports")
+		}
+	}
+	if offset != len(section) {
+		return fmt.Errorf("artifactbundle: invalid WASM imports")
+	}
+	return nil
+}
+
+func readWASMName(data []byte, offset int) (string, int, error) {
+	size, offset, err := readWASMU32(data, offset)
+	if err != nil || uint64(size) > uint64(len(data)-offset) {
+		return "", offset, fmt.Errorf("invalid name")
+	}
+	end := offset + int(size)
+	return string(data[offset:end]), end, nil
+}
+
+func skipWASMTableType(data []byte, offset int) (int, error) {
+	if offset >= len(data) {
+		return offset, fmt.Errorf("truncated table type")
+	}
+	return skipWASMLimits(data, offset+1)
+}
+
+func skipWASMLimits(data []byte, offset int) (int, error) {
+	flags, offset, err := readWASMU32(data, offset)
+	if err != nil {
+		return offset, err
+	}
+	if _, offset, err = readWASMU32(data, offset); err != nil {
+		return offset, err
+	}
+	if flags&1 != 0 {
+		_, offset, err = readWASMU32(data, offset)
+	}
+	return offset, err
+}
+
+func readWASMU32(data []byte, offset int) (uint32, int, error) {
+	var value uint32
+	for i := 0; i < 5; i++ {
+		if offset >= len(data) {
+			return 0, offset, fmt.Errorf("truncated integer")
+		}
+		part := data[offset]
+		offset++
+		if i == 4 && (part&0x80 != 0 || part > 1) {
+			return 0, offset, fmt.Errorf("integer overflow")
+		}
+		value |= uint32(part&0x7f) << (7 * i)
+		if part&0x80 == 0 {
+			return value, offset, nil
+		}
+	}
+	return 0, offset, fmt.Errorf("integer overflow")
 }
 
 func readEntry(file *zip.File, limit int64) ([]byte, error) {

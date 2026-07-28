@@ -57,6 +57,41 @@ func TestReadRejectsUnsafeAndInvalidWASMEntries(t *testing.T) {
 	}
 }
 
+func TestReadRejectsExplicitZeroResourceLimits(t *testing.T) {
+	for _, manifest := range []string{
+		`{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"test","game_version":"2.0.0","runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":0}}`,
+		`{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"test","game_version":"2.0.0","runtime":{"kind":"wasm-wasi","module":"module.wasm","timeout_ms":0}}`,
+		`{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"test","game_version":"2.0.0","rulesets":[{"ruleset_version":"1","player_count":0}],"runtime":{"kind":"wasm-wasi","module":"module.wasm"}}`,
+		`{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"test","game_version":"2.0.0","rulesets":[{"ruleset_version":"1","max_active_bots_per_owner":0}],"runtime":{"kind":"wasm-wasi","module":"module.wasm"}}`,
+	} {
+		if _, err := Read(testZIP(t, manifest)); err == nil {
+			t.Fatalf("Read accepted an explicit zero resource limit: %s", manifest)
+		}
+	}
+}
+
+func TestValidateWASMImportsRejectsNonWASIImportForEveryKind(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		kind byte
+		desc []byte
+	}{
+		{name: "function", kind: 0, desc: []byte{0}},
+		{name: "table", kind: 1, desc: []byte{0x70, 0, 0}},
+		{name: "memory", kind: 2, desc: []byte{0, 0}},
+		{name: "global", kind: 3, desc: []byte{0x7f, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			imports := append([]byte{1, 3, 'e', 'n', 'v', 1, 'x', tc.kind}, tc.desc...)
+			module := append([]byte{0, 97, 115, 109, 1, 0, 0, 0}, 2, byte(len(imports)))
+			module = append(module, imports...)
+			if err := validateWASMImports(module); err == nil {
+				t.Fatalf("validateWASMImports accepted a non-WASI %s import", tc.name)
+			}
+		})
+	}
+}
+
 func testZIP(t *testing.T, manifest string) []byte {
 	t.Helper()
 	var out bytes.Buffer

@@ -26,16 +26,30 @@ func (s *S3BundleStore) Put(ctx context.Context, bundle artifactbundle.Bundle) e
 	if err != nil {
 		return err
 	}
-	if existing, readErr := s.Read(ctx, bundle.Digest); readErr == nil {
+	for attempt := 0; attempt < 2; attempt++ {
+		created, putErr := s.store.PutBytesIfAbsent(ctx, key, bundle.Bytes, "application/zip")
+		if errors.Is(putErr, errS3ConditionalRequestConflict) {
+			continue
+		}
+		if putErr != nil {
+			return putErr
+		}
+		if created {
+			return nil
+		}
+		existing, readErr := s.Read(ctx, bundle.Digest)
+		if os.IsNotExist(readErr) {
+			continue
+		}
+		if readErr != nil {
+			return readErr
+		}
 		if !bytes.Equal(existing, bundle.Bytes) {
 			return fmt.Errorf("service: digest collision for %s", bundle.Digest)
 		}
 		return nil
-	} else if !os.IsNotExist(readErr) {
-		return readErr
 	}
-	_, err = s.store.PutBytes(ctx, key, bundle.Bytes, "application/zip")
-	return err
+	return fmt.Errorf("service: conditional bundle store retry exhausted for %s", bundle.Digest)
 }
 
 func (s *S3BundleStore) Read(ctx context.Context, digest string) ([]byte, error) {
