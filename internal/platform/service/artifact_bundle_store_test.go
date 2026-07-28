@@ -36,6 +36,39 @@ func TestFilesystemBundleStoreRoundTripAndMaterialize(t *testing.T) {
 	}
 }
 
+func TestS3BundleStoreDoesNotOverwriteExistingDigest(t *testing.T) {
+	data := bundleFixture(t)
+	bundle, err := artifactbundle.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifactStore, shutdown := newTestS3ArtifactStore(t)
+	defer shutdown()
+	store, err := NewS3BundleStore(artifactStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := store.Put(ctx, bundle); err != nil {
+		t.Fatalf("first Put() error = %v", err)
+	}
+	if err := store.Put(ctx, bundle); err != nil {
+		t.Fatalf("idempotent Put() error = %v", err)
+	}
+	conflicting := bundle
+	conflicting.Bytes = []byte("different bytes")
+	if err := store.Put(ctx, conflicting); err == nil {
+		t.Fatal("Put accepted conflicting bytes for an existing digest")
+	}
+	stored, err := store.Read(ctx, bundle.Digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(stored, bundle.Bytes) {
+		t.Fatal("Put overwrote the existing bundle bytes")
+	}
+}
+
 func bundleFixture(t *testing.T) []byte {
 	t.Helper()
 	var out bytes.Buffer

@@ -37,6 +37,10 @@ func TestArtifactAdmissionRegistersGameRelease(t *testing.T) {
 	if record.GameVersion != "2.1.0" || record.ArtifactID == "" {
 		t.Fatalf("record = %+v", record)
 	}
+	repeated, err := service.RegisterGameBundle(context.Background(), gameBundle(t))
+	if err != nil || repeated.ArtifactID != record.ArtifactID {
+		t.Fatalf("repeat = %+v, %v", repeated, err)
+	}
 }
 
 func gameBundle(t *testing.T) []byte {

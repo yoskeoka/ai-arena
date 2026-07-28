@@ -32,6 +32,8 @@ type RegistryKey struct {
 
 // BuildSpec captures the inputs required to build a game-master session.
 type BuildSpec struct {
+	// Context owns the lifetime of a constructed session, rather than only lookup.
+	Context     context.Context
 	GameVersion string
 	Ruleset     string
 	RNGSeed     string

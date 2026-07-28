@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,8 +27,30 @@ func (s *S3BundleStore) Put(ctx context.Context, bundle artifactbundle.Bundle) e
 	if err != nil {
 		return err
 	}
-	_, err = s.store.PutBytes(ctx, key, bundle.Bytes, "application/zip")
-	return err
+	for attempt := 0; attempt < 2; attempt++ {
+		created, putErr := s.store.PutBytesIfAbsent(ctx, key, bundle.Bytes, "application/zip")
+		if errors.Is(putErr, errS3ConditionalRequestConflict) {
+			continue
+		}
+		if putErr != nil {
+			return putErr
+		}
+		if created {
+			return nil
+		}
+		existing, readErr := s.Read(ctx, bundle.Digest)
+		if os.IsNotExist(readErr) {
+			continue
+		}
+		if readErr != nil {
+			return readErr
+		}
+		if !bytes.Equal(existing, bundle.Bytes) {
+			return fmt.Errorf("service: digest collision for %s", bundle.Digest)
+		}
+		return nil
+	}
+	return fmt.Errorf("service: conditional bundle store retry exhausted for %s", bundle.Digest)
 }
 
 func (s *S3BundleStore) Read(ctx context.Context, digest string) ([]byte, error) {
@@ -57,6 +81,9 @@ func (s *S3BundleStore) Materialize(ctx context.Context, digest, destination str
 		return "", fmt.Errorf("service: bundle module missing")
 	}
 	path := filepath.Join(destination, bundle.Manifest.Runtime.Module)
+	if err := os.WriteFile(filepath.Join(destination, "manifest.json"), artifactbundle.ManifestJSON(bundle.Manifest), 0o600); err != nil {
+		return "", err
+	}
 	// #nosec G703 -- module name is validated as a single root entry by artifactbundle.Read.
 	if err := os.WriteFile(path, module, 0o600); err != nil {
 		return "", err

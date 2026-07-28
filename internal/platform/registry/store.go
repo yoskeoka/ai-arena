@@ -32,6 +32,9 @@ func (s *InMemoryStore) Register(record DescriptorRecord) error {
 	}
 	for _, existing := range s.records[record.RegistryKey] {
 		if existing.GameVersion == record.GameVersion {
+			if existing.ArtifactID == record.ArtifactID && existing.BuilderID == record.BuilderID {
+				return nil
+			}
 			return fmt.Errorf("registry: duplicate descriptor release %s@%s", record.GameID, record.GameVersion)
 		}
 	}

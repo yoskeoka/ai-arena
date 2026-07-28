@@ -118,6 +118,13 @@ func newTestS3ArtifactStore(t *testing.T) (*S3ArtifactStore, func()) {
 				t.Fatalf("io.ReadAll(PUT) error = %v", err)
 			}
 			mu.Lock()
+			if r.Header.Get("If-None-Match") == "*" {
+				if _, exists := objects[key]; exists {
+					mu.Unlock()
+					w.WriteHeader(http.StatusPreconditionFailed)
+					return
+				}
+			}
 			objects[key] = body
 			mu.Unlock()
 			w.WriteHeader(http.StatusOK)
