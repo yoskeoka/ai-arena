@@ -230,6 +230,44 @@ export async function createAiSubmission(
   }
   throw createRestError(response);
 }
+export interface UploadAiBundleOptions extends OperationOptions {}
+export async function uploadAiBundle(
+  client: OperatorClientContext,
+  body: {
+    bundle: File;
+    gameRegistrationId: string;
+    displayName?: string;
+  },
+  options?: UploadAiBundleOptions,
+): Promise<AiSubmission> {
+  const path = parse("/api/v1/ai-bundles").expand({});
+  const httpRequestOptions = {
+    headers: {},
+    body: [
+      createFilePartDescriptor("bundle", body.bundle),
+      {
+        name: "game_registration_id",
+        body: body.gameRegistrationId,
+      },
+      {
+        name: "display_name",
+        body: body.displayName,
+      },
+    ],
+  };
+  const response = await client.pathUnchecked(path).post(httpRequestOptions);
+
+  if (typeof options?.operationOptions?.onResponse === "function") {
+    options?.operationOptions?.onResponse(response);
+  }
+  if (
+    +response.status === 201 &&
+    response.headers["content-type"]?.includes("application/json")
+  ) {
+    return jsonAiSubmissionToApplicationTransform(response.body)!;
+  }
+  throw createRestError(response);
+}
 export interface ListMatchRequestsOptions extends OperationOptions {}
 export async function listMatchRequests(
   client: OperatorClientContext,

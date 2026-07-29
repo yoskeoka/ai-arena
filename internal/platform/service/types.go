@@ -13,21 +13,23 @@ import (
 
 // MatchSubmission is one admitted request to execute a single match.
 type MatchSubmission struct {
-	RunID        string                `json:"run_id"`
-	MatchID      string                `json:"match_id"`
-	Game         contract.GameMetadata `json:"game"`
-	Players      []SubmittedPlayer     `json:"players"`
-	OutputDir    string                `json:"output_dir"`
-	AttemptCount int                   `json:"attempt_count"`
-	ParentRunID  string                `json:"parent_run_id,omitempty"`
-	RunKind      RunKind               `json:"run_kind"`
-	Official     bool                  `json:"official"`
+	RunID          string                `json:"run_id"`
+	MatchID        string                `json:"match_id"`
+	Game           contract.GameMetadata `json:"game"`
+	GameArtifactID string                `json:"game_artifact_id,omitempty"`
+	Players        []SubmittedPlayer     `json:"players"`
+	OutputDir      string                `json:"output_dir"`
+	AttemptCount   int                   `json:"attempt_count"`
+	ParentRunID    string                `json:"parent_run_id,omitempty"`
+	RunKind        RunKind               `json:"run_kind"`
+	Official       bool                  `json:"official"`
 }
 
-// SubmittedPlayer binds a player id to an opaque AI artifact reference.
+// SubmittedPlayer binds a player id to its immutable admitted AI artifact.
 type SubmittedPlayer struct {
 	PlayerID    string `json:"player_id"`
 	ArtifactRef string `json:"artifact_ref"`
+	ArtifactID  string `json:"artifact_id,omitempty"`
 }
 
 // RunKind identifies why one run exists inside a match run group.
@@ -173,8 +175,8 @@ func ValidateSubmission(submission MatchSubmission) error {
 		if strings.TrimSpace(player.PlayerID) == "" {
 			return fmt.Errorf("service: player_id is required")
 		}
-		if strings.TrimSpace(player.ArtifactRef) == "" {
-			return fmt.Errorf("service: artifact_ref is required for player %q", player.PlayerID)
+		if strings.TrimSpace(player.ArtifactRef) == "" && strings.TrimSpace(player.ArtifactID) == "" {
+			return fmt.Errorf("service: artifact identity is required for player %q", player.PlayerID)
 		}
 		if slices.Contains(playerIDs, player.PlayerID) {
 			return fmt.Errorf("service: duplicate player_id %q", player.PlayerID)

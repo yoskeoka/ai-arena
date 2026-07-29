@@ -216,6 +216,7 @@ type cliApp struct {
 	persister         service.TerminalPersister
 	auth              *service.AuthService
 	artifactAdmission *service.ArtifactAdmissionService
+	bundles           service.BundleStore
 	registry          *registry.Registry
 	baseDir           string
 	timeout           time.Duration
@@ -295,6 +296,7 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	if err != nil {
 		return nil, err
 	}
+	general.WithBundleStore(runtime.bundles)
 	requests, err := service.NewMatchRequestService(general, commands, store, nil)
 	if err != nil {
 		return nil, err
@@ -317,6 +319,7 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		persister:         runtime.persister,
 		auth:              auth,
 		artifactAdmission: artifactAdmission,
+		bundles:           runtime.bundles,
 		registry:          admissionRegistry,
 		baseDir:           baseDir,
 		timeout:           matchTimeout,
@@ -451,6 +454,7 @@ func (a *cliApp) newWorker() (*service.Worker, error) {
 	if err != nil {
 		return nil, err
 	}
+	invoker.WithBundleStore(a.bundles)
 	return service.NewWorker(a.queue, invoker, a.persister, a.rankings)
 }
 

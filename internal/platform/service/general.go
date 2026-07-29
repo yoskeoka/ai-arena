@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/yoskeoka/ai-arena/artifactbundle"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
@@ -58,6 +59,7 @@ type RegisteredAI struct {
 	GameRegistrationID string                `json:"game_registration_id"`
 	Game               contract.GameMetadata `json:"game"`
 	ArtifactRef        string                `json:"artifact_ref"`
+	ArtifactID         string                `json:"artifact_id,omitempty"`
 	DisplayName        string                `json:"display_name"`
 	RuntimeKind        runtime.Kind          `json:"runtime_kind"`
 	AIID               string                `json:"ai_id"`
@@ -101,6 +103,55 @@ type GeneralSubmissionService struct {
 	games               GameRegistrationStore
 	submissions         AISubmissionStore
 	newAISubmissionIDFn func() string
+	bundles             BundleStore
+}
+
+// WithBundleStore enables immutable AI bundle admission for this service.
+func (s *GeneralSubmissionService) WithBundleStore(bundles BundleStore) *GeneralSubmissionService {
+	s.bundles = bundles
+	return s
+}
+
+// RegisterAIBundle admits an immutable WASI AI bundle for a registered game.
+func (s *GeneralSubmissionService) RegisterAIBundle(ctx context.Context, req AISubmissionRequest, data []byte) (RegisteredAI, error) {
+	if s.bundles == nil {
+		return RegisteredAI{}, fmt.Errorf("service: AI bundle upload is not configured")
+	}
+	game, err := s.games.Get(ctx, strings.TrimSpace(req.GameRegistrationID))
+	if err != nil {
+		return RegisteredAI{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
+	}
+	bundle, err := artifactbundle.Read(data)
+	if err != nil {
+		return RegisteredAI{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
+	}
+	if bundle.Manifest.ArtifactKind != "ai" || bundle.Manifest.GameID != game.Game.GameID {
+		return RegisteredAI{}, fmt.Errorf("%w: service: AI bundle is incompatible with game registration", ErrBadRequest)
+	}
+	major, err := catalog.MajorVersion(bundle.Manifest.GameVersion)
+	if err != nil {
+		return RegisteredAI{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
+	}
+	expectedMajor, _ := catalog.MajorVersion(game.Game.GameVersion)
+	if major != expectedMajor {
+		return RegisteredAI{}, fmt.Errorf("%w: service: AI bundle game version is incompatible", ErrBadRequest)
+	}
+	if err := s.bundles.Put(ctx, bundle); err != nil {
+		return RegisteredAI{}, err
+	}
+	id := strings.TrimSpace(req.AISubmissionID)
+	if id == "" {
+		id = s.newAISubmissionIDFn()
+	}
+	name := strings.TrimSpace(req.DisplayName)
+	if name == "" {
+		name = bundle.Manifest.AIID
+	}
+	record := RegisteredAI{AISubmissionID: id, GameRegistrationID: game.RegistrationID, Game: game.Game, ArtifactID: bundle.Digest, DisplayName: name, RuntimeKind: runtime.KindWASMWASI, AIID: bundle.Manifest.AIID, ValidationState: ValidationReady, Source: SourceManual}
+	if err := s.submissions.Save(ctx, record); err != nil {
+		return RegisteredAI{}, wrapConflict(err)
+	}
+	return record, nil
 }
 
 // NewGeneralSubmissionService constructs the general-lane registration service.

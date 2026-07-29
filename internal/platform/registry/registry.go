@@ -79,6 +79,11 @@ type RegistryStore interface {
 	Lookup(context.Context, RegistryKey) (DescriptorRecord, error)
 }
 
+// ArtifactRecordLookup resolves one exact admitted artifact identity.
+type ArtifactRecordLookup interface {
+	LookupArtifact(context.Context, string) (DescriptorRecord, error)
+}
+
 // DescriptorResolver materializes a descriptor from stored metadata.
 type DescriptorResolver interface {
 	Resolve(context.Context, DescriptorRecord) (GameDescriptor, error)
@@ -132,6 +137,19 @@ func (r *Registry) LookupVersion(ctx context.Context, gameID, gameVersion string
 		GameID:           gameID,
 		GameVersionMajor: major,
 	})
+}
+
+// LookupArtifact resolves the exact descriptor admitted for an immutable digest.
+func (r *Registry) LookupArtifact(ctx context.Context, artifactID string) (GameDescriptor, error) {
+	lookup, ok := r.store.(ArtifactRecordLookup)
+	if !ok {
+		return GameDescriptor{}, fmt.Errorf("registry: configured store cannot look up artifact identity")
+	}
+	record, err := lookup.LookupArtifact(ctx, artifactID)
+	if err != nil {
+		return GameDescriptor{}, err
+	}
+	return r.resolver.Resolve(ctx, record)
 }
 
 // Default returns the process-wide default registry.

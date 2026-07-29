@@ -6,6 +6,52 @@
   },
   "tags": [],
   "paths": {
+    "/api/v1/ai-bundles": {
+      "post": {
+        "operationId": "Operator_uploadAIBundle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.AISubmission"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "game_registration_id": {
+                    "type": "string"
+                  },
+                  "display_name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["bundle", "game_registration_id"]
+              },
+              "encoding": {
+                "bundle": {
+                  "contentType": "*/*"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai-submissions": {
       "get": {
         "operationId": "Operator_listAISubmissions",
@@ -524,6 +570,9 @@
             "$ref": "#/components/schemas/Shared.GameMetadata"
           },
           "artifact_ref": {
+            "type": "string"
+          },
+          "artifact_id": {
             "type": "string"
           },
           "display_name": {

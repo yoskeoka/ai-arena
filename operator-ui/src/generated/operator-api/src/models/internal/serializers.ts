@@ -372,7 +372,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    ai_submission_id: input_.aiSubmissionId,game_registration_id: input_.gameRegistrationId,game: jsonGameMetadataToTransportTransform(input_.game),artifact_ref: input_.artifactRef,display_name: input_.displayName,runtime_kind: input_.runtimeKind,ai_id: input_.aiId,validation_state: input_.validationState,source: input_.source,source_id: input_.sourceId
+    ai_submission_id: input_.aiSubmissionId,game_registration_id: input_.gameRegistrationId,game: jsonGameMetadataToTransportTransform(input_.game),artifact_ref: input_.artifactRef,artifact_id: input_.artifactId,display_name: input_.displayName,runtime_kind: input_.runtimeKind,ai_id: input_.aiId,validation_state: input_.validationState,source: input_.source,source_id: input_.sourceId
   }!;
 }export function jsonAiSubmissionToApplicationTransform(
   input_?: any,
@@ -381,7 +381,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    aiSubmissionId: input_.ai_submission_id,gameRegistrationId: input_.game_registration_id,game: jsonGameMetadataToApplicationTransform(input_.game),artifactRef: input_.artifact_ref,displayName: input_.display_name,runtimeKind: input_.runtime_kind,aiId: input_.ai_id,validationState: input_.validation_state,source: input_.source,sourceId: input_.source_id
+    aiSubmissionId: input_.ai_submission_id,gameRegistrationId: input_.game_registration_id,game: jsonGameMetadataToApplicationTransform(input_.game),artifactRef: input_.artifact_ref,artifactId: input_.artifact_id,displayName: input_.display_name,runtimeKind: input_.runtime_kind,aiId: input_.ai_id,validationState: input_.validation_state,source: input_.source,sourceId: input_.source_id
   }!;
 }export function jsonAiSubmissionRequestToTransportTransform(
   input_?: AiSubmissionRequest | null,
