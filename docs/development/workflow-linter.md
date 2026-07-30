@@ -19,4 +19,5 @@
 - active exec-plans under `docs/exec-plan/todo/` use `<sequence>-<name>.md`
 - active issues under `docs/issues/` use `<sequence>-<name>.md`
 - execution branches map by the `-<name>.md` suffix
-- historical files already under `docs/issues/done/` keep their existing names
+- When execution completes, delete the matching plan and any resolved linked local issues. The linter reconstructs `Addresses:` from the deleted plan on the merge base to validate closure.
+- Track completed task artifacts via the plan PR, implementation PR, or Git history. Record long-lived decisions/contracts/operational knowledge in specs, ADRs, code, or appropriate development docs.

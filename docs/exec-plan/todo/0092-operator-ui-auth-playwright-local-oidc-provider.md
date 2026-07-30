@@ -160,7 +160,7 @@ Addresses: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
 - depends on: `docs/specs/platform-product-auth.md`
 - depends on: `docs/specs/platform-service-operator-ui.md`
 - depends on: `docs/issues/0030-operator-ui-playwright-auth-coverage-gap.md`
-- depends on: `docs/exec-plan/done/0089-oauth-library-adoption.md`
+- depends on: OAuth library adoption の実装 PR と Git 履歴
 
 ## Verification
 
