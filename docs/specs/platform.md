@@ -148,10 +148,11 @@ registry 内部の流れは `lookup persisted record -> resolve runtime descript
 の順とする。runner / replay は runtime descriptor を受け取るだけで、in-memory store /
 DB-backed store の違いを意識しない。
 
-runner は opt-in dev entry として game master manifest file を受け取ってよい。
-manifest が与えられた場合、runner は built-in persisted record lookup の代わりに
+runner は dev-only の game master manifest file と、consumer-facing local verification 用の検証済み game bundle ZIP を
+別々の opt-in input として受け取ってよい。manifest または ZIP が与えられた場合、runner は built-in persisted record lookup の代わりに
 runner-local overlay descriptor を構築し、その descriptor を以後の build / compatibility /
-match execution へ流す。
+match execution へ流す。ZIP 入力は archive / manifest / WASI policy を検証した exact bytes だけを
+worker-private directory に materialize し、host filesystem / network capability を与えない WASI runtime で起動する。
 
 この経路でも replay/debug entrypoint は既存 artifact contract のまま扱う。
 
@@ -160,8 +161,10 @@ match execution へ流す。
   compatibility check したうえで resume / replay source として使う
 - `--history-input` は manifest metadata を source of truth にした history replay build へ流す
 
-`--game-master-manifest` は引き続き `--game` / `--game-version` / `--ruleset` とは排他的とする。
-一方で replay/debug input flag との組み合わせは許可してよい。
+`--game-master-manifest` と game bundle ZIP 入力は、いずれも `--game` / `--game-version` / `--ruleset` と
+排他的とする。manifest と ZIP も同時には指定できない。一方で replay/debug input flag との組み合わせは
+許可してよい。ただし ZIP-backed game master が history replay を実装していない場合、history/record からの
+reconstruction は fail-fast し、fresh run と snapshot resume の可否を曖昧にしてはならない。
 
 service が runner result を file-backed first で受け取るとき、標準 artifact layout は
 `record.json`、`result-summary.json`、`snapshot.json`、`exported-snapshot.json`、`history.json`
@@ -681,6 +684,7 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--ruleset <ruleset-version>`
 - `--rng-seed <seed>` は省略可能で、runner はこれを opaque string として game master へ渡せる
 - `--player player_id=entry-path`
+- `--player-bundle player_id=zip-path` は validator 済み `arena-bundle/v1` AI ZIP を指定する repeatable input とする
 - `--match-id <id>` は省略可能
 - `--output-dir <dir>` は標準 artifact layout の base directory を指定する。省略時は `arena-runner-output` を使う
 - `--log-output <target>` は file path または `stdout` を受け付け、省略時は `stdout` を使う
@@ -695,6 +699,8 @@ Phase 2a の black-box verification は `arena-runner` を入口にする。
 - `--game-master-manifest <path>` は built-in lookup の代わりに manifest overlay descriptor を選ぶ opt-in dev entry であり、
   `--game` / `--game-version` / `--ruleset` とは排他的だが、`--snapshot-input` / `--history-input` /
   `--record-input` / `--target-turn` とは組み合わせてよい
+- `--game-master-bundle <zip-path>` は built-in lookup の代わりに validator 済み `arena-bundle/v1` game ZIP を選ぶ
+  opt-in local entry であり、manifest overlay と `--game` / `--game-version` / `--ruleset` とは排他的とする
 
 targeted verification の想定:
 
@@ -805,6 +811,11 @@ artifact 読取既定順:
 AI metadata 読み取り:
 
 - `--player` で指定した実行物の横に `<entry>.arena.json` があれば、それを優先して読む
+- `--player-bundle` は ZIP 自身の manifest を metadata source of truth とし、artifact kind が `ai` であることと
+  selected game の `game_id`、game-version major の互換性を match loop 開始前に検証する。ruleset は game bundle 側で
+  選択・検証し、AI bundle v1 が ruleset target を持たない限り artifact metadata だけから未宣言の ruleset 互換性を推測しない
+- `--player` と `--player-bundle` は同じ match 内で混在してよい。全入力をまたいで `player_id` は一意でなければならず、
+  legacy entry の sidecar/local fallback と bundle の runtime をそれぞれ独立 session として起動する
 - sidecar がある場合、runner は `runtime.kind` を解決し、kind ごとに必要な entrypoint 情報を読む
 - sidecar がある場合、`protocol.game_id` / `game_version` / `ruleset_version` を compatibility 判定に使う
 - sidecar がない場合、`local-subprocess` fallback として entry-path 自体を実行コマンドとし、protocol metadata は match 側設定と同一でなければならない
