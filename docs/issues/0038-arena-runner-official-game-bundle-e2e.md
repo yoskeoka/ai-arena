@@ -1,4 +1,4 @@
-# arena-runner の official game bundle E2E 経路
+# arena-runner-official-game-bundle-e2e
 
 ## Summary
 
