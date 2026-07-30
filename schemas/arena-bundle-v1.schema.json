@@ -5,6 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "artifact_kind", "runtime"],
+  "allOf": [{"if": {"properties": {"artifact_kind": {"const": "ai"}}}, "then": {"required": ["ai_id"]}}],
   "properties": {
     "schema_version": {"const": "arena-bundle/v1"},
     "artifact_kind": {"enum": ["game", "ai"]},

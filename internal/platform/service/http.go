@@ -188,9 +188,13 @@ func (a *OperatorAPI) handleAIBundleUpload(w http.ResponseWriter, r *http.Reques
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
 	// #nosec G120 -- MaxBytesReader above caps the complete multipart request body.
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 	file, _, err := r.FormFile("bundle")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("service: bundle file is required: %w", err))
@@ -218,9 +222,13 @@ func (a *OperatorAPI) handleGameBundleUpload(w http.ResponseWriter, r *http.Requ
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
 	// #nosec G120 -- MaxBytesReader above caps the complete request body.
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 	file, _, err := r.FormFile("bundle")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("service: bundle file is required: %w", err))

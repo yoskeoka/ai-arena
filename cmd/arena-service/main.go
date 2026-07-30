@@ -280,6 +280,7 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	if err != nil {
 		return nil, err
 	}
+	dryRun.WithBundleStore(runtime.bundles)
 	admissionRegistry, err := registry.NewWASIOverlay(runtime.bundles)
 	if err != nil {
 		return nil, err

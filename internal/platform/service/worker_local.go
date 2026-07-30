@@ -121,8 +121,8 @@ func (i *LocalRunnerInvoker) loadPlayersAndSessions(ctx context.Context, submiss
 				closeSessions(sessions)
 				return nil, nil, err
 			}
-			players = append(players, game.Player{PlayerID: submitted.PlayerID, AIID: submitted.PlayerID})
-			sessions[submitted.PlayerID] = session.New(adapter)
+			players = append(players, game.Player{PlayerID: submitted.PlayerID, AIID: submitted.ArtifactID})
+			sessions[submitted.PlayerID] = &materializedPlayerSession{PlayerSession: session.New(adapter), dir: dir}
 			continue
 		}
 		entryPath, err := resolveLocalArtifactRef(i.baseDir, submitted.ArtifactRef)
@@ -150,6 +150,20 @@ func (i *LocalRunnerInvoker) loadPlayersAndSessions(ctx context.Context, submiss
 		sessions[submitted.PlayerID] = session.New(adapter)
 	}
 	return players, sessions, nil
+}
+
+type materializedPlayerSession struct {
+	match.PlayerSession
+	dir string
+}
+
+func (s *materializedPlayerSession) Close(ctx context.Context) error {
+	closeErr := s.PlayerSession.Close(ctx)
+	removeErr := os.RemoveAll(s.dir)
+	if closeErr != nil {
+		return closeErr
+	}
+	return removeErr
 }
 
 // LocalTerminalPersister writes standard artifacts plus per-player stderr logs under output_dir.

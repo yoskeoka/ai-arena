@@ -70,6 +70,13 @@ func TestReadRejectsExplicitZeroResourceLimits(t *testing.T) {
 	}
 }
 
+func TestReadRejectsAIWithoutAIID(t *testing.T) {
+	data := testZIP(t, `{"schema_version":"arena-bundle/v1","artifact_kind":"ai","game_id":"test","game_version":"2.0.0","runtime":{"kind":"wasm-wasi","module":"module.wasm"}}`)
+	if _, err := Read(data); err == nil {
+		t.Fatal("Read accepted AI bundle without ai_id")
+	}
+}
+
 func TestValidateWASMImportsRejectsNonWASIImportForEveryKind(t *testing.T) {
 	for _, tc := range []struct {
 		name string

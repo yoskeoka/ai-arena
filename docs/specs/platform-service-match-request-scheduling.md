@@ -105,7 +105,7 @@ request を受け付けるときは、少なくとも次を同期的に確認し
 - participant の admitted game metadata が request の registered game metadata と矛盾しないこと
 - `output_dir` が run の terminal persist target として受け入れ可能であること
 
-validation 成功後に scheduling された request は、selected game release と participant の admitted AI revision の digest を snapshot して 1 件の initial run へ具体化される。queue record はこの snapshot を worker handoff の正本とし、mutable path / URL を実行入力に含めない。
+validation 成功後に scheduling された request は、selected game release と participant の admitted AI revision の digest を snapshot して 1 件の initial run へ具体化される。admitted AI digest を持つ participant は、その digest が保存済みの AI bundle を指すことを admission 時に確認する。queue record はこの snapshot を worker handoff の正本とし、mutable path / URL を実行入力に含めない。
 
 ## Preset Lane との関係
 
