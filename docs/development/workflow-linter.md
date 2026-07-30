@@ -19,4 +19,5 @@
 - active exec-plans under `docs/exec-plan/todo/` use `<sequence>-<name>.md`
 - active issues under `docs/issues/` use `<sequence>-<name>.md`
 - execution branches map by the `-<name>.md` suffix
-- historical files already under `docs/issues/done/` keep their existing names
+- 実行完了時は matching plan と解決済みの linked local issue を削除する。linter は merge-base 側の削除済み plan から `Addresses:` を復元して検査する。
+- 完了済み task tracker は plan PR、実装 PR、または Git 履歴で追跡する。永続的な判断は仕様、ADR、コード、または開発文書に残す。

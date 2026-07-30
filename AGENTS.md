@@ -42,3 +42,9 @@
 
 - When an ai-arena PR updates a deterministic regression golden, use the ai-arena local `.github/PULL_REQUEST_TEMPLATE.md` section for that update, check the golden-update box, and explain why the update is allowed.
 - The same PR must also make that update reason explicit in the relevant spec and/or exec-plan, rather than leaving the rationale only in the PR body.
+
+## Workflow Artifact Retention
+
+- 通常の検索対象は active な `docs/exec-plan/todo/` と未解決の `docs/issues/` に限定する。
+- 実行完了後は matching plan と解決済みの linked local issue を実装 PR で削除する。完了記録は plan PR、実装 PR、Git 履歴から参照する。
+- 長期に残す判断・契約・運用上の知見は task tracker の複写ではなく、仕様、ADR、コード、または適切な開発文書に記録する。

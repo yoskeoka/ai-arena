@@ -93,8 +93,8 @@ If no deterministic golden changed, leave the box unchecked and write N/A below.
 
 - [ ] Branch created from latest `origin/main`
 - [ ] `docs/specs/` updated (Spec-Code Parity) — _if code changed_
-- [ ] Plan moved from `todo/` to `done/` — _if executing a plan_
-- [ ] Resolved linked local issues from the plan's `Addresses:` line were moved to `docs/issues/done/`, or this PR explains why they remain open
+- [ ] Matching plan deleted from `docs/exec-plan/todo/` — _if executing a plan_
+- [ ] Resolved linked local issues from the plan's `Addresses:` line were deleted, or this PR explains why they remain open
 - [ ] Workflow-linter warnings reviewed; all `fixable` warnings were resolved or explicitly justified in this PR
 - [ ] New issues logged in `docs/issues/` — _if discovered during work_
 - [ ] No unresolved blockers remain
