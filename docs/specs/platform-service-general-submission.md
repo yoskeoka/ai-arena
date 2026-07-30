@@ -69,7 +69,7 @@
   - `game_id`
   - `game_version`
   - `ruleset_version`
-- `artifact_ref`
+- `artifact_id`
 - `display_name`
 - `runtime_kind`
 - `ai_id`
@@ -101,10 +101,9 @@ validation 後に保存する metadata view は、lookup 結果の plain-data pr
 `AI submission` を受け付けるときは、少なくとも次を同期的に確認しなければならない。
 
 - 参照先 `game_registration_id` が存在すること
-- `artifact_ref` がその lane で解決可能であること
-- sidecar manifest または fallback runtime から得られる metadata が
-  registration の `game` と互換であること
-- runtime entrypoint が最小 startability を満たすこと
+- upload された immutable AI bundle が admission 済みであること
+- AI bundle の `ai_id`、game id、semver major、ruleset が registration の `game` と互換であること
+- bundle が WASI runtime として起動可能であること
 
 validation 成功後は `ai_id` と `runtime_kind` を registration record と一緒に exposed してよい。
 
@@ -118,7 +117,7 @@ preset から queue へ積むとき、service は少なくとも次の変換点�
 
 1. preset definition から `game registration` identity を materialize する
 2. preset participant ごとに `AI submission` identity を materialize する
-3. queue へ積む 1 試合要求は、materialized entity と同じ `game` / `artifact_ref` を参照する
+3. queue へ積む 1 試合要求は、materialized entity と同じ immutable game / AI artifact digest を参照する
 
 この変換により、preset lane は first remote landing の bootstrap に留めつつ、
 後続の `match request` / scheduling lane が参照する stable identity を先に固定できる。

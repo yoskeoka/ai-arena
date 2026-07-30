@@ -27,6 +27,7 @@ const (
 type Manifest struct {
 	SchemaVersion string `json:"schema_version"`
 	ArtifactKind  string `json:"artifact_kind"`
+	AIID          string `json:"ai_id,omitempty"`
 	GameID        string `json:"game_id"`
 	GameVersion   string `json:"game_version"`
 	Rulesets      []struct {
@@ -140,6 +141,9 @@ func Read(data []byte) (Bundle, error) {
 func validateManifest(m Manifest, raw []byte) error {
 	if m.SchemaVersion != SchemaVersion || (m.ArtifactKind != "game" && m.ArtifactKind != "ai") || m.GameID == "" || m.GameVersion == "" || m.Runtime.Kind != "wasm-wasi" || m.Runtime.Module == "" || m.Runtime.Module != path.Base(m.Runtime.Module) || strings.Contains(m.Runtime.Module, "\\") {
 		return fmt.Errorf("artifactbundle: unsupported manifest")
+	}
+	if m.ArtifactKind == "ai" && strings.TrimSpace(m.AIID) == "" {
+		return fmt.Errorf("artifactbundle: ai bundle ai_id is required")
 	}
 	if m.Runtime.MemoryLimitPages > 1024 || m.Runtime.TimeoutMS > 600000 {
 		return fmt.Errorf("artifactbundle: runtime budget exceeds policy")

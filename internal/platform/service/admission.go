@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/yoskeoka/ai-arena/artifactbundle"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
@@ -58,6 +59,7 @@ func (v *DefaultAdmissionValidator) Validate(ctx context.Context, submission Mat
 // LocalDryRunChecker resolves local artifact locators and verifies minimal runtime startability.
 type LocalDryRunChecker struct {
 	baseDir string
+	bundles BundleStore
 }
 
 // NewLocalDryRunChecker constructs the initial local file-backed dry-run validator.
@@ -68,13 +70,36 @@ func NewLocalDryRunChecker(baseDir string) (*LocalDryRunChecker, error) {
 	return &LocalDryRunChecker{baseDir: baseDir}, nil
 }
 
+// WithBundleStore enables admission checks for digest-identified AI bundles.
+func (c *LocalDryRunChecker) WithBundleStore(bundles BundleStore) *LocalDryRunChecker {
+	c.bundles = bundles
+	return c
+}
+
 // Check validates local artifact locator resolution and runtime entrypoint existence.
-func (c *LocalDryRunChecker) Check(_ context.Context, submission MatchSubmission) error {
+func (c *LocalDryRunChecker) Check(ctx context.Context, submission MatchSubmission) error {
 	if looksLikeURI(submission.OutputDir) {
 		return fmt.Errorf("service: output_dir must be a local path")
 	}
 
 	for _, player := range submission.Players {
+		if strings.TrimSpace(player.ArtifactID) != "" {
+			if c.bundles == nil {
+				return fmt.Errorf("service: %s admission failed: artifact bundle store is not configured", player.PlayerID)
+			}
+			data, err := c.bundles.Read(ctx, player.ArtifactID)
+			if err != nil {
+				return fmt.Errorf("service: %s admission failed: read artifact bundle: %w", player.PlayerID, err)
+			}
+			bundle, err := artifactbundle.Read(data)
+			if err != nil {
+				return fmt.Errorf("service: %s admission failed: invalid artifact bundle: %w", player.PlayerID, err)
+			}
+			if bundle.Digest != player.ArtifactID || bundle.Manifest.ArtifactKind != "ai" {
+				return fmt.Errorf("service: %s admission failed: artifact_id is not an AI bundle", player.PlayerID)
+			}
+			continue
+		}
 		if _, err := validateRegisteredArtifact(c.baseDir, submission.Game, player.ArtifactRef); err != nil {
 			return fmt.Errorf("service: %s admission failed: %w", player.PlayerID, err)
 		}

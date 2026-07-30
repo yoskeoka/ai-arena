@@ -56,3 +56,17 @@ func gameBundle(t *testing.T) []byte {
 	}
 	return out.Bytes()
 }
+
+func aiBundle(t *testing.T) []byte {
+	t.Helper()
+	var out bytes.Buffer
+	writer := zip.NewWriter(&out)
+	entry, _ := writer.Create("manifest.json")
+	_, _ = entry.Write([]byte(`{"schema_version":"arena-bundle/v1","artifact_kind":"ai","ai_id":"test-ai","game_id":"janken","game_version":"2.1.0","runtime":{"kind":"wasm-wasi","module":"module.wasm"}}`))
+	entry, _ = writer.Create("module.wasm")
+	_, _ = entry.Write([]byte{0, 97, 115, 109, 1, 0, 0, 0})
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
+}

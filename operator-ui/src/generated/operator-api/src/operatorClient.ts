@@ -42,6 +42,8 @@ import {
   type RetryRunOptions,
   session,
   type SessionOptions,
+  uploadAiBundle,
+  type UploadAiBundleOptions,
   uploadGameBundle,
   type UploadGameBundleOptions,
 } from "./api/operatorClientOperations.js";
@@ -94,6 +96,16 @@ export class OperatorClient {
     options?: CreateAiSubmissionOptions,
   ) {
     return createAiSubmission(this.#context, body, options);
+  };
+  async uploadAiBundle(
+    body: {
+        bundle: File;
+        gameRegistrationId: string;
+        displayName?: string;
+      },
+    options?: UploadAiBundleOptions,
+  ) {
+    return uploadAiBundle(this.#context, body, options);
   };
   async listMatchRequests(options?: ListMatchRequestsOptions) {
     return listMatchRequests(this.#context, options);

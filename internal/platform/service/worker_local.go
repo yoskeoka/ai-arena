@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -23,6 +24,13 @@ type LocalRunnerInvoker struct {
 	registry         *registry.Registry
 	stderrLimitBytes int
 	matchTimeout     time.Duration
+	bundles          BundleStore
+}
+
+// WithBundleStore enables digest-only WASI player materialization.
+func (i *LocalRunnerInvoker) WithBundleStore(bundles BundleStore) *LocalRunnerInvoker {
+	i.bundles = bundles
+	return i
 }
 
 // NewLocalRunnerInvoker constructs the initial local file-backed runner invoker.
@@ -51,7 +59,13 @@ func (i *LocalRunnerInvoker) Run(ctx context.Context, req ExecutionRequest) (Exe
 	}
 	defer cancel()
 
-	descriptor, err := i.registry.LookupVersion(runCtx, submission.Game.GameID, submission.Game.GameVersion)
+	var descriptor registry.GameDescriptor
+	var err error
+	if submission.GameArtifactID != "" {
+		descriptor, err = i.registry.LookupArtifact(runCtx, submission.GameArtifactID)
+	} else {
+		descriptor, err = i.registry.LookupVersion(runCtx, submission.Game.GameID, submission.Game.GameVersion)
+	}
 	if err != nil {
 		return ExecutionResult{}, err
 	}
@@ -88,6 +102,29 @@ func (i *LocalRunnerInvoker) loadPlayersAndSessions(ctx context.Context, submiss
 	players := make([]game.Player, 0, len(submission.Players))
 	sessions := make(map[string]match.PlayerSession, len(submission.Players))
 	for _, submitted := range submission.Players {
+		if submitted.ArtifactID != "" && i.bundles != nil {
+			dir, err := os.MkdirTemp("", "ai-arena-ai-")
+			if err != nil {
+				closeSessions(sessions)
+				return nil, nil, err
+			}
+			module, err := i.bundles.Materialize(ctx, submitted.ArtifactID, dir)
+			if err != nil {
+				_ = os.RemoveAll(dir)
+				closeSessions(sessions)
+				return nil, nil, fmt.Errorf("service: %s bundle materialize failed: %w", submitted.PlayerID, err)
+			}
+			cfg := runtime.Config{Kind: runtime.KindWASMWASI, ModulePath: module, Dir: dir, StderrLimitBytes: i.stderrLimitBytes}
+			adapter, err := runtime.Start(ctx, cfg)
+			if err != nil {
+				_ = os.RemoveAll(dir)
+				closeSessions(sessions)
+				return nil, nil, err
+			}
+			players = append(players, game.Player{PlayerID: submitted.PlayerID, AIID: submitted.ArtifactID})
+			sessions[submitted.PlayerID] = &materializedPlayerSession{PlayerSession: session.New(adapter), dir: dir}
+			continue
+		}
 		entryPath, err := resolveLocalArtifactRef(i.baseDir, submitted.ArtifactRef)
 		if err != nil {
 			closeSessions(sessions)
@@ -113,6 +150,20 @@ func (i *LocalRunnerInvoker) loadPlayersAndSessions(ctx context.Context, submiss
 		sessions[submitted.PlayerID] = session.New(adapter)
 	}
 	return players, sessions, nil
+}
+
+type materializedPlayerSession struct {
+	match.PlayerSession
+	dir string
+}
+
+func (s *materializedPlayerSession) Close(ctx context.Context) error {
+	closeErr := s.PlayerSession.Close(ctx)
+	removeErr := os.RemoveAll(s.dir)
+	if closeErr != nil {
+		return closeErr
+	}
+	return removeErr
 }
 
 // LocalTerminalPersister writes standard artifacts plus per-player stderr logs under output_dir.

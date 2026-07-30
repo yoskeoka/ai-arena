@@ -160,6 +160,7 @@ func (a *OperatorAPI) Handler() http.Handler {
 	protected.HandleFunc("POST /api/v1/signup-invites", a.handleSignupInvites)
 	protected.HandleFunc("/api/v1/game-registrations", a.handleGameRegistrations)
 	protected.HandleFunc("/api/v1/ai-submissions", a.handleAISubmissions)
+	protected.HandleFunc("POST /api/v1/ai-bundles", a.handleAIBundleUpload)
 	protected.HandleFunc("POST /api/v1/game-bundles", a.handleGameBundleUpload)
 	protected.HandleFunc("/api/v1/match-requests", a.handleMatchRequests)
 	protected.HandleFunc("GET /api/v1/rankings", a.handleRankings)
@@ -179,6 +180,40 @@ func (a *OperatorAPI) Handler() http.Handler {
 	return withOperatorCORS(mux)
 }
 
+func (a *OperatorAPI) handleAIBundleUpload(w http.ResponseWriter, r *http.Request) {
+	if a.general.bundles == nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("service: AI bundle upload is not configured"))
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
+	// #nosec G120 -- MaxBytesReader above caps the complete multipart request body.
+	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+	file, _, err := r.FormFile("bundle")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("service: bundle file is required: %w", err))
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	record, err := a.general.RegisterAIBundle(r.Context(), AISubmissionRequest{GameRegistrationID: r.FormValue("game_registration_id"), DisplayName: r.FormValue("display_name")}, data)
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, record)
+}
+
 func (a *OperatorAPI) handleGameBundleUpload(w http.ResponseWriter, r *http.Request) {
 	if a.artifactAdmission == nil {
 		writeError(w, http.StatusNotFound, fmt.Errorf("service: artifact upload is not configured"))
@@ -187,9 +222,13 @@ func (a *OperatorAPI) handleGameBundleUpload(w http.ResponseWriter, r *http.Requ
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
 	// #nosec G120 -- MaxBytesReader above caps the complete request body.
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 	file, _, err := r.FormFile("bundle")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("service: bundle file is required: %w", err))

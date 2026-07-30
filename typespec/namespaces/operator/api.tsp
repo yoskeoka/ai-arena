@@ -32,6 +32,13 @@ op listAISubmissions(): AISubmissionListResponse;
 @post
 op createAISubmission(@body body: AISubmissionRequest): AISubmission;
 
+@route("/api/v1/ai-bundles")
+@post
+op uploadAIBundle(@multipartBody body: { bundle: HttpPart<File>; game_registration_id: HttpPart<string>; display_name?: HttpPart<string>; }): {
+  @statusCode statusCode: 201;
+  @body body: AISubmission;
+};
+
 @route("/api/v1/match-requests")
 @get
 op listMatchRequests(): MatchRequestListResponse;

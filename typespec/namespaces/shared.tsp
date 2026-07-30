@@ -157,6 +157,7 @@ model AISubmission {
   game_registration_id: string;
   game: GameMetadata;
   artifact_ref: string;
+  artifact_id?: string;
   display_name: string;
   runtime_kind: string;
   ai_id: string;

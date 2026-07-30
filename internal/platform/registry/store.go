@@ -57,6 +57,18 @@ func (s *InMemoryStore) Lookup(_ context.Context, key RegistryKey) (DescriptorRe
 	return copyDescriptorRecord(latestRelease(releases)), nil
 }
 
+// LookupArtifact finds an exact admitted release by its immutable digest.
+func (s *InMemoryStore) LookupArtifact(_ context.Context, artifactID string) (DescriptorRecord, error) {
+	for _, releases := range s.records {
+		for _, record := range releases {
+			if record.ArtifactID == artifactID {
+				return copyDescriptorRecord(record), nil
+			}
+		}
+	}
+	return DescriptorRecord{}, fmt.Errorf("registry: unsupported artifact %q", artifactID)
+}
+
 func (s *InMemoryStore) hasGameID(gameID string) bool {
 	for key := range s.records {
 		if key.GameID == gameID {

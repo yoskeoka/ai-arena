@@ -130,6 +130,7 @@ export interface AiSubmission {
   gameRegistrationId: string;
   game: GameMetadata;
   artifactRef: string;
+  artifactId?: string;
   displayName: string;
   runtimeKind: string;
   aiId: string;

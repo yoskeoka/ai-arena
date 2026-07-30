@@ -111,13 +111,14 @@ func (s *MatchRequestService) Create(ctx context.Context, req MatchRequestCreate
 		matchID = s.newMatchIDFn()
 	}
 	submission := MatchSubmission{
-		RunID:        s.newRunIDFn(),
-		MatchID:      matchID,
-		Game:         game.Game,
-		Players:      players,
-		OutputDir:    strings.TrimSpace(req.OutputDir),
-		AttemptCount: 1,
-		RunKind:      RunKindInitial,
+		RunID:          s.newRunIDFn(),
+		MatchID:        matchID,
+		Game:           game.Game,
+		GameArtifactID: gameArtifactID(game),
+		Players:        players,
+		OutputDir:      strings.TrimSpace(req.OutputDir),
+		AttemptCount:   1,
+		RunKind:        RunKindInitial,
 	}
 	record, err := s.commands.Submit(ctx, submission)
 	if err != nil {
@@ -252,9 +253,17 @@ func (s *MatchRequestService) resolveParticipants(ctx context.Context, gameRegis
 		players = append(players, SubmittedPlayer{
 			PlayerID:    playerID,
 			ArtifactRef: ai.ArtifactRef,
+			ArtifactID:  ai.ArtifactID,
 		})
 	}
 	return players, nil
+}
+
+func gameArtifactID(game RegisteredGame) string {
+	if strings.HasPrefix(game.BuilderID, "artifact/") {
+		return strings.TrimPrefix(game.BuilderID, "artifact/")
+	}
+	return ""
 }
 
 func cloneRequestParticipants(items []MatchRequestParticipant) []MatchRequestParticipant {
