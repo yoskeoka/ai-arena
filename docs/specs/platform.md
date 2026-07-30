@@ -148,8 +148,8 @@ registry 内部の流れは `lookup persisted record -> resolve runtime descript
 の順とする。runner / replay は runtime descriptor を受け取るだけで、in-memory store /
 DB-backed store の違いを意識しない。
 
-runner は opt-in dev entry として game master manifest file または検証済み game bundle ZIP を受け取ってよい。
-manifest または ZIP が与えられた場合、runner は built-in persisted record lookup の代わりに
+runner は dev-only の game master manifest file と、consumer-facing local verification 用の検証済み game bundle ZIP を
+別々の opt-in input として受け取ってよい。manifest または ZIP が与えられた場合、runner は built-in persisted record lookup の代わりに
 runner-local overlay descriptor を構築し、その descriptor を以後の build / compatibility /
 match execution へ流す。ZIP 入力は archive / manifest / WASI policy を検証した exact bytes だけを
 worker-private directory に materialize し、host filesystem / network capability を与えない WASI runtime で起動する。
