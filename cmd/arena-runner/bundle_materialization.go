@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,10 +62,7 @@ type cleanupGameMasterSession struct {
 func (s *cleanupGameMasterSession) Shutdown(ctx context.Context) error {
 	shutdownErr := s.Session.Shutdown(ctx)
 	removeErr := os.RemoveAll(s.dir)
-	if shutdownErr != nil {
-		return shutdownErr
-	}
-	return removeErr
+	return errors.Join(shutdownErr, removeErr)
 }
 
 type cleanupPlayerSession struct {
@@ -75,10 +73,7 @@ type cleanupPlayerSession struct {
 func (s *cleanupPlayerSession) Close(ctx context.Context) error {
 	closeErr := s.Session.Close(ctx)
 	removeErr := os.RemoveAll(s.dir)
-	if closeErr != nil {
-		return closeErr
-	}
-	return removeErr
+	return errors.Join(closeErr, removeErr)
 }
 
 var _ match.PlayerSession = (*cleanupPlayerSession)(nil)

@@ -501,9 +501,9 @@ func parsePlayerSpecs(entries, bundles []string) ([]playerSpec, error) {
 		}
 	}
 	for _, raw := range bundles {
-		spec, err := parsePlayerSpec(raw)
+		spec, err := parsePlayerSpecWithFlag(raw, "--player-bundle")
 		if err != nil {
-			return nil, fmt.Errorf("invalid --player-bundle %q: %w", raw, err)
+			return nil, err
 		}
 		bundle, err := readArtifactBundle(spec.Entry)
 		if err != nil {
@@ -592,9 +592,13 @@ func loadEntry(matchMeta catalog.GameMetadata, spec playerSpec) (loadedEntry, er
 }
 
 func parsePlayerSpec(raw string) (playerSpec, error) {
+	return parsePlayerSpecWithFlag(raw, "--player")
+}
+
+func parsePlayerSpecWithFlag(raw, flagName string) (playerSpec, error) {
 	playerID, entry, ok := strings.Cut(raw, "=")
 	if !ok || playerID == "" || entry == "" {
-		return playerSpec{}, fmt.Errorf("invalid --player %q", raw)
+		return playerSpec{}, fmt.Errorf("invalid %s %q", flagName, raw)
 	}
 	return playerSpec{PlayerID: playerID, Entry: entry}, nil
 }

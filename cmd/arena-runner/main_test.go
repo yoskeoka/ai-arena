@@ -380,6 +380,15 @@ func TestRunRejectsBundleInputConflictsAndMismatches(t *testing.T) {
 	}); err == nil || !strings.Contains(err.Error(), "read ZIP") {
 		t.Fatalf("run invalid bundle error = %v, want ZIP validation failure", err)
 	}
+	if err := run([]string{
+		"--game", "echo-count",
+		"--game-version", "2.0.0",
+		"--ruleset", "phase2-simultaneous-3turn",
+		"--output-dir", t.TempDir(),
+		"--player-bundle", "malformed",
+	}); err == nil || !strings.Contains(err.Error(), "invalid --player-bundle") {
+		t.Fatalf("run player bundle syntax error = %v, want player-bundle flag name", err)
+	}
 }
 
 func buildTestBundle(t *testing.T, packagePath, manifest string) string {
