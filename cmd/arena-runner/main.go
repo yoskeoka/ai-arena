@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/yoskeoka/ai-arena/artifactbundle"
 	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
@@ -31,6 +32,7 @@ const defaultOutputDir = "arena-runner-output"
 type playerSpec struct {
 	PlayerID string
 	Entry    string
+	Bundle   *artifactbundle.Bundle
 }
 
 type logRecord struct {
@@ -62,6 +64,7 @@ func run(args []string) error {
 		gameVersion        string
 		ruleset            string
 		gameMasterManifest string
+		gameMasterBundle   string
 		rngSeed            string
 		matchID            string
 		outputDir          string
@@ -75,6 +78,7 @@ func run(args []string) error {
 		matchTimeout       time.Duration
 		stderrLimitBytes   int
 		playerArgs         multiFlag
+		playerBundleArgs   multiFlag
 	)
 
 	fs := flag.NewFlagSet("arena-runner", flag.ContinueOnError)
@@ -83,6 +87,7 @@ func run(args []string) error {
 	fs.StringVar(&gameVersion, "game-version", "", "game version")
 	fs.StringVar(&ruleset, "ruleset", "", "game ruleset")
 	fs.StringVar(&gameMasterManifest, "game-master-manifest", "", "game master manifest path for a dev-only local-subprocess overlay")
+	fs.StringVar(&gameMasterBundle, "game-master-bundle", "", "game master arena-bundle/v1 ZIP path for a local WASI overlay")
 	fs.StringVar(&rngSeed, "rng-seed", "", "deterministic seed for seed-aware games")
 	fs.StringVar(&matchID, "match-id", "", "match id")
 	fs.StringVar(&outputDir, "output-dir", defaultOutputDir, "base directory for standard runner artifacts")
@@ -96,12 +101,13 @@ func run(args []string) error {
 	fs.DurationVar(&matchTimeout, "match-timeout", 0, "cancel the match after the given duration")
 	fs.IntVar(&stderrLimitBytes, "stderr-limit-bytes", defaultStderrLimitBytes, "captured stderr bytes per player")
 	fs.Var(&playerArgs, "player", "player_id=entry-path")
+	fs.Var(&playerBundleArgs, "player-bundle", "player_id=arena-bundle/v1-AI-ZIP-path")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if len(playerArgs) == 0 {
-		return fmt.Errorf("at least one --player is required")
+	if len(playerArgs) == 0 && len(playerBundleArgs) == 0 {
+		return fmt.Errorf("at least one --player or --player-bundle is required")
 	}
 	if strings.TrimSpace(outputDir) == "" {
 		return fmt.Errorf("--output-dir must not be empty")
@@ -114,10 +120,11 @@ func run(args []string) error {
 		return err
 	}
 
-	playersForGame, err := parsePlayersForGame(playerArgs)
+	playerSpecs, err := parsePlayerSpecs(playerArgs, playerBundleArgs)
 	if err != nil {
 		return err
 	}
+	playersForGame := buildPlayersForGame(playerSpecs)
 
 	debugInputCount := 0
 	for _, value := range []string{recordInput, snapshotInput, historyInput} {
@@ -143,9 +150,12 @@ func run(args []string) error {
 	if targetTurn < 0 {
 		return fmt.Errorf("--target-turn must be non-negative")
 	}
-	if gameMasterManifest != "" {
+	if gameMasterManifest != "" && gameMasterBundle != "" {
+		return fmt.Errorf("--game-master-manifest and --game-master-bundle cannot be combined")
+	}
+	if gameMasterManifest != "" || gameMasterBundle != "" {
 		if gameName != "" || gameVersion != "" || ruleset != "" {
-			return fmt.Errorf("--game-master-manifest cannot be combined with --game, --game-version, or --ruleset")
+			return fmt.Errorf("game master overlay cannot be combined with --game, --game-version, or --ruleset")
 		}
 	}
 
@@ -217,6 +227,15 @@ func run(args []string) error {
 		gameName = manifestMeta.GameID
 		gameVersion = manifestMeta.GameVersion
 		ruleset = manifestMeta.RulesetVersion
+	} else if gameMasterBundle != "" {
+		var bundleMeta catalog.GameMetadata
+		descriptor, bundleMeta, err = loadGameMasterBundleDescriptor(gameMasterBundle, defaultStderrLimitBytes)
+		if err != nil {
+			return err
+		}
+		gameName = bundleMeta.GameID
+		gameVersion = bundleMeta.GameVersion
+		ruleset = bundleMeta.RulesetVersion
 	} else {
 		if gameName == "" {
 			return fmt.Errorf("--game is required")
@@ -239,6 +258,7 @@ func run(args []string) error {
 			return err
 		}
 		buildSpec := registry.BuildSpec{
+			Context:     context.Background(),
 			GameVersion: gameVersion,
 			Ruleset:     ruleset,
 			RNGSeed:     rngSeed,
@@ -257,6 +277,7 @@ func run(args []string) error {
 		resumeSnapshot = &snapshot
 	} else if recordSource != nil && targetTurn > 0 {
 		spec := registry.BuildSpec{
+			Context:     context.Background(),
 			GameVersion: gameVersion,
 			Ruleset:     ruleset,
 			RNGSeed:     rngSeed,
@@ -270,7 +291,15 @@ func run(args []string) error {
 		metaOverride = &recordSource.Game
 	}
 
+	ctx := context.Background()
+	if matchTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, matchTimeout)
+		defer cancel()
+	}
+
 	master, err := newGameMasterSession(descriptor, registry.BuildSpec{
+		Context:     ctx,
 		GameVersion: gameVersion,
 		Ruleset:     ruleset,
 		RNGSeed:     rngSeed,
@@ -305,16 +334,9 @@ func run(args []string) error {
 		}
 	}
 
-	players, sessions, err := loadPlayersAndSessions(master.Metadata(), playerArgs, stderrLimitBytes)
+	players, sessions, err := loadPlayersAndSessions(ctx, master.Metadata(), playerSpecs, stderrLimitBytes)
 	if err != nil {
 		return err
-	}
-
-	ctx := context.Background()
-	if matchTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, matchTimeout)
-		defer cancel()
 	}
 
 	logWriter, closeLog, err := openLogOutputs(layout.StructuredLogPath, logOutput, os.Stdout)
@@ -458,24 +480,53 @@ func newGameMasterSession(descriptor registry.GameDescriptor, spec registry.Buil
 	return descriptor.BuildSession(spec)
 }
 
-func parsePlayersForGame(args []string) ([]game.Player, error) {
-	players := make([]game.Player, 0, len(args))
-	seenPlayerIDs := make(map[string]struct{}, len(args))
-	for _, arg := range args {
-		spec, err := parsePlayerSpec(arg)
+func parsePlayerSpecs(entries, bundles []string) ([]playerSpec, error) {
+	specs := make([]playerSpec, 0, len(entries)+len(bundles))
+	seenPlayerIDs := make(map[string]struct{}, len(entries)+len(bundles))
+	add := func(spec playerSpec) error {
+		if _, exists := seenPlayerIDs[spec.PlayerID]; exists {
+			return fmt.Errorf("duplicate player_id %q", spec.PlayerID)
+		}
+		seenPlayerIDs[spec.PlayerID] = struct{}{}
+		specs = append(specs, spec)
+		return nil
+	}
+	for _, raw := range entries {
+		spec, err := parsePlayerSpec(raw)
 		if err != nil {
 			return nil, err
 		}
-		if _, exists := seenPlayerIDs[spec.PlayerID]; exists {
-			return nil, fmt.Errorf("duplicate player_id %q", spec.PlayerID)
+		if err := add(spec); err != nil {
+			return nil, err
 		}
-		seenPlayerIDs[spec.PlayerID] = struct{}{}
-		players = append(players, game.Player{
-			PlayerID: spec.PlayerID,
-			AIID:     spec.PlayerID,
-		})
 	}
-	return players, nil
+	for _, raw := range bundles {
+		spec, err := parsePlayerSpecWithFlag(raw, "--player-bundle")
+		if err != nil {
+			return nil, err
+		}
+		bundle, err := readArtifactBundle(spec.Entry)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", spec.PlayerID, err)
+		}
+		spec.Bundle = &bundle
+		if err := add(spec); err != nil {
+			return nil, err
+		}
+	}
+	return specs, nil
+}
+
+func buildPlayersForGame(specs []playerSpec) []game.Player {
+	players := make([]game.Player, 0, len(specs))
+	for _, spec := range specs {
+		aiID := spec.PlayerID
+		if spec.Bundle != nil {
+			aiID = spec.Bundle.Digest
+		}
+		players = append(players, game.Player{PlayerID: spec.PlayerID, AIID: aiID})
+	}
+	return players
 }
 
 func extractRNGSeedFromSnapshot(snapshot game.Snapshot) (string, bool) {
@@ -494,33 +545,30 @@ func extractRNGSeedFromSnapshot(snapshot game.Snapshot) (string, bool) {
 	return state.RNGSeed, true
 }
 
-func loadPlayersAndSessions(meta catalog.GameMetadata, args []string, stderrLimitBytes int) ([]game.Player, map[string]match.PlayerSession, error) {
-	players := make([]game.Player, 0, len(args))
-	sessions := make(map[string]match.PlayerSession, len(args))
-	seenPlayerIDs := make(map[string]struct{}, len(args))
-	for _, arg := range args {
-		spec, err := parsePlayerSpec(arg)
-		if err != nil {
-			return nil, nil, err
+func loadPlayersAndSessions(ctx context.Context, meta catalog.GameMetadata, specs []playerSpec, stderrLimitBytes int) ([]game.Player, map[string]match.PlayerSession, error) {
+	players := make([]game.Player, 0, len(specs))
+	sessions := make(map[string]match.PlayerSession, len(specs))
+	for _, spec := range specs {
+		if spec.Bundle != nil {
+			player, playerSession, err := loadPlayerBundleSession(ctx, meta, spec, stderrLimitBytes)
+			if err != nil {
+				closeSessions(sessions)
+				return nil, nil, err
+			}
+			players = append(players, player)
+			sessions[spec.PlayerID] = playerSession
+			continue
 		}
-		if _, exists := seenPlayerIDs[spec.PlayerID]; exists {
-			closeSessions(sessions)
-			return nil, nil, fmt.Errorf("duplicate player_id %q", spec.PlayerID)
-		}
-		seenPlayerIDs[spec.PlayerID] = struct{}{}
 		loaded, err := loadEntry(meta, spec)
 		if err != nil {
 			closeSessions(sessions)
 			return nil, nil, err
 		}
-		players = append(players, game.Player{
-			PlayerID: spec.PlayerID,
-			AIID:     loaded.AIID,
-		})
+		players = append(players, game.Player{PlayerID: spec.PlayerID, AIID: loaded.AIID})
 		cfg := loaded.Runtime
 		cfg.Dir = repoRoot()
 		cfg.StderrLimitBytes = stderrLimitBytes
-		adapter, err := runtime.Start(context.Background(), cfg)
+		adapter, err := runtime.Start(ctx, cfg)
 		if err != nil {
 			closeSessions(sessions)
 			return nil, nil, err
@@ -544,9 +592,13 @@ func loadEntry(matchMeta catalog.GameMetadata, spec playerSpec) (loadedEntry, er
 }
 
 func parsePlayerSpec(raw string) (playerSpec, error) {
+	return parsePlayerSpecWithFlag(raw, "--player")
+}
+
+func parsePlayerSpecWithFlag(raw, flagName string) (playerSpec, error) {
 	playerID, entry, ok := strings.Cut(raw, "=")
 	if !ok || playerID == "" || entry == "" {
-		return playerSpec{}, fmt.Errorf("invalid --player %q", raw)
+		return playerSpec{}, fmt.Errorf("invalid %s %q", flagName, raw)
 	}
 	return playerSpec{PlayerID: playerID, Entry: entry}, nil
 }
