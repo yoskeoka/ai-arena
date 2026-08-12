@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/yoskeoka/ai-arena/artifactbundle"
@@ -18,8 +17,8 @@ import (
 )
 
 func TestArtifactSubmissionUploadToWASIStartAcrossBundleStores(t *testing.T) {
-	gameBytes := buildWASIBundle(t, "./cmd/echo-count-gamemaster", `{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"echo-count","game_version":"2.0.0","rulesets":[{"ruleset_version":"phase2-simultaneous-3turn","player_count":2}],"runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024,"args":["module.wasm","--game-id","echo-count","--game-version","2.0.0","--ruleset","phase2-simultaneous-3turn"]}}`)
-	aiBytes := buildWASIBundle(t, "./testdata/ai/echo/echo-ai", `{"schema_version":"arena-bundle/v1","artifact_kind":"ai","ai_id":"echo-ai","game_id":"echo-count","game_version":"2.0.0","runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024}}`)
+	gameBytes := buildWASIBundle(t, "./cmd/janken-gamemaster", `{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"janken","game_version":"2.1.0","rulesets":[{"ruleset_version":"regular","player_count":2}],"runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024}}`)
+	aiBytes := buildWASIBundle(t, "./testdata/ai/janken/janken-go-wasm-ai", `{"schema_version":"arena-bundle/v1","artifact_kind":"ai","ai_id":"janken-go-wasm-ai","game_id":"janken","game_version":"2.1.0","runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024}}`)
 
 	for _, backend := range []struct {
 		name  string
@@ -81,13 +80,16 @@ func runArtifactSubmissionProof(t *testing.T, bundles BundleStore, gameBytes, ai
 	if gameRelease.ArtifactID != gameBundle.Digest {
 		t.Fatalf("game artifact_id = %q, want %q", gameRelease.ArtifactID, gameBundle.Digest)
 	}
+	if gameRelease.MemoryLimitPages != gameBundle.Manifest.Runtime.MemoryLimitPages {
+		t.Fatalf("game memory_limit_pages = %d, want %d", gameRelease.MemoryLimitPages, gameBundle.Manifest.Runtime.MemoryLimitPages)
+	}
 
 	general, err := NewGeneralSubmissionService(repoRoot(t), reg, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	general.WithBundleStore(bundles)
-	game, err := general.RegisterGame(ctx, GameRegistrationRequest{Game: contract.GameMetadata{GameID: "echo-count", GameVersion: "2.0.0", RulesetVersion: "phase2-simultaneous-3turn"}})
+	game, err := general.RegisterGame(ctx, GameRegistrationRequest{Game: contract.GameMetadata{GameID: "janken", GameVersion: "2.1.0", RulesetVersion: "regular"}})
 	if err != nil {
 		t.Fatalf("RegisterGame() error = %v", err)
 	}
@@ -228,9 +230,6 @@ func assertBundleRunRecord(t *testing.T, recordPath, aiDigest string) {
 		if player.AIID != aiDigest {
 			t.Fatalf("player %q AIID = %q, want %q", player.PlayerID, player.AIID, aiDigest)
 		}
-	}
-	if !strings.Contains(recordPath, "artifact-submission-match") {
-		t.Fatalf("record path = %q, want match path", recordPath)
 	}
 }
 

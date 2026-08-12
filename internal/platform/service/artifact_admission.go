@@ -47,7 +47,7 @@ func (s *ArtifactAdmissionService) RegisterGameBundle(ctx context.Context, data 
 	if err := s.bundles.Put(ctx, bundle); err != nil {
 		return registry.DescriptorRecord{}, err
 	}
-	record := registry.DescriptorRecord{RegistryKey: registry.RegistryKey{GameID: bundle.Manifest.GameID, GameVersionMajor: major}, GameID: bundle.Manifest.GameID, GameVersion: bundle.Manifest.GameVersion, ArtifactID: bundle.Digest, BuildMode: registry.BuildModeWASMWASI, BuilderID: "artifact/" + bundle.Digest, RuntimeArgs: append([]string(nil), bundle.Manifest.Runtime.Args...), BuildConstraints: registry.BuildConstraints{SupportedRulesets: rulesets}}
+	record := registry.DescriptorRecord{RegistryKey: registry.RegistryKey{GameID: bundle.Manifest.GameID, GameVersionMajor: major}, GameID: bundle.Manifest.GameID, GameVersion: bundle.Manifest.GameVersion, ArtifactID: bundle.Digest, BuildMode: registry.BuildModeWASMWASI, BuilderID: "artifact/" + bundle.Digest, RuntimeArgs: append([]string(nil), bundle.Manifest.Runtime.Args...), MemoryLimitPages: bundle.Manifest.Runtime.MemoryLimitPages, BuildConstraints: registry.BuildConstraints{SupportedRulesets: rulesets}}
 	if err := s.registry.Register(ctx, record); err != nil {
 		return registry.DescriptorRecord{}, err
 	}
