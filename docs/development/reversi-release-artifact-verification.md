@@ -1,4 +1,4 @@
-# Reversi release artifact verification
+# Reversi release artifact の検証
 
 Phase 7 の external game acceptance は、Reversi の公開 release asset を bundle-only runner input として実行する。download 前に release の `SHA256SUMS` と固定 digest を確認し、repo-local checkout や legacy AI entrypoint を代用しない。
 
