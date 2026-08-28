@@ -255,7 +255,7 @@ export async function createOrReviseBot(
     options?.operationOptions?.onResponse(response);
   }
   if (
-    +response.status === 200 &&
+    +response.status === 201 &&
     response.headers["content-type"]?.includes("application/json")
   ) {
     return jsonBotRevisionResponseToApplicationTransform(response.body)!;

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 )
 
 // PostgresGameRegistrationStore persists a game release and its stable ruleset scope.
@@ -58,7 +59,11 @@ func (s *PostgresGameRegistrationStore) Save(ctx context.Context, r RegisteredGa
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO competition_scopes(scope_id,game_id,game_version_major,ruleset_version,active_release_id,player_count,max_active_bots_per_owner) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(scope_id) DO UPDATE SET active_release_id=EXCLUDED.active_release_id,player_count=EXCLUDED.player_count,max_active_bots_per_owner=EXCLUDED.max_active_bots_per_owner`, r.RegistrationID, r.Game.GameID, majorVersion(r.Game.GameVersion), r.Game.RulesetVersion, releaseID, r.PlayerCount, r.MaxActiveBotsPerOwner)
+	major, err := catalog.MajorVersion(r.Game.GameVersion)
+	if err != nil {
+		return fmt.Errorf("%w: invalid game version: %v", ErrBadRequest, err)
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO competition_scopes(scope_id,game_id,game_version_major,ruleset_version,active_release_id,player_count,max_active_bots_per_owner) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(scope_id) DO UPDATE SET active_release_id=EXCLUDED.active_release_id,player_count=EXCLUDED.player_count,max_active_bots_per_owner=EXCLUDED.max_active_bots_per_owner`, r.RegistrationID, r.Game.GameID, major, r.Game.RulesetVersion, releaseID, r.PlayerCount, r.MaxActiveBotsPerOwner)
 	if err != nil {
 		return err
 	}
@@ -88,6 +93,5 @@ func (s *PostgresGameRegistrationStore) List(ctx context.Context) ([]RegisteredG
 	}
 	return out, rows.Err()
 }
-func majorVersion(v string) int { var n int; _, _ = fmt.Sscanf(v, "%d.", &n); return n }
 
 var _ GameRegistrationStore = (*PostgresGameRegistrationStore)(nil)

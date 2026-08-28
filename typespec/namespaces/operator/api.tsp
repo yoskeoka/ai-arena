@@ -34,7 +34,10 @@ op createAISubmission(@body body: AISubmissionRequest): AISubmission;
 
 @route("/api/v1/bots")
 @post
-op createOrReviseBot(@body body: BotRevisionRequest): BotRevisionResponse;
+op createOrReviseBot(@body body: BotRevisionRequest): {
+  @statusCode statusCode: 201;
+  @body body: BotRevisionResponse;
+};
 
 @route("/api/v1/bots")
 @get

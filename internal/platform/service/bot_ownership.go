@@ -62,6 +62,8 @@ type BotRevisionRequest struct {
 	BotName         string           `json:"bot_name,omitempty"`
 	ArtifactID      string           `json:"artifact_id"`
 	ValidationState ValidationState  `json:"validation_state,omitempty"`
+	RuntimeKind     string           `json:"-"`
+	AIID            string           `json:"-"`
 }
 
 // BotOwnershipStore is the durable transaction boundary for bot lifecycle changes.

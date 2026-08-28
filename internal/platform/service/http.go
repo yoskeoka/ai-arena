@@ -175,11 +175,6 @@ func (a *OperatorAPI) Handler() http.Handler {
 	protected.HandleFunc("POST /api/v1/signup-invites", a.handleSignupInvites)
 	protected.HandleFunc("/api/v1/game-registrations", a.handleGameRegistrations)
 	protected.HandleFunc("/api/v1/ai-submissions", a.handleAISubmissions)
-	if a.auth == nil {
-		protected.HandleFunc("POST /api/v1/bots", a.handleBotRevision)
-		protected.HandleFunc("GET /api/v1/bots", a.handleBots)
-		protected.HandleFunc("POST /api/v1/bots/{bot_id}/retire", a.handleBotRetire)
-	}
 	protected.HandleFunc("POST /api/v1/ai-bundles", a.handleAIBundleUpload)
 	protected.HandleFunc("POST /api/v1/game-bundles", a.handleGameBundleUpload)
 	protected.HandleFunc("/api/v1/match-requests", a.handleMatchRequests)
@@ -270,6 +265,8 @@ func (a *OperatorAPI) handleBotRevision(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		req.Scope = CompetitionScope{ScopeID: scope.RegistrationID, GameID: scope.Game.GameID, GameVersionMajor: expectedMajor, RulesetVersion: scope.Game.RulesetVersion, MaxActiveBotsPerOwner: scope.MaxActiveBotsPerOwner}
+		req.RuntimeKind = string(bundle.Manifest.Runtime.Kind)
+		req.AIID = bundle.Manifest.AIID
 	}
 	bot, revision, err := a.botOwnership.CreateOrRevise(r.Context(), req)
 	if err != nil {

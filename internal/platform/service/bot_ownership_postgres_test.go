@@ -22,7 +22,7 @@ func TestPostgresBotOwnershipSurvivesRestartAndEnforcesQuota(t *testing.T) {
 	}
 	scope := CompetitionScope{ScopeID: "test-v1-regular"}
 	owner := "00000000-0000-0000-0000-000000000101"
-	bot, first, err := store.CreateOrRevise(ctx, BotRevisionRequest{Scope: scope, OwnerAccountID: owner, BotName: "Alpha", ArtifactID: "one"})
+	bot, first, err := store.CreateOrRevise(ctx, BotRevisionRequest{Scope: scope, OwnerAccountID: owner, BotName: "Alpha", ArtifactID: "one", RuntimeKind: "wasm-wasi", AIID: "alpha"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,11 +32,11 @@ func TestPostgresBotOwnershipSurvivesRestartAndEnforcesQuota(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	updated, second, err := store.CreateOrRevise(ctx, BotRevisionRequest{Scope: scope, OwnerAccountID: owner, BotID: bot.BotID, ArtifactID: "two"})
+	updated, second, err := store.CreateOrRevise(ctx, BotRevisionRequest{Scope: scope, OwnerAccountID: owner, BotID: bot.BotID, ArtifactID: "two", RuntimeKind: "wasm-wasi", AIID: "alpha-v2"})
 	if err != nil || updated.BotID != bot.BotID || first.AISubmissionID == second.AISubmissionID {
 		t.Fatalf("revision = %+v %+v %v", updated, second, err)
 	}
-	_, _, err = store.CreateOrRevise(ctx, BotRevisionRequest{Scope: scope, OwnerAccountID: owner, BotName: "second", ArtifactID: "three"})
+	_, _, err = store.CreateOrRevise(ctx, BotRevisionRequest{Scope: scope, OwnerAccountID: owner, BotName: "second", ArtifactID: "three", RuntimeKind: "wasm-wasi", AIID: "second"})
 	if !errors.Is(err, ErrBotQuotaExceeded) {
 		t.Fatalf("quota = %v", err)
 	}

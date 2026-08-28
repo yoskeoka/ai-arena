@@ -77,7 +77,7 @@ func (s *PostgresBotOwnershipStore) CreateOrRevise(ctx context.Context, req BotR
 	if revision.ValidationState == "" {
 		revision.ValidationState = ValidationReady
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO ai_submission_revisions (ai_submission_id,bot_id,artifact_id,runtime_kind,ai_id,validation_state) VALUES ($1,$2,$3,'wasm-wasi','',$4) RETURNING created_at`, revision.AISubmissionID, revision.BotID, revision.ArtifactID, revision.ValidationState).Scan(&revision.CreatedAt)
+	err = tx.QueryRow(ctx, `INSERT INTO ai_submission_revisions (ai_submission_id,bot_id,artifact_id,runtime_kind,ai_id,validation_state) VALUES ($1,$2,$3,$4,$5,$6) RETURNING created_at`, revision.AISubmissionID, revision.BotID, revision.ArtifactID, req.RuntimeKind, req.AIID, revision.ValidationState).Scan(&revision.CreatedAt)
 	if err != nil {
 		return OwnedBot{}, AISubmissionRevision{}, mapBotStoreError(err)
 	}
