@@ -74,11 +74,16 @@ type CompetitionScope struct {
 }
 
 type GameRelease struct {
-	ReleaseID   pgtype.UUID
-	GameID      string
-	GameVersion string
-	ArtifactID  string
-	CreatedAt   pgtype.Timestamptz
+	ReleaseID         pgtype.UUID
+	GameID            string
+	GameVersion       string
+	ArtifactID        string
+	BuildMode         string
+	BuilderID         string
+	SupportedRulesets []byte
+	Source            string
+	SourceID          string
+	CreatedAt         pgtype.Timestamptz
 }
 
 type ServiceQueueRecord struct {
