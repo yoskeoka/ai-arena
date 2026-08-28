@@ -50,7 +50,13 @@ func TestPostgresGameRegistrationStorePersistsScopeActivation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	record := RegisteredGame{RegistrationID: "persisted-game-v1-persisted", Game: contract.GameMetadata{GameID: "persisted-game", GameVersion: "1.0.0", RulesetVersion: "persisted"}, ArtifactID: "digest-persisted", PlayerCount: 2, MaxActiveBotsPerOwner: 3}
+	record := RegisteredGame{RegistrationID: "persisted-game-v1-persisted", Game: contract.GameMetadata{GameID: "persisted-game", GameVersion: "1.0.0", RulesetVersion: "persisted"}, ArtifactID: "digest-persisted", PlayerCount: 2, MaxActiveBotsPerOwner: 3, BuilderID: "persisted-builder", SupportedRulesets: []string{"persisted"}, Source: SourceManual}
+	if _, err := store.pool.Exec(ctx, `DELETE FROM competition_scopes WHERE scope_id=$1`, record.RegistrationID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.pool.Exec(ctx, `DELETE FROM game_releases WHERE artifact_id=$1`, record.ArtifactID); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.Save(ctx, record); err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +70,7 @@ func TestPostgresGameRegistrationStorePersistsScopeActivation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ArtifactID != record.ArtifactID || got.PlayerCount != 2 || got.MaxActiveBotsPerOwner != 3 {
+	if got.ArtifactID != record.ArtifactID || got.PlayerCount != 2 || got.MaxActiveBotsPerOwner != 3 || got.BuilderID != record.BuilderID || len(got.SupportedRulesets) != 1 || got.SupportedRulesets[0] != "persisted" || got.Source != SourceManual {
 		t.Fatalf("scope = %+v", got)
 	}
 }

@@ -3,6 +3,11 @@ CREATE TABLE game_releases (
     game_id TEXT NOT NULL,
     game_version TEXT NOT NULL,
     artifact_id TEXT NOT NULL UNIQUE,
+    build_mode TEXT NOT NULL DEFAULT '',
+    builder_id TEXT NOT NULL DEFAULT '',
+    supported_rulesets JSONB NOT NULL DEFAULT '[]',
+    source TEXT NOT NULL DEFAULT 'manual',
+    source_id TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (game_id, game_version)
 );

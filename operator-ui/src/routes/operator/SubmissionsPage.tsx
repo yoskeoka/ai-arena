@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { AiBot, OperatorApiClient } from "../../lib/operatorApiClient";
+import { AiBot, AiSubmission, OperatorApiClient } from "../../lib/operatorApiClient";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
@@ -11,6 +11,7 @@ type SubmissionsPageProps = {
 export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
   const client = useMemo(() => new OperatorApiClient(normalizeBaseUrl(baseUrl)), [baseUrl]);
   const [items, setItems] = useState<AiBot[]>([]);
+  const [legacyItems, setLegacyItems] = useState<AiSubmission[]>([]);
   const [listState, setListState] = useState<LoadState>("loading");
   const [listError, setListError] = useState<string>();
   const [writeState, setWriteState] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -19,6 +20,10 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
   const [botID, setBotID] = useState("");
   const [botName, setBotName] = useState("");
   const [artifactID, setArtifactID] = useState("");
+  const [legacySubmissionID, setLegacySubmissionID] = useState("");
+  const [legacyGameRegistrationID, setLegacyGameRegistrationID] = useState("");
+  const [legacyArtifactRef, setLegacyArtifactRef] = useState("");
+  const [legacyDisplayName, setLegacyDisplayName] = useState("");
 
   const load = async () => {
     setListState((current) => (current === "ready" ? current : "loading"));
@@ -42,6 +47,19 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
     void load();
   }, [client, scopeID]);
 
+  const loadLegacy = async () => {
+    try {
+      setLegacyItems(await client.listAiSubmissions());
+    } catch {
+      // The durable bot flow remains available when a pre-migration service has no legacy endpoint.
+      setLegacyItems([]);
+    }
+  };
+
+  useEffect(() => {
+    void loadLegacy();
+  }, [client]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setWriteState("submitting");
@@ -55,6 +73,25 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
       });
       setWriteState("success");
       await load();
+    } catch (error) {
+      setWriteState("error");
+      setWriteError(messageOf(error));
+    }
+  };
+
+  const handleLegacySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setWriteState("submitting");
+    setWriteError(undefined);
+    try {
+      await client.createAiSubmission({
+        aiSubmissionId: legacySubmissionID.trim() || undefined,
+        gameRegistrationId: legacyGameRegistrationID.trim(),
+        artifactRef: legacyArtifactRef.trim(),
+        displayName: legacyDisplayName.trim() || undefined,
+      });
+      setWriteState("success");
+      await loadLegacy();
     } catch (error) {
       setWriteState("error");
       setWriteError(messageOf(error));
@@ -98,6 +135,18 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
             Save bot revision
           </button>
         </form>
+        <form className="mt-8 border-t border-black/10 pt-6" onSubmit={handleLegacySubmit}>
+          <p className="mb-4 text-sm text-black/65">Legacy AI submissions remain available only for existing match-request migrations.</p>
+          <div className="space-y-4">
+            <TextField label="AI Submission ID" value={legacySubmissionID} onChange={setLegacySubmissionID} placeholder="optional stable id" />
+            <TextField label="Game Registration ID" value={legacyGameRegistrationID} onChange={setLegacyGameRegistrationID} placeholder="existing competition scope" required />
+            <TextField label="Artifact Ref" value={legacyArtifactRef} onChange={setLegacyArtifactRef} placeholder="/abs/path/to/ai" required />
+            <TextField label="Display Name" value={legacyDisplayName} onChange={setLegacyDisplayName} placeholder="Echo Bot 01" />
+            <button className="rounded-full border border-black/20 px-5 py-3 text-sm font-semibold" type="submit">
+              Create AI submission
+            </button>
+          </div>
+        </form>
       </Panel>
 
       <Panel
@@ -140,6 +189,19 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
             ))}
           </div>
         )}
+        {legacyItems.length > 0 ? (
+          <div className="mt-6 border-t border-black/10 pt-5">
+            <p className="text-sm font-semibold">Legacy AI submissions</p>
+            <div className="mt-3 space-y-3">
+              {legacyItems.map((item) => (
+                <article key={item.aiSubmissionId} className="rounded-3xl border border-black/10 bg-paper p-4" data-testid={`submission-row-${item.aiSubmissionId}`}>
+                  <p className="font-semibold">{item.displayName}</p>
+                  <p className="mt-1 text-xs text-black/60">{item.aiSubmissionId}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </Panel>
     </section>
   );

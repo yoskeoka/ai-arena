@@ -80,7 +80,7 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
           />
           <TextField label="Uploaded game artifact ID" value={artifactID} onChange={setArtifactID} placeholder="SHA-256 digest from bundle upload" />
           <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit">
-            Activate competition scope
+            Create game registration
           </button>
         </form>
       </Panel>
@@ -110,7 +110,7 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
                 <div className="mt-3 flex flex-wrap gap-4 text-xs text-black/60">
                   <span>build: {item.buildMode}</span>
                   <span>builder: {item.builderId}</span>
-                  <span>rulesets: {item.supportedRulesets.join(", ") || "n/a"}</span>
+                  <span>rulesets: {item.supportedRulesets?.join(", ") || "n/a"}</span>
                   <span>artifact: {item.artifactId || "builtin"}</span>
                 </div>
               </article>
