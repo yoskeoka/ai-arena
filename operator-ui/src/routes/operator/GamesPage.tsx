@@ -17,6 +17,9 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
   const [writeError, setWriteError] = useState<string>();
   const [rulesetVersion, setRulesetVersion] = useState("");
   const [artifactID, setArtifactID] = useState("");
+  const [registrationID, setRegistrationID] = useState("");
+  const [gameID, setGameID] = useState("");
+  const [gameVersion, setGameVersion] = useState("");
 
   const load = async () => {
     setListState((current) => (current === "ready" ? current : "loading"));
@@ -41,6 +44,8 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
     setWriteError(undefined);
     try {
       await client.createGameRegistration({
+        registrationId: registrationID.trim() || undefined,
+        game: gameID.trim() ? { gameId: gameID.trim(), gameVersion: gameVersion.trim(), rulesetVersion: rulesetVersion.trim() } : undefined,
         artifactId: artifactID.trim() || undefined,
         rulesetVersion: rulesetVersion.trim() || undefined,
       });
@@ -63,6 +68,9 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
         testId="operator-form-games"
       >
         <form className="space-y-4" onSubmit={handleSubmit}>
+          <TextField label="Registration ID" value={registrationID} onChange={setRegistrationID} placeholder="legacy compatibility id" />
+          <TextField label="Game ID" value={gameID} onChange={setGameID} placeholder="derived from uploaded artifact when omitted" />
+          <TextField label="Game Version" value={gameVersion} onChange={setGameVersion} placeholder="derived from uploaded artifact when omitted" />
           <TextField
             label="Ruleset Version"
             value={rulesetVersion}
@@ -70,7 +78,7 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
             placeholder="regular"
             required
           />
-          <TextField label="Uploaded game artifact ID" value={artifactID} onChange={setArtifactID} placeholder="SHA-256 digest from bundle upload" required />
+          <TextField label="Uploaded game artifact ID" value={artifactID} onChange={setArtifactID} placeholder="SHA-256 digest from bundle upload" />
           <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit">
             Activate competition scope
           </button>

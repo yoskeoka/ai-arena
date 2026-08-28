@@ -30,6 +30,10 @@ game form は manifest の technical field や arbitrary artifact ref を持た�
 artifact の activate だけを送る。AI form は scope、bot name、uploaded AI artifact、および new
 bot / existing bot revision の choice だけを送る。
 
+既存の metadata-only game registration request は migration-period の compatibility input として
+受け付けてよいが、新規 operator operation の正本ではない。この input から作る legacy scope は
+artifact-backed activation を代替しない。
+
 - selected game release と ruleset は admitted immutable artifact から解決可能でなければならない。
 - player count と owner quota は selected ruleset manifest 由来でなければならない。
 - AI artifact の game id、semver major、ruleset、runtime は target scope と互換でなければならない。

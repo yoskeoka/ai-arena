@@ -32,8 +32,17 @@ func (s *PostgresGameRegistrationStore) Close() {
 }
 
 func (s *PostgresGameRegistrationStore) Save(ctx context.Context, r RegisteredGame) error {
-	if r.RegistrationID == "" || r.ArtifactID == "" || r.PlayerCount < 1 || r.MaxActiveBotsPerOwner < 1 {
-		return fmt.Errorf("%w: activated game artifact and ruleset limits are required", ErrBadRequest)
+	if r.RegistrationID == "" {
+		return fmt.Errorf("%w: registration id is required", ErrBadRequest)
+	}
+	if r.ArtifactID == "" {
+		r.ArtifactID = "legacy:" + r.RegistrationID
+		if r.PlayerCount < 1 {
+			r.PlayerCount = 2
+		}
+		if r.MaxActiveBotsPerOwner < 1 {
+			r.MaxActiveBotsPerOwner = 1
+		}
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
