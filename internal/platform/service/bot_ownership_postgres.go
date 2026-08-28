@@ -106,7 +106,7 @@ func (s *PostgresBotOwnershipStore) ListByOwner(ctx context.Context, owner, scop
 		return nil, err
 	}
 	defer rows.Close()
-	var out []OwnedBot
+	out := make([]OwnedBot, 0)
 	for rows.Next() {
 		var b OwnedBot
 		if err = rows.Scan(&b.BotID, &b.OwnerAccountID, &b.ScopeID, &b.BotName, &b.NormalizedBotName, &b.LifecycleState, &b.ActiveRevisionID); err != nil {

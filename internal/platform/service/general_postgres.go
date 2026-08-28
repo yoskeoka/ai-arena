@@ -101,7 +101,7 @@ func (s *PostgresGameRegistrationStore) List(ctx context.Context) ([]RegisteredG
 		return nil, err
 	}
 	defer rows.Close()
-	var out []RegisteredGame
+	out := make([]RegisteredGame, 0)
 	for rows.Next() {
 		var r RegisteredGame
 		var rulesets []byte

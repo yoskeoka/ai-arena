@@ -50,6 +50,10 @@ func TestPostgresGameRegistrationStorePersistsScopeActivation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
+	empty, err := store.List(ctx)
+	if err != nil || empty == nil {
+		t.Fatalf("empty list = %#v, %v", empty, err)
+	}
 	record := RegisteredGame{RegistrationID: "persisted-game-v1-persisted", Game: contract.GameMetadata{GameID: "persisted-game", GameVersion: "1.0.0", RulesetVersion: "persisted"}, ArtifactID: "digest-persisted", PlayerCount: 2, MaxActiveBotsPerOwner: 3, BuilderID: "persisted-builder", SupportedRulesets: []string{"persisted"}, Source: SourceManual}
 	if _, err := store.pool.Exec(ctx, `DELETE FROM competition_scopes WHERE scope_id=$1`, record.RegistrationID); err != nil {
 		t.Fatal(err)
