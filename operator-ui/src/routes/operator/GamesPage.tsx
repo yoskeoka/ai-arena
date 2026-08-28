@@ -140,10 +140,10 @@ function TextField({
       <span className="font-medium text-black/70">{label}</span>
       <input
         className="rounded-2xl border border-black/15 bg-white px-4 py-3 shadow-sm outline-none transition focus:border-accent"
-        value={value}
+        value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        required={required}
+        placeholder={placeholder ?? ""}
+        required={required === true}
       />
     </label>
   );
