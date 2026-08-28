@@ -10,6 +10,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/yoskeoka/ai-arena/artifactbundle"
+	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 )
 
 var allowedOperatorOrigins = map[string]struct{}{
@@ -97,6 +100,13 @@ type OperatorAPI struct {
 	artifactAccess    ArtifactAccessIssuer
 	auth              *AuthService
 	artifactAdmission *ArtifactAdmissionService
+	botOwnership      BotOwnershipStore
+}
+
+// WithBotOwnership enables authenticated bot revision and retirement routes.
+func (a *OperatorAPI) WithBotOwnership(store BotOwnershipStore) *OperatorAPI {
+	a.botOwnership = store
+	return a
 }
 
 // WithArtifactAdmission enables multipart official game-bundle upload.
@@ -156,10 +166,20 @@ func (a *OperatorAPI) Handler() http.Handler {
 		mux.HandleFunc("GET /auth/github/callback", a.auth.GitHubCallback)
 		mux.HandleFunc("POST /auth/logout", a.auth.Logout)
 	}
+	if a.auth != nil {
+		mux.Handle("GET /api/v1/bots", a.auth.RequireAuthenticated(http.HandlerFunc(a.handleBots)))
+		mux.Handle("POST /api/v1/bots", a.auth.RequireAuthenticated(http.HandlerFunc(a.handleBotRevision)))
+		mux.Handle("POST /api/v1/bots/{bot_id}/retire", a.auth.RequireAuthenticated(http.HandlerFunc(a.handleBotRetire)))
+	}
 	protected := http.NewServeMux()
 	protected.HandleFunc("POST /api/v1/signup-invites", a.handleSignupInvites)
 	protected.HandleFunc("/api/v1/game-registrations", a.handleGameRegistrations)
 	protected.HandleFunc("/api/v1/ai-submissions", a.handleAISubmissions)
+	if a.auth == nil {
+		protected.HandleFunc("POST /api/v1/bots", a.handleBotRevision)
+		protected.HandleFunc("GET /api/v1/bots", a.handleBots)
+		protected.HandleFunc("POST /api/v1/bots/{bot_id}/retire", a.handleBotRetire)
+	}
 	protected.HandleFunc("POST /api/v1/ai-bundles", a.handleAIBundleUpload)
 	protected.HandleFunc("POST /api/v1/game-bundles", a.handleGameBundleUpload)
 	protected.HandleFunc("/api/v1/match-requests", a.handleMatchRequests)
@@ -178,6 +198,103 @@ func (a *OperatorAPI) Handler() http.Handler {
 		mux.Handle("/api/v1/", protected)
 	}
 	return withOperatorCORS(mux)
+}
+
+func (a *OperatorAPI) handleBots(w http.ResponseWriter, r *http.Request) {
+	if a.botOwnership == nil || a.auth == nil {
+		writeError(w, http.StatusNotFound, ErrBotNotFound)
+		return
+	}
+	principal, err := a.auth.Principal(r.Context(), r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+	scopeID := strings.TrimSpace(r.URL.Query().Get("scope_id"))
+	if scopeID == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("service: scope_id is required"))
+		return
+	}
+	includeRetired := r.URL.Query().Get("include_retired") == "true"
+	items, err := a.botOwnership.ListByOwner(r.Context(), principal.AccountID, scopeID, includeRetired)
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *OperatorAPI) handleBotRevision(w http.ResponseWriter, r *http.Request) {
+	if a.botOwnership == nil || a.auth == nil {
+		writeError(w, http.StatusNotFound, ErrBotNotFound)
+		return
+	}
+	principal, err := a.auth.Principal(r.Context(), r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+	req, err := decodeJSON[BotRevisionRequest](r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	req.OwnerAccountID = principal.AccountID
+	if req.Scope.ScopeID == "" {
+		req.Scope.ScopeID = req.ScopeID
+	}
+	if a.general != nil {
+		scope, err := a.general.GetGame(r.Context(), req.Scope.ScopeID)
+		if err != nil {
+			writeError(w, statusCodeForServiceError(err), err)
+			return
+		}
+		if a.general.bundles == nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("service: AI bundle upload is not configured"))
+			return
+		}
+		data, err := a.general.bundles.Read(r.Context(), req.ArtifactID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		bundle, err := artifactbundle.Read(data)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		major, majorErr := catalog.MajorVersion(bundle.Manifest.GameVersion)
+		expectedMajor, expectedErr := catalog.MajorVersion(scope.Game.GameVersion)
+		if majorErr != nil || expectedErr != nil || bundle.Manifest.ArtifactKind != "ai" || bundle.Manifest.GameID != scope.Game.GameID || major != expectedMajor {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("service: AI bundle is incompatible with competition scope"))
+			return
+		}
+		req.Scope = CompetitionScope{ScopeID: scope.RegistrationID, GameID: scope.Game.GameID, GameVersionMajor: expectedMajor, RulesetVersion: scope.Game.RulesetVersion, MaxActiveBotsPerOwner: scope.MaxActiveBotsPerOwner}
+	}
+	bot, revision, err := a.botOwnership.CreateOrRevise(r.Context(), req)
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"bot": bot, "revision": revision})
+}
+
+func (a *OperatorAPI) handleBotRetire(w http.ResponseWriter, r *http.Request) {
+	if a.botOwnership == nil || a.auth == nil {
+		writeError(w, http.StatusNotFound, ErrBotNotFound)
+		return
+	}
+	principal, err := a.auth.Principal(r.Context(), r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+	bot, err := a.botOwnership.Retire(r.Context(), principal.AccountID, r.PathValue("bot_id"))
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, bot)
 }
 
 func (a *OperatorAPI) handleAIBundleUpload(w http.ResponseWriter, r *http.Request) {

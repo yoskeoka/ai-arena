@@ -4,9 +4,13 @@ import { createRestError } from "../helpers/error.js";
 import type { OperationOptions } from "../helpers/interfaces.js";
 import { createFilePartDescriptor } from "../helpers/multipart-helpers.js";
 import {
+  jsonAiBotListResponseToApplicationTransform,
+  jsonAiBotToApplicationTransform,
   jsonAiSubmissionListResponseToApplicationTransform,
   jsonAiSubmissionRequestToTransportTransform,
   jsonAiSubmissionToApplicationTransform,
+  jsonBotRevisionRequestToTransportTransform,
+  jsonBotRevisionResponseToApplicationTransform,
   jsonGameBundleAdmissionToApplicationTransform,
   jsonGameRegistrationListResponseToApplicationTransform,
   jsonGameRegistrationRequestToTransportTransform,
@@ -25,9 +29,13 @@ import {
   jsonStoredRankingSnapshotToApplicationTransform,
 } from "../models/internal/serializers.js";
 import type {
+  AiBot,
+  AiBotListResponse,
   AiSubmission,
   AiSubmissionListResponse,
   AiSubmissionRequest,
+  BotRevisionRequest,
+  BotRevisionResponse,
   File,
   GameBundleAdmission,
   GameRegistration,
@@ -227,6 +235,83 @@ export async function createAiSubmission(
     response.headers["content-type"]?.includes("application/json")
   ) {
     return jsonAiSubmissionToApplicationTransform(response.body)!;
+  }
+  throw createRestError(response);
+}
+export interface CreateOrReviseBotOptions extends OperationOptions {}
+export async function createOrReviseBot(
+  client: OperatorClientContext,
+  body: BotRevisionRequest,
+  options?: CreateOrReviseBotOptions,
+): Promise<BotRevisionResponse> {
+  const path = parse("/api/v1/bots").expand({});
+  const httpRequestOptions = {
+    headers: {},
+    body: jsonBotRevisionRequestToTransportTransform(body),
+  };
+  const response = await client.pathUnchecked(path).post(httpRequestOptions);
+
+  if (typeof options?.operationOptions?.onResponse === "function") {
+    options?.operationOptions?.onResponse(response);
+  }
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.includes("application/json")
+  ) {
+    return jsonBotRevisionResponseToApplicationTransform(response.body)!;
+  }
+  throw createRestError(response);
+}
+export interface ListBotsOptions extends OperationOptions {
+  includeRetired?: boolean;
+}
+export async function listBots(
+  client: OperatorClientContext,
+  scopeId: string,
+  options?: ListBotsOptions,
+): Promise<AiBotListResponse> {
+  const path = parse("/api/v1/bots{?scope_id,include_retired}").expand({
+    scope_id: scopeId,
+    ...(options?.includeRetired && { include_retired: options.includeRetired }),
+  });
+  const httpRequestOptions = {
+    headers: {},
+  };
+  const response = await client.pathUnchecked(path).get(httpRequestOptions);
+
+  if (typeof options?.operationOptions?.onResponse === "function") {
+    options?.operationOptions?.onResponse(response);
+  }
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.includes("application/json")
+  ) {
+    return jsonAiBotListResponseToApplicationTransform(response.body)!;
+  }
+  throw createRestError(response);
+}
+export interface RetireBotOptions extends OperationOptions {}
+export async function retireBot(
+  client: OperatorClientContext,
+  botId: string,
+  options?: RetireBotOptions,
+): Promise<AiBot> {
+  const path = parse("/api/v1/bots/{bot_id}/retire").expand({
+    bot_id: botId,
+  });
+  const httpRequestOptions = {
+    headers: {},
+  };
+  const response = await client.pathUnchecked(path).post(httpRequestOptions);
+
+  if (typeof options?.operationOptions?.onResponse === "function") {
+    options?.operationOptions?.onResponse(response);
+  }
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.includes("application/json")
+  ) {
+    return jsonAiBotToApplicationTransform(response.body)!;
   }
   throw createRestError(response);
 }

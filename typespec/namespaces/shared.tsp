@@ -123,12 +123,17 @@ model SignupInviteResponse {
 
 model GameRegistrationRequest {
   registration_id?: string;
-  game: GameMetadata;
+  game?: GameMetadata;
+  artifact_id?: string;
+  ruleset_version?: string;
 }
 
 model GameRegistration {
   registration_id: string;
   game: GameMetadata;
+  artifact_id?: string;
+  player_count?: int32;
+  max_active_bots_per_owner?: int32;
   build_mode: string;
   builder_id: string;
   supported_rulesets: string[];
@@ -150,6 +155,38 @@ model AISubmissionRequest {
   game_registration_id: string;
   artifact_ref: string;
   display_name?: string;
+}
+
+model BotRevisionRequest {
+  scope_id: string;
+  bot_id?: string;
+  bot_name?: string;
+  artifact_id: string;
+}
+
+model AIBot {
+  bot_id: string;
+  scope_id: string;
+  bot_name: string;
+  lifecycle_state: "active" | "retired";
+  active_submission_id?: string;
+}
+
+model AIBotListResponse {
+  items: AIBot[];
+}
+
+model AISubmissionRevision {
+  ai_submission_id: string;
+  bot_id: string;
+  artifact_id: string;
+  validation_state: ValidationState;
+  created_at: string;
+}
+
+model BotRevisionResponse {
+  bot: AIBot;
+  revision: AISubmissionRevision;
 }
 
 model AISubmission {

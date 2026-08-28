@@ -4,6 +4,10 @@ import {
   jsonAiSubmissionListResponseToApplicationTransform,
   jsonAiSubmissionRequestToTransportTransform,
   jsonAiSubmissionToApplicationTransform,
+  jsonBotRevisionRequestToTransportTransform,
+  jsonBotRevisionResponseToApplicationTransform,
+  jsonAiBotToApplicationTransform,
+  jsonAiBotListResponseToApplicationTransform,
   jsonGameRegistrationListResponseToApplicationTransform,
   jsonGameRegistrationRequestToTransportTransform,
   jsonGameRegistrationToApplicationTransform,
@@ -22,6 +26,9 @@ import {
 import type {
   AiSubmission,
   AiSubmissionRequest,
+  AiBot,
+  BotRevisionRequest,
+  BotRevisionResponse,
   AuthPrincipal,
   GameRegistration,
   GameRegistrationRequest,
@@ -41,6 +48,9 @@ import type {
 export type {
   AiSubmission,
   AiSubmissionRequest,
+  AiBot,
+  BotRevisionRequest,
+  BotRevisionResponse,
   AuthPrincipal,
   GameRegistration,
   GameRegistrationRequest,
@@ -113,6 +123,22 @@ export class OperatorApiClient {
       signal,
     );
     return jsonAiSubmissionToApplicationTransform(response.body)!;
+  }
+
+  async createOrReviseBot(body: BotRevisionRequest, signal?: AbortSignal): Promise<BotRevisionResponse> {
+    const response = await this.post("/api/v1/bots", jsonBotRevisionRequestToTransportTransform(body), [201], signal);
+    return jsonBotRevisionResponseToApplicationTransform(response.body)!;
+  }
+
+  async retireBot(botId: string, signal?: AbortSignal): Promise<AiBot> {
+    const response = await this.post(`/api/v1/bots/${encodeURIComponent(botId)}/retire`, undefined, [200], signal);
+    return jsonAiBotToApplicationTransform(response.body)!;
+  }
+
+  async listBots(scopeId: string, includeRetired = false, signal?: AbortSignal): Promise<AiBot[]> {
+    const query = new URLSearchParams({ scope_id: scopeId, include_retired: String(includeRetired) });
+    const response = await this.get(`/api/v1/bots?${query.toString()}`, signal);
+    return jsonAiBotListResponseToApplicationTransform(response.body)!.items;
   }
 
   async listMatchRequests(signal?: AbortSignal): Promise<MatchRequest[]> {

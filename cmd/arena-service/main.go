@@ -217,6 +217,7 @@ type cliApp struct {
 	auth              *service.AuthService
 	artifactAdmission *service.ArtifactAdmissionService
 	bundles           service.BundleStore
+	botOwnership      service.BotOwnershipStore
 	registry          *registry.Registry
 	baseDir           string
 	timeout           time.Duration
@@ -293,11 +294,31 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	if err != nil {
 		return nil, err
 	}
-	general, err := service.NewGeneralSubmissionService(baseDir, nil, nil, nil)
+	var gameStore service.GameRegistrationStore
+	if strings.TrimSpace(postgresDSN) != "" {
+		postgresGames, err := service.NewPostgresGameRegistrationStore(context.Background(), postgresDSN)
+		if err != nil {
+			return nil, err
+		}
+		gameStore = postgresGames
+		previousClose := closeFn
+		closeFn = func() { postgresGames.Close(); previousClose() }
+	}
+	general, err := service.NewGeneralSubmissionService(baseDir, nil, gameStore, nil)
 	if err != nil {
 		return nil, err
 	}
 	general.WithBundleStore(runtime.bundles)
+	botOwnership := service.BotOwnershipStore(service.NewInMemoryBotOwnershipStore())
+	if strings.TrimSpace(postgresDSN) != "" {
+		postgresBots, err := service.NewPostgresBotOwnershipStore(context.Background(), postgresDSN)
+		if err != nil {
+			return nil, err
+		}
+		botOwnership = postgresBots
+		previousClose := closeFn
+		closeFn = func() { postgresBots.Close(); previousClose() }
+	}
 	requests, err := service.NewMatchRequestService(general, commands, store, nil)
 	if err != nil {
 		return nil, err
@@ -321,6 +342,7 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		auth:              auth,
 		artifactAdmission: artifactAdmission,
 		bundles:           runtime.bundles,
+		botOwnership:      botOwnership,
 		registry:          admissionRegistry,
 		baseDir:           baseDir,
 		timeout:           matchTimeout,
@@ -501,6 +523,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 		return err
 	}
 	api.WithArtifactAdmission(a.artifactAdmission)
+	api.WithBotOwnership(a.botOwnership)
 	logger := log.New(stderr, "arena-service: ", log.LstdFlags)
 	loop, err := service.NewWorkerLoop(worker, workerID, pollInterval, func(err error) {
 		logger.Printf("worker loop error: %v", err)

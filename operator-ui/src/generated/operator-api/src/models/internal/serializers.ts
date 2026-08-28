@@ -1,9 +1,14 @@
 import type {
+  AiBot,
+  AiBotListResponse,
   AiSubmission,
   AiSubmissionListResponse,
   AiSubmissionRequest,
+  AiSubmissionRevision,
   ArtifactAccessMetadata,
   AuthPrincipal,
+  BotRevisionRequest,
+  BotRevisionResponse,
   File,
   GameBundleAdmission,
   GameMetadata,
@@ -95,6 +100,10 @@ export function decodeBase64(value: string): Uint8Array | undefined {
   payload: AiSubmissionRequest,
 ) {
   return jsonAiSubmissionRequestToTransportTransform(payload)!;
+}export function createOrReviseBotPayloadToTransport(
+  payload: BotRevisionRequest,
+) {
+  return jsonBotRevisionRequestToTransportTransform(payload)!;
 }export function createMatchRequestPayloadToTransport(
   payload: MatchRequestCreateRequest,
 ) {
@@ -240,7 +249,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    registration_id: input_.registrationId,game: jsonGameMetadataToTransportTransform(input_.game),build_mode: input_.buildMode,builder_id: input_.builderId,supported_rulesets: jsonArrayStringToTransportTransform(input_.supportedRulesets),source: input_.source,source_id: input_.sourceId
+    registration_id: input_.registrationId,game: jsonGameMetadataToTransportTransform(input_.game),artifact_id: input_.artifactId,player_count: input_.playerCount,max_active_bots_per_owner: input_.maxActiveBotsPerOwner,build_mode: input_.buildMode,builder_id: input_.builderId,supported_rulesets: jsonArrayStringToTransportTransform(input_.supportedRulesets),source: input_.source,source_id: input_.sourceId
   }!;
 }export function jsonGameRegistrationToApplicationTransform(
   input_?: any,
@@ -249,7 +258,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    registrationId: input_.registration_id,game: jsonGameMetadataToApplicationTransform(input_.game),buildMode: input_.build_mode,builderId: input_.builder_id,supportedRulesets: jsonArrayStringToApplicationTransform(input_.supported_rulesets),source: input_.source,sourceId: input_.source_id
+    registrationId: input_.registration_id,game: jsonGameMetadataToApplicationTransform(input_.game),artifactId: input_.artifact_id,playerCount: input_.player_count,maxActiveBotsPerOwner: input_.max_active_bots_per_owner,buildMode: input_.build_mode,builderId: input_.builder_id,supportedRulesets: jsonArrayStringToApplicationTransform(input_.supported_rulesets),source: input_.source,sourceId: input_.source_id
   }!;
 }export function jsonGameMetadataToTransportTransform(
   input_?: GameMetadata | null,
@@ -276,7 +285,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    registration_id: input_.registrationId,game: jsonGameMetadataToTransportTransform(input_.game)
+    registration_id: input_.registrationId,game: jsonGameMetadataToTransportTransform(input_.game),artifact_id: input_.artifactId,ruleset_version: input_.rulesetVersion
   }!;
 }export function jsonGameRegistrationRequestToApplicationTransform(
   input_?: any,
@@ -285,7 +294,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    registrationId: input_.registration_id,game: jsonGameMetadataToApplicationTransform(input_.game)
+    registrationId: input_.registration_id,game: jsonGameMetadataToApplicationTransform(input_.game),artifactId: input_.artifact_id,rulesetVersion: input_.ruleset_version
   }!;
 }export function jsonFileToTransportTransform(input_?: File | null): any {
   if(!input_) {
@@ -401,6 +410,120 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return {
     aiSubmissionId: input_.ai_submission_id,gameRegistrationId: input_.game_registration_id,artifactRef: input_.artifact_ref,displayName: input_.display_name
   }!;
+}export function jsonBotRevisionRequestToTransportTransform(
+  input_?: BotRevisionRequest | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    scope_id: input_.scopeId,bot_id: input_.botId,bot_name: input_.botName,artifact_id: input_.artifactId
+  }!;
+}export function jsonBotRevisionRequestToApplicationTransform(
+  input_?: any,
+): BotRevisionRequest {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    scopeId: input_.scope_id,botId: input_.bot_id,botName: input_.bot_name,artifactId: input_.artifact_id
+  }!;
+}export function jsonBotRevisionResponseToTransportTransform(
+  input_?: BotRevisionResponse | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    bot: jsonAiBotToTransportTransform(input_.bot),revision: jsonAiSubmissionRevisionToTransportTransform(input_.revision)
+  }!;
+}export function jsonBotRevisionResponseToApplicationTransform(
+  input_?: any,
+): BotRevisionResponse {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    bot: jsonAiBotToApplicationTransform(input_.bot),revision: jsonAiSubmissionRevisionToApplicationTransform(input_.revision)
+  }!;
+}export function jsonAiBotToTransportTransform(input_?: AiBot | null): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    bot_id: input_.botId,scope_id: input_.scopeId,bot_name: input_.botName,lifecycle_state: input_.lifecycleState,active_submission_id: input_.activeSubmissionId
+  }!;
+}export function jsonAiBotToApplicationTransform(input_?: any): AiBot {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    botId: input_.bot_id,scopeId: input_.scope_id,botName: input_.bot_name,lifecycleState: input_.lifecycle_state,activeSubmissionId: input_.active_submission_id
+  }!;
+}export function jsonAiSubmissionRevisionToTransportTransform(
+  input_?: AiSubmissionRevision | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    ai_submission_id: input_.aiSubmissionId,bot_id: input_.botId,artifact_id: input_.artifactId,validation_state: input_.validationState,created_at: input_.createdAt
+  }!;
+}export function jsonAiSubmissionRevisionToApplicationTransform(
+  input_?: any,
+): AiSubmissionRevision {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    aiSubmissionId: input_.ai_submission_id,botId: input_.bot_id,artifactId: input_.artifact_id,validationState: input_.validation_state,createdAt: input_.created_at
+  }!;
+}export function jsonAiBotListResponseToTransportTransform(
+  input_?: AiBotListResponse | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    items: jsonArrayAiBotToTransportTransform(input_.items)
+  }!;
+}export function jsonAiBotListResponseToApplicationTransform(
+  input_?: any,
+): AiBotListResponse {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    items: jsonArrayAiBotToApplicationTransform(input_.items)
+  }!;
+}export function jsonArrayAiBotToTransportTransform(
+  items_?: Array<AiBot> | null,
+): any {
+  if(!items_) {
+    return items_ as any;
+  }
+  const _transformedArray = [];
+
+  for (const item of items_ ?? []) {
+    const transformedItem = jsonAiBotToTransportTransform(item as any);
+    _transformedArray.push(transformedItem);
+  }
+
+  return _transformedArray as any;
+}export function jsonArrayAiBotToApplicationTransform(
+  items_?: any,
+): Array<AiBot> {
+  if(!items_) {
+    return items_ as any;
+  }
+  const _transformedArray = [];
+
+  for (const item of items_ ?? []) {
+    const transformedItem = jsonAiBotToApplicationTransform(item as any);
+    _transformedArray.push(transformedItem);
+  }
+
+  return _transformedArray as any;
 }export function jsonMatchRequestListResponseToTransportTransform(
   input_?: MatchRequestListResponse | null,
 ): any {

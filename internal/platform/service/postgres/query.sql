@@ -138,3 +138,14 @@ SELECT
     terminal_json
 FROM service_queue_records
 ORDER BY queue_order;
+-- name: ListOwnedBots :many
+SELECT bot_id, owner_account_id, scope_id, bot_name, normalized_bot_name, lifecycle_state, active_submission_id, created_at, retired_at
+FROM ai_bots
+WHERE owner_account_id = $1 AND scope_id = $2
+ORDER BY created_at;
+
+-- name: ListSubmissionRevisionsForBot :many
+SELECT ai_submission_id, bot_id, artifact_id, runtime_kind, ai_id, validation_state, created_at
+FROM ai_submission_revisions
+WHERE bot_id = $1
+ORDER BY created_at;

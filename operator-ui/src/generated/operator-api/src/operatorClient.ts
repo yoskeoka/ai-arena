@@ -12,6 +12,8 @@ import {
   type CreateGameRegistrationOptions,
   createMatchRequest,
   type CreateMatchRequestOptions,
+  createOrReviseBot,
+  type CreateOrReviseBotOptions,
   createSignupInvite,
   type CreateSignupInviteOptions,
   enqueuePreset,
@@ -26,6 +28,8 @@ import {
   type ListActiveMatchesOptions,
   listAiSubmissions,
   type ListAiSubmissionsOptions,
+  listBots,
+  type ListBotsOptions,
   listCompletedMatches,
   type ListCompletedMatchesOptions,
   listGameRegistrations,
@@ -38,6 +42,8 @@ import {
   type PromoteRunOptions,
   rerunRun,
   type RerunRunOptions,
+  retireBot,
+  type RetireBotOptions,
   retryRun,
   type RetryRunOptions,
   session,
@@ -49,6 +55,7 @@ import {
 } from "./api/operatorClientOperations.js";
 import type {
   AiSubmissionRequest,
+  BotRevisionRequest,
   File,
   GameRegistrationRequest,
   MatchRequestCreateRequest,
@@ -96,6 +103,18 @@ export class OperatorClient {
     options?: CreateAiSubmissionOptions,
   ) {
     return createAiSubmission(this.#context, body, options);
+  };
+  async createOrReviseBot(
+    body: BotRevisionRequest,
+    options?: CreateOrReviseBotOptions,
+  ) {
+    return createOrReviseBot(this.#context, body, options);
+  };
+  async listBots(scopeId: string, options?: ListBotsOptions) {
+    return listBots(this.#context, scopeId, options);
+  };
+  async retireBot(botId: string, options?: RetireBotOptions) {
+    return retireBot(this.#context, botId, options);
   };
   async uploadAiBundle(
     body: {

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { AiSubmission, OperatorApiClient } from "../../lib/operatorApiClient";
+import { AiBot, OperatorApiClient } from "../../lib/operatorApiClient";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
@@ -10,20 +10,25 @@ type SubmissionsPageProps = {
 
 export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
   const client = useMemo(() => new OperatorApiClient(normalizeBaseUrl(baseUrl)), [baseUrl]);
-  const [items, setItems] = useState<AiSubmission[]>([]);
+  const [items, setItems] = useState<AiBot[]>([]);
   const [listState, setListState] = useState<LoadState>("loading");
   const [listError, setListError] = useState<string>();
   const [writeState, setWriteState] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [writeError, setWriteError] = useState<string>();
-  const [submissionID, setSubmissionID] = useState("");
-  const [gameRegistrationID, setGameRegistrationID] = useState("");
-  const [artifactRef, setArtifactRef] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [scopeID, setScopeID] = useState("");
+  const [botID, setBotID] = useState("");
+  const [botName, setBotName] = useState("");
+  const [artifactID, setArtifactID] = useState("");
 
   const load = async () => {
     setListState((current) => (current === "ready" ? current : "loading"));
     try {
-      const response = await client.listAiSubmissions();
+      if (!scopeID.trim()) {
+        setItems([]);
+        setListState("ready");
+        return;
+      }
+      const response = await client.listBots(scopeID.trim(), true);
       setItems(response);
       setListState("ready");
       setListError(undefined);
@@ -35,19 +40,32 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
 
   useEffect(() => {
     void load();
-  }, [client]);
+  }, [client, scopeID]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setWriteState("submitting");
     setWriteError(undefined);
     try {
-      await client.createAiSubmission({
-        aiSubmissionId: submissionID.trim() || undefined,
-        gameRegistrationId: gameRegistrationID.trim(),
-        artifactRef: artifactRef.trim(),
-        displayName: displayName.trim() || undefined,
+      await client.createOrReviseBot({
+        scopeId: scopeID.trim(),
+        botId: botID.trim() || undefined,
+        botName: botName.trim() || undefined,
+        artifactId: artifactID.trim(),
       });
+      setWriteState("success");
+      await load();
+    } catch (error) {
+      setWriteState("error");
+      setWriteError(messageOf(error));
+    }
+  };
+
+  const handleRetire = async (botId: string) => {
+    setWriteState("submitting");
+    setWriteError(undefined);
+    try {
+      await client.retireBot(botId);
       setWriteState("success");
       await load();
     } catch (error) {
@@ -59,66 +77,65 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <Panel
-        title="Register AI"
-        subtitle="Admit one AI artifact for one game registration."
+        title="Create or revise AI bot"
+        subtitle="A revision keeps the selected bot and ranking identity."
         status={writeState}
         error={writeError}
         hint={hintFor(writeError)}
         testId="operator-form-submissions"
       >
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <TextField label="AI Submission ID" value={submissionID} onChange={setSubmissionID} placeholder="optional stable id" />
+          <TextField label="Competition scope" value={scopeID} onChange={setScopeID} placeholder="reversi-v1-regular" required />
           <TextField
-            label="Game Registration ID"
-            value={gameRegistrationID}
-            onChange={setGameRegistrationID}
-            placeholder="echo-count-v2"
-            required
+            label="Existing bot ID"
+            value={botID}
+            onChange={setBotID}
+            placeholder="leave empty for a new bot"
           />
-          <TextField label="Artifact Ref" value={artifactRef} onChange={setArtifactRef} placeholder="/abs/path/to/ai" required />
-          <TextField label="Display Name" value={displayName} onChange={setDisplayName} placeholder="Echo Bot 01" />
+          <TextField label="Bot name" value={botName} onChange={setBotName} placeholder="required for a new bot" />
+          <TextField label="Uploaded AI artifact ID" value={artifactID} onChange={setArtifactID} placeholder="SHA-256 digest from bundle upload" required />
           <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit">
-            Create AI submission
+            Save bot revision
           </button>
         </form>
       </Panel>
 
       <Panel
-        title="Admitted AIs"
-        subtitle="Ready AI identities for manual requests and preset materialization."
+        title="Your bots"
+        subtitle="Active and retired bots remain visible with stable identities."
         status={listState}
         error={listError}
         hint={hintFor(listError)}
         testId="operator-panel-submissions"
       >
         {items.length === 0 ? (
-          <p className="text-sm text-black/60">No admitted AI submissions yet.</p>
+          <p className="text-sm text-black/60">Enter a competition scope to list bots.</p>
         ) : (
           <div className="space-y-3">
             {items.map((item) => (
               <article
-                key={item.aiSubmissionId}
+                key={item.botId}
                 className="rounded-3xl border border-black/10 bg-paper p-4"
-                data-testid={`submission-row-${item.aiSubmissionId}`}
+                data-testid={`bot-row-${item.botId}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold">{item.displayName}</p>
-                    <p className="mt-1 text-xs text-black/60">{item.aiSubmissionId}</p>
+                    <p className="font-semibold">{item.botName}</p>
+                    <p className="mt-1 text-xs text-black/60">{item.botId}</p>
                   </div>
                   <div className="text-xs text-black/60">
-                    <span>{item.validationState}</span>
+                    <span>{item.lifecycleState}</span>
                   </div>
                 </div>
-                <p className="mt-2 text-sm text-black/70">
-                  {item.game.gameId}@{item.game.gameVersion} / {item.game.rulesetVersion}
-                </p>
-                <p className="mt-2 break-all text-sm text-black/65">{item.artifactRef}</p>
                 <div className="mt-3 flex flex-wrap gap-4 text-xs text-black/60">
-                  <span>game registration: {item.gameRegistrationId}</span>
-                  <span>runtime: {item.runtimeKind}</span>
-                  <span>ai id: {item.aiId}</span>
+                  <span>scope: {item.scopeId}</span>
+                  <span>active revision: {item.activeSubmissionId || "none"}</span>
                 </div>
+                {item.lifecycleState === "active" ? (
+                  <button className="mt-3 rounded-full border border-black/20 px-3 py-1 text-xs font-semibold" type="button" onClick={() => void handleRetire(item.botId)}>
+                    Retire bot
+                  </button>
+                ) : null}
               </article>
             ))}
           </div>

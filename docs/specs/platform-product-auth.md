@@ -160,6 +160,13 @@ first landing の auth metadata backend は `Postgres` とする。
 provider 固有 subject や login name は `account` に混ぜず、
 `account_identity` 側に寄せなければならない。
 
+## Registration Ownership Authorization
+
+- game bundle upload と uploaded release の activation は `operator` role を要求する。
+- AI bot の create、revision、retire、list は authenticated principal の account を owner とし、
+  request body が別 account を指定して ownership を偽装する経路を持ってはならない。
+- operator role であっても他 account の代理 submit や ownership transfer はこの段階では許可しない。
+
 ## Backend Auth Provider Boundary
 
 - public browser route は current の GitHub first contract を維持する

@@ -15,10 +15,8 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
   const [listError, setListError] = useState<string>();
   const [writeState, setWriteState] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [writeError, setWriteError] = useState<string>();
-  const [registrationID, setRegistrationID] = useState("");
-  const [gameID, setGameID] = useState("");
-  const [gameVersion, setGameVersion] = useState("");
   const [rulesetVersion, setRulesetVersion] = useState("");
+  const [artifactID, setArtifactID] = useState("");
 
   const load = async () => {
     setListState((current) => (current === "ready" ? current : "loading"));
@@ -43,12 +41,8 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
     setWriteError(undefined);
     try {
       await client.createGameRegistration({
-        registrationId: registrationID.trim() || undefined,
-        game: {
-          gameId: gameID.trim(),
-          gameVersion: gameVersion.trim(),
-          rulesetVersion: rulesetVersion.trim(),
-        },
+        artifactId: artifactID.trim() || undefined,
+        rulesetVersion: rulesetVersion.trim() || undefined,
       });
       setWriteState("success");
       await load();
@@ -61,33 +55,31 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <Panel
-        title="Register Game"
-        subtitle="Add one operator-visible game registration."
+        title="Activate uploaded game"
+        subtitle="Select an admitted game bundle and one ruleset for a stable competition scope."
         status={writeState}
         error={writeError}
         hint={hintFor(writeError)}
         testId="operator-form-games"
       >
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <TextField label="Registration ID" value={registrationID} onChange={setRegistrationID} placeholder="optional stable id" />
-          <TextField label="Game ID" value={gameID} onChange={setGameID} placeholder="echo-count" required />
-          <TextField label="Game Version" value={gameVersion} onChange={setGameVersion} placeholder="2.0.0" required />
           <TextField
             label="Ruleset Version"
             value={rulesetVersion}
             onChange={setRulesetVersion}
-            placeholder="phase2-simultaneous-2turn"
+            placeholder="regular"
             required
           />
+          <TextField label="Uploaded game artifact ID" value={artifactID} onChange={setArtifactID} placeholder="SHA-256 digest from bundle upload" required />
           <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit">
-            Create game registration
+            Activate competition scope
           </button>
         </form>
       </Panel>
 
       <Panel
-        title="Registered Games"
-        subtitle="Insertion-order list from the operator API."
+        title="Competition scopes"
+        subtitle="Active exact game releases and their stable major/ruleset scope identities."
         status={listState}
         error={listError}
         hint={hintFor(listError)}
@@ -111,6 +103,7 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
                   <span>build: {item.buildMode}</span>
                   <span>builder: {item.builderId}</span>
                   <span>rulesets: {item.supportedRulesets.join(", ") || "n/a"}</span>
+                  <span>artifact: {item.artifactId || "builtin"}</span>
                 </div>
               </article>
             ))}

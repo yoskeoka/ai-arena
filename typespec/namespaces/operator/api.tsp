@@ -32,6 +32,18 @@ op listAISubmissions(): AISubmissionListResponse;
 @post
 op createAISubmission(@body body: AISubmissionRequest): AISubmission;
 
+@route("/api/v1/bots")
+@post
+op createOrReviseBot(@body body: BotRevisionRequest): BotRevisionResponse;
+
+@route("/api/v1/bots")
+@get
+op listBots(@query scope_id: string, @query include_retired?: boolean): AIBotListResponse;
+
+@route("/api/v1/bots/{bot_id}/retire")
+@post
+op retireBot(@path bot_id: string): AIBot;
+
 @route("/api/v1/ai-bundles")
 @post
 op uploadAIBundle(@multipartBody body: { bundle: HttpPart<File>; game_registration_id: HttpPart<string>; display_name?: HttpPart<string>; }): {

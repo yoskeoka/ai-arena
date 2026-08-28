@@ -333,6 +333,20 @@ func (a *AuthService) RequireOperator(next http.Handler) http.Handler {
 	})
 }
 
+// RequireAuthenticated wraps a handler with session authentication only.
+func (a *AuthService) RequireAuthenticated(next http.Handler) http.Handler {
+	if a == nil {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := a.sessionPrincipal(r.Context(), r); err != nil {
+			writeError(w, http.StatusUnauthorized, ErrAuthenticationNeeded)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (a *AuthService) sessionPrincipal(ctx context.Context, r *http.Request) (AuthPrincipal, error) {
 	if a == nil {
 		return AuthPrincipal{}, ErrAuthDisabled
@@ -346,6 +360,11 @@ func (a *AuthService) sessionPrincipal(ctx context.Context, r *http.Request) (Au
 		return AuthPrincipal{}, ErrAuthenticationNeeded
 	}
 	return a.store.GetSession(ctx, token, a.now().UTC())
+}
+
+// Principal resolves the authenticated request account for ownership-scoped APIs.
+func (a *AuthService) Principal(ctx context.Context, r *http.Request) (AuthPrincipal, error) {
+	return a.sessionPrincipal(ctx, r)
 }
 
 func (a *AuthService) validatedReturnTo(raw string) (string, error) {
