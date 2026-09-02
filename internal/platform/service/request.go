@@ -15,6 +15,7 @@ import (
 // MatchRequestParticipant binds one operator-visible player id to one admitted AI submission.
 type MatchRequestParticipant struct {
 	PlayerID       string `json:"player_id"`
+	BotID          string `json:"bot_id"`
 	AISubmissionID string `json:"ai_submission_id"`
 }
 
@@ -35,10 +36,13 @@ type MatchRequest struct {
 
 // MatchRequestCreateRequest is the operator-facing create payload for one general match request.
 type MatchRequestCreateRequest struct {
+	ScopeID string   `json:"scope_id"`
+	BotIDs  []string `json:"bot_ids"`
+	// Legacy fields remain internal compatibility inputs while API clients use scope_id and bot_ids.
 	RequestID          string                    `json:"request_id,omitempty"`
-	GameRegistrationID string                    `json:"game_registration_id"`
-	Participants       []MatchRequestParticipant `json:"participants"`
-	OutputDir          string                    `json:"output_dir"`
+	GameRegistrationID string                    `json:"game_registration_id,omitempty"`
+	Participants       []MatchRequestParticipant `json:"participants,omitempty"`
+	OutputDir          string                    `json:"output_dir,omitempty"`
 	MatchID            string                    `json:"match_id,omitempty"`
 }
 
@@ -54,9 +58,16 @@ type MatchRequestService struct {
 	commands       *CommandService
 	queue          QueueStore
 	store          MatchRequestStore
+	bots           BotOwnershipStore
 	newRequestIDFn func() string
 	newRunIDFn     func() string
 	newMatchIDFn   func() string
+}
+
+// WithBotOwnership enables immutable ready-revision resolution for operator composition.
+func (s *MatchRequestService) WithBotOwnership(bots BotOwnershipStore) *MatchRequestService {
+	s.bots = bots
+	return s
 }
 
 // NewMatchRequestService constructs the minimal request+scheduling service.
@@ -90,7 +101,10 @@ func (s *MatchRequestService) Create(ctx context.Context, req MatchRequestCreate
 	if requestID == "" {
 		requestID = s.newRequestIDFn()
 	}
-	gameRegistrationID := strings.TrimSpace(req.GameRegistrationID)
+	gameRegistrationID := strings.TrimSpace(req.ScopeID)
+	if gameRegistrationID == "" {
+		gameRegistrationID = strings.TrimSpace(req.GameRegistrationID)
+	}
 	if gameRegistrationID == "" {
 		return MatchRequest{}, QueueRecord{}, fmt.Errorf("%w: service: game_registration_id is required", ErrBadRequest)
 	}
@@ -102,21 +116,63 @@ func (s *MatchRequestService) Create(ctx context.Context, req MatchRequestCreate
 		return MatchRequest{}, QueueRecord{}, err
 	}
 
-	players, err := s.resolveParticipants(ctx, gameRegistrationID, req.Participants)
+	if len(req.BotIDs) == 0 {
+		players, err := s.resolveParticipants(ctx, gameRegistrationID, req.Participants)
+		if err != nil {
+			return MatchRequest{}, QueueRecord{}, err
+		}
+		participants := cloneRequestParticipants(req.Participants)
+		matchID := strings.TrimSpace(req.MatchID)
+		if matchID == "" {
+			matchID = s.newMatchIDFn()
+		}
+		submission := MatchSubmission{RunID: s.newRunIDFn(), MatchID: matchID, Game: game.Game, GameArtifactID: gameArtifactID(game), Players: players, OutputDir: strings.TrimSpace(req.OutputDir), AttemptCount: 1, RunKind: RunKindInitial}
+		record, err := s.commands.Submit(ctx, submission)
+		if err != nil {
+			return MatchRequest{}, QueueRecord{}, err
+		}
+		item := MatchRequest{RequestID: requestID, GameRegistrationID: gameRegistrationID, Game: game.Game, Participants: participants, OutputDir: submission.OutputDir, Source: SourceManual, MatchID: record.Submission.MatchID, LatestRunID: record.Submission.RunID, OfficialRunID: officialRunID(record), LifecycleState: record.State}
+		if err := s.store.Save(ctx, item); err != nil {
+			return MatchRequest{}, QueueRecord{}, s.rollbackQueuedSubmission(ctx, record, wrapConflict(err))
+		}
+		return item, record, nil
+	}
+	if s.bots == nil {
+		return MatchRequest{}, QueueRecord{}, fmt.Errorf("service: bot ownership is required")
+	}
+	if game.PlayerCount < 1 || len(req.BotIDs) != game.PlayerCount {
+		return MatchRequest{}, QueueRecord{}, fmt.Errorf("%w: service: exact player count is required", ErrBadRequest)
+	}
+	seen := map[string]struct{}{}
+	for _, id := range req.BotIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return MatchRequest{}, QueueRecord{}, fmt.Errorf("%w: service: bot_id is required", ErrBadRequest)
+		}
+		if _, ok := seen[id]; ok {
+			return MatchRequest{}, QueueRecord{}, fmt.Errorf("%w: service: duplicate bot_id", ErrBadRequest)
+		}
+		seen[id] = struct{}{}
+	}
+	resolved, err := s.bots.ResolveEligible(ctx, gameRegistrationID, req.BotIDs)
 	if err != nil {
 		return MatchRequest{}, QueueRecord{}, err
 	}
-	matchID := strings.TrimSpace(req.MatchID)
-	if matchID == "" {
-		matchID = s.newMatchIDFn()
+	players := make([]SubmittedPlayer, 0, len(resolved))
+	participants := make([]MatchRequestParticipant, 0, len(resolved))
+	for index, bot := range resolved {
+		playerID := fmt.Sprintf("p%d", index+1)
+		players = append(players, SubmittedPlayer{PlayerID: playerID, BotID: bot.BotID, AISubmissionID: bot.ActiveRevisionID, ArtifactID: bot.ArtifactID})
+		participants = append(participants, MatchRequestParticipant{PlayerID: playerID, BotID: bot.BotID, AISubmissionID: bot.ActiveRevisionID})
 	}
+	matchID := s.newMatchIDFn()
 	submission := MatchSubmission{
 		RunID:          s.newRunIDFn(),
 		MatchID:        matchID,
 		Game:           game.Game,
 		GameArtifactID: gameArtifactID(game),
 		Players:        players,
-		OutputDir:      strings.TrimSpace(req.OutputDir),
+		OutputDir:      "matches",
 		AttemptCount:   1,
 		RunKind:        RunKindInitial,
 	}
@@ -129,7 +185,7 @@ func (s *MatchRequestService) Create(ctx context.Context, req MatchRequestCreate
 		RequestID:          requestID,
 		GameRegistrationID: gameRegistrationID,
 		Game:               game.Game,
-		Participants:       cloneRequestParticipants(req.Participants),
+		Participants:       participants,
 		OutputDir:          submission.OutputDir,
 		Source:             SourceManual,
 		MatchID:            record.Submission.MatchID,

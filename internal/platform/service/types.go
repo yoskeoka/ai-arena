@@ -27,9 +27,11 @@ type MatchSubmission struct {
 
 // SubmittedPlayer binds a player id to its immutable admitted AI artifact.
 type SubmittedPlayer struct {
-	PlayerID    string `json:"player_id"`
-	ArtifactRef string `json:"artifact_ref"`
-	ArtifactID  string `json:"artifact_id,omitempty"`
+	PlayerID       string `json:"player_id"`
+	BotID          string `json:"bot_id,omitempty"`
+	AISubmissionID string `json:"ai_submission_id,omitempty"`
+	ArtifactRef    string `json:"artifact_ref"`
+	ArtifactID     string `json:"artifact_id,omitempty"`
 }
 
 // RunKind identifies why one run exists inside a match run group.

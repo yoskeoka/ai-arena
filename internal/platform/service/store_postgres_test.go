@@ -17,6 +17,9 @@ func TestPostgresQueueStoreSharesQueueAcrossInstances(t *testing.T) {
 	submission1 := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
 	submission1.RunID = "run-pg-1"
 	submission1.MatchID = "match-pg-1"
+	submission1.Players[0].BotID = "bot-pg-1"
+	submission1.Players[0].AISubmissionID = "revision-pg-1"
+	submission1.Players[0].ArtifactID = "digest-pg-1"
 	submission2 := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
 	submission2.RunID = "run-pg-2"
 	submission2.MatchID = "match-pg-2"
@@ -68,6 +71,9 @@ func TestPostgresQueueStoreSharesQueueAcrossInstances(t *testing.T) {
 	}
 	if loaded.State != StateCompleted {
 		t.Fatalf("loaded.State = %q, want %q", loaded.State, StateCompleted)
+	}
+	if got := loaded.Submission.Players[0]; got.BotID != "bot-pg-1" || got.AISubmissionID != "revision-pg-1" || got.ArtifactID != "digest-pg-1" {
+		t.Fatalf("loaded pinned provenance = %+v", got)
 	}
 	if loaded.Terminal == nil {
 		t.Fatal("loaded.Terminal = nil, want terminal summary")

@@ -32,6 +32,8 @@ import {
   type ListBotsOptions,
   listCompletedMatches,
   type ListCompletedMatchesOptions,
+  listEligibleBots,
+  type ListEligibleBotsOptions,
   listGameRegistrations,
   type ListGameRegistrationsOptions,
   listMatchRequests,
@@ -112,6 +114,9 @@ export class OperatorClient {
   };
   async listBots(scopeId: string, options?: ListBotsOptions) {
     return listBots(this.#context, scopeId, options);
+  };
+  async listEligibleBots(scopeId: string, options?: ListEligibleBotsOptions) {
+    return listEligibleBots(this.#context, scopeId, options);
   };
   async retireBot(botId: string, options?: RetireBotOptions) {
     return retireBot(this.#context, botId, options);

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { MatchRequest, MatchRequestParticipant, OperatorApiClient } from "../../lib/operatorApiClient";
+import { EligibleBot, MatchRequest, OperatorApiClient } from "../../lib/operatorApiClient";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 import { hrefForRunDetail } from "./operatorRoutes";
@@ -9,8 +9,6 @@ type RequestsPageProps = {
   baseUrl: string;
 };
 
-type EditableParticipant = MatchRequestParticipant & { id: string };
-
 export function RequestsPage({ baseUrl }: RequestsPageProps) {
   const client = useMemo(() => new OperatorApiClient(normalizeBaseUrl(baseUrl)), [baseUrl]);
   const [items, setItems] = useState<MatchRequest[]>([]);
@@ -18,12 +16,10 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
   const [listError, setListError] = useState<string>();
   const [writeState, setWriteState] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [writeError, setWriteError] = useState<string>();
-  const [gameRegistrationID, setGameRegistrationID] = useState("");
-  const [outputDir, setOutputDir] = useState("");
-  const [participants, setParticipants] = useState<EditableParticipant[]>([
-    { id: "p1", playerId: "p1", aiSubmissionId: "" },
-    { id: "p2", playerId: "p2", aiSubmissionId: "" },
-  ]);
+  const [games, setGames] = useState<Array<{ registrationId: string; playerCount?: number }>>([]);
+  const [scopeID, setScopeID] = useState("");
+  const [eligible, setEligible] = useState<EligibleBot[]>([]);
+  const [selected, setSelected] = useState<EligibleBot[]>([]);
 
   const load = async () => {
     setListState((current) => (current === "ready" ? current : "loading"));
@@ -40,21 +36,21 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
 
   useEffect(() => {
     void load();
+    void client.listGameRegistrations().then(setGames).catch((error) => setListError(messageOf(error)));
   }, [client]);
+
+  const playerCount = games.find((game) => game.registrationId === scopeID)?.playerCount ?? 0;
+  useEffect(() => {
+    if (!scopeID) { setEligible([]); setSelected([]); return; }
+    void client.listEligibleBots(scopeID).then((items) => { setEligible(items); setSelected(shuffle(items).slice(0, playerCount)); }).catch((error) => setWriteError(messageOf(error)));
+  }, [client, playerCount, scopeID]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setWriteState("submitting");
     setWriteError(undefined);
     try {
-      await client.createMatchRequest({
-        gameRegistrationId: gameRegistrationID.trim(),
-        outputDir: outputDir.trim(),
-        participants: participants.map(({ playerId, aiSubmissionId }) => ({
-          playerId: playerId.trim(),
-          aiSubmissionId: aiSubmissionId.trim(),
-        })),
-      });
+      await client.createComposedMatchRequest(scopeID, selected.map((bot) => bot.botId));
       setWriteState("success");
       await load();
     } catch (error) {
@@ -63,9 +59,7 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
     }
   };
 
-  const updateParticipant = (id: string, field: "playerId" | "aiSubmissionId", value: string) => {
-    setParticipants((current) => current.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
-  };
+  const shuffleSelection = () => setSelected(shuffle(eligible).slice(0, playerCount));
 
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
@@ -78,36 +72,11 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
         testId="operator-form-requests"
       >
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <TextField
-            label="Game Registration ID"
-            value={gameRegistrationID}
-            onChange={setGameRegistrationID}
-            placeholder="echo-count-v2"
-            required
-          />
-          <TextField label="Output Dir" value={outputDir} onChange={setOutputDir} placeholder="tmp/operator-ui-request-01" required />
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-black/70">Participants</p>
-            {participants.map((participant, index) => (
-              <div key={participant.id} className="grid gap-3 rounded-3xl border border-black/10 bg-paper p-4 md:grid-cols-2">
-                <TextField
-                  label={`Player ${index + 1} ID`}
-                  value={participant.playerId}
-                  onChange={(value) => updateParticipant(participant.id, "playerId", value)}
-                  placeholder={`p${index + 1}`}
-                  required
-                />
-                <TextField
-                  label={`Player ${index + 1} AI Submission ID`}
-                  value={participant.aiSubmissionId}
-                  onChange={(value) => updateParticipant(participant.id, "aiSubmissionId", value)}
-                  placeholder="ai-..."
-                  required
-                />
-              </div>
-            ))}
-          </div>
-          <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit">
+          <label className="flex flex-col gap-2 text-sm"><span className="font-medium text-black/70">Competition scope</span><select value={scopeID} onChange={(event) => setScopeID(event.target.value)} required><option value="">Select a scope</option>{games.map((game) => <option key={game.registrationId} value={game.registrationId}>{game.registrationId}</option>)}</select></label>
+          <div className="space-y-2"><p className="text-sm font-medium text-black/70">Selected seats ({selected.length}/{playerCount})</p>{selected.map((bot, index) => <p key={bot.botId} className="rounded-2xl bg-white px-3 py-2 text-sm">p{index + 1}: {bot.botName}</p>)}</div>
+          <button className="rounded-full border border-ink px-5 py-3 text-sm font-semibold" type="button" onClick={shuffleSelection} disabled={eligible.length < playerCount}>Shuffle</button>
+          {scopeID && eligible.length < playerCount ? <p className="text-sm text-red-700">Not enough eligible bots for this scope.</p> : null}
+          <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit" disabled={!scopeID || selected.length !== playerCount}>
             Create match request
           </button>
         </form>
@@ -168,29 +137,11 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
   );
 }
 
-function TextField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  required,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  required?: boolean;
-}) {
-  return (
-    <label className="flex flex-col gap-2 text-sm">
-      <span className="font-medium text-black/70">{label}</span>
-      <input
-        className="rounded-2xl border border-black/15 bg-white px-4 py-3 shadow-sm outline-none transition focus:border-accent"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        required={required}
-      />
-    </label>
-  );
+function shuffle<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const next = Math.floor(Math.random() * (index + 1));
+    [result[index], result[next]] = [result[next], result[index]];
+  }
+  return result;
 }

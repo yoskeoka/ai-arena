@@ -48,6 +48,20 @@ type OwnedBot struct {
 	ActiveRevisionID  string            `json:"active_submission_id,omitempty"`
 }
 
+// EligibleBot is the minimum operator composition projection for one ready bot.
+type EligibleBot struct {
+	BotID            string `json:"bot_id"`
+	ScopeID          string `json:"scope_id"`
+	BotName          string `json:"bot_name"`
+	ActiveRevisionID string `json:"active_submission_id"`
+}
+
+// ResolvedEligibleBot contains the immutable revision selected at admission.
+type ResolvedEligibleBot struct {
+	EligibleBot
+	ArtifactID string `json:"artifact_id"`
+}
+
 // AISubmissionRevision is an immutable admitted artifact revision for a bot.
 type AISubmissionRevision struct {
 	AISubmissionID  string          `json:"ai_submission_id"`
@@ -75,6 +89,46 @@ type BotOwnershipStore interface {
 	CreateOrRevise(context.Context, BotRevisionRequest) (OwnedBot, AISubmissionRevision, error)
 	Retire(context.Context, string, string) (OwnedBot, error)
 	ListByOwner(context.Context, string, string, bool) ([]OwnedBot, error)
+	ListEligible(context.Context, string) ([]EligibleBot, error)
+	ResolveEligible(context.Context, string, []string) ([]ResolvedEligibleBot, error)
+}
+
+func (s *InMemoryBotOwnershipStore) ResolveEligible(ctx context.Context, scopeID string, ids []string) ([]ResolvedEligibleBot, error) {
+	eligible, err := s.ListEligible(ctx, scopeID)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]EligibleBot, len(eligible))
+	for _, item := range eligible {
+		byID[item.BotID] = item
+	}
+	items := make([]ResolvedEligibleBot, 0, len(ids))
+	for _, id := range ids {
+		item, ok := byID[strings.TrimSpace(id)]
+		if !ok {
+			return nil, fmt.Errorf("%w: bot is not eligible in scope", ErrBadRequest)
+		}
+		items = append(items, ResolvedEligibleBot{EligibleBot: item, ArtifactID: s.revisions[item.ActiveRevisionID].ArtifactID})
+	}
+	return items, nil
+}
+
+// ListEligible returns every active bot with a ready active revision in a scope.
+func (s *InMemoryBotOwnershipStore) ListEligible(_ context.Context, scopeID string) ([]EligibleBot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	items := make([]EligibleBot, 0)
+	for _, bot := range s.bots {
+		if bot.ScopeID != strings.TrimSpace(scopeID) || bot.LifecycleState != BotActive || bot.ActiveRevisionID == "" {
+			continue
+		}
+		revision, ok := s.revisions[bot.ActiveRevisionID]
+		if !ok || revision.ValidationState != ValidationReady {
+			continue
+		}
+		items = append(items, EligibleBot{BotID: bot.BotID, ScopeID: bot.ScopeID, BotName: bot.BotName, ActiveRevisionID: bot.ActiveRevisionID})
+	}
+	return items, nil
 }
 
 // InMemoryBotOwnershipStore provides the same serialized invariant for local mode.

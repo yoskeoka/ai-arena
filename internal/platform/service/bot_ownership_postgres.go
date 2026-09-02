@@ -122,6 +122,37 @@ func (s *PostgresBotOwnershipStore) ListByOwner(ctx context.Context, owner, scop
 	}
 	return out, rows.Err()
 }
+
+// ListEligible returns the scope-wide, operator-only composition projection.
+func (s *PostgresBotOwnershipStore) ListEligible(ctx context.Context, scopeID string) ([]EligibleBot, error) {
+	rows, err := s.pool.Query(ctx, `SELECT b.bot_id::text, b.scope_id, b.bot_name, b.active_submission_id::text FROM ai_bots b JOIN ai_submission_revisions r ON r.ai_submission_id=b.active_submission_id WHERE b.scope_id=$1 AND b.lifecycle_state='active' AND r.validation_state='ready' ORDER BY b.bot_name, b.bot_id`, strings.TrimSpace(scopeID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]EligibleBot, 0)
+	for rows.Next() {
+		var item EligibleBot
+		if err = rows.Scan(&item.BotID, &item.ScopeID, &item.BotName, &item.ActiveRevisionID); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *PostgresBotOwnershipStore) ResolveEligible(ctx context.Context, scopeID string, ids []string) ([]ResolvedEligibleBot, error) {
+	items := make([]ResolvedEligibleBot, 0, len(ids))
+	for _, id := range ids {
+		var item ResolvedEligibleBot
+		err := s.pool.QueryRow(ctx, `SELECT b.bot_id::text,b.scope_id,b.bot_name,b.active_submission_id::text,r.artifact_id FROM ai_bots b JOIN ai_submission_revisions r ON r.ai_submission_id=b.active_submission_id WHERE b.bot_id=$1 AND b.scope_id=$2 AND b.lifecycle_state='active' AND r.validation_state='ready'`, strings.TrimSpace(id), strings.TrimSpace(scopeID)).Scan(&item.BotID, &item.ScopeID, &item.BotName, &item.ActiveRevisionID, &item.ArtifactID)
+		if err != nil {
+			return nil, mapBotStoreError(err)
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
 func mapBotStoreError(err error) error {
 	if err == nil {
 		return nil
