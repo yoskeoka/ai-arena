@@ -125,8 +125,8 @@ func TestOperatorAPIPresetLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("general.ListGames() error = %v", err)
 	}
-	if len(gameRegistrations) != 1 || gameRegistrations[0].RegistrationID != "echo-count-v2" {
-		t.Fatalf("game registrations = %+v, want materialized echo-count-v2", gameRegistrations)
+	if len(gameRegistrations) != 1 || gameRegistrations[0].RegistrationID != "echo-count-v2-phase2-simultaneous-2turn" {
+		t.Fatalf("game registrations = %+v, want materialized ruleset scope", gameRegistrations)
 	}
 	if gameRegistrations[0].Source != SourcePreset || gameRegistrations[0].SourceID != "echo-reference" {
 		t.Fatalf("game registration source = %+v, want preset echo-reference", gameRegistrations[0])
@@ -299,6 +299,35 @@ func TestOperatorAPICreateSignupInvite(t *testing.T) {
 	}
 	if !invite.ExpiresAt.After(time.Now().UTC().Add(24 * time.Hour)) {
 		t.Fatalf("invite.ExpiresAt = %s, want TTL longer than 24h", invite.ExpiresAt)
+	}
+}
+
+func TestOperatorAPIBotRevisionUsesAuthenticatedOwner(t *testing.T) {
+	authStore := &memoryAuthStore{identities: map[string]AuthPrincipal{authIdentityKey(AuthIdentity{Provider: authProviderGitHub, Subject: "bot-owner"}): {AccountID: "account-owner", Roles: []string{"developer"}}}}
+	auth, err := NewAuthService(AuthConfig{GitHubClientID: "client-id", GitHubClientSecret: "client-secret"}, authStore, fakeGitHubAuthProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := authStore.CreateSession(context.Background(), "account-owner", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := &OperatorAPI{auth: auth, botOwnership: NewInMemoryBotOwnershipStore()}
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/bots", bytes.NewBufferString(`{"scope":{"scope_id":"scope","max_active_bots_per_owner":1},"bot_name":"Alpha","artifact_id":"digest"}`))
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
+	resp := httptest.NewRecorder()
+	api.handleBotRevision(resp, req)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("bot revision status = %d, body=%s", resp.Code, resp.Body.String())
+	}
+	var payload struct {
+		Bot OwnedBot `json:"bot"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Bot.OwnerAccountID != "account-owner" {
+		t.Fatalf("owner = %q", payload.Bot.OwnerAccountID)
 	}
 }
 
@@ -512,7 +541,7 @@ func TestOperatorAPIGeneralRegistrationRoutes(t *testing.T) {
 		t.Fatalf("POST /api/v1/game-registrations status = %d, body = %s", gameResp.Code, gameResp.Body.String())
 	}
 
-	aiReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/ai-submissions", bytes.NewBufferString(fmt.Sprintf(`{"game_registration_id":"echo-count-v2","artifact_ref":%q}`, repoJoin(t, "testdata/ai/echo/echo-ai-2turn"))))
+	aiReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/ai-submissions", bytes.NewBufferString(fmt.Sprintf(`{"game_registration_id":"echo-count-v2-phase2-simultaneous-2turn","artifact_ref":%q}`, repoJoin(t, "testdata/ai/echo/echo-ai-2turn"))))
 	aiReq.Header.Set("Content-Type", "application/json")
 	aiResp := httptest.NewRecorder()
 	handler.ServeHTTP(aiResp, aiReq)
@@ -585,8 +614,8 @@ func TestOperatorAPIMatchRequestRoutes(t *testing.T) {
 	}
 
 	aiPayloads := []string{
-		fmt.Sprintf(`{"game_registration_id":"echo-count-v2","artifact_ref":%q,"display_name":"Echo 1"}`, repoJoin(t, "testdata/ai/echo/echo-ai-2turn")),
-		fmt.Sprintf(`{"game_registration_id":"echo-count-v2","artifact_ref":%q,"display_name":"Echo 2"}`, repoJoin(t, "testdata/ai/echo/echo-ai-2turn")),
+		fmt.Sprintf(`{"game_registration_id":"echo-count-v2-phase2-simultaneous-2turn","artifact_ref":%q,"display_name":"Echo 1"}`, repoJoin(t, "testdata/ai/echo/echo-ai-2turn")),
+		fmt.Sprintf(`{"game_registration_id":"echo-count-v2-phase2-simultaneous-2turn","artifact_ref":%q,"display_name":"Echo 2"}`, repoJoin(t, "testdata/ai/echo/echo-ai-2turn")),
 	}
 	aiIDs := make([]string, 0, len(aiPayloads))
 	for _, payload := range aiPayloads {
@@ -604,7 +633,7 @@ func TestOperatorAPIMatchRequestRoutes(t *testing.T) {
 		aiIDs = append(aiIDs, createdAI.AISubmissionID)
 	}
 
-	matchReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/match-requests", bytes.NewBufferString(fmt.Sprintf(`{"game_registration_id":"echo-count-v2","participants":[{"player_id":"p1","ai_submission_id":"%s"},{"player_id":"p2","ai_submission_id":"%s"}],"output_dir":%q}`, aiIDs[0], aiIDs[1], t.TempDir())))
+	matchReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/match-requests", bytes.NewBufferString(fmt.Sprintf(`{"game_registration_id":"echo-count-v2-phase2-simultaneous-2turn","participants":[{"player_id":"p1","ai_submission_id":"%s"},{"player_id":"p2","ai_submission_id":"%s"}],"output_dir":%q}`, aiIDs[0], aiIDs[1], t.TempDir())))
 	matchReq.Header.Set("Content-Type", "application/json")
 	matchResp := httptest.NewRecorder()
 	handler.ServeHTTP(matchResp, matchReq)

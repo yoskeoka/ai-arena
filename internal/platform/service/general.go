@@ -44,13 +44,16 @@ const (
 
 // RegisteredGame is the operator-facing metadata view for one admitted game.
 type RegisteredGame struct {
-	RegistrationID    string                `json:"registration_id"`
-	Game              contract.GameMetadata `json:"game"`
-	BuildMode         registry.BuildMode    `json:"build_mode"`
-	BuilderID         string                `json:"builder_id"`
-	SupportedRulesets []string              `json:"supported_rulesets"`
-	Source            RegistrationSource    `json:"source,omitempty"`
-	SourceID          string                `json:"source_id,omitempty"`
+	RegistrationID        string                `json:"registration_id"`
+	Game                  contract.GameMetadata `json:"game"`
+	ArtifactID            string                `json:"artifact_id,omitempty"`
+	PlayerCount           int                   `json:"player_count,omitempty"`
+	MaxActiveBotsPerOwner int                   `json:"max_active_bots_per_owner,omitempty"`
+	BuildMode             registry.BuildMode    `json:"build_mode"`
+	BuilderID             string                `json:"builder_id"`
+	SupportedRulesets     []string              `json:"supported_rulesets"`
+	Source                RegistrationSource    `json:"source,omitempty"`
+	SourceID              string                `json:"source_id,omitempty"`
 }
 
 // RegisteredAI is one admitted AI artifact identity for the general operator lane.
@@ -72,6 +75,8 @@ type RegisteredAI struct {
 type GameRegistrationRequest struct {
 	RegistrationID string                `json:"registration_id,omitempty"`
 	Game           contract.GameMetadata `json:"game"`
+	ArtifactID     string                `json:"artifact_id,omitempty"`
+	RulesetVersion string                `json:"ruleset_version,omitempty"`
 }
 
 // AISubmissionRequest registers one admitted AI artifact for a game registration.
@@ -179,6 +184,25 @@ func NewGeneralSubmissionService(baseDir string, reg *registry.Registry, games G
 
 // RegisterGame validates and stores one operator-facing registered game view.
 func (s *GeneralSubmissionService) RegisterGame(ctx context.Context, req GameRegistrationRequest) (RegisteredGame, error) {
+	if strings.TrimSpace(req.ArtifactID) != "" && strings.TrimSpace(req.Game.GameID) == "" {
+		if s.bundles == nil {
+			return RegisteredGame{}, fmt.Errorf("%w: service: game bundle upload is not configured", ErrBadRequest)
+		}
+		data, err := s.bundles.Read(ctx, strings.TrimSpace(req.ArtifactID))
+		if err != nil {
+			return RegisteredGame{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
+		}
+		bundle, err := artifactbundle.Read(data)
+		if err != nil {
+			return RegisteredGame{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
+		}
+		if bundle.Manifest.ArtifactKind != "game" {
+			return RegisteredGame{}, fmt.Errorf("%w: service: selected artifact is not a game bundle", ErrBadRequest)
+		}
+		req.Game.GameID = bundle.Manifest.GameID
+		req.Game.GameVersion = bundle.Manifest.GameVersion
+		req.Game.RulesetVersion = strings.TrimSpace(req.RulesetVersion)
+	}
 	registrationID := strings.TrimSpace(req.RegistrationID)
 	if registrationID == "" {
 		registrationID = defaultGameRegistrationID(req.Game)
@@ -186,6 +210,35 @@ func (s *GeneralSubmissionService) RegisterGame(ctx context.Context, req GameReg
 	record, err := s.buildRegisteredGame(ctx, registrationID, req.Game, SourceManual, "")
 	if err != nil {
 		return RegisteredGame{}, err
+	}
+	if artifactID := strings.TrimSpace(req.ArtifactID); artifactID != "" {
+		if s.bundles == nil {
+			return RegisteredGame{}, fmt.Errorf("%w: service: game bundle upload is not configured", ErrBadRequest)
+		}
+		data, err := s.bundles.Read(ctx, artifactID)
+		if err != nil {
+			return RegisteredGame{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
+		}
+		bundle, err := artifactbundle.Read(data)
+		if err != nil {
+			return RegisteredGame{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
+		}
+		if bundle.Manifest.ArtifactKind != "game" || bundle.Manifest.GameID != req.Game.GameID || bundle.Manifest.GameVersion != req.Game.GameVersion {
+			return RegisteredGame{}, fmt.Errorf("%w: service: uploaded game bundle does not match requested release", ErrBadRequest)
+		}
+		found := false
+		for _, ruleset := range bundle.Manifest.Rulesets {
+			if ruleset.RulesetVersion == req.Game.RulesetVersion {
+				record.PlayerCount = ruleset.PlayerCount
+				record.MaxActiveBotsPerOwner = ruleset.MaxActiveBotsPerOwner
+				found = true
+				break
+			}
+		}
+		if !found || record.PlayerCount < 1 || record.MaxActiveBotsPerOwner < 1 {
+			return RegisteredGame{}, fmt.Errorf("%w: service: selected ruleset is missing player or bot limits", ErrBadRequest)
+		}
+		record.ArtifactID = artifactID
 	}
 	if err := s.games.Save(ctx, record); err != nil {
 		return RegisteredGame{}, wrapConflict(err)
@@ -301,7 +354,7 @@ func defaultGameRegistrationID(game contract.GameMetadata) string {
 	if err != nil {
 		return strings.TrimSpace(game.GameID)
 	}
-	return fmt.Sprintf("%s-v%d", strings.TrimSpace(game.GameID), major)
+	return fmt.Sprintf("%s-v%d-%s", strings.TrimSpace(game.GameID), major, strings.TrimSpace(game.RulesetVersion))
 }
 
 func defaultPresetAISubmissionID(presetID, playerID string) string {
@@ -333,15 +386,34 @@ func (s *GeneralSubmissionService) buildRegisteredGame(ctx context.Context, regi
 		return RegisteredGame{}, fmt.Errorf("%w: service: ruleset %q is not supported for game %q version %q", ErrBadRequest, game.RulesetVersion, game.GameID, game.GameVersion)
 	}
 
-	return RegisteredGame{
+	record := RegisteredGame{
 		RegistrationID:    registrationID,
 		Game:              game,
+		ArtifactID:        descriptor.ArtifactID,
 		BuildMode:         descriptor.BuildMode,
 		BuilderID:         descriptor.BuilderID,
 		SupportedRulesets: append([]string(nil), descriptor.BuildConstraints.SupportedRulesets...),
 		Source:            source,
 		SourceID:          sourceID,
-	}, nil
+	}
+	if record.ArtifactID != "" && s.bundles != nil {
+		data, err := s.bundles.Read(ctx, record.ArtifactID)
+		if err != nil {
+			return RegisteredGame{}, err
+		}
+		bundle, err := artifactbundle.Read(data)
+		if err != nil {
+			return RegisteredGame{}, err
+		}
+		for _, ruleset := range bundle.Manifest.Rulesets {
+			if ruleset.RulesetVersion == game.RulesetVersion {
+				record.PlayerCount = ruleset.PlayerCount
+				record.MaxActiveBotsPerOwner = ruleset.MaxActiveBotsPerOwner
+				break
+			}
+		}
+	}
+	return record, nil
 }
 
 func (s *GeneralSubmissionService) buildRegisteredAI(aiSubmissionID string, game RegisteredGame, artifactRef string, displayName string, source RegistrationSource, sourceID string) (RegisteredAI, error) {

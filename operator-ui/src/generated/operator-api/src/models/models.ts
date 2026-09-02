@@ -27,6 +27,9 @@ export interface GameRegistrationListResponse {
 export interface GameRegistration {
   registrationId: string;
   game: GameMetadata;
+  artifactId?: string;
+  playerCount?: number;
+  maxActiveBotsPerOwner?: number;
   buildMode: string;
   builderId: string;
   supportedRulesets: Array<string>;
@@ -38,9 +41,28 @@ export interface GameMetadata {
   gameVersion: string;
   rulesetVersion: string;
 }
+/**
+ * A 32-bit integer. (`-2,147,483,648` to `2,147,483,647`)
+ */
+export type Int32 = number;
+/**
+ * A 64-bit integer. (`-9,223,372,036,854,775,808` to `9,223,372,036,854,775,807`)
+ */
+export type Int64 = bigint;
+/**
+ * A whole number. This represent any `integer` value possible.
+ * It is commonly represented as `BigInteger` in some languages.
+ */
+export type Integer = number;
+/**
+ * A numeric type
+ */
+export type Numeric = number;
 export interface GameRegistrationRequest {
   registrationId?: string;
-  game: GameMetadata;
+  game?: GameMetadata;
+  artifactId?: string;
+  rulesetVersion?: string;
 }
 /**
  * A file in an HTTP request, response, or multipart payload.
@@ -144,6 +166,33 @@ export interface AiSubmissionRequest {
   artifactRef: string;
   displayName?: string;
 }
+export interface BotRevisionRequest {
+  scopeId: string;
+  botId?: string;
+  botName?: string;
+  artifactId: string;
+}
+export interface BotRevisionResponse {
+  bot: AiBot;
+  revision: AiSubmissionRevision;
+}
+export interface AiBot {
+  botId: string;
+  scopeId: string;
+  botName: string;
+  lifecycleState: "active" | "retired";
+  activeSubmissionId?: string;
+}
+export interface AiSubmissionRevision {
+  aiSubmissionId: string;
+  botId: string;
+  artifactId: string;
+  validationState: "ready";
+  createdAt: string;
+}
+export interface AiBotListResponse {
+  items: Array<AiBot>;
+}
 export interface MatchRequestListResponse {
   items: Array<MatchRequest>;
 }
@@ -206,23 +255,6 @@ export interface RankingScope {
   gameVersion: string;
   rulesetVersion: string;
 }
-/**
- * A 32-bit integer. (`-2,147,483,648` to `2,147,483,647`)
- */
-export type Int32 = number;
-/**
- * A 64-bit integer. (`-9,223,372,036,854,775,808` to `9,223,372,036,854,775,807`)
- */
-export type Int64 = bigint;
-/**
- * A whole number. This represent any `integer` value possible.
- * It is commonly represented as `BigInteger` in some languages.
- */
-export type Integer = number;
-/**
- * A numeric type
- */
-export type Numeric = number;
 export interface RankingEntry {
   competitorRef: string;
   lastPlayerId: string;

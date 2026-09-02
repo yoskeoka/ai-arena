@@ -285,6 +285,48 @@ func (q *Queries) GetQueueRecordForUpdate(ctx context.Context, submissionID stri
 	return i, err
 }
 
+const listOwnedBots = `-- name: ListOwnedBots :many
+SELECT bot_id, owner_account_id, scope_id, bot_name, normalized_bot_name, lifecycle_state, active_submission_id, created_at, retired_at
+FROM ai_bots
+WHERE owner_account_id = $1 AND scope_id = $2
+ORDER BY created_at
+`
+
+type ListOwnedBotsParams struct {
+	OwnerAccountID pgtype.UUID
+	ScopeID        string
+}
+
+func (q *Queries) ListOwnedBots(ctx context.Context, arg ListOwnedBotsParams) ([]AiBot, error) {
+	rows, err := q.db.Query(ctx, listOwnedBots, arg.OwnerAccountID, arg.ScopeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AiBot
+	for rows.Next() {
+		var i AiBot
+		if err := rows.Scan(
+			&i.BotID,
+			&i.OwnerAccountID,
+			&i.ScopeID,
+			&i.BotName,
+			&i.NormalizedBotName,
+			&i.LifecycleState,
+			&i.ActiveSubmissionID,
+			&i.CreatedAt,
+			&i.RetiredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listQueueRecords = `-- name: ListQueueRecords :many
 SELECT
     submission_id,
@@ -346,6 +388,41 @@ func (q *Queries) ListQueueRecords(ctx context.Context) ([]ListQueueRecordsRow, 
 			&i.State,
 			&i.WorkerID,
 			&i.TerminalJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubmissionRevisionsForBot = `-- name: ListSubmissionRevisionsForBot :many
+SELECT ai_submission_id, bot_id, artifact_id, runtime_kind, ai_id, validation_state, created_at
+FROM ai_submission_revisions
+WHERE bot_id = $1
+ORDER BY created_at
+`
+
+func (q *Queries) ListSubmissionRevisionsForBot(ctx context.Context, botID pgtype.UUID) ([]AiSubmissionRevision, error) {
+	rows, err := q.db.Query(ctx, listSubmissionRevisionsForBot, botID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AiSubmissionRevision
+	for rows.Next() {
+		var i AiSubmissionRevision
+		if err := rows.Scan(
+			&i.AiSubmissionID,
+			&i.BotID,
+			&i.ArtifactID,
+			&i.RuntimeKind,
+			&i.AiID,
+			&i.ValidationState,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -96,6 +96,96 @@
         }
       }
     },
+    "/api/v1/bots": {
+      "post": {
+        "operationId": "Operator_createOrReviseBot",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.BotRevisionResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Shared.BotRevisionRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Operator_listBots",
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "include_retired",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.AIBotListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bots/{bot_id}/retire": {
+      "post": {
+        "operationId": "Operator_retireBot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.AIBot"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/game-bundles": {
       "post": {
         "operationId": "Operator_uploadGameBundle",
@@ -547,6 +637,40 @@
   },
   "components": {
     "schemas": {
+      "Shared.AIBot": {
+        "type": "object",
+        "required": ["bot_id", "scope_id", "bot_name", "lifecycle_state"],
+        "properties": {
+          "bot_id": {
+            "type": "string"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "bot_name": {
+            "type": "string"
+          },
+          "lifecycle_state": {
+            "type": "string",
+            "enum": ["active", "retired"]
+          },
+          "active_submission_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.AIBotListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.AIBot"
+            }
+          }
+        }
+      },
       "Shared.AISubmission": {
         "type": "object",
         "required": [
@@ -627,6 +751,34 @@
           }
         }
       },
+      "Shared.AISubmissionRevision": {
+        "type": "object",
+        "required": [
+          "ai_submission_id",
+          "bot_id",
+          "artifact_id",
+          "validation_state",
+          "created_at"
+        ],
+        "properties": {
+          "ai_submission_id": {
+            "type": "string"
+          },
+          "bot_id": {
+            "type": "string"
+          },
+          "artifact_id": {
+            "type": "string"
+          },
+          "validation_state": {
+            "type": "string",
+            "enum": ["ready"]
+          },
+          "created_at": {
+            "type": "string"
+          }
+        }
+      },
       "Shared.ArtifactAccessMetadata": {
         "type": "object",
         "required": ["locator"],
@@ -669,6 +821,36 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "Shared.BotRevisionRequest": {
+        "type": "object",
+        "required": ["scope_id", "artifact_id"],
+        "properties": {
+          "scope_id": {
+            "type": "string"
+          },
+          "bot_id": {
+            "type": "string"
+          },
+          "bot_name": {
+            "type": "string"
+          },
+          "artifact_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.BotRevisionResponse": {
+        "type": "object",
+        "required": ["bot", "revision"],
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/Shared.AIBot"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Shared.AISubmissionRevision"
           }
         }
       },
@@ -737,6 +919,17 @@
           "game": {
             "$ref": "#/components/schemas/Shared.GameMetadata"
           },
+          "artifact_id": {
+            "type": "string"
+          },
+          "player_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "max_active_bots_per_owner": {
+            "type": "integer",
+            "format": "int32"
+          },
           "build_mode": {
             "type": "string"
           },
@@ -772,13 +965,18 @@
       },
       "Shared.GameRegistrationRequest": {
         "type": "object",
-        "required": ["game"],
         "properties": {
           "registration_id": {
             "type": "string"
           },
           "game": {
             "$ref": "#/components/schemas/Shared.GameMetadata"
+          },
+          "artifact_id": {
+            "type": "string"
+          },
+          "ruleset_version": {
+            "type": "string"
           }
         }
       },

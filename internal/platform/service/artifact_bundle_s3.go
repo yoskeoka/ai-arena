@@ -15,6 +15,7 @@ import (
 // S3BundleStore implements the immutable bundle contract through an S3/R2 object store.
 type S3BundleStore struct{ store *S3ArtifactStore }
 
+// NewS3BundleStore wraps an S3-compatible artifact store as an immutable bundle store.
 func NewS3BundleStore(store *S3ArtifactStore) (*S3BundleStore, error) {
 	if store == nil {
 		return nil, fmt.Errorf("service: S3 artifact store is required")
@@ -22,6 +23,7 @@ func NewS3BundleStore(store *S3ArtifactStore) (*S3BundleStore, error) {
 	return &S3BundleStore{store: store}, nil
 }
 
+// Put stores bundle bytes conditionally under their digest and rejects digest collisions.
 func (s *S3BundleStore) Put(ctx context.Context, bundle artifactbundle.Bundle) error {
 	key, err := bundleObjectKey(bundle.Digest)
 	if err != nil {
@@ -61,6 +63,7 @@ func (s *S3BundleStore) Read(ctx context.Context, digest string) ([]byte, error)
 	return s.store.ReadLocator(ctx, s.store.ObjectLocator(key))
 }
 
+// Materialize verifies a stored bundle and writes its manifest and WASM module into destination, returning the module path.
 func (s *S3BundleStore) Materialize(ctx context.Context, digest, destination string) (string, error) {
 	data, err := s.Read(ctx, digest)
 	if err != nil {

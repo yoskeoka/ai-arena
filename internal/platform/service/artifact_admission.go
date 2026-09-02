@@ -15,6 +15,7 @@ type ArtifactAdmissionService struct {
 	registry *registry.Registry
 }
 
+// NewArtifactAdmissionService constructs an admission service backed by a bundle store and writable registry.
 func NewArtifactAdmissionService(bundles BundleStore, reg *registry.Registry) (*ArtifactAdmissionService, error) {
 	if bundles == nil || reg == nil {
 		return nil, fmt.Errorf("service: bundle store and registry are required")

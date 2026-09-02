@@ -23,8 +23,8 @@ func TestGeneralSubmissionServiceRegistersGameAndAI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterGame() error = %v", err)
 	}
-	if game.RegistrationID != "echo-count-v2" {
-		t.Fatalf("game.RegistrationID = %q, want %q", game.RegistrationID, "echo-count-v2")
+	if game.RegistrationID != "echo-count-v2-phase2-simultaneous-2turn" {
+		t.Fatalf("game.RegistrationID = %q, want scope id", game.RegistrationID)
 	}
 
 	ai, err := service.RegisterAI(context.Background(), AISubmissionRequest{

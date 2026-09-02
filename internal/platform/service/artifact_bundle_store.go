@@ -20,6 +20,7 @@ type BundleStore interface {
 // FilesystemBundleStore is the local content-addressed implementation.
 type FilesystemBundleStore struct{ root string }
 
+// NewFilesystemBundleStore creates a content-addressed local bundle store rooted at root.
 func NewFilesystemBundleStore(root string) (*FilesystemBundleStore, error) {
 	if strings.TrimSpace(root) == "" {
 		return nil, fmt.Errorf("service: bundle store root is required")
@@ -27,6 +28,7 @@ func NewFilesystemBundleStore(root string) (*FilesystemBundleStore, error) {
 	return &FilesystemBundleStore{root: root}, nil
 }
 
+// Put stores bundle bytes under their digest without overwriting a different existing payload.
 func (s *FilesystemBundleStore) Put(_ context.Context, bundle artifactbundle.Bundle) error {
 	path, err := s.pathFor(bundle.Digest)
 	if err != nil {

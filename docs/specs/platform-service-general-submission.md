@@ -2,129 +2,58 @@
 
 ## 目的
 
-このドキュメントは、Phase 7 の general operator lane で扱う
-`game registration` と `AI submission` の最小 entity / validation contract を定義する。
+この文書は Phase 7 general operator lane の immutable game release、stable competition
+scope、owner 付き AI bot、immutable AI submission revision の durable contract を定義する。
+後続の match request / scheduling / ranking はここで定義する identity を参照する。
 
-この spec が固定するのは、1 試合要求そのものではなく、
-後続の match request / scheduling が参照する durable identity と validation surface である。
+## Entity Contract
 
-## この spec の責務範囲
+- game release は uploaded game artifact の immutable record であり、exact game version と
+  artifact digest を持つ。operator だけが upload 済み artifact を activate できる。
+- competition scope は `game_id + game_version_major + ruleset_version` で識別する stable
+  identity である。scope は active release、exact player count、manifest 由来の
+  `max_active_bots_per_owner`、ruleset budget を持つ。compatible patch release の activation
+  は scope identity を変えない。
+- AI bot は `bot_id`、owner account、scope、user-visible `bot_name`、`active|retired` を持つ
+  stable identity である。
+- AI submission revision は bot に属する immutable admission record であり、artifact
+  digest、runtime/AI identity、validation state、created time を持つ。
+- active bot の active revision は 0 または 1 件である。existing bot の new revision は bot
+  identity、ranking identity、quota slot を変えない。
 
-この spec が定義するもの:
+既存 HTTP surface の `game_registration_id` は後方互換のため scope id を指す。field-level
+wire contract の正本は `typespec/` とする。
 
-- `game registration` の最小 identity と metadata
-- `AI submission` の最小 identity と validation 結果
-- operator-facing registration route が同期的に確認する内容
-- preset queue lane から general lane へ接続する変換点
+## Validation and Lifecycle
 
-この spec が定義しないもの:
+game form は manifest の technical field や arbitrary artifact ref を持たず、uploaded game
+artifact の activate だけを送る。AI form は scope、bot name、uploaded AI artifact、および new
+bot / existing bot revision の choice だけを送る。
 
-- match request / scheduling policy
-- ranking 集計
-- rerun / retry / cancellation
-- public self-service upload portal
+既存の metadata-only game registration request は migration-period の compatibility input として
+受け付けてよいが、新規 operator operation の正本ではない。この input から作る legacy scope は
+artifact-backed activation を代替しない。
 
-## 参照関係
+- selected game release と ruleset は admitted immutable artifact から解決可能でなければならない。
+- player count と owner quota は selected ruleset manifest 由来でなければならない。
+- AI artifact の game id、semver major、ruleset、runtime は target scope と互換でなければならない。
+- bot name は owner + scope 内で trim、Unicode case-fold、連続 whitespace の一文字化をした
+  normalized value が一意でなければならない。
+- scope/account の active bot count、name uniqueness、create/revise/retire 判定は同一 transaction
+  で直列化する。new bot は limit 未満だけ成功し、existing bot revision は slot を消費しない。
+- retire は new match selection から除外するが、bot/revision と過去 run/ranking reference を
+  削除してはならない。
 
-- `docs/specs/platform-game-registry.md`: registered game lookup の正本
-- `docs/specs/platform-service-skeleton.md`: single-match `match submission` の正本
-- `docs/specs/index.md`: operator-facing HTTP contract の lookup index
-- `typespec/namespaces/operator/api.tsp`: registration routes の TypeSpec source
-- `docs/specs/platform-service-match-request-scheduling.md`: registration entity を参照する request/scheduling の正本
+## Authorization and Durability
 
-## エンティティ
-
-### Game Registration
-
-`game registration` は、operator lane で選択可能な registered game の plain-data view である。
-
-最小項目:
-
-- `registration_id`
-- `game`
-  - `game_id`
-  - `game_version`
-  - `ruleset_version`
-- `build_mode`
-- `builder_id`
-- `supported_rulesets`
-- `source`
-  - `manual`
-  - `preset`
-- `source_id`
-  - preset 由来なら `preset_id`
-
-`registration_id` は stable identity であり、default では
-`game_id + game_version major` から決まる deterministic id にしてよい。
-
-### AI Submission
-
-`AI submission` は、1 つの registered game に対して admission 済みの AI artifact identity を表す。
-
-最小項目:
-
-- `ai_submission_id`
-- `game_registration_id`
-- `game`
-  - `game_id`
-  - `game_version`
-  - `ruleset_version`
-- `artifact_id`
-- `display_name`
-- `runtime_kind`
-- `ai_id`
-- `validation_state`
-  - initial contract では `ready` のみ
-- `source`
-  - `manual`
-  - `preset`
-- `source_id`
-  - preset 由来なら `preset_id`
-
-initial contract では synchronous validation に成功した record だけを exposed してよい。
-非同期 review queue や `pending` 状態は後続へ送る。
-
-## Validation
-
-### Game Registration Validation
-
-`game registration` を受け付けるときは、少なくとも次を同期的に確認しなければならない。
-
-- `game_id + game_version major` が registry lookup 可能であること
-- `ruleset_version` が lookup した descriptor の `supported_rulesets` に含まれること
-- `build_mode` / `builder_id` / `supported_rulesets` が descriptor 由来 metadata と矛盾しないこと
-
-validation 後に保存する metadata view は、lookup 結果の plain-data projection とする。
-
-### AI Submission Validation
-
-`AI submission` を受け付けるときは、少なくとも次を同期的に確認しなければならない。
-
-- 参照先 `game_registration_id` が存在すること
-- upload された immutable AI bundle が admission 済みであること
-- AI bundle の `ai_id`、game id、semver major、ruleset が registration の `game` と互換であること
-- bundle が WASI runtime として起動可能であること
-
-validation 成功後は `ai_id` と `runtime_kind` を registration record と一緒に exposed してよい。
+- game artifact upload/release activation は operator-only とする。
+- bot create/revise/retire/list は authenticated internal surface であり、acting account を owner
+  とする。operator の代理 submit と ownership transfer は後続へ送る。
+- Postgres mode では release、scope、bot、revision、active revision relation は restart 後も残る。
+  process-local store は Postgres mode の source of truth にしてはならない。
 
 ## Preset Queue との関係
 
-preset queue lane は Phase 6 confirmation 用の operator entry であり、
-general operator lane の canonical entity ではない。
-
-ただし preset lane は general lane と切り離された dedicated queue を持ってはならない。
-preset から queue へ積むとき、service は少なくとも次の変換点を持ってよい。
-
-1. preset definition から `game registration` identity を materialize する
-2. preset participant ごとに `AI submission` identity を materialize する
-3. queue へ積む 1 試合要求は、materialized entity と同じ immutable game / AI artifact digest を参照する
-
-この変換により、preset lane は first remote landing の bootstrap に留めつつ、
-後続の `match request` / scheduling lane が参照する stable identity を先に固定できる。
-
-## Deferred Follow-Ups
-
-- DB-backed durability
-- AI upload binary storage
-- retired / superseded / suspended lifecycle
-- operator auth と ownership scope
+preset lane は dedicated queue identity を持たず、必要な scope と bot/revision を materialize
+して general lane と同じ immutable artifact identity を参照する。match request / scheduling
+policy、ranking aggregate、public self-service portal、asynchronous review はこの文書の範囲外とする。

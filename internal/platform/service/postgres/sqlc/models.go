@@ -40,6 +40,52 @@ type AccountSession struct {
 	CreatedAt        pgtype.Timestamptz
 }
 
+type AiBot struct {
+	BotID              pgtype.UUID
+	OwnerAccountID     pgtype.UUID
+	ScopeID            string
+	BotName            string
+	NormalizedBotName  string
+	LifecycleState     string
+	ActiveSubmissionID pgtype.UUID
+	CreatedAt          pgtype.Timestamptz
+	RetiredAt          pgtype.Timestamptz
+}
+
+type AiSubmissionRevision struct {
+	AiSubmissionID  pgtype.UUID
+	BotID           pgtype.UUID
+	ArtifactID      string
+	RuntimeKind     string
+	AiID            string
+	ValidationState string
+	CreatedAt       pgtype.Timestamptz
+}
+
+type CompetitionScope struct {
+	ScopeID               string
+	GameID                string
+	GameVersionMajor      int32
+	RulesetVersion        string
+	ActiveReleaseID       pgtype.UUID
+	PlayerCount           int32
+	MaxActiveBotsPerOwner int32
+	CreatedAt             pgtype.Timestamptz
+}
+
+type GameRelease struct {
+	ReleaseID         pgtype.UUID
+	GameID            string
+	GameVersion       string
+	ArtifactID        string
+	BuildMode         string
+	BuilderID         string
+	SupportedRulesets []byte
+	Source            string
+	SourceID          string
+	CreatedAt         pgtype.Timestamptz
+}
+
 type ServiceQueueRecord struct {
 	SubmissionID   string
 	QueueOrder     int64
