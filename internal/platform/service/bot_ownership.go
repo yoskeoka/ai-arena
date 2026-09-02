@@ -12,7 +12,9 @@ import (
 )
 
 var (
-	ErrBotNotFound      = errors.New("service: bot not found")
+	// ErrBotNotFound reports that a requested bot identity does not exist.
+	ErrBotNotFound = errors.New("service: bot not found")
+	// ErrBotQuotaExceeded reports that creating another active bot would exceed the scope quota.
 	ErrBotQuotaExceeded = errors.New("service: active bot quota exceeded")
 )
 
@@ -20,7 +22,9 @@ var (
 type BotLifecycleState string
 
 const (
-	BotActive  BotLifecycleState = "active"
+	// BotActive marks a bot as eligible for new revisions and match selection.
+	BotActive BotLifecycleState = "active"
+	// BotRetired marks a bot as excluded from new match selection while retaining its history.
 	BotRetired BotLifecycleState = "retired"
 )
 
@@ -80,10 +84,12 @@ type InMemoryBotOwnershipStore struct {
 	revisions map[string]AISubmissionRevision
 }
 
+// NewInMemoryBotOwnershipStore creates a process-local store with serialized bot lifecycle state.
 func NewInMemoryBotOwnershipStore() *InMemoryBotOwnershipStore {
 	return &InMemoryBotOwnershipStore{bots: map[string]OwnedBot{}, revisions: map[string]AISubmissionRevision{}}
 }
 
+// CreateOrRevise creates a bot or appends an immutable revision while enforcing scope quota and name uniqueness.
 func (s *InMemoryBotOwnershipStore) CreateOrRevise(_ context.Context, req BotRevisionRequest) (OwnedBot, AISubmissionRevision, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -132,6 +138,7 @@ func (s *InMemoryBotOwnershipStore) CreateOrRevise(_ context.Context, req BotRev
 	return bot, revision, nil
 }
 
+// Retire marks an owner-owned bot as retired without deleting its identity or revisions.
 func (s *InMemoryBotOwnershipStore) Retire(_ context.Context, ownerAccountID, botID string) (OwnedBot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -147,6 +154,7 @@ func (s *InMemoryBotOwnershipStore) Retire(_ context.Context, ownerAccountID, bo
 	return bot, nil
 }
 
+// ListByOwner returns bots owned by an account in a scope, optionally including retired bots.
 func (s *InMemoryBotOwnershipStore) ListByOwner(_ context.Context, ownerAccountID, scopeID string, includeRetired bool) ([]OwnedBot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

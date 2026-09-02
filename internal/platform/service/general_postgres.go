@@ -16,6 +16,7 @@ import (
 // PostgresGameRegistrationStore persists a game release and its stable ruleset scope.
 type PostgresGameRegistrationStore struct{ pool *pgxpool.Pool }
 
+// NewPostgresGameRegistrationStore opens and verifies a PostgreSQL-backed game registration store.
 func NewPostgresGameRegistrationStore(ctx context.Context, dsn string) (*PostgresGameRegistrationStore, error) {
 	pool, err := pgxpool.New(ctx, strings.TrimSpace(dsn))
 	if err != nil {
@@ -27,12 +28,15 @@ func NewPostgresGameRegistrationStore(ctx context.Context, dsn string) (*Postgre
 	}
 	return &PostgresGameRegistrationStore{pool: pool}, nil
 }
+
+// Close releases the PostgreSQL connection pool used by the game registration store.
 func (s *PostgresGameRegistrationStore) Close() {
 	if s != nil && s.pool != nil {
 		s.pool.Close()
 	}
 }
 
+// Save durably records an immutable game release and its active ruleset scope.
 func (s *PostgresGameRegistrationStore) Save(ctx context.Context, r RegisteredGame) error {
 	if r.RegistrationID == "" {
 		return fmt.Errorf("%w: registration id is required", ErrBadRequest)
@@ -80,6 +84,8 @@ func (s *PostgresGameRegistrationStore) Save(ctx context.Context, r RegisteredGa
 	}
 	return tx.Commit(ctx)
 }
+
+// Get returns the active registered game for a scope ID, or ErrGameRegistrationNotFound.
 func (s *PostgresGameRegistrationStore) Get(ctx context.Context, id string) (RegisteredGame, error) {
 	var r RegisteredGame
 	var rulesets []byte
@@ -95,6 +101,8 @@ func (s *PostgresGameRegistrationStore) Get(ctx context.Context, id string) (Reg
 	}
 	return r, nil
 }
+
+// List returns all registered game scopes in creation order.
 func (s *PostgresGameRegistrationStore) List(ctx context.Context) ([]RegisteredGame, error) {
 	rows, err := s.pool.Query(ctx, `SELECT s.scope_id,s.game_id,r.game_version,s.ruleset_version,r.artifact_id,s.player_count,s.max_active_bots_per_owner,r.build_mode,r.builder_id,r.supported_rulesets,r.source,r.source_id FROM competition_scopes s JOIN game_releases r ON r.release_id=s.active_release_id ORDER BY s.created_at`)
 	if err != nil {

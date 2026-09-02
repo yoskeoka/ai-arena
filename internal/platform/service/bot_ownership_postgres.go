@@ -15,6 +15,7 @@ import (
 // PostgresBotOwnershipStore serializes owner/scope lifecycle changes durably.
 type PostgresBotOwnershipStore struct{ pool *pgxpool.Pool }
 
+// NewPostgresBotOwnershipStore opens and verifies a PostgreSQL-backed bot ownership store.
 func NewPostgresBotOwnershipStore(ctx context.Context, dsn string) (*PostgresBotOwnershipStore, error) {
 	pool, err := pgxpool.New(ctx, strings.TrimSpace(dsn))
 	if err != nil {
@@ -27,12 +28,14 @@ func NewPostgresBotOwnershipStore(ctx context.Context, dsn string) (*PostgresBot
 	return &PostgresBotOwnershipStore{pool: pool}, nil
 }
 
+// Close releases the PostgreSQL connection pool used by the bot ownership store.
 func (s *PostgresBotOwnershipStore) Close() {
 	if s != nil && s.pool != nil {
 		s.pool.Close()
 	}
 }
 
+// CreateOrRevise durably creates or revises an owned bot in a serializable transaction.
 func (s *PostgresBotOwnershipStore) CreateOrRevise(ctx context.Context, req BotRevisionRequest) (OwnedBot, AISubmissionRevision, error) {
 	if strings.TrimSpace(req.OwnerAccountID) == "" || strings.TrimSpace(req.Scope.ScopeID) == "" || strings.TrimSpace(req.ArtifactID) == "" {
 		return OwnedBot{}, AISubmissionRevision{}, fmt.Errorf("%w: owner, scope, and artifact are required", ErrBadRequest)
@@ -91,11 +94,14 @@ func (s *PostgresBotOwnershipStore) CreateOrRevise(ctx context.Context, req BotR
 	return bot, revision, nil
 }
 
+// Retire marks an owned bot retired while preserving its stored identity and revision history.
 func (s *PostgresBotOwnershipStore) Retire(ctx context.Context, owner, id string) (OwnedBot, error) {
 	var b OwnedBot
 	err := s.pool.QueryRow(ctx, `UPDATE ai_bots SET lifecycle_state='retired', retired_at=NOW() WHERE bot_id=$1 AND owner_account_id=$2 RETURNING bot_id::text,owner_account_id::text,scope_id,bot_name,normalized_bot_name,lifecycle_state,COALESCE(active_submission_id::text,'')`, id, owner).Scan(&b.BotID, &b.OwnerAccountID, &b.ScopeID, &b.BotName, &b.NormalizedBotName, &b.LifecycleState, &b.ActiveRevisionID)
 	return b, mapBotStoreError(err)
 }
+
+// ListByOwner returns persisted bots for an owner and scope, optionally including retired bots.
 func (s *PostgresBotOwnershipStore) ListByOwner(ctx context.Context, owner, scope string, retired bool) ([]OwnedBot, error) {
 	query := `SELECT bot_id::text,owner_account_id::text,scope_id,bot_name,normalized_bot_name,lifecycle_state,COALESCE(active_submission_id::text,'') FROM ai_bots WHERE owner_account_id=$1 AND scope_id=$2`
 	if !retired {

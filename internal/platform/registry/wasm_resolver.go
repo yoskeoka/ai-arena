@@ -19,6 +19,7 @@ type BundleMaterializer interface {
 // WASIResolver resolves admitted artifact-backed game releases.
 type WASIResolver struct{ materializer BundleMaterializer }
 
+// NewWASIResolver constructs a resolver that materializes admitted WASI game releases through the provided bundle materializer.
 func NewWASIResolver(materializer BundleMaterializer) (*WASIResolver, error) {
 	if materializer == nil {
 		return nil, fmt.Errorf("registry: bundle materializer is required")
@@ -26,6 +27,7 @@ func NewWASIResolver(materializer BundleMaterializer) (*WASIResolver, error) {
 	return &WASIResolver{materializer: materializer}, nil
 }
 
+// Resolve converts an admitted WASI descriptor into a game descriptor whose sessions use the immutable artifact and clean up private files on shutdown.
 func (r *WASIResolver) Resolve(_ context.Context, record DescriptorRecord) (GameDescriptor, error) {
 	if err := validateDescriptorRecord(record); err != nil {
 		return GameDescriptor{}, err
