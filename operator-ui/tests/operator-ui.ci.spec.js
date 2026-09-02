@@ -158,13 +158,10 @@ test("service-backed operator UI browser lane covers registration, request execu
 
   await page.getByTestId("operator-nav-requests").click();
   await expect(page.getByTestId("operator-form-requests")).toBeVisible();
-  await page.getByLabel("Game Registration ID").fill(registrationID);
-  await page.getByLabel("Output Dir").fill(requestOutputDir);
-  await page.getByLabel("Player 1 ID").fill("alpha");
-  await page.getByLabel("Player 1 AI Submission ID").fill(aiSubmissionID1);
-  await page.getByLabel("Player 2 ID").fill("beta");
-  await page.getByLabel("Player 2 AI Submission ID").fill(aiSubmissionID2);
-  await page.getByRole("button", { name: "Create match request" }).click();
+  await expect(page.getByLabel("Competition scope")).toBeVisible();
+  await expect(page.getByLabel("Game Registration ID")).toHaveCount(0);
+  await expect(page.getByLabel("Output Dir")).toHaveCount(0);
+  await createLegacyMatchRequest(api, registrationID, requestOutputDir, aiSubmissionID1, aiSubmissionID2);
 
   const createdRequest = await waitForRequest(api, registrationID, requestOutputDir);
   await expect(page.getByTestId(`request-row-${createdRequest.request_id}`)).toBeVisible();
@@ -230,6 +227,20 @@ async function createAISubmission(page, { submissionID, registrationID, artifact
   await page.getByLabel("Artifact Ref").fill(artifactRef);
   await page.getByLabel("Display Name").fill(displayName);
   await page.getByRole("button", { name: "Create AI submission" }).click();
+}
+
+async function createLegacyMatchRequest(api, registrationID, outputDir, firstSubmissionID, secondSubmissionID) {
+  const response = await api.post(`${backendBaseURL}/api/v1/match-requests`, {
+    data: {
+      game_registration_id: registrationID,
+      output_dir: outputDir,
+      participants: [
+        { player_id: "alpha", ai_submission_id: firstSubmissionID },
+        { player_id: "beta", ai_submission_id: secondSubmissionID },
+      ],
+    },
+  });
+  expect(response.ok()).toBeTruthy();
 }
 
 async function waitForRequest(api, registrationID, outputDir) {

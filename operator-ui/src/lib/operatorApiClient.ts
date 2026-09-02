@@ -154,11 +154,6 @@ export class OperatorApiClient {
     return jsonMatchRequestToApplicationTransform(response.body)!;
   }
 
-  async createLegacyMatchRequest(gameRegistrationId: string, outputDir: string, participants: MatchRequestParticipant[], signal?: AbortSignal): Promise<MatchRequest> {
-    const response = await this.post("/api/v1/match-requests", { game_registration_id: gameRegistrationId, output_dir: outputDir, participants: participants.map(({ playerId, aiSubmissionId }) => ({ player_id: playerId, ai_submission_id: aiSubmissionId })) }, [201], signal);
-    return jsonMatchRequestToApplicationTransform(response.body)!;
-  }
-
   async listMatchRequests(signal?: AbortSignal): Promise<MatchRequest[]> {
     const response = await this.get("/api/v1/match-requests", signal);
     return jsonMatchRequestListResponseToApplicationTransform(response.body)!.items;
