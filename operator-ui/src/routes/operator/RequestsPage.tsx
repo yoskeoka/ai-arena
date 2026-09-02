@@ -56,7 +56,7 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
       if (scopeID) {
         await client.createComposedMatchRequest(scopeID, selected.map((bot) => bot.botId));
       } else {
-        await client.createMatchRequest({ gameRegistrationId: legacyScopeID, outputDir: legacyOutputDir, participants: legacyParticipants } as never);
+        await client.createLegacyMatchRequest(legacyScopeID, legacyOutputDir, legacyParticipants);
       }
       setWriteState("success");
       await load();
