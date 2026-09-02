@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { EligibleBot, MatchRequest, OperatorApiClient } from "../../lib/operatorApiClient";
+import { EligibleBot, MatchRequest, MatchRequestParticipant, OperatorApiClient } from "../../lib/operatorApiClient";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 import { hrefForRunDetail } from "./operatorRoutes";
@@ -20,6 +20,9 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
   const [scopeID, setScopeID] = useState("");
   const [eligible, setEligible] = useState<EligibleBot[]>([]);
   const [selected, setSelected] = useState<EligibleBot[]>([]);
+  const [legacyScopeID, setLegacyScopeID] = useState("");
+  const [legacyOutputDir, setLegacyOutputDir] = useState("");
+  const [legacyParticipants, setLegacyParticipants] = useState<MatchRequestParticipant[]>([{ playerId: "p1", botId: "", aiSubmissionId: "" }, { playerId: "p2", botId: "", aiSubmissionId: "" }]);
 
   const load = async () => {
     setListState((current) => (current === "ready" ? current : "loading"));
@@ -50,7 +53,11 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
     setWriteState("submitting");
     setWriteError(undefined);
     try {
-      await client.createComposedMatchRequest(scopeID, selected.map((bot) => bot.botId));
+      if (scopeID) {
+        await client.createComposedMatchRequest(scopeID, selected.map((bot) => bot.botId));
+      } else {
+        await client.createMatchRequest({ gameRegistrationId: legacyScopeID, outputDir: legacyOutputDir, participants: legacyParticipants } as never);
+      }
       setWriteState("success");
       await load();
     } catch (error) {
@@ -60,6 +67,7 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
   };
 
   const shuffleSelection = () => setSelected(shuffle(eligible).slice(0, playerCount));
+  const hasLegacyScope = games.some((game) => !game.playerCount);
 
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
@@ -72,11 +80,12 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
         testId="operator-form-requests"
       >
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <label className="flex flex-col gap-2 text-sm"><span className="font-medium text-black/70">Competition scope</span><select value={scopeID} onChange={(event) => setScopeID(event.target.value)} required><option value="">Select a scope</option>{games.map((game) => <option key={game.registrationId} value={game.registrationId}>{game.registrationId}</option>)}</select></label>
+          <label className="flex flex-col gap-2 text-sm"><span className="font-medium text-black/70">Competition scope</span><select value={scopeID} onChange={(event) => setScopeID(event.target.value)}><option value="">Select a scope</option>{games.map((game) => <option key={game.registrationId} value={game.registrationId}>{game.registrationId}</option>)}</select></label>
           <div className="space-y-2"><p className="text-sm font-medium text-black/70">Selected seats ({selected.length}/{playerCount})</p>{selected.map((bot, index) => <p key={bot.botId} className="rounded-2xl bg-white px-3 py-2 text-sm">p{index + 1}: {bot.botName}</p>)}</div>
           <button className="rounded-full border border-ink px-5 py-3 text-sm font-semibold" type="button" onClick={shuffleSelection} disabled={eligible.length < playerCount}>Shuffle</button>
           {scopeID && eligible.length < playerCount ? <p className="text-sm text-red-700">Not enough eligible bots for this scope.</p> : null}
-          <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit" disabled={!scopeID || selected.length !== playerCount}>
+          {hasLegacyScope && !scopeID ? <div className="space-y-3"><TextField label="Game Registration ID" value={legacyScopeID} onChange={setLegacyScopeID} required /><TextField label="Output Dir" value={legacyOutputDir} onChange={setLegacyOutputDir} required />{legacyParticipants.map((participant, index) => <div key={participant.playerId} className="grid gap-3 md:grid-cols-2"><TextField label={`Player ${index + 1} ID`} value={participant.playerId} onChange={(value) => setLegacyParticipants((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, playerId: value } : item))} required /><TextField label={`Player ${index + 1} AI Submission ID`} value={participant.aiSubmissionId} onChange={(value) => setLegacyParticipants((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, aiSubmissionId: value } : item))} required /></div>)}</div> : null}
+          <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit" disabled={scopeID ? selected.length !== playerCount : !hasLegacyScope || !legacyScopeID || !legacyOutputDir || legacyParticipants.some((participant) => !participant.playerId || !participant.aiSubmissionId)}>
             Create match request
           </button>
         </form>
@@ -144,4 +153,8 @@ function shuffle<T>(items: T[]): T[] {
     [result[index], result[next]] = [result[next], result[index]];
   }
   return result;
+}
+
+function TextField({ label, value, onChange, required }: { label: string; value: string; onChange: (value: string) => void; required?: boolean }) {
+  return <label className="flex flex-col gap-2 text-sm"><span className="font-medium text-black/70">{label}</span><input className="rounded-2xl border border-black/15 bg-white px-4 py-3" value={value} onChange={(event) => onChange(event.target.value)} required={required} /></label>;
 }
