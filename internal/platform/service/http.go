@@ -533,7 +533,7 @@ func (a *OperatorAPI) handleMatchRequests(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		if strings.TrimSpace(req.ScopeID) == "" || len(req.BotIDs) == 0 {
+		if a.requests.bots != nil && (strings.TrimSpace(req.ScopeID) == "" || len(req.BotIDs) == 0) {
 			writeError(w, http.StatusBadRequest, fmt.Errorf("service: scope_id and bot_ids are required"))
 			return
 		}
