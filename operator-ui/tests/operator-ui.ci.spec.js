@@ -230,17 +230,15 @@ async function createAISubmission(page, { submissionID, registrationID, artifact
 }
 
 async function createLegacyMatchRequest(api, registrationID, outputDir, firstSubmissionID, secondSubmissionID) {
-  const response = await api.post(`${backendBaseURL}/api/v1/match-requests`, {
-    data: {
-      game_registration_id: registrationID,
-      output_dir: outputDir,
-      participants: [
-        { player_id: "alpha", ai_submission_id: firstSubmissionID },
-        { player_id: "beta", ai_submission_id: secondSubmissionID },
-      ],
-    },
+  const response = await api.postJSON(`${backendBaseURL}/api/v1/match-requests`, {
+    game_registration_id: registrationID,
+    output_dir: outputDir,
+    participants: [
+      { player_id: "alpha", ai_submission_id: firstSubmissionID },
+      { player_id: "beta", ai_submission_id: secondSubmissionID },
+    ],
   });
-  expect(response.ok()).toBeTruthy();
+  expect(response.ok).toBeTruthy();
 }
 
 async function waitForRequest(api, registrationID, outputDir) {
@@ -313,6 +311,14 @@ function createRequestAPI(request) {
         json: await response.json(),
       };
     },
+    async postJSON(url, data) {
+      const response = await request.post(url, { data });
+      return {
+        ok: response.ok(),
+        status: response.status(),
+        json: await response.json(),
+      };
+    },
   };
 }
 
@@ -330,6 +336,23 @@ function createBrowserAPI(page) {
           json: await response.json(),
         };
       }, fetchTarget);
+    },
+    async postJSON(url, data) {
+      const target = new URL(url);
+      const fetchTarget = usesRemoteServers ? target.toString() : `${target.pathname}${target.search}`;
+      return page.evaluate(async ({ requestURL, body }) => {
+        const response = await fetch(requestURL, {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        return {
+          ok: response.ok,
+          status: response.status,
+          json: await response.json(),
+        };
+      }, { requestURL: fetchTarget, body: data });
     },
   };
 }
