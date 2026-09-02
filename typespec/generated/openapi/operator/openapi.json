@@ -1181,7 +1181,7 @@
       },
       "Shared.MatchRequestParticipant": {
         "type": "object",
-        "required": ["player_id", "bot_id", "ai_submission_id"],
+        "required": ["player_id", "ai_submission_id"],
         "properties": {
           "player_id": {
             "type": "string"

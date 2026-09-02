@@ -142,14 +142,26 @@ func (s *PostgresBotOwnershipStore) ListEligible(ctx context.Context, scopeID st
 }
 
 func (s *PostgresBotOwnershipStore) ResolveEligible(ctx context.Context, scopeID string, ids []string) ([]ResolvedEligibleBot, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	items := make([]ResolvedEligibleBot, 0, len(ids))
 	for _, id := range ids {
 		var item ResolvedEligibleBot
-		err := s.pool.QueryRow(ctx, `SELECT b.bot_id::text,b.scope_id,b.bot_name,b.active_submission_id::text,r.artifact_id FROM ai_bots b JOIN ai_submission_revisions r ON r.ai_submission_id=b.active_submission_id WHERE b.bot_id=$1 AND b.scope_id=$2 AND b.lifecycle_state='active' AND r.validation_state='ready'`, strings.TrimSpace(id), strings.TrimSpace(scopeID)).Scan(&item.BotID, &item.ScopeID, &item.BotName, &item.ActiveRevisionID, &item.ArtifactID)
+		err := tx.QueryRow(ctx, `SELECT b.bot_id::text,b.scope_id,b.bot_name,b.active_submission_id::text,r.artifact_id FROM ai_bots b JOIN ai_submission_revisions r ON r.ai_submission_id=b.active_submission_id WHERE b.bot_id=$1 AND b.scope_id=$2 AND b.lifecycle_state='active' AND r.validation_state='ready'`, strings.TrimSpace(id), strings.TrimSpace(scopeID)).Scan(&item.BotID, &item.ScopeID, &item.BotName, &item.ActiveRevisionID, &item.ArtifactID)
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, fmt.Errorf("%w: bot is not eligible in scope", ErrBadRequest)
+			}
 			return nil, mapBotStoreError(err)
 		}
 		items = append(items, item)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
 	return items, nil
 }

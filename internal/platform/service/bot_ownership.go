@@ -94,21 +94,21 @@ type BotOwnershipStore interface {
 }
 
 func (s *InMemoryBotOwnershipStore) ResolveEligible(ctx context.Context, scopeID string, ids []string) ([]ResolvedEligibleBot, error) {
-	eligible, err := s.ListEligible(ctx, scopeID)
-	if err != nil {
-		return nil, err
-	}
-	byID := make(map[string]EligibleBot, len(eligible))
-	for _, item := range eligible {
-		byID[item.BotID] = item
-	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	scopeID = strings.TrimSpace(scopeID)
 	items := make([]ResolvedEligibleBot, 0, len(ids))
 	for _, id := range ids {
-		item, ok := byID[strings.TrimSpace(id)]
-		if !ok {
+		bot, ok := s.bots[strings.TrimSpace(id)]
+		if !ok || bot.ScopeID != scopeID || bot.LifecycleState != BotActive || bot.ActiveRevisionID == "" {
 			return nil, fmt.Errorf("%w: bot is not eligible in scope", ErrBadRequest)
 		}
-		items = append(items, ResolvedEligibleBot{EligibleBot: item, ArtifactID: s.revisions[item.ActiveRevisionID].ArtifactID})
+		revision, ok := s.revisions[bot.ActiveRevisionID]
+		if !ok || revision.ValidationState != ValidationReady {
+			return nil, fmt.Errorf("%w: bot is not eligible in scope", ErrBadRequest)
+		}
+		items = append(items, ResolvedEligibleBot{EligibleBot: EligibleBot{BotID: bot.BotID, ScopeID: bot.ScopeID, BotName: bot.BotName, ActiveRevisionID: bot.ActiveRevisionID}, ArtifactID: revision.ArtifactID})
 	}
 	return items, nil
 }

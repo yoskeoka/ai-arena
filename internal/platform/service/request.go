@@ -15,7 +15,7 @@ import (
 // MatchRequestParticipant binds one operator-visible player id to one admitted AI submission.
 type MatchRequestParticipant struct {
 	PlayerID       string `json:"player_id"`
-	BotID          string `json:"bot_id"`
+	BotID          string `json:"bot_id,omitempty"`
 	AISubmissionID string `json:"ai_submission_id"`
 }
 
@@ -106,7 +106,7 @@ func (s *MatchRequestService) Create(ctx context.Context, req MatchRequestCreate
 		gameRegistrationID = strings.TrimSpace(req.GameRegistrationID)
 	}
 	if gameRegistrationID == "" {
-		return MatchRequest{}, QueueRecord{}, fmt.Errorf("%w: service: game_registration_id is required", ErrBadRequest)
+		return MatchRequest{}, QueueRecord{}, fmt.Errorf("%w: service: scope_id is required", ErrBadRequest)
 	}
 	game, err := s.general.GetGame(ctx, gameRegistrationID)
 	if err != nil {

@@ -227,7 +227,7 @@ export interface MatchRequest {
 }
 export interface MatchRequestParticipant {
   playerId: string;
-  botId: string;
+  botId?: string;
   aiSubmissionId: string;
 }
 export interface MatchRequestCreateRequest {

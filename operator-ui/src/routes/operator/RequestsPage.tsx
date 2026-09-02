@@ -74,9 +74,9 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
         <form className="space-y-4" onSubmit={handleSubmit}>
           <label className="flex flex-col gap-2 text-sm"><span className="font-medium text-black/70">Competition scope</span><select value={scopeID} onChange={(event) => setScopeID(event.target.value)}><option value="">Select a scope</option>{games.map((game) => <option key={game.registrationId} value={game.registrationId}>{game.registrationId}</option>)}</select></label>
           <div className="space-y-2"><p className="text-sm font-medium text-black/70">Selected seats ({selected.length}/{playerCount})</p>{selected.map((bot, index) => <p key={bot.botId} className="rounded-2xl bg-white px-3 py-2 text-sm">p{index + 1}: {bot.botName}</p>)}</div>
-          <button className="rounded-full border border-ink px-5 py-3 text-sm font-semibold" type="button" onClick={shuffleSelection} disabled={eligible.length < playerCount}>Shuffle</button>
+          <button className="rounded-full border border-ink px-5 py-3 text-sm font-semibold" type="button" onClick={shuffleSelection} disabled={playerCount < 1 || eligible.length < playerCount}>Shuffle</button>
           {scopeID && eligible.length < playerCount ? <p className="text-sm text-red-700">Not enough eligible bots for this scope.</p> : null}
-          <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit" disabled={!scopeID || selected.length !== playerCount}>
+          <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit" disabled={!scopeID || playerCount < 1 || selected.length !== playerCount}>
             Create match request
           </button>
         </form>

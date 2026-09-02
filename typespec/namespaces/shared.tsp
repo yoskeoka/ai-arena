@@ -216,7 +216,7 @@ model AISubmission {
 
 model MatchRequestParticipant {
   player_id: string;
-  bot_id: string;
+  bot_id?: string;
   ai_submission_id: string;
 }
 
