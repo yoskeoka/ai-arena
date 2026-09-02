@@ -164,6 +164,7 @@ test("service-backed operator UI browser lane covers registration, request execu
   await createLegacyMatchRequest(api, registrationID, requestOutputDir, aiSubmissionID1, aiSubmissionID2);
 
   const createdRequest = await waitForRequest(api, registrationID, requestOutputDir);
+  await page.reload();
   await expect(page.getByTestId(`request-row-${createdRequest.request_id}`)).toBeVisible();
 
   const initialRun = await waitForRunState(api, createdRequest.latest_run_id, "completed");
