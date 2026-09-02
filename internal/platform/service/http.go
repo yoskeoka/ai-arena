@@ -534,8 +534,8 @@ func (a *OperatorAPI) handleMatchRequests(w http.ResponseWriter, r *http.Request
 			return
 		}
 		if a.requests.bots != nil && (strings.TrimSpace(req.ScopeID) == "" || len(req.BotIDs) == 0) {
-			legacy, lookupErr := a.general.GetGame(r.Context(), strings.TrimSpace(req.GameRegistrationID))
-			if lookupErr != nil || legacy.PlayerCount > 0 {
+			_, lookupErr := a.general.GetGame(r.Context(), strings.TrimSpace(req.GameRegistrationID))
+			if lookupErr != nil {
 				writeError(w, http.StatusBadRequest, fmt.Errorf("service: scope_id and bot_ids are required"))
 				return
 			}

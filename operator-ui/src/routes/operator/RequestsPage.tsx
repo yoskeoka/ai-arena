@@ -67,7 +67,7 @@ export function RequestsPage({ baseUrl }: RequestsPageProps) {
   };
 
   const shuffleSelection = () => setSelected(shuffle(eligible).slice(0, playerCount));
-  const hasLegacyScope = games.some((game) => !game.playerCount);
+  const hasLegacyScope = true;
 
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
