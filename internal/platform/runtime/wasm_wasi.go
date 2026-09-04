@@ -201,7 +201,7 @@ func resolvePath(dir, path string) string {
 	return filepath.Join(dir, path)
 }
 
-func readStdout(stdout io.Reader, incoming chan<- Message, done chan<- struct{}) {
+func readStdout(stdout io.Reader, incoming chan Message, done chan<- struct{}) {
 	defer close(done)
 
 	dec := protocol.NewDecoder(stdout)
@@ -215,6 +215,18 @@ func readStdout(stdout io.Reader, incoming chan<- Message, done chan<- struct{})
 			return
 		}
 		respCopy := resp
-		incoming <- Message{Response: &respCopy}
+		select {
+		case incoming <- Message{Response: &respCopy}:
+		default:
+			select {
+			case <-incoming:
+			default:
+			}
+			select {
+			case incoming <- Message{Err: errors.New("runtime: stdout response buffer exceeded")}:
+			default:
+			}
+			return
+		}
 	}
 }

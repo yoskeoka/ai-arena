@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ type localSubprocessAdapter struct {
 	incoming chan Message
 	done     chan error
 	stderr   *captureBuffer
+	waitOnce sync.Once
 }
 
 func startLocalSubprocess(ctx context.Context, cfg Config) (*localSubprocessAdapter, error) {
@@ -63,14 +65,20 @@ func startLocalSubprocess(ctx context.Context, cfg Config) (*localSubprocessAdap
 	stdoutDone := make(chan struct{})
 	go readStdout(stdout, adapter.incoming, stdoutDone)
 	go func() {
-		err := cmd.Wait()
 		<-stdoutDone
-		adapter.done <- err
-		close(adapter.done)
-		close(adapter.incoming)
+		adapter.waitForExit()
 	}()
 
 	return adapter, nil
+}
+
+func (a *localSubprocessAdapter) waitForExit() {
+	a.waitOnce.Do(func() {
+		err := a.cmd.Wait()
+		a.done <- err
+		close(a.done)
+		close(a.incoming)
+	})
 }
 
 func (a *localSubprocessAdapter) Send(req protocol.Request) error {
@@ -111,6 +119,7 @@ func (a *localSubprocessAdapter) Close(ctx context.Context) error {
 		return suppressExpectedShutdownExit(err, os.Interrupt)
 	case <-ctx.Done():
 		_ = a.cmd.Process.Signal(syscall.SIGKILL)
+		a.waitForExit()
 		err := <-a.done
 		if err == nil {
 			return ctx.Err()
