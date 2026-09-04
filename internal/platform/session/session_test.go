@@ -82,7 +82,7 @@ func TestSessionInitTurnTimeoutGameOverAndLateResponse(t *testing.T) {
 		Deadline: time.Second,
 	})
 	if result.Status != StatusAccepted {
-		t.Fatalf("GameOver status = %q, want accepted", result.Status)
+		t.Fatalf("GameOver status = %q, reason = %q, want accepted", result.Status, result.FailureReason)
 	}
 }
 

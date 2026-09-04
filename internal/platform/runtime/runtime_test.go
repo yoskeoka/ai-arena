@@ -50,6 +50,51 @@ func TestStartStreamsAndCapturesStderr(t *testing.T) {
 	}
 }
 
+func TestStartDeliversResponseBeforeImmediateExit(t *testing.T) {
+	adapter, err := Start(context.Background(), Config{
+		Command: helperCommand("runtime-immediate-exit"),
+		Env:     []string{"GO_WANT_HELPER_PROCESS=runtime-immediate-exit"},
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = adapter.Close(closeCtx)
+	})
+
+	msg, ok := <-adapter.Incoming()
+	if !ok {
+		t.Fatal("Incoming closed before response")
+	}
+	if msg.Err != nil {
+		t.Fatalf("incoming err: %v", msg.Err)
+	}
+	if msg.Response == nil || msg.Response.ID != "immediate-exit" {
+		t.Fatalf("unexpected response: %+v", msg.Response)
+	}
+	if _, ok := <-adapter.Incoming(); ok {
+		t.Fatal("Incoming remained open after immediate exit")
+	}
+}
+
+func TestStartReapsImmediateExitWhenResponseBufferOverflows(t *testing.T) {
+	adapter, err := Start(context.Background(), Config{
+		Command: helperCommand("runtime-response-spam"),
+		Env:     []string{"GO_WANT_HELPER_PROCESS=runtime-response-spam"},
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	closeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := adapter.Close(closeCtx); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
 func TestCloseKillsProcessWhenShutdownDeadlineExpires(t *testing.T) {
 	adapter, err := Start(context.Background(), Config{
 		Command: []string{"/bin/sh", "-c", "tail -f /dev/null"},
@@ -187,6 +232,12 @@ func TestHelperProcess(t *testing.T) {
 		fmt.Fprintln(os.Stderr, "runtime stderr")
 		fmt.Println(`{"jsonrpc":"2.0","id":"boot","result":{"ready":true}}`)
 		time.Sleep(10 * time.Millisecond)
+	case "runtime-immediate-exit":
+		fmt.Println(`{"jsonrpc":"2.0","id":"immediate-exit","result":{"ready":true}}`)
+	case "runtime-response-spam":
+		for i := 0; i < 17; i++ {
+			fmt.Printf(`{"jsonrpc":"2.0","id":"response-%d","result":{"ready":true}}\n`, i)
+		}
 	case "runtime-hang":
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, os.Interrupt)

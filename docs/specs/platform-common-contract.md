@@ -99,7 +99,9 @@ minor / patch 差分は同一 major の範囲で互換とみなす。
 - transport 実装が subprocess か WASM かはこの spec の責務外とする
 - `stdout` は JSON-RPC response 専用であり、runtime kind に依らず JSON 以外を混在させてはならない
 - `stderr` は AI の自由ログであり、platform が capture する
-- `stdout` が閉じる、`stdin` に書けない、process が終了するなど transport 継続不能な事象は `runtime-stopped` に分類する
+- request に対応する完全な JSON-RPC response が transport close より前に `stdout` へ出力済みなら、platform は close を理由にその response を破棄せず、通常の response matching と validation に渡す。この優先順は subprocess と WASM/WASI を含むすべての runtime kind で共通である
+- 完全な対応 response を観測する前に `stdout` が閉じる、`stdin` に書けない、process が終了するなど transport 継続不能な事象は `runtime-stopped` に分類する
+- timeout 済み request への response は late response として扱い、current pending request へ混在させてはならない。この扱いは subsequent transport close によって変わらない
 
 ## 共通メソッド契約
 
