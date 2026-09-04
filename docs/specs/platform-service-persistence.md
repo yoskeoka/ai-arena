@@ -43,9 +43,12 @@ durable write model の最小保存単位は、1 回の `match submission` に�
 - compatibility metadata:
   `game_id`、`game_version`、`ruleset_version`
 - submitted players:
-  player 順序、`player_id`、`artifact_ref`
+  player 順序、match-local `player_id`、stable bot identity、immutable submission revision identity、
+  admitted AI artifact digest
+- selected game release:
+  stable competition scope identity、immutable game artifact digest
 - artifact base locator:
-  `output_dir`
+  service が生成した run-scoped output prefix
 - orchestration lifecycle:
   `queued|leased|running|persisting|completed|failed|canceled`
 - queue ordering identity:
@@ -56,6 +59,12 @@ durable write model の最小保存単位は、1 回の `match submission` に�
   `match_dir`、`record` locator、`result-summary` locator、player stderr locator 群、terminal match status、terminal error summary
 
 `attempt_count` は record に含めてよいが、この milestone では `1` 固定のままとする。
+
+match request acceptance は、eligible bot / active revision の read と request/run snapshot の
+write を同じ transaction または同等の consistent read boundary で完結する。revision 更新と
+request acceptance が競合しても、1 run 内で bot revision / artifact digest が混在してはならない。
+retry / rerun は parent run の snapshot を再利用し、後から active release や active revision を
+再解決してはならない。
 
 ## 状態遷移と durability
 

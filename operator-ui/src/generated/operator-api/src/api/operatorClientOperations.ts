@@ -11,6 +11,7 @@ import {
   jsonAiSubmissionToApplicationTransform,
   jsonBotRevisionRequestToTransportTransform,
   jsonBotRevisionResponseToApplicationTransform,
+  jsonEligibleBotListResponseToApplicationTransform,
   jsonGameBundleAdmissionToApplicationTransform,
   jsonGameRegistrationListResponseToApplicationTransform,
   jsonGameRegistrationRequestToTransportTransform,
@@ -36,6 +37,7 @@ import type {
   AiSubmissionRequest,
   BotRevisionRequest,
   BotRevisionResponse,
+  EligibleBotListResponse,
   File,
   GameBundleAdmission,
   GameRegistration,
@@ -287,6 +289,31 @@ export async function listBots(
     response.headers["content-type"]?.includes("application/json")
   ) {
     return jsonAiBotListResponseToApplicationTransform(response.body)!;
+  }
+  throw createRestError(response);
+}
+export interface ListEligibleBotsOptions extends OperationOptions {}
+export async function listEligibleBots(
+  client: OperatorClientContext,
+  scopeId: string,
+  options?: ListEligibleBotsOptions,
+): Promise<EligibleBotListResponse> {
+  const path = parse("/api/v1/eligible-bots{?scope_id}").expand({
+    scope_id: scopeId,
+  });
+  const httpRequestOptions = {
+    headers: {},
+  };
+  const response = await client.pathUnchecked(path).get(httpRequestOptions);
+
+  if (typeof options?.operationOptions?.onResponse === "function") {
+    options?.operationOptions?.onResponse(response);
+  }
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.includes("application/json")
+  ) {
+    return jsonEligibleBotListResponseToApplicationTransform(response.body)!;
   }
   throw createRestError(response);
 }

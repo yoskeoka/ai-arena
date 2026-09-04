@@ -178,6 +178,7 @@ func (a *OperatorAPI) Handler() http.Handler {
 	protected.HandleFunc("POST /api/v1/ai-bundles", a.handleAIBundleUpload)
 	protected.HandleFunc("POST /api/v1/game-bundles", a.handleGameBundleUpload)
 	protected.HandleFunc("/api/v1/match-requests", a.handleMatchRequests)
+	protected.HandleFunc("GET /api/v1/eligible-bots", a.handleEligibleBots)
 	protected.HandleFunc("GET /api/v1/rankings", a.handleRankings)
 	protected.HandleFunc("POST /api/v1/preset-matches", a.handlePresetMatches)
 	protected.HandleFunc("POST /api/v1/runs/{run_id}/cancel", a.handleRunCancel)
@@ -193,6 +194,24 @@ func (a *OperatorAPI) Handler() http.Handler {
 		mux.Handle("/api/v1/", protected)
 	}
 	return withOperatorCORS(mux)
+}
+
+func (a *OperatorAPI) handleEligibleBots(w http.ResponseWriter, r *http.Request) {
+	if a.botOwnership == nil {
+		writeError(w, http.StatusNotFound, ErrBotNotFound)
+		return
+	}
+	scopeID := strings.TrimSpace(r.URL.Query().Get("scope_id"))
+	if scopeID == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("service: scope_id is required"))
+		return
+	}
+	items, err := a.botOwnership.ListEligible(r.Context(), scopeID)
+	if err != nil {
+		writeError(w, statusCodeForServiceError(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (a *OperatorAPI) handleBots(w http.ResponseWriter, r *http.Request) {
@@ -513,6 +532,13 @@ func (a *OperatorAPI) handleMatchRequests(w http.ResponseWriter, r *http.Request
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
+		}
+		if a.requests.bots != nil && (strings.TrimSpace(req.ScopeID) == "" || len(req.BotIDs) == 0) {
+			_, lookupErr := a.general.GetGame(r.Context(), strings.TrimSpace(req.GameRegistrationID))
+			if lookupErr != nil {
+				writeError(w, http.StatusBadRequest, fmt.Errorf("service: scope_id and bot_ids are required"))
+				return
+			}
 		}
 		record, _, err := a.requests.Create(r.Context(), req)
 		if err != nil {

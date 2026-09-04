@@ -176,6 +176,17 @@ model AIBotListResponse {
   items: AIBot[];
 }
 
+model EligibleBot {
+  bot_id: string;
+  scope_id: string;
+  bot_name: string;
+  active_submission_id: string;
+}
+
+model EligibleBotListResponse {
+  items: EligibleBot[];
+}
+
 model AISubmissionRevision {
   ai_submission_id: string;
   bot_id: string;
@@ -205,15 +216,13 @@ model AISubmission {
 
 model MatchRequestParticipant {
   player_id: string;
+  bot_id?: string;
   ai_submission_id: string;
 }
 
 model MatchRequestCreateRequest {
-  request_id?: string;
-  game_registration_id: string;
-  participants: MatchRequestParticipant[];
-  output_dir: string;
-  match_id?: string;
+  scope_id: string;
+  bot_ids: string[];
 }
 
 model MatchRequest {

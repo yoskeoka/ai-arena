@@ -43,6 +43,10 @@ op createOrReviseBot(@body body: BotRevisionRequest): {
 @get
 op listBots(@query scope_id: string, @query include_retired?: boolean): AIBotListResponse;
 
+@route("/api/v1/eligible-bots")
+@get
+op listEligibleBots(@query scope_id: string): EligibleBotListResponse;
+
 @route("/api/v1/bots/{bot_id}/retire")
 @post
 op retireBot(@path bot_id: string): AIBot;

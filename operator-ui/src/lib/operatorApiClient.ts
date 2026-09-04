@@ -66,6 +66,8 @@ export type {
   StoredRankingSnapshot,
 };
 
+export type EligibleBot = { botId: string; scopeId: string; botName: string; activeSubmissionId: string };
+
 const credentialsPolicy: PipelinePolicy = {
   name: "operator-ui-with-credentials",
   async sendRequest(request, next) {
@@ -139,6 +141,17 @@ export class OperatorApiClient {
     const query = new URLSearchParams({ scope_id: scopeId, include_retired: String(includeRetired) });
     const response = await this.get(`/api/v1/bots?${query.toString()}`, signal);
     return jsonAiBotListResponseToApplicationTransform(response.body)!.items;
+  }
+
+  async listEligibleBots(scopeId: string, signal?: AbortSignal): Promise<EligibleBot[]> {
+    const response = await this.get(`/api/v1/eligible-bots?${new URLSearchParams({ scope_id: scopeId }).toString()}`, signal);
+    const body = response.body as { items?: Array<{ bot_id: string; scope_id: string; bot_name: string; active_submission_id: string }> };
+    return (body.items ?? []).map((item) => ({ botId: item.bot_id, scopeId: item.scope_id, botName: item.bot_name, activeSubmissionId: item.active_submission_id }));
+  }
+
+  async createComposedMatchRequest(scopeId: string, botIds: string[], signal?: AbortSignal): Promise<MatchRequest> {
+    const response = await this.post("/api/v1/match-requests", { scope_id: scopeId, bot_ids: botIds }, [201], signal);
+    return jsonMatchRequestToApplicationTransform(response.body)!;
   }
 
   async listMatchRequests(signal?: AbortSignal): Promise<MatchRequest[]> {

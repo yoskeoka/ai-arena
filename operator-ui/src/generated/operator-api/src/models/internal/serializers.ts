@@ -9,6 +9,8 @@ import type {
   AuthPrincipal,
   BotRevisionRequest,
   BotRevisionResponse,
+  EligibleBot,
+  EligibleBotListResponse,
   File,
   GameBundleAdmission,
   GameMetadata,
@@ -524,6 +526,70 @@ export function decodeBase64(value: string): Uint8Array | undefined {
   }
 
   return _transformedArray as any;
+}export function jsonEligibleBotListResponseToTransportTransform(
+  input_?: EligibleBotListResponse | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    items: jsonArrayEligibleBotToTransportTransform(input_.items)
+  }!;
+}export function jsonEligibleBotListResponseToApplicationTransform(
+  input_?: any,
+): EligibleBotListResponse {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    items: jsonArrayEligibleBotToApplicationTransform(input_.items)
+  }!;
+}export function jsonArrayEligibleBotToTransportTransform(
+  items_?: Array<EligibleBot> | null,
+): any {
+  if(!items_) {
+    return items_ as any;
+  }
+  const _transformedArray = [];
+
+  for (const item of items_ ?? []) {
+    const transformedItem = jsonEligibleBotToTransportTransform(item as any);
+    _transformedArray.push(transformedItem);
+  }
+
+  return _transformedArray as any;
+}export function jsonArrayEligibleBotToApplicationTransform(
+  items_?: any,
+): Array<EligibleBot> {
+  if(!items_) {
+    return items_ as any;
+  }
+  const _transformedArray = [];
+
+  for (const item of items_ ?? []) {
+    const transformedItem = jsonEligibleBotToApplicationTransform(item as any);
+    _transformedArray.push(transformedItem);
+  }
+
+  return _transformedArray as any;
+}export function jsonEligibleBotToTransportTransform(
+  input_?: EligibleBot | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    bot_id: input_.botId,scope_id: input_.scopeId,bot_name: input_.botName,active_submission_id: input_.activeSubmissionId
+  }!;
+}export function jsonEligibleBotToApplicationTransform(
+  input_?: any,
+): EligibleBot {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    botId: input_.bot_id,scopeId: input_.scope_id,botName: input_.bot_name,activeSubmissionId: input_.active_submission_id
+  }!;
 }export function jsonMatchRequestListResponseToTransportTransform(
   input_?: MatchRequestListResponse | null,
 ): any {
@@ -623,7 +689,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    player_id: input_.playerId,ai_submission_id: input_.aiSubmissionId
+    player_id: input_.playerId,bot_id: input_.botId,ai_submission_id: input_.aiSubmissionId
   }!;
 }export function jsonMatchRequestParticipantToApplicationTransform(
   input_?: any,
@@ -632,7 +698,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    playerId: input_.player_id,aiSubmissionId: input_.ai_submission_id
+    playerId: input_.player_id,botId: input_.bot_id,aiSubmissionId: input_.ai_submission_id
   }!;
 }export function jsonMatchRequestCreateRequestToTransportTransform(
   input_?: MatchRequestCreateRequest | null,
@@ -641,7 +707,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    request_id: input_.requestId,game_registration_id: input_.gameRegistrationId,participants: jsonArrayMatchRequestParticipantToTransportTransform(input_.participants),output_dir: input_.outputDir,match_id: input_.matchId
+    scope_id: input_.scopeId,bot_ids: jsonArrayStringToTransportTransform(input_.botIds)
   }!;
 }export function jsonMatchRequestCreateRequestToApplicationTransform(
   input_?: any,
@@ -650,7 +716,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    requestId: input_.request_id,gameRegistrationId: input_.game_registration_id,participants: jsonArrayMatchRequestParticipantToApplicationTransform(input_.participants),outputDir: input_.output_dir,matchId: input_.match_id
+    scopeId: input_.scope_id,botIds: jsonArrayStringToApplicationTransform(input_.bot_ids)
   }!;
 }export function jsonSignupInviteRequestToTransportTransform(
   input_?: SignupInviteRequest | null,

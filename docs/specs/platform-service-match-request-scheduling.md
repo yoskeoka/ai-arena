@@ -107,6 +107,16 @@ request を受け付けるときは、少なくとも次を同期的に確認し
 
 validation 成功後に scheduling された request は、selected game release と participant の admitted AI revision の digest を snapshot して 1 件の initial run へ具体化される。admitted AI digest を持つ participant は、その digest が保存済みの AI bundle を指すことを admission 時に確認する。queue record はこの snapshot を worker handoff の正本とし、mutable path / URL を実行入力に含めない。
 
+## List Query Reuse
+
+同じ domain model を扱う一覧でも、呼び出し元ごとに visibility、authorization、filter、presentation は異なり得る。単一の一覧 response を異なる authorization / presentation の代用にしてはならない。
+
+外部 interface は、それぞれの利用目的に必要な visibility と response shape を定義する。frontend、external API、別種の frontend、background job process は、同じ domain query を呼び出してよいが、ある interface の authorization 判定、field projection、response schema を他の interface に流用してはならない。
+
+service 内部の一覧 query は、domain model に対する再利用可能な実装として、少なくとも対象 scope / ownership などの visibility boundary、lifecycle・readiness・状態などの selection filter、呼び出し元が必要とする field projection を明示的な option として受け取らなければならない。
+
+各外部 adapter は認可済みの principal と利用目的からこれらの option を組み立て、domain query の結果をその interface の response へ変換する。これにより domain-level の filter / retrieval logic は共有し、authorization と presentation の契約は interface ごとに独立して進化させる。
+
 ## Preset Lane との関係
 
 preset lane は bootstrap 用の shortcut だが、

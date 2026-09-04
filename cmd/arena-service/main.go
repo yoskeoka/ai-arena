@@ -323,6 +323,7 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	if err != nil {
 		return nil, err
 	}
+	requests.WithBotOwnership(botOwnership)
 	rankings, err := service.NewRankingService(runtime.rankingStore, store, runtime.reader)
 	if err != nil {
 		return nil, err

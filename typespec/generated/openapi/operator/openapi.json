@@ -186,6 +186,34 @@
         }
       }
     },
+    "/api/v1/eligible-bots": {
+      "get": {
+        "operationId": "Operator_listEligibleBots",
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.EligibleBotListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/game-bundles": {
       "post": {
         "operationId": "Operator_uploadGameBundle",
@@ -854,6 +882,36 @@
           }
         }
       },
+      "Shared.EligibleBot": {
+        "type": "object",
+        "required": ["bot_id", "scope_id", "bot_name", "active_submission_id"],
+        "properties": {
+          "bot_id": {
+            "type": "string"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "bot_name": {
+            "type": "string"
+          },
+          "active_submission_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Shared.EligibleBotListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shared.EligibleBot"
+            }
+          }
+        }
+      },
       "Shared.GameBundleAdmission": {
         "type": "object",
         "required": [
@@ -1096,25 +1154,16 @@
       },
       "Shared.MatchRequestCreateRequest": {
         "type": "object",
-        "required": ["game_registration_id", "participants", "output_dir"],
+        "required": ["scope_id", "bot_ids"],
         "properties": {
-          "request_id": {
+          "scope_id": {
             "type": "string"
           },
-          "game_registration_id": {
-            "type": "string"
-          },
-          "participants": {
+          "bot_ids": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Shared.MatchRequestParticipant"
+              "type": "string"
             }
-          },
-          "output_dir": {
-            "type": "string"
-          },
-          "match_id": {
-            "type": "string"
           }
         }
       },
@@ -1135,6 +1184,9 @@
         "required": ["player_id", "ai_submission_id"],
         "properties": {
           "player_id": {
+            "type": "string"
+          },
+          "bot_id": {
             "type": "string"
           },
           "ai_submission_id": {

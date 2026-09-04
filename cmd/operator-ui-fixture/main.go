@@ -72,6 +72,7 @@ func newFixtureBackend(listenAddr string) (*fixtureBackend, error) {
 	if err != nil {
 		return nil, err
 	}
+	requests.WithBotOwnership(service.NewInMemoryBotOwnershipStore())
 
 	presets, err := service.NewStaticPresetCatalog([]service.MatchPresetDefinition{
 		{

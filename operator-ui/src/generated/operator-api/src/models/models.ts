@@ -193,6 +193,15 @@ export interface AiSubmissionRevision {
 export interface AiBotListResponse {
   items: Array<AiBot>;
 }
+export interface EligibleBotListResponse {
+  items: Array<EligibleBot>;
+}
+export interface EligibleBot {
+  botId: string;
+  scopeId: string;
+  botName: string;
+  activeSubmissionId: string;
+}
 export interface MatchRequestListResponse {
   items: Array<MatchRequest>;
 }
@@ -218,14 +227,12 @@ export interface MatchRequest {
 }
 export interface MatchRequestParticipant {
   playerId: string;
+  botId?: string;
   aiSubmissionId: string;
 }
 export interface MatchRequestCreateRequest {
-  requestId?: string;
-  gameRegistrationId: string;
-  participants: Array<MatchRequestParticipant>;
-  outputDir: string;
-  matchId?: string;
+  scopeId: string;
+  botIds: Array<string>;
 }
 export interface SignupInviteRequest {
   role: "participant" | "developer" | "operator";
