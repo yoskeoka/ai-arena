@@ -107,22 +107,15 @@ request を受け付けるときは、少なくとも次を同期的に確認し
 
 validation 成功後に scheduling された request は、selected game release と participant の admitted AI revision の digest を snapshot して 1 件の initial run へ具体化される。admitted AI digest を持つ participant は、その digest が保存済みの AI bundle を指すことを admission 時に確認する。queue record はこの snapshot を worker handoff の正本とし、mutable path / URL を実行入力に含めない。
 
-## Bot Read Models
+## List Query Reuse
 
-bot の一覧は用途ごとに異なる visibility と filter を持つ。単一の一覧 response を異なる
-authorization / presentation の代用にしてはならない。
+同じ domain model を扱う一覧でも、呼び出し元ごとに visibility、authorization、filter、presentation は異なり得る。単一の一覧 response を異なる authorization / presentation の代用にしてはならない。
 
-- owner management list は、acting owner と scope を filter とし、retired bot と revision
-  management に必要な lifecycle / active revision 情報を含んでよい。
-- match composer eligible list は、指定 scope 内の全 owner を対象に、active bot かつ ready
-  active revision を持つ bot だけを返す。これは operator-only surface とし、composition に
-  必要な stable bot identity、表示名、scope、active revision identity だけを返す。
-- viewer / leaderboard list は ranking read model の責務とする。公開可能な bot 表示情報と
-  ranking aggregate だけを返し、owner management / revision 操作情報を露出してはならない。
+外部 interface は、それぞれの利用目的に必要な visibility と response shape を定義する。frontend、external API、別種の frontend、background job process は、同じ domain query を呼び出してよいが、ある interface の authorization 判定、field projection、response schema を他の interface に流用してはならない。
 
-service 内部の bot query は、scope、owner、lifecycle、active revision readiness、返却する
-field projection を用途ごとに明示して指定できなければならない。scope をまたぐ bot、retired bot、
-active revision のない bot、ready でない revision は eligible list に含めてはならない。
+service 内部の一覧 query は、domain model に対する再利用可能な実装として、少なくとも対象 scope / ownership などの visibility boundary、lifecycle・readiness・状態などの selection filter、呼び出し元が必要とする field projection を明示的な option として受け取らなければならない。
+
+各外部 adapter は認可済みの principal と利用目的からこれらの option を組み立て、domain query の結果をその interface の response へ変換する。これにより domain-level の filter / retrieval logic は共有し、authorization と presentation の契約は interface ごとに独立して進化させる。
 
 ## Preset Lane との関係
 
