@@ -169,20 +169,12 @@ func (r *Runner) Run(ctx context.Context) (record Record, runErr error) {
 	}()
 
 	if err := r.initializeSessions(ctx, meta); err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			runErr = r.cancel(err)
-			return record, runErr
-		}
-		runErr = r.fail(err)
+		runErr = r.classifyTerminalError(ctx, err)
 		return record, runErr
 	}
 
 	if err := r.runDecisionLoop(ctx); err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			runErr = r.cancel(err)
-			return record, runErr
-		}
-		runErr = r.fail(err)
+		runErr = r.classifyTerminalError(ctx, err)
 		return record, runErr
 	}
 
@@ -220,7 +212,7 @@ func (r *Runner) initializeSessions(ctx context.Context, meta catalog.GameMetada
 			Deadline: initAckDeadline,
 		})
 		r.appendEvent("session_initialized", 0, player.PlayerID, result)
-		if ctxErr := ctx.Err(); ctxErr != nil && result.FailureReason == session.ReasonTimeout {
+		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
 		if result.FailureReason == session.ReasonRuntimeStop {
@@ -427,6 +419,18 @@ func (r *Runner) fail(err error) error {
 	return err
 }
 
+// classifyTerminalError gives an observed match-context cancellation precedence
+// over concurrent transport and game-master errors.
+func (r *Runner) classifyTerminalError(ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return r.cancel(ctxErr)
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return r.cancel(err)
+	}
+	return r.fail(err)
+}
+
 func (r *Runner) cancel(err error) error {
 	r.phase = game.StatusCanceled
 	r.status = game.StatusCanceled
@@ -480,7 +484,7 @@ func (r *Runner) executeTurn(ctx context.Context, turn int, req game.DecisionReq
 			Action:        result.Payload,
 		},
 	}
-	if ctxErr := ctx.Err(); ctxErr != nil && result.FailureReason == session.ReasonTimeout {
+	if ctxErr := ctx.Err(); ctxErr != nil {
 		exec.err = ctxErr
 	}
 	return exec

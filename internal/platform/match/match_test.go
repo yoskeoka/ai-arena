@@ -186,6 +186,26 @@ func TestRunnerReturnsCanceledRecordForInitCancellation(t *testing.T) {
 	}
 }
 
+func TestRunnerReturnsCanceledRecordWhenDeadlineRacesInitRuntimeStop(t *testing.T) {
+	players := []game.Player{{PlayerID: "p1", AIID: "bot-a"}}
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now())
+	defer cancel()
+	record, err := NewRunner("match-init-deadline-runtime-stop", players, &fakeMaster{metadata: baseMetadata()}, map[string]PlayerSession{
+		"p1": &fakeSession{
+			initResult: session.Result{Status: session.StatusNoAction, FailureReason: session.ReasonRuntimeStop},
+		},
+	}).Run(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run error = %v, want context.DeadlineExceeded", err)
+	}
+	if record.Status != game.StatusCanceled {
+		t.Fatalf("record.Status = %q, want canceled", record.Status)
+	}
+	if !hasEventKind(record.EventLog, "match_canceled") || hasEventKind(record.EventLog, "match_failed") {
+		t.Fatalf("unexpected terminal events: %+v", record.EventLog)
+	}
+}
+
 func TestRunnerReturnsCanceledRecordWhenContextCanceled(t *testing.T) {
 	players := []game.Player{{PlayerID: "p1", AIID: "bot-a"}}
 	master := &fakeMaster{
