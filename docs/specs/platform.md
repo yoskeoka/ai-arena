@@ -547,6 +547,13 @@ platform は少なくとも以下の lifecycle phase を内部で扱う。
 
 `completed` / `failed` / `canceled` は terminal phase であり、match record の `status` と整合していなければならない。
 
+match を統括する context の cancellation または deadline を runner が観測した実行は、
+terminal status を `canceled` とする。この時、session、player process、game master が
+同時に返した `runtime-stopped`、timeout、shutdown error は `failed` へ上書きしない。
+一方で、match context が生きている時点で観測した runtime-stop、protocol error、
+game master error は `failed` とする。terminal record の保存に成功した service run は、
+runner の terminal status が `canceled` を含むいずれであっても lifecycle `completed` とする。
+
 ### match record
 
 match record は、1試合の最終結果をあとから参照するための最小記録である。

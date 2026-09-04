@@ -307,7 +307,7 @@ func TestRunOnceFailureStillPrintsTerminalRecord(t *testing.T) {
 		"run-once",
 		"--submission", submissionPath,
 		"--base-dir", baseDir,
-		"--match-timeout", "10ms",
+		"--match-timeout", "150ms",
 	}, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("run() returned nil error")
@@ -325,19 +325,45 @@ func TestRunOnceFailureStillPrintsTerminalRecord(t *testing.T) {
 		} `json:"terminal"`
 	}
 	if jsonErr := json.Unmarshal(stdout.Bytes(), &record); jsonErr != nil {
-		t.Fatalf("json.Unmarshal() error = %v", jsonErr)
+		t.Fatalf("json.Unmarshal() error = %v, stdout = %s, stderr = %s", jsonErr, stdout.String(), stderr.String())
 	}
 	if record.State != "completed" {
-		t.Fatalf("state = %q, want completed", record.State)
+		t.Fatalf("state = %q, want completed; match_status = %q, terminal_error = %q, stdout = %s, stderr = %s", record.State, record.Terminal.MatchStatus, record.Terminal.Error, stdout.String(), stderr.String())
 	}
 	if record.Terminal.MatchStatus != "canceled" {
-		t.Fatalf("match_status = %q, want canceled", record.Terminal.MatchStatus)
+		t.Fatalf("match_status = %q, want canceled; state = %q, terminal_error = %q, stdout = %s, stderr = %s", record.Terminal.MatchStatus, record.State, record.Terminal.Error, stdout.String(), stderr.String())
 	}
 	assertPathExists(t, record.Terminal.MatchDir)
 	assertPathExists(t, record.Terminal.RecordPath)
 	assertPathExists(t, record.Terminal.ResultSummaryPath)
 	if len(record.Terminal.PlayerStderrPaths) == 0 {
 		t.Fatal("player_stderr_paths should not be empty")
+	}
+
+	persisted, readErr := os.ReadFile(record.Terminal.RecordPath)
+	if readErr != nil {
+		t.Fatalf("os.ReadFile(%q) error = %v", record.Terminal.RecordPath, readErr)
+	}
+	var terminalRecord struct {
+		Status   string `json:"status"`
+		EventLog []struct {
+			Kind string `json:"kind"`
+		} `json:"event_log"`
+	}
+	if jsonErr := json.Unmarshal(persisted, &terminalRecord); jsonErr != nil {
+		t.Fatalf("json.Unmarshal(persisted record) error = %v", jsonErr)
+	}
+	var canceledEvent, failedEvent bool
+	for _, event := range terminalRecord.EventLog {
+		switch event.Kind {
+		case "match_canceled":
+			canceledEvent = true
+		case "match_failed":
+			failedEvent = true
+		}
+	}
+	if terminalRecord.Status != "canceled" || !canceledEvent || failedEvent {
+		t.Fatalf("persisted terminal record = %+v, want canceled status with match_canceled only", terminalRecord)
 	}
 }
 
