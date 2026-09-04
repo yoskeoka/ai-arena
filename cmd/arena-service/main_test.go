@@ -307,7 +307,7 @@ func TestRunOnceFailureStillPrintsTerminalRecord(t *testing.T) {
 		"run-once",
 		"--submission", submissionPath,
 		"--base-dir", baseDir,
-		"--match-timeout", "200ms",
+		"--match-timeout", "150ms",
 	}, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("run() returned nil error")
