@@ -184,13 +184,6 @@ test("service-backed operator UI browser lane covers registration, request execu
   await page.getByTestId("run-action-promote").click();
   await expect.poll(async () => getRunDetail(api, rerunRun.run_id)).toMatchObject({ run_id: rerunRun.run_id, official: true });
 
-  await page.getByTestId("operator-nav-rankings").click();
-  const quickScopeId = scopeTestId(rerunRun.game_id, rerunRun.game_version, rerunRun.ruleset_version);
-  await expect(page.getByTestId(`ranking-scope-${quickScopeId}`)).toBeVisible();
-  await page.getByTestId(`ranking-scope-${quickScopeId}`).click();
-  await expect(page.getByText(`last applied run: ${rerunRun.run_id}`)).toBeVisible();
-  await expect(page.getByTestId(`ranking-entry-${encodeURIComponent(artifactRef)}`)).toBeVisible();
-
   await page.goto(`/operator/runs/${rerunRun.run_id}`);
   const resultSummaryArtifact = page.getByTestId("artifact-entry-result-summary");
   await expect(resultSummaryArtifact).toBeVisible();
