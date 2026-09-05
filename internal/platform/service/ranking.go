@@ -459,7 +459,9 @@ func applyRankingUpdate(snapshot RankingSnapshot, update rankingUpdate) (Ranking
 	for _, placement := range update.Placements {
 		entry := normalizeRankingEntry(entries[placement.BotID])
 		entry.BotID = placement.BotID
-		entry.BotName = placement.BotName
+		if strings.TrimSpace(placement.BotName) != "" {
+			entry.BotName = placement.BotName
+		}
 		entry.LastPlayerID = placement.PlayerID
 		entry.MatchesPlayed++
 		entry.PlacementCounts[placement.Place]++

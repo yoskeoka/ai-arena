@@ -84,7 +84,7 @@ func TestRankingServiceAggregatesBotAcrossRevisionChanges(t *testing.T) {
 			return s
 		}(),
 		func() MatchSubmission {
-			s := rankingTestSubmission("run-2", "match-2", []SubmittedPlayer{{PlayerID: "p1", BotID: "bot-alpha", BotName: "Alpha", AISubmissionID: "revision-2", ArtifactID: "artifact-2"}})
+			s := rankingTestSubmission("run-2", "match-2", []SubmittedPlayer{{PlayerID: "p1", BotID: "bot-alpha", AISubmissionID: "revision-2", ArtifactID: "artifact-2"}})
 			s.Official = true
 			return s
 		}(),
@@ -98,7 +98,7 @@ func TestRankingServiceAggregatesBotAcrossRevisionChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
-	if len(stored.Snapshot.Entries) != 1 || stored.Snapshot.Entries[0].BotID != "bot-alpha" || stored.Snapshot.Entries[0].MatchesPlayed != 2 {
+	if len(stored.Snapshot.Entries) != 1 || stored.Snapshot.Entries[0].BotID != "bot-alpha" || stored.Snapshot.Entries[0].BotName != "Alpha" || stored.Snapshot.Entries[0].MatchesPlayed != 2 {
 		t.Fatalf("Entries = %+v, want one two-match bot-alpha aggregate", stored.Snapshot.Entries)
 	}
 }

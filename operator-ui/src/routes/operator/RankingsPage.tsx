@@ -152,7 +152,7 @@ export function RankingsPage({ baseUrl }: RankingsPageProps) {
                     className="rounded-3xl border border-black/10 bg-white p-4"
                     data-testid={`ranking-entry-${encodeURIComponent(entry.botId)}`}
                   >
-                    <p className="font-semibold">{entry.botName}</p>
+                    <p className="font-semibold">{entry.botName || entry.botId}</p>
                     <p className="mt-1 text-xs text-black/60">bot: {entry.botId}</p>
                     <p className="mt-1 text-sm text-black/70">last player: {entry.lastPlayerId}</p>
                     <div className="mt-3 flex flex-wrap gap-4 text-xs text-black/60">

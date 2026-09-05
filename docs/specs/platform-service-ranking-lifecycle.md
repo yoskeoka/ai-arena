@@ -113,8 +113,8 @@ ranking aggregate の competitor key は stable `bot_id` とする。`ai_submiss
 実行を再現するための immutable revision identity であり、ranking key にしてはならない。
 `artifact_ref`、artifact digest、`player_id` も cross-match aggregation key にしてはならない。
 
-snapshot entry は operator が読める bot name と owner-visible label を併せて持ってよい。
-これらは表示用の last-seen metadata であり、集計 identity ではない。bot の revision 更新または
+snapshot entry は operator が読める bot name（owner-visible label）を併せて持ってよい。
+これは表示用の last-seen metadata であり、集計 identity ではない。bot の revision 更新または
 retire は、過去の official result とその ranking entry を書き換えない。
 
 snapshot payload は competitor-identity version を持つ。artifact reference を competitor key にした
@@ -154,7 +154,6 @@ snapshot は少なくとも次を含む:
 - entries[]:
   - `bot_id`
   - `bot_name`
-  - owner-visible label
   - `last_player_id`
   - `matches_played`
   - `first_places`
