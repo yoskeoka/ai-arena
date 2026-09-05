@@ -38,7 +38,11 @@ WITH next_record AS (
     LIMIT 1
 )
 UPDATE service_queue_records AS records
-SET state = @leased_state, worker_id = @worker_id, updated_at = NOW()
+SET state = @leased_state,
+    worker_id = @worker_id,
+    lease_deadline = @lease_deadline,
+    last_heartbeat_at = @last_heartbeat_at,
+    updated_at = NOW()
 FROM next_record
 WHERE records.submission_id = next_record.submission_id
 RETURNING
@@ -55,6 +59,8 @@ RETURNING
     records.attempt_count,
     records.state,
     records.worker_id,
+    records.lease_deadline,
+    records.last_heartbeat_at,
     records.terminal_json;
 
 -- name: UpdateQueueRecord :exec
@@ -72,13 +78,15 @@ SET
     attempt_count = @attempt_count,
     state = @state,
     worker_id = @worker_id,
+    lease_deadline = @lease_deadline,
+    last_heartbeat_at = @last_heartbeat_at,
     terminal_json = @terminal_json,
     updated_at = NOW()
 WHERE submission_id = @submission_id;
 
 -- name: CancelQueueRecord :exec
 UPDATE service_queue_records
-SET state = @state, worker_id = NULL, terminal_json = NULL, updated_at = NOW()
+SET state = @state, worker_id = NULL, lease_deadline = NULL, last_heartbeat_at = NULL, terminal_json = NULL, updated_at = NOW()
 WHERE submission_id = @submission_id;
 
 -- name: GetQueueRecord :one
@@ -96,6 +104,8 @@ SELECT
     attempt_count,
     state,
     worker_id,
+    lease_deadline,
+    last_heartbeat_at,
     terminal_json
 FROM service_queue_records
 WHERE submission_id = @submission_id;
@@ -115,6 +125,8 @@ SELECT
     attempt_count,
     state,
     worker_id,
+    lease_deadline,
+    last_heartbeat_at,
     terminal_json
 FROM service_queue_records
 WHERE submission_id = @submission_id
@@ -135,9 +147,23 @@ SELECT
     attempt_count,
     state,
     worker_id,
+    lease_deadline,
+    last_heartbeat_at,
     terminal_json
 FROM service_queue_records
 ORDER BY queue_order;
+
+-- name: HeartbeatQueueRecord :execrows
+UPDATE service_queue_records
+SET lease_deadline = @lease_deadline, last_heartbeat_at = @last_heartbeat_at, updated_at = NOW()
+WHERE submission_id = @submission_id AND worker_id = @worker_id
+  AND state IN ('leased', 'running', 'persisting');
+
+-- name: RecoverExpiredQueueRecords :execrows
+UPDATE service_queue_records
+SET state = @queued_state, worker_id = NULL, lease_deadline = NULL, last_heartbeat_at = NULL, updated_at = NOW()
+WHERE state IN ('leased', 'running', 'persisting')
+  AND (lease_deadline IS NULL OR lease_deadline <= @now);
 -- name: ListOwnedBots :many
 SELECT bot_id, owner_account_id, scope_id, bot_name, normalized_bot_name, lifecycle_state, active_submission_id, created_at, retired_at
 FROM ai_bots

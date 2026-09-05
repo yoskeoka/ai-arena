@@ -37,6 +37,13 @@ func NewWorkerLoop(worker *Worker, workerID string, pollInterval time.Duration, 
 
 // Run keeps processing queued submissions until the context is canceled.
 func (l *WorkerLoop) Run(ctx context.Context) error {
+	if guard, ok := l.worker.queue.(workerProcessGuard); ok {
+		release, err := guard.AcquireWorker(ctx, l.workerID)
+		if err != nil {
+			return err
+		}
+		defer release()
+	}
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 
@@ -45,6 +52,13 @@ func (l *WorkerLoop) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-timer.C:
+		}
+		if _, err := l.worker.queue.RecoverExpired(ctx, time.Now().UTC()); err != nil {
+			if l.onError != nil {
+				l.onError(fmt.Errorf("recover expired leases: %w", err))
+			}
+			timer.Reset(l.pollInterval)
+			continue
 		}
 
 		_, err := l.worker.ProcessNext(ctx, l.workerID)

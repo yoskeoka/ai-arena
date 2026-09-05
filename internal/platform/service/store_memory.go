@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -68,11 +69,45 @@ func (s *InMemoryQueueStore) Claim(_ context.Context, workerID string) (QueueRec
 			continue
 		}
 		record.State = StateLeased
-		record.Lease = &WorkerLease{WorkerID: workerID}
+		record.Lease = newWorkerLease(workerID, time.Now().UTC())
 		s.records[runID] = record
 		return cloneQueueRecord(record), nil
 	}
 	return QueueRecord{}, ErrNoQueuedSubmission
+}
+
+// Heartbeat renews an active lease owned by workerID.
+func (s *InMemoryQueueStore) Heartbeat(_ context.Context, runID, workerID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	record, ok := s.records[runID]
+	if !ok {
+		return ErrQueueRecordNotFound
+	}
+	if record.Lease == nil || record.Lease.WorkerID != workerID {
+		return fmt.Errorf("service: worker does not own run %q", runID)
+	}
+	record.Lease = newWorkerLease(workerID, time.Now().UTC())
+	s.records[runID] = record
+	return nil
+}
+
+// RecoverExpired returns abandoned in-flight records to the queue.
+func (s *InMemoryQueueStore) RecoverExpired(_ context.Context, now time.Time) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	recovered := 0
+	for runID, record := range s.records {
+		if !isRecoverableLease(record, now) {
+			continue
+		}
+		record.State = StateQueued
+		record.Lease = nil
+		s.records[runID] = record
+		s.order = append(s.order, runID)
+		recovered++
+	}
+	return recovered, nil
 }
 
 // Update replaces one existing record after validating the lifecycle transition.
@@ -170,6 +205,24 @@ func cloneQueueRecord(record QueueRecord) QueueRecord {
 		record.Terminal = &terminal
 	}
 	return record
+}
+
+const workerLeaseDuration = 30 * time.Second
+
+func newWorkerLease(workerID string, now time.Time) *WorkerLease {
+	return &WorkerLease{WorkerID: workerID, Deadline: now.Add(workerLeaseDuration), LastHeartbeat: now}
+}
+
+func isRecoverableLease(record QueueRecord, now time.Time) bool {
+	if record.Lease == nil || record.Lease.Deadline.After(now) {
+		return false
+	}
+	switch record.State {
+	case StateLeased, StateRunning, StatePersisting:
+		return true
+	default:
+		return false
+	}
 }
 
 func cloneMatchSubmission(submission MatchSubmission) MatchSubmission {
