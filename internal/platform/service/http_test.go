@@ -765,6 +765,7 @@ func TestOperatorAPIRankingReadRoute(t *testing.T) {
 		RulesetVersion: "phase2-simultaneous-2turn",
 	}
 	snapshot := RankingSnapshot{
+		Version:          rankingSnapshotVersion,
 		Scope:            scope,
 		AppliedRunIDs:    []string{"run-1"},
 		AppliedMatchIDs:  []string{"match-1"},
@@ -772,7 +773,8 @@ func TestOperatorAPIRankingReadRoute(t *testing.T) {
 		CompletedMatches: 1,
 		Entries: []RankingEntry{
 			{
-				CompetitorRef: "artifact://echo",
+				BotID:         "bot-echo",
+				BotName:       "echo",
 				LastPlayerID:  "p1",
 				MatchesPlayed: 1,
 				FirstPlaces:   1,

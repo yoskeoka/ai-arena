@@ -58,7 +58,9 @@ ranking update を組み立てるときは、少なくとも次を使う。
   - `official`
   - player 順序
   - `player_id`
-  - `artifact_ref`
+  - stable `bot_id`
+  - pinned `ai_submission_id`
+  - pinned artifact digest / artifact identity
 
 `record.json` や `history.json` は replay / audit の source-of-truth だが、
 ranking update の既定入力にはしない。
@@ -105,18 +107,21 @@ ranking へ入るのは `correction/promote` で official に切り替わった�
 「completed run 全件の総和」ではなく
 「各 `match_id` の official completed run だけの総和」でなければならない。
 
-## Competitor Identity
+## Competitor Identity And Snapshot Migration
 
-first ranking aggregate の competitor key は `artifact_ref` とする。
+ranking aggregate の competitor key は stable `bot_id` とする。`ai_submission_id` は
+実行を再現するための immutable revision identity であり、ranking key にしてはならない。
+`artifact_ref`、artifact digest、`player_id` も cross-match aggregation key にしてはならない。
 
-理由:
+snapshot entry は operator が読める bot name と owner-visible label を併せて持ってよい。
+これらは表示用の last-seen metadata であり、集計 identity ではない。bot の revision 更新または
+retire は、過去の official result とその ranking entry を書き換えない。
 
-- current run contract には `ai_submission_id` が残っていない
-- `player_id` は match-local label であり、cross-match identity としては弱い
-- `artifact_ref` は official completed run から安定して取り出せる admitted competitor identity である
-
-snapshot は operator readability のために last seen `player_id` を持ってよいが、
-cross-match aggregation key として使ってはならない。
+snapshot payload は competitor-identity version を持つ。artifact reference を competitor key にした
+旧 version の snapshot は bot identity snapshot と混在させてはならない。service は旧 version を
+read した場合に migration-required として扱い、operator は durable official run set から full
+recompute して current version を保存してから read を再開する。旧 run metadata に `bot_id` が
+なければ、その run は current bot ranking へ推測して移行してはならない。
 
 ## Aggregate Scope
 
@@ -147,7 +152,9 @@ snapshot は少なくとも次を含む:
 - aggregate totals:
   `completed_matches`
 - entries[]:
-  - `competitor_ref`
+  - `bot_id`
+  - `bot_name`
+  - owner-visible label
   - `last_player_id`
   - `matches_played`
   - `first_places`
@@ -169,7 +176,7 @@ incremental update は、1 件の official ranking input を current snapshot �
 - same `run_id` を 2 回適用してはならない
 - same `match_id` を 2 つの run として同時適用してはならない
 - 1 placement はちょうど 1 competitor entry に反映される
-- unseen `competitor_ref` は新規 entry として追加してよい
+- unseen `bot_id` は新規 entry として追加してよい
 - `placement_counts[place]`、`matches_played`、`first_places` を更新する
 - `completed_matches` は applied `match_id` 数と一致しなければならない
 

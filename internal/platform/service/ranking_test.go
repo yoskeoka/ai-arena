@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -57,11 +58,57 @@ func TestRankingServiceApplyCompletedAndGet(t *testing.T) {
 	if len(stored.Snapshot.Entries) != 2 {
 		t.Fatalf("len(Entries) = %d, want 2", len(stored.Snapshot.Entries))
 	}
-	if stored.Snapshot.Entries[0].CompetitorRef != "artifact://alpha" || stored.Snapshot.Entries[0].FirstPlaces != 1 {
+	if stored.Snapshot.Entries[0].BotID != "bot-alpha" || stored.Snapshot.Entries[0].FirstPlaces != 1 {
 		t.Fatalf("alpha entry = %+v, want first place counted", stored.Snapshot.Entries[0])
 	}
 	if stored.Snapshot.Entries[1].PlacementCounts[2] != 1 {
 		t.Fatalf("beta placement_counts = %+v, want place 2 counted once", stored.Snapshot.Entries[1].PlacementCounts)
+	}
+}
+
+func TestRankingServiceAggregatesBotAcrossRevisionChanges(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewLocalRankingSnapshotStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewLocalRankingSnapshotStore() error = %v", err)
+	}
+	rankings, err := NewRankingService(store, nil)
+	if err != nil {
+		t.Fatalf("NewRankingService() error = %v", err)
+	}
+	for _, submission := range []MatchSubmission{
+		func() MatchSubmission {
+			s := rankingTestSubmission("run-1", "match-1", []SubmittedPlayer{{PlayerID: "p1", BotID: "bot-alpha", BotName: "Alpha", AISubmissionID: "revision-1", ArtifactID: "artifact-1"}})
+			s.Official = true
+			return s
+		}(),
+		func() MatchSubmission {
+			s := rankingTestSubmission("run-2", "match-2", []SubmittedPlayer{{PlayerID: "p1", BotID: "bot-alpha", BotName: "Alpha", AISubmissionID: "revision-2", ArtifactID: "artifact-2"}})
+			s.Official = true
+			return s
+		}(),
+	} {
+		if err := rankings.ApplyCompleted(context.Background(), submission, rankingTestSummary(submission.MatchID, []game.Placement{{PlayerID: "p1", Place: 1}})); err != nil {
+			t.Fatalf("ApplyCompleted(%s) error = %v", submission.RunID, err)
+		}
+	}
+
+	stored, err := rankings.Get(context.Background(), RankingScope{GameID: "echo", GameVersion: "v1", RulesetVersion: "default"})
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if len(stored.Snapshot.Entries) != 1 || stored.Snapshot.Entries[0].BotID != "bot-alpha" || stored.Snapshot.Entries[0].MatchesPlayed != 2 {
+		t.Fatalf("Entries = %+v, want one two-match bot-alpha aggregate", stored.Snapshot.Entries)
+	}
+}
+
+func TestDecodeRankingSnapshotRequiresLegacyRebuild(t *testing.T) {
+	t.Parallel()
+
+	_, err := decodeRankingSnapshot([]byte(`{"scope":{"game_id":"echo","game_version":"v1","ruleset_version":"default"},"completed_matches":0}`))
+	if !errors.Is(err, ErrRankingSnapshotMigrationRequired) {
+		t.Fatalf("decodeRankingSnapshot() error = %v, want migration required", err)
 	}
 }
 
@@ -192,6 +239,12 @@ func (s staticRunnerInvoker) Run(_ context.Context, _ ExecutionRequest) (Executi
 }
 
 func rankingTestSubmission(runID, matchID string, players []SubmittedPlayer) MatchSubmission {
+	for index := range players {
+		if players[index].BotID == "" {
+			players[index].BotID = "bot-" + players[index].PlayerID
+			players[index].BotName = players[index].PlayerID
+		}
+	}
 	return MatchSubmission{
 		RunID:   runID,
 		MatchID: matchID,

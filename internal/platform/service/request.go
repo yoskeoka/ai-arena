@@ -162,7 +162,7 @@ func (s *MatchRequestService) Create(ctx context.Context, req MatchRequestCreate
 	participants := make([]MatchRequestParticipant, 0, len(resolved))
 	for index, bot := range resolved {
 		playerID := fmt.Sprintf("p%d", index+1)
-		players = append(players, SubmittedPlayer{PlayerID: playerID, BotID: bot.BotID, AISubmissionID: bot.ActiveRevisionID, ArtifactID: bot.ArtifactID})
+		players = append(players, SubmittedPlayer{PlayerID: playerID, BotID: bot.BotID, BotName: bot.BotName, AISubmissionID: bot.ActiveRevisionID, ArtifactID: bot.ArtifactID})
 		participants = append(participants, MatchRequestParticipant{PlayerID: playerID, BotID: bot.BotID, AISubmissionID: bot.ActiveRevisionID})
 	}
 	matchID := s.newMatchIDFn()

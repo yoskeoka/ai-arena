@@ -1255,7 +1255,8 @@
       "Shared.RankingEntry": {
         "type": "object",
         "required": [
-          "competitor_ref",
+          "bot_id",
+          "bot_name",
           "last_player_id",
           "matches_played",
           "first_places",
@@ -1264,7 +1265,10 @@
           "last_status"
         ],
         "properties": {
-          "competitor_ref": {
+          "bot_id": {
+            "type": "string"
+          },
+          "bot_name": {
             "type": "string"
           },
           "last_player_id": {
@@ -1313,8 +1317,12 @@
       },
       "Shared.RankingSnapshot": {
         "type": "object",
-        "required": ["scope", "completed_matches"],
+        "required": ["version", "scope", "completed_matches"],
         "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
           "scope": {
             "$ref": "#/components/schemas/Shared.RankingScope"
           },
@@ -1563,7 +1571,19 @@
           "player_id": {
             "type": "string"
           },
+          "bot_id": {
+            "type": "string"
+          },
+          "bot_name": {
+            "type": "string"
+          },
+          "ai_submission_id": {
+            "type": "string"
+          },
           "artifact_ref": {
+            "type": "string"
+          },
+          "artifact_id": {
             "type": "string"
           }
         }

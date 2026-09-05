@@ -779,7 +779,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    scope: jsonRankingScopeToTransportTransform(input_.scope),applied_run_ids: jsonArrayStringToTransportTransform(input_.appliedRunIds),applied_match_ids: jsonArrayStringToTransportTransform(input_.appliedMatchIds),last_applied_run_id: input_.lastAppliedRunId,last_applied_match_id: input_.lastAppliedMatchId,completed_matches: input_.completedMatches,entries: jsonArrayRankingEntryToTransportTransform(input_.entries)
+    version: input_.version,scope: jsonRankingScopeToTransportTransform(input_.scope),applied_run_ids: jsonArrayStringToTransportTransform(input_.appliedRunIds),applied_match_ids: jsonArrayStringToTransportTransform(input_.appliedMatchIds),last_applied_run_id: input_.lastAppliedRunId,last_applied_match_id: input_.lastAppliedMatchId,completed_matches: input_.completedMatches,entries: jsonArrayRankingEntryToTransportTransform(input_.entries)
   }!;
 }export function jsonRankingSnapshotToApplicationTransform(
   input_?: any,
@@ -788,7 +788,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    scope: jsonRankingScopeToApplicationTransform(input_.scope),appliedRunIds: jsonArrayStringToApplicationTransform(input_.applied_run_ids),appliedMatchIds: jsonArrayStringToApplicationTransform(input_.applied_match_ids),lastAppliedRunId: input_.last_applied_run_id,lastAppliedMatchId: input_.last_applied_match_id,completedMatches: input_.completed_matches,entries: jsonArrayRankingEntryToApplicationTransform(input_.entries)
+    version: input_.version,scope: jsonRankingScopeToApplicationTransform(input_.scope),appliedRunIds: jsonArrayStringToApplicationTransform(input_.applied_run_ids),appliedMatchIds: jsonArrayStringToApplicationTransform(input_.applied_match_ids),lastAppliedRunId: input_.last_applied_run_id,lastAppliedMatchId: input_.last_applied_match_id,completedMatches: input_.completed_matches,entries: jsonArrayRankingEntryToApplicationTransform(input_.entries)
   }!;
 }export function jsonRankingScopeToTransportTransform(
   input_?: RankingScope | null,
@@ -843,7 +843,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    competitor_ref: input_.competitorRef,last_player_id: input_.lastPlayerId,matches_played: input_.matchesPlayed,first_places: input_.firstPlaces,placement_counts: jsonRecordInt32ToTransportTransform(input_.placementCounts),last_run_id: input_.lastRunId,last_match_id: input_.lastMatchId,last_status: input_.lastStatus
+    bot_id: input_.botId,bot_name: input_.botName,last_player_id: input_.lastPlayerId,matches_played: input_.matchesPlayed,first_places: input_.firstPlaces,placement_counts: jsonRecordInt32ToTransportTransform(input_.placementCounts),last_run_id: input_.lastRunId,last_match_id: input_.lastMatchId,last_status: input_.lastStatus
   }!;
 }export function jsonRankingEntryToApplicationTransform(
   input_?: any,
@@ -852,7 +852,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    competitorRef: input_.competitor_ref,lastPlayerId: input_.last_player_id,matchesPlayed: input_.matches_played,firstPlaces: input_.first_places,placementCounts: jsonRecordInt32ToApplicationTransform(input_.placement_counts),lastRunId: input_.last_run_id,lastMatchId: input_.last_match_id,lastStatus: input_.last_status
+    botId: input_.bot_id,botName: input_.bot_name,lastPlayerId: input_.last_player_id,matchesPlayed: input_.matches_played,firstPlaces: input_.first_places,placementCounts: jsonRecordInt32ToApplicationTransform(input_.placement_counts),lastRunId: input_.last_run_id,lastMatchId: input_.last_match_id,lastStatus: input_.last_status
   }!;
 }export function jsonRecordInt32ToTransportTransform(
   items_?: Record<string, any> | null,
@@ -1017,7 +1017,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    player_id: input_.playerId,artifact_ref: input_.artifactRef
+    player_id: input_.playerId,bot_id: input_.botId,bot_name: input_.botName,ai_submission_id: input_.aiSubmissionId,artifact_ref: input_.artifactRef,artifact_id: input_.artifactId
   }!;
 }export function jsonSubmittedPlayerToApplicationTransform(
   input_?: any,
@@ -1026,7 +1026,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    playerId: input_.player_id,artifactRef: input_.artifact_ref
+    playerId: input_.player_id,botId: input_.bot_id,botName: input_.bot_name,aiSubmissionId: input_.ai_submission_id,artifactRef: input_.artifact_ref,artifactId: input_.artifact_id
   }!;
 }export function jsonRecordStringToTransportTransform(
   items_?: Record<string, any> | null,
