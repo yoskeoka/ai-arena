@@ -500,7 +500,8 @@ func (q *Queries) ListSubmissionRevisionsForBot(ctx context.Context, botID pgtyp
 const recoverExpiredQueueRecords = `-- name: RecoverExpiredQueueRecords :execrows
 UPDATE service_queue_records
 SET state = $1, worker_id = NULL, lease_deadline = NULL, last_heartbeat_at = NULL, updated_at = NOW()
-WHERE state IN ('leased', 'running', 'persisting') AND lease_deadline <= $2
+WHERE state IN ('leased', 'running', 'persisting')
+  AND (lease_deadline IS NULL OR lease_deadline <= $2)
 `
 
 type RecoverExpiredQueueRecordsParams struct {

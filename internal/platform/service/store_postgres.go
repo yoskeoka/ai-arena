@@ -47,7 +47,9 @@ func (s *PostgresQueueStore) AcquireWorker(ctx context.Context, workerID string)
 		return nil, fmt.Errorf("service: another worker already owns this queue")
 	}
 	return func() {
-		_, _ = conn.Exec(context.Background(), "SELECT pg_advisory_unlock(hashtext('ai-arena-service-single-worker'))")
+		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = conn.Exec(unlockCtx, "SELECT pg_advisory_unlock(hashtext('ai-arena-service-single-worker'))")
 		conn.Release()
 	}, nil
 }
@@ -454,7 +456,7 @@ func queueRecordFromFields(
 	record.Submission.Game.GameVersion = gameVersion
 	record.Submission.Game.RulesetVersion = rulesetVersion
 
-	if workerID.Valid && strings.TrimSpace(workerID.String) != "" {
+	if workerID.Valid && strings.TrimSpace(workerID.String) != "" && leaseDeadline.Valid && lastHeartbeatAt.Valid {
 		record.Lease = &WorkerLease{WorkerID: workerID.String, Deadline: leaseDeadline.Time, LastHeartbeat: lastHeartbeatAt.Time}
 	}
 	if len(terminalJSON) > 0 {

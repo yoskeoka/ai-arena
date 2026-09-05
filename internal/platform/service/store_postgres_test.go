@@ -110,6 +110,9 @@ func TestPostgresQueueStoreRecoversExpiredLease(t *testing.T) {
 	if err := store.Update(ctx, record); err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
+	if _, err := store.pool.Exec(ctx, "UPDATE service_queue_records SET lease_deadline = NULL, last_heartbeat_at = NULL WHERE submission_id = $1", submission.RunID); err != nil {
+		t.Fatalf("clear pre-migration lease metadata: %v", err)
+	}
 
 	recovered, err := store.RecoverExpired(ctx, time.Now().UTC())
 	if err != nil {

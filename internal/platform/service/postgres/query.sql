@@ -162,7 +162,8 @@ WHERE submission_id = @submission_id AND worker_id = @worker_id
 -- name: RecoverExpiredQueueRecords :execrows
 UPDATE service_queue_records
 SET state = @queued_state, worker_id = NULL, lease_deadline = NULL, last_heartbeat_at = NULL, updated_at = NOW()
-WHERE state IN ('leased', 'running', 'persisting') AND lease_deadline <= @now;
+WHERE state IN ('leased', 'running', 'persisting')
+  AND (lease_deadline IS NULL OR lease_deadline <= @now);
 -- name: ListOwnedBots :many
 SELECT bot_id, owner_account_id, scope_id, bot_name, normalized_bot_name, lifecycle_state, active_submission_id, created_at, retired_at
 FROM ai_bots

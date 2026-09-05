@@ -153,10 +153,18 @@ jobs:
       - name: Download and verify exact Reversi release assets
         run: |
           mkdir -p "$RUNNER_TEMP/reversi-release"
-          curl --fail --location --silent --show-error "$REVERSI_GAME_URL" --output "$RUNNER_TEMP/reversi-release/game.arena.zip"
-          curl --fail --location --silent --show-error "$REVERSI_AI_URL" --output "$RUNNER_TEMP/reversi-release/ai.arena.zip"
-          echo "$REVERSI_GAME_SHA256  $RUNNER_TEMP/reversi-release/game.arena.zip" | sha256sum --check --status
-          echo "$REVERSI_AI_SHA256  $RUNNER_TEMP/reversi-release/ai.arena.zip" | sha256sum --check --status
+          game_asset="${REVERSI_GAME_URL##*/}"
+          ai_asset="${REVERSI_AI_URL##*/}"
+          release_base="${REVERSI_GAME_URL%/*}"
+          curl --fail --location --silent --show-error "$REVERSI_GAME_URL" --output "$RUNNER_TEMP/reversi-release/$game_asset"
+          curl --fail --location --silent --show-error "$REVERSI_AI_URL" --output "$RUNNER_TEMP/reversi-release/$ai_asset"
+          curl --fail --location --silent --show-error "$release_base/SHA256SUMS" --output "$RUNNER_TEMP/reversi-release/SHA256SUMS"
+          (
+            cd "$RUNNER_TEMP/reversi-release"
+            sha256sum --check --status SHA256SUMS
+            echo "$REVERSI_GAME_SHA256  $game_asset" | sha256sum --check --status
+            echo "$REVERSI_AI_SHA256  $ai_asset" | sha256sum --check --status
+          )
         env:
           REVERSI_GAME_URL: ${{ needs.prepare.outputs.reversi_game_url }}
           REVERSI_GAME_SHA256: ${{ needs.prepare.outputs.reversi_game_sha256 }}
@@ -170,9 +178,9 @@ jobs:
           CI: "true"
           OPERATOR_UI_BASE_URL: ${{ needs.prepare.outputs.frontend_url }}
           OPERATOR_UI_BACKEND_BASE_URL: ${{ needs.prepare.outputs.backend_url }}
-          OPERATOR_UI_REVERSI_GAME_BUNDLE: ${{ runner.temp }}/reversi-release/game.arena.zip
+          OPERATOR_UI_REVERSI_GAME_BUNDLE: ${{ runner.temp }}/reversi-release/reversi-game-v0.1.0.arena.zip
           OPERATOR_UI_REVERSI_GAME_SHA256: ${{ needs.prepare.outputs.reversi_game_sha256 }}
-          OPERATOR_UI_REVERSI_AI_BUNDLE: ${{ runner.temp }}/reversi-release/ai.arena.zip
+          OPERATOR_UI_REVERSI_AI_BUNDLE: ${{ runner.temp }}/reversi-release/reversi-rust-reference-ai-v0.1.0.arena.zip
           OPERATOR_UI_REVERSI_AI_SHA256: ${{ needs.prepare.outputs.reversi_ai_sha256 }}
 
       - name: Upload staging verification artifacts
