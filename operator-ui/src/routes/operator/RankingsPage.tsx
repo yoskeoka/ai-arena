@@ -148,11 +148,12 @@ export function RankingsPage({ baseUrl }: RankingsPageProps) {
               <div className="space-y-3">
                 {snapshot.snapshot.entries.map((entry) => (
                   <article
-                    key={entry.competitorRef}
+                    key={entry.botId}
                     className="rounded-3xl border border-black/10 bg-white p-4"
-                    data-testid={`ranking-entry-${encodeURIComponent(entry.competitorRef)}`}
+                    data-testid={`ranking-entry-${encodeURIComponent(entry.botId)}`}
                   >
-                    <p className="font-semibold">{entry.competitorRef}</p>
+                    <p className="font-semibold">{entry.botName || entry.botId}</p>
+                    <p className="mt-1 text-xs text-black/60">bot: {entry.botId}</p>
                     <p className="mt-1 text-sm text-black/70">last player: {entry.lastPlayerId}</p>
                     <div className="mt-3 flex flex-wrap gap-4 text-xs text-black/60">
                       <span>matches: {entry.matchesPlayed}</span>

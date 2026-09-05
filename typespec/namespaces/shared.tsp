@@ -52,7 +52,11 @@ model ReplayInputs {
 
 model SubmittedPlayer {
   player_id: string;
+  bot_id?: string;
+  bot_name?: string;
+  ai_submission_id?: string;
   artifact_ref: string;
+  artifact_id?: string;
 }
 
 model ArtifactAccessMetadata {
@@ -253,7 +257,8 @@ model RankingScope {
 }
 
 model RankingEntry {
-  competitor_ref: string;
+  bot_id: string;
+  bot_name: string;
   last_player_id: string;
   matches_played: int32;
   first_places: int32;
@@ -264,6 +269,7 @@ model RankingEntry {
 }
 
 model RankingSnapshot {
+  version: int32;
   scope: RankingScope;
   applied_run_ids?: string[];
   applied_match_ids?: string[];

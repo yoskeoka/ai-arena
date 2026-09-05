@@ -24,7 +24,11 @@ import (
 var (
 	// ErrRankingSnapshotNotFound reports that no durable ranking snapshot exists for the requested scope.
 	ErrRankingSnapshotNotFound = errors.New("service: ranking snapshot not found")
+	// ErrRankingSnapshotMigrationRequired reports a legacy artifact-keyed snapshot.
+	ErrRankingSnapshotMigrationRequired = errors.New("service: ranking snapshot migration required")
 )
+
+const rankingSnapshotVersion = 2
 
 // RankingScope identifies one durable ranking snapshot family.
 type RankingScope struct {
@@ -35,7 +39,8 @@ type RankingScope struct {
 
 // RankingEntry aggregates one competitor across completed submissions in one scope.
 type RankingEntry struct {
-	CompetitorRef   string           `json:"competitor_ref"`
+	BotID           string           `json:"bot_id"`
+	BotName         string           `json:"bot_name"`
 	LastPlayerID    string           `json:"last_player_id"`
 	MatchesPlayed   int              `json:"matches_played"`
 	FirstPlaces     int              `json:"first_places"`
@@ -47,6 +52,7 @@ type RankingEntry struct {
 
 // RankingSnapshot is the durable aggregate payload for one ranking scope.
 type RankingSnapshot struct {
+	Version            int            `json:"version"`
 	Scope              RankingScope   `json:"scope"`
 	AppliedRunIDs      []string       `json:"applied_run_ids,omitempty"`
 	AppliedMatchIDs    []string       `json:"applied_match_ids,omitempty"`
@@ -79,9 +85,10 @@ type rankingUpdate struct {
 }
 
 type rankingPlacement struct {
-	CompetitorRef string
-	PlayerID      string
-	Place         int
+	BotID    string
+	BotName  string
+	PlayerID string
+	Place    int
 }
 
 // RankingSnapshotStore persists ranking snapshots on a durable backend.
@@ -121,6 +128,9 @@ func NewRankingService(store RankingSnapshotStore, queue QueueStore, readers ...
 // ApplyCompleted applies one completed submission to the durable snapshot in its scope.
 func (s *RankingService) ApplyCompleted(ctx context.Context, submission MatchSubmission, summary artifacts.ResultSummary) error {
 	if !submission.Official {
+		return nil
+	}
+	if !hasBotRankingIdentity(submission) {
 		return nil
 	}
 	update, err := buildRankingUpdate(submission, summary)
@@ -195,6 +205,9 @@ func (s *RankingService) Recompute(ctx context.Context, scope RankingScope) (Ran
 		if record.State != StateCompleted || !record.Submission.Official || record.Terminal == nil || strings.TrimSpace(record.Terminal.ResultSummaryPath) == "" {
 			continue
 		}
+		if !hasBotRankingIdentity(record.Submission) {
+			continue
+		}
 		summary, err := readResultSummary(ctx, s.reader, record.Terminal.ResultSummaryPath)
 		if err != nil {
 			return RankingSnapshot{}, err
@@ -215,6 +228,15 @@ func (s *RankingService) Recompute(ctx context.Context, scope RankingScope) (Ran
 		}
 	}
 	return normalizeRankingSnapshot(snapshot), nil
+}
+
+func hasBotRankingIdentity(submission MatchSubmission) bool {
+	for _, player := range submission.Players {
+		if strings.TrimSpace(player.BotID) == "" {
+			return false
+		}
+	}
+	return len(submission.Players) > 0
 }
 
 // Verify compares the durable snapshot and a recomputed snapshot for one scope.
@@ -400,14 +422,15 @@ func buildRankingUpdate(submission MatchSubmission, summary artifacts.ResultSumm
 		if _, ok := seenPlayers[placement.PlayerID]; ok {
 			return rankingUpdate{}, fmt.Errorf("service: duplicate ranking placement for player %q", placement.PlayerID)
 		}
-		if strings.TrimSpace(player.ArtifactRef) == "" {
-			return rankingUpdate{}, fmt.Errorf("service: artifact_ref is required for ranking competitor %q", placement.PlayerID)
+		if strings.TrimSpace(player.BotID) == "" {
+			return rankingUpdate{}, fmt.Errorf("service: bot_id is required for ranking competitor %q", placement.PlayerID)
 		}
 		seenPlayers[placement.PlayerID] = struct{}{}
 		placements = append(placements, rankingPlacement{
-			CompetitorRef: player.ArtifactRef,
-			PlayerID:      placement.PlayerID,
-			Place:         placement.Place,
+			BotID:    player.BotID,
+			BotName:  player.BotName,
+			PlayerID: placement.PlayerID,
+			Place:    placement.Place,
 		})
 	}
 	return rankingUpdate{
@@ -431,11 +454,14 @@ func applyRankingUpdate(snapshot RankingSnapshot, update rankingUpdate) (Ranking
 	entries := make(map[string]RankingEntry, len(snapshot.Entries))
 	for _, entry := range snapshot.Entries {
 		entry = normalizeRankingEntry(entry)
-		entries[entry.CompetitorRef] = entry
+		entries[entry.BotID] = entry
 	}
 	for _, placement := range update.Placements {
-		entry := normalizeRankingEntry(entries[placement.CompetitorRef])
-		entry.CompetitorRef = placement.CompetitorRef
+		entry := normalizeRankingEntry(entries[placement.BotID])
+		entry.BotID = placement.BotID
+		if strings.TrimSpace(placement.BotName) != "" {
+			entry.BotName = placement.BotName
+		}
 		entry.LastPlayerID = placement.PlayerID
 		entry.MatchesPlayed++
 		entry.PlacementCounts[placement.Place]++
@@ -445,7 +471,7 @@ func applyRankingUpdate(snapshot RankingSnapshot, update rankingUpdate) (Ranking
 		entry.LastRunID = update.RunID
 		entry.LastMatchID = update.MatchID
 		entry.LastStatus = update.Status
-		entries[placement.CompetitorRef] = entry
+		entries[placement.BotID] = entry
 	}
 
 	snapshot.AppliedRunIDs = append(snapshot.AppliedRunIDs, update.RunID)
@@ -458,13 +484,13 @@ func applyRankingUpdate(snapshot RankingSnapshot, update rankingUpdate) (Ranking
 		snapshot.Entries = append(snapshot.Entries, normalizeRankingEntry(entry))
 	}
 	sort.Slice(snapshot.Entries, func(i, j int) bool {
-		return snapshot.Entries[i].CompetitorRef < snapshot.Entries[j].CompetitorRef
+		return snapshot.Entries[i].BotID < snapshot.Entries[j].BotID
 	})
 	return snapshot, nil
 }
 
 func newRankingSnapshot(scope RankingScope) RankingSnapshot {
-	return RankingSnapshot{Scope: normalizeRankingScope(scope)}
+	return RankingSnapshot{Version: rankingSnapshotVersion, Scope: normalizeRankingScope(scope)}
 }
 
 func scopeFromSummary(summary artifacts.ResultSummary) RankingScope {
@@ -497,6 +523,9 @@ func validateRankingScope(scope RankingScope) error {
 
 func normalizeRankingSnapshot(snapshot RankingSnapshot) RankingSnapshot {
 	snapshot.Scope = normalizeRankingScope(snapshot.Scope)
+	if snapshot.Version == 0 {
+		snapshot.Version = rankingSnapshotVersion
+	}
 	if snapshot.AppliedRunIDs == nil {
 		snapshot.AppliedRunIDs = []string{}
 	}
@@ -511,13 +540,14 @@ func normalizeRankingSnapshot(snapshot RankingSnapshot) RankingSnapshot {
 		snapshot.Entries[index] = normalizeRankingEntry(snapshot.Entries[index])
 	}
 	sort.Slice(snapshot.Entries, func(i, j int) bool {
-		return snapshot.Entries[i].CompetitorRef < snapshot.Entries[j].CompetitorRef
+		return snapshot.Entries[i].BotID < snapshot.Entries[j].BotID
 	})
 	return snapshot
 }
 
 func normalizeRankingEntry(entry RankingEntry) RankingEntry {
-	entry.CompetitorRef = strings.TrimSpace(entry.CompetitorRef)
+	entry.BotID = strings.TrimSpace(entry.BotID)
+	entry.BotName = strings.TrimSpace(entry.BotName)
 	entry.LastPlayerID = strings.TrimSpace(entry.LastPlayerID)
 	entry.LastRunID = strings.TrimSpace(entry.LastRunID)
 	entry.LastMatchID = strings.TrimSpace(entry.LastMatchID)
@@ -542,7 +572,8 @@ func rankingSnapshotsEqual(left, right RankingSnapshot) bool {
 func rankingEntriesEqual(left, right RankingEntry) bool {
 	left = normalizeRankingEntry(left)
 	right = normalizeRankingEntry(right)
-	return left.CompetitorRef == right.CompetitorRef &&
+	return left.BotID == right.BotID &&
+		left.BotName == right.BotName &&
 		left.LastPlayerID == right.LastPlayerID &&
 		left.MatchesPlayed == right.MatchesPlayed &&
 		left.FirstPlaces == right.FirstPlaces &&
@@ -578,6 +609,9 @@ func decodeRankingSnapshot(data []byte) (RankingSnapshot, error) {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&snapshot); err != nil {
 		return RankingSnapshot{}, fmt.Errorf("service: decode ranking snapshot: %w", err)
+	}
+	if snapshot.Version != rankingSnapshotVersion {
+		return RankingSnapshot{}, fmt.Errorf("%w: snapshot version %d must be rebuilt", ErrRankingSnapshotMigrationRequired, snapshot.Version)
 	}
 	return normalizeRankingSnapshot(snapshot), nil
 }

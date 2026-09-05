@@ -249,6 +249,7 @@ export interface StoredRankingSnapshot {
   snapshot: RankingSnapshot;
 }
 export interface RankingSnapshot {
+  version: number;
   scope: RankingScope;
   appliedRunIds?: Array<string>;
   appliedMatchIds?: Array<string>;
@@ -263,7 +264,8 @@ export interface RankingScope {
   rulesetVersion: string;
 }
 export interface RankingEntry {
-  competitorRef: string;
+  botId: string;
+  botName: string;
   lastPlayerId: string;
   matchesPlayed: number;
   firstPlaces: number;
@@ -317,7 +319,11 @@ export interface MatchDetailResponse extends ResultListItem {
 }
 export interface SubmittedPlayer {
   playerId: string;
+  botId?: string;
+  botName?: string;
+  aiSubmissionId?: string;
   artifactRef: string;
+  artifactId?: string;
 }
 export interface ResultSummary {
   matchId: string;

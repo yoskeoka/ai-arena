@@ -29,6 +29,7 @@ type MatchSubmission struct {
 type SubmittedPlayer struct {
 	PlayerID       string `json:"player_id"`
 	BotID          string `json:"bot_id,omitempty"`
+	BotName        string `json:"bot_name,omitempty"`
 	AISubmissionID string `json:"ai_submission_id,omitempty"`
 	ArtifactRef    string `json:"artifact_ref"`
 	ArtifactID     string `json:"artifact_id,omitempty"`

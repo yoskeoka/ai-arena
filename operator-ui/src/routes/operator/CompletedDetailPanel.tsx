@@ -95,6 +95,9 @@ export function CompletedDetailPanel({
                 {detail.players.map((player) => (
                   <li key={player.playerId} className="rounded-2xl bg-paper px-3 py-2">
                     <p className="font-medium">{player.playerId}</p>
+                    {player.botId ? <p className="mt-1 text-black/65">bot: {player.botName || player.botId}</p> : null}
+                    {player.aiSubmissionId ? <p className="mt-1 break-all text-xs text-black/60">revision: {player.aiSubmissionId}</p> : null}
+                    {player.artifactId ? <p className="mt-1 break-all text-xs text-black/60">artifact: {player.artifactId}</p> : null}
                     <p className="mt-1 break-all text-black/65">{player.artifactRef}</p>
                   </li>
                 ))}
