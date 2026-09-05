@@ -451,6 +451,28 @@ repo で使う canonical workflow 名は次で固定する。
 - production release:
   `.github/workflows/online-release-production.yml`
 
+## Phase 7 staging recovery and Reversi acceptance
+
+staging deploy は migration apply を Render deploy より先に完了させる。service runtime は migration を
+実行しない。Render の同居 worker は 1 process / 1 worker に限定し、lease deadline を過ぎた in-flight
+run は次の startup / poll で queue へ復旧する。operator は active worker identity、heartbeat age、queue
+lag を確認してから restart を行う。
+
+Phase 7 の release gate は diagnostic preset ではなく、次の GitHub Release asset を使う Reversi flow
+である。workflow は download URL と SHA-256 を input/evidence に持ち、`SHA256SUMS` と asset digest の
+両方を検証してから operator API へ upload する。
+
+- game: `reversi-game-v0.1.0.arena.zip`
+  - `https://github.com/yoskeoka/reversi-ai-arena/releases/download/v0.1.0/reversi-game-v0.1.0.arena.zip`
+  - `98bd46609016dc763bcbfff747c6705c7f1608a86d164d77b38db208d0d1c0df`
+- AI: `reversi-rust-reference-ai-v0.1.0.arena.zip`
+  - `https://github.com/yoskeoka/reversi-ai-arena/releases/download/v0.1.0/reversi-rust-reference-ai-v0.1.0.arena.zip`
+  - `15ec6133f92002f68f291b39df69ac9beeb177debc93dd1d9c725c77db042326`
+
+verification artifact には release URL / digest、scope、3 bot、request、run、ranking、rerun / promote /
+recompute の identity を残す。release asset ではなく repo-local path または `echo-reference` preset だけを
+通した結果は release gate を満たさない。
+
 repo workflow は `verified commit` を主語にしつつ、trigger は次で自動化する。
 
 - staging deploy:

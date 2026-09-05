@@ -42,6 +42,33 @@ current phase の platform service は、
 「read current state -> decide -> write next state」という複数段の処理を
 single process 内の逐次操作として扱ってよい。
 
+## Phase 7 運用トポロジ
+
+Phase 7 の最小 deploy unit は、HTTP service と同居する 1 worker process とする。
+metadata / queue authority は Neon Postgres、artifact payload は R2、operator UI は Pages が担う。
+Pages には R2 credential を配布してはならず、artifact access は service が発行する限定的な
+download metadata を通す。worker を別 deploy unit に分離すること、複数 worker、distributed
+fairness はこの phase の範囲外である。
+
+同じ Postgres queue を使う service は 1 worker だけを起動しなければならない。起動時に
+既存の生存 worker が観測される構成を許可する場合は fail closed とし、operator が lease expiry
+を待つか明示的に復旧させるまで、2 本目の worker が run を実行してはならない。
+
+## Lease、回復、shutdown
+
+worker が claim した run には worker identity、lease deadline、最後の heartbeat を durable に
+記録する。worker は run の実行中も heartbeat を更新し、queue lag と worker heartbeat age は
+operator が観測できなければならない。
+
+lease deadline を過ぎた `leased`、`running`、`persisting` run は startup と通常 poll の前に
+recovery 対象となる。recovery は run を `queued` に戻して lease owner/deadline を消去し、同じ
+submission snapshot を再実行する。terminal record、未期限 lease、または cancel 済み record を
+変更してはならない。これにより process crash 後の run が永久に in-flight で残らない。
+
+shutdown は新規 claim を止め、HTTP server の drain と現在の run の context cancellation を
+bounded deadline 内で行う。deadline 内に終了できない run は lease expiry recovery に委ねる。
+graceful shutdown の成功を、terminal artifact の完成を伴わない `completed` として記録してはならない。
+
 ## Current Single-Worker Assumption Sites
 
 ### Official auto-promote on worker completion

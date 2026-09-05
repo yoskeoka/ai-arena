@@ -13,7 +13,7 @@ import (
 
 const cancelQueueRecord = `-- name: CancelQueueRecord :exec
 UPDATE service_queue_records
-SET state = $1, worker_id = NULL, terminal_json = NULL, updated_at = NOW()
+SET state = $1, worker_id = NULL, lease_deadline = NULL, last_heartbeat_at = NULL, terminal_json = NULL, updated_at = NOW()
 WHERE submission_id = $2
 `
 
@@ -31,13 +31,17 @@ const claimNextQueueRecord = `-- name: ClaimNextQueueRecord :one
 WITH next_record AS (
     SELECT submission_id
     FROM service_queue_records
-    WHERE service_queue_records.state = $3
+    WHERE service_queue_records.state = $5
     ORDER BY queue_order
     FOR UPDATE SKIP LOCKED
     LIMIT 1
 )
 UPDATE service_queue_records AS records
-SET state = $1, worker_id = $2, updated_at = NOW()
+SET state = $1,
+    worker_id = $2,
+    lease_deadline = $3,
+    last_heartbeat_at = $4,
+    updated_at = NOW()
 FROM next_record
 WHERE records.submission_id = next_record.submission_id
 RETURNING
@@ -54,34 +58,46 @@ RETURNING
     records.attempt_count,
     records.state,
     records.worker_id,
+    records.lease_deadline,
+    records.last_heartbeat_at,
     records.terminal_json
 `
 
 type ClaimNextQueueRecordParams struct {
-	LeasedState string
-	WorkerID    pgtype.Text
-	QueuedState string
+	LeasedState     string
+	WorkerID        pgtype.Text
+	LeaseDeadline   pgtype.Timestamptz
+	LastHeartbeatAt pgtype.Timestamptz
+	QueuedState     string
 }
 
 type ClaimNextQueueRecordRow struct {
-	SubmissionID   string
-	MatchID        string
-	ParentRunID    pgtype.Text
-	RunKind        string
-	Official       bool
-	GameID         string
-	GameVersion    string
-	RulesetVersion string
-	PlayersJson    []byte
-	OutputDir      string
-	AttemptCount   int32
-	State          string
-	WorkerID       pgtype.Text
-	TerminalJson   []byte
+	SubmissionID    string
+	MatchID         string
+	ParentRunID     pgtype.Text
+	RunKind         string
+	Official        bool
+	GameID          string
+	GameVersion     string
+	RulesetVersion  string
+	PlayersJson     []byte
+	OutputDir       string
+	AttemptCount    int32
+	State           string
+	WorkerID        pgtype.Text
+	LeaseDeadline   pgtype.Timestamptz
+	LastHeartbeatAt pgtype.Timestamptz
+	TerminalJson    []byte
 }
 
 func (q *Queries) ClaimNextQueueRecord(ctx context.Context, arg ClaimNextQueueRecordParams) (ClaimNextQueueRecordRow, error) {
-	row := q.db.QueryRow(ctx, claimNextQueueRecord, arg.LeasedState, arg.WorkerID, arg.QueuedState)
+	row := q.db.QueryRow(ctx, claimNextQueueRecord,
+		arg.LeasedState,
+		arg.WorkerID,
+		arg.LeaseDeadline,
+		arg.LastHeartbeatAt,
+		arg.QueuedState,
+	)
 	var i ClaimNextQueueRecordRow
 	err := row.Scan(
 		&i.SubmissionID,
@@ -97,6 +113,8 @@ func (q *Queries) ClaimNextQueueRecord(ctx context.Context, arg ClaimNextQueueRe
 		&i.AttemptCount,
 		&i.State,
 		&i.WorkerID,
+		&i.LeaseDeadline,
+		&i.LastHeartbeatAt,
 		&i.TerminalJson,
 	)
 	return i, err
@@ -181,26 +199,30 @@ SELECT
     attempt_count,
     state,
     worker_id,
+    lease_deadline,
+    last_heartbeat_at,
     terminal_json
 FROM service_queue_records
 WHERE submission_id = $1
 `
 
 type GetQueueRecordRow struct {
-	SubmissionID   string
-	MatchID        string
-	ParentRunID    pgtype.Text
-	RunKind        string
-	Official       bool
-	GameID         string
-	GameVersion    string
-	RulesetVersion string
-	PlayersJson    []byte
-	OutputDir      string
-	AttemptCount   int32
-	State          string
-	WorkerID       pgtype.Text
-	TerminalJson   []byte
+	SubmissionID    string
+	MatchID         string
+	ParentRunID     pgtype.Text
+	RunKind         string
+	Official        bool
+	GameID          string
+	GameVersion     string
+	RulesetVersion  string
+	PlayersJson     []byte
+	OutputDir       string
+	AttemptCount    int32
+	State           string
+	WorkerID        pgtype.Text
+	LeaseDeadline   pgtype.Timestamptz
+	LastHeartbeatAt pgtype.Timestamptz
+	TerminalJson    []byte
 }
 
 func (q *Queries) GetQueueRecord(ctx context.Context, submissionID string) (GetQueueRecordRow, error) {
@@ -220,6 +242,8 @@ func (q *Queries) GetQueueRecord(ctx context.Context, submissionID string) (GetQ
 		&i.AttemptCount,
 		&i.State,
 		&i.WorkerID,
+		&i.LeaseDeadline,
+		&i.LastHeartbeatAt,
 		&i.TerminalJson,
 	)
 	return i, err
@@ -240,6 +264,8 @@ SELECT
     attempt_count,
     state,
     worker_id,
+    lease_deadline,
+    last_heartbeat_at,
     terminal_json
 FROM service_queue_records
 WHERE submission_id = $1
@@ -247,20 +273,22 @@ FOR UPDATE
 `
 
 type GetQueueRecordForUpdateRow struct {
-	SubmissionID   string
-	MatchID        string
-	ParentRunID    pgtype.Text
-	RunKind        string
-	Official       bool
-	GameID         string
-	GameVersion    string
-	RulesetVersion string
-	PlayersJson    []byte
-	OutputDir      string
-	AttemptCount   int32
-	State          string
-	WorkerID       pgtype.Text
-	TerminalJson   []byte
+	SubmissionID    string
+	MatchID         string
+	ParentRunID     pgtype.Text
+	RunKind         string
+	Official        bool
+	GameID          string
+	GameVersion     string
+	RulesetVersion  string
+	PlayersJson     []byte
+	OutputDir       string
+	AttemptCount    int32
+	State           string
+	WorkerID        pgtype.Text
+	LeaseDeadline   pgtype.Timestamptz
+	LastHeartbeatAt pgtype.Timestamptz
+	TerminalJson    []byte
 }
 
 func (q *Queries) GetQueueRecordForUpdate(ctx context.Context, submissionID string) (GetQueueRecordForUpdateRow, error) {
@@ -280,9 +308,38 @@ func (q *Queries) GetQueueRecordForUpdate(ctx context.Context, submissionID stri
 		&i.AttemptCount,
 		&i.State,
 		&i.WorkerID,
+		&i.LeaseDeadline,
+		&i.LastHeartbeatAt,
 		&i.TerminalJson,
 	)
 	return i, err
+}
+
+const heartbeatQueueRecord = `-- name: HeartbeatQueueRecord :execrows
+UPDATE service_queue_records
+SET lease_deadline = $1, last_heartbeat_at = $2, updated_at = NOW()
+WHERE submission_id = $3 AND worker_id = $4
+  AND state IN ('leased', 'running', 'persisting')
+`
+
+type HeartbeatQueueRecordParams struct {
+	LeaseDeadline   pgtype.Timestamptz
+	LastHeartbeatAt pgtype.Timestamptz
+	SubmissionID    string
+	WorkerID        pgtype.Text
+}
+
+func (q *Queries) HeartbeatQueueRecord(ctx context.Context, arg HeartbeatQueueRecordParams) (int64, error) {
+	result, err := q.db.Exec(ctx, heartbeatQueueRecord,
+		arg.LeaseDeadline,
+		arg.LastHeartbeatAt,
+		arg.SubmissionID,
+		arg.WorkerID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listOwnedBots = `-- name: ListOwnedBots :many
@@ -342,26 +399,30 @@ SELECT
     attempt_count,
     state,
     worker_id,
+    lease_deadline,
+    last_heartbeat_at,
     terminal_json
 FROM service_queue_records
 ORDER BY queue_order
 `
 
 type ListQueueRecordsRow struct {
-	SubmissionID   string
-	MatchID        string
-	ParentRunID    pgtype.Text
-	RunKind        string
-	Official       bool
-	GameID         string
-	GameVersion    string
-	RulesetVersion string
-	PlayersJson    []byte
-	OutputDir      string
-	AttemptCount   int32
-	State          string
-	WorkerID       pgtype.Text
-	TerminalJson   []byte
+	SubmissionID    string
+	MatchID         string
+	ParentRunID     pgtype.Text
+	RunKind         string
+	Official        bool
+	GameID          string
+	GameVersion     string
+	RulesetVersion  string
+	PlayersJson     []byte
+	OutputDir       string
+	AttemptCount    int32
+	State           string
+	WorkerID        pgtype.Text
+	LeaseDeadline   pgtype.Timestamptz
+	LastHeartbeatAt pgtype.Timestamptz
+	TerminalJson    []byte
 }
 
 func (q *Queries) ListQueueRecords(ctx context.Context) ([]ListQueueRecordsRow, error) {
@@ -387,6 +448,8 @@ func (q *Queries) ListQueueRecords(ctx context.Context) ([]ListQueueRecordsRow, 
 			&i.AttemptCount,
 			&i.State,
 			&i.WorkerID,
+			&i.LeaseDeadline,
+			&i.LastHeartbeatAt,
 			&i.TerminalJson,
 		); err != nil {
 			return nil, err
@@ -434,6 +497,25 @@ func (q *Queries) ListSubmissionRevisionsForBot(ctx context.Context, botID pgtyp
 	return items, nil
 }
 
+const recoverExpiredQueueRecords = `-- name: RecoverExpiredQueueRecords :execrows
+UPDATE service_queue_records
+SET state = $1, worker_id = NULL, lease_deadline = NULL, last_heartbeat_at = NULL, updated_at = NOW()
+WHERE state IN ('leased', 'running', 'persisting') AND lease_deadline <= $2
+`
+
+type RecoverExpiredQueueRecordsParams struct {
+	QueuedState string
+	Now         pgtype.Timestamptz
+}
+
+func (q *Queries) RecoverExpiredQueueRecords(ctx context.Context, arg RecoverExpiredQueueRecordsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, recoverExpiredQueueRecords, arg.QueuedState, arg.Now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateQueueRecord = `-- name: UpdateQueueRecord :exec
 UPDATE service_queue_records
 SET
@@ -449,26 +531,30 @@ SET
     attempt_count = $10,
     state = $11,
     worker_id = $12,
-    terminal_json = $13,
+    lease_deadline = $13,
+    last_heartbeat_at = $14,
+    terminal_json = $15,
     updated_at = NOW()
-WHERE submission_id = $14
+WHERE submission_id = $16
 `
 
 type UpdateQueueRecordParams struct {
-	MatchID        string
-	ParentRunID    pgtype.Text
-	RunKind        string
-	Official       bool
-	GameID         string
-	GameVersion    string
-	RulesetVersion string
-	PlayersJson    []byte
-	OutputDir      string
-	AttemptCount   int32
-	State          string
-	WorkerID       pgtype.Text
-	TerminalJson   []byte
-	SubmissionID   string
+	MatchID         string
+	ParentRunID     pgtype.Text
+	RunKind         string
+	Official        bool
+	GameID          string
+	GameVersion     string
+	RulesetVersion  string
+	PlayersJson     []byte
+	OutputDir       string
+	AttemptCount    int32
+	State           string
+	WorkerID        pgtype.Text
+	LeaseDeadline   pgtype.Timestamptz
+	LastHeartbeatAt pgtype.Timestamptz
+	TerminalJson    []byte
+	SubmissionID    string
 }
 
 func (q *Queries) UpdateQueueRecord(ctx context.Context, arg UpdateQueueRecordParams) error {
@@ -485,6 +571,8 @@ func (q *Queries) UpdateQueueRecord(ctx context.Context, arg UpdateQueueRecordPa
 		arg.AttemptCount,
 		arg.State,
 		arg.WorkerID,
+		arg.LeaseDeadline,
+		arg.LastHeartbeatAt,
 		arg.TerminalJson,
 		arg.SubmissionID,
 	)

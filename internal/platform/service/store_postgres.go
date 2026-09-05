@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -21,6 +22,34 @@ const postgresQueueRecordPrimaryKey = "service_queue_records_pkey"
 type PostgresQueueStore struct {
 	pool    *pgxpool.Pool
 	queries *servicepostgressqlc.Queries
+}
+
+type workerProcessGuard interface {
+	AcquireWorker(context.Context, string) (func(), error)
+}
+
+// AcquireWorker reserves this durable queue for exactly one colocated worker process.
+func (s *PostgresQueueStore) AcquireWorker(ctx context.Context, workerID string) (func(), error) {
+	if strings.TrimSpace(workerID) == "" {
+		return nil, fmt.Errorf("service: worker_id is required")
+	}
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("service: acquire worker guard connection: %w", err)
+	}
+	var acquired bool
+	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock(hashtext('ai-arena-service-single-worker'))").Scan(&acquired); err != nil {
+		conn.Release()
+		return nil, fmt.Errorf("service: acquire worker guard: %w", err)
+	}
+	if !acquired {
+		conn.Release()
+		return nil, fmt.Errorf("service: another worker already owns this queue")
+	}
+	return func() {
+		_, _ = conn.Exec(context.Background(), "SELECT pg_advisory_unlock(hashtext('ai-arena-service-single-worker'))")
+		conn.Release()
+	}, nil
 }
 
 // NewPostgresQueueStore constructs a durable PostgreSQL-backed queue store.
@@ -107,10 +136,13 @@ func (s *PostgresQueueStore) Claim(ctx context.Context, workerID string) (QueueR
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
+	now := time.Now().UTC()
 	row, err := s.queries.WithTx(tx).ClaimNextQueueRecord(ctx, servicepostgressqlc.ClaimNextQueueRecordParams{
-		LeasedState: string(StateLeased),
-		WorkerID:    textValue(workerID),
-		QueuedState: string(StateQueued),
+		LeasedState:     string(StateLeased),
+		WorkerID:        textValue(workerID),
+		LeaseDeadline:   timestamptzValue(now.Add(workerLeaseDuration)),
+		LastHeartbeatAt: timestamptzValue(now),
+		QueuedState:     string(StateQueued),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -132,6 +164,8 @@ func (s *PostgresQueueStore) Claim(ctx context.Context, workerID string) (QueueR
 		row.AttemptCount,
 		row.State,
 		row.WorkerID,
+		row.LeaseDeadline,
+		row.LastHeartbeatAt,
 		row.TerminalJson,
 	)
 	if err != nil {
@@ -141,6 +175,36 @@ func (s *PostgresQueueStore) Claim(ctx context.Context, workerID string) (QueueR
 		return QueueRecord{}, fmt.Errorf("service: commit claim tx: %w", err)
 	}
 	return record, nil
+}
+
+// Heartbeat renews a currently owned durable lease.
+func (s *PostgresQueueStore) Heartbeat(ctx context.Context, runID, workerID string) error {
+	now := time.Now().UTC()
+	updated, err := s.queries.HeartbeatQueueRecord(ctx, servicepostgressqlc.HeartbeatQueueRecordParams{
+		LeaseDeadline:   timestamptzValue(now.Add(workerLeaseDuration)),
+		LastHeartbeatAt: timestamptzValue(now),
+		SubmissionID:    runID,
+		WorkerID:        textValue(workerID),
+	})
+	if err != nil {
+		return fmt.Errorf("service: heartbeat queue record: %w", err)
+	}
+	if updated != 1 {
+		return fmt.Errorf("service: worker does not own run %q", runID)
+	}
+	return nil
+}
+
+// RecoverExpired returns abandoned in-flight durable records to the queue.
+func (s *PostgresQueueStore) RecoverExpired(ctx context.Context, now time.Time) (int, error) {
+	recovered, err := s.queries.RecoverExpiredQueueRecords(ctx, servicepostgressqlc.RecoverExpiredQueueRecordsParams{
+		QueuedState: string(StateQueued),
+		Now:         timestamptzValue(now.UTC()),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("service: recover expired queue records: %w", err)
+	}
+	return int(recovered), nil
 }
 
 // Update replaces one existing record after validating the lifecycle transition.
@@ -176,20 +240,22 @@ func (s *PostgresQueueStore) Update(ctx context.Context, next QueueRecord) error
 	}
 
 	if err := s.queries.WithTx(tx).UpdateQueueRecord(ctx, servicepostgressqlc.UpdateQueueRecordParams{
-		MatchID:        next.Submission.MatchID,
-		ParentRunID:    textValue(next.Submission.ParentRunID),
-		RunKind:        string(next.Submission.RunKind),
-		Official:       next.Submission.Official,
-		GameID:         next.Submission.Game.GameID,
-		GameVersion:    next.Submission.Game.GameVersion,
-		RulesetVersion: next.Submission.Game.RulesetVersion,
-		PlayersJson:    playersJSON,
-		OutputDir:      next.Submission.OutputDir,
-		AttemptCount:   attemptCount,
-		State:          string(next.State),
-		WorkerID:       textValueFromLease(next.Lease),
-		TerminalJson:   terminalJSON,
-		SubmissionID:   next.Submission.RunID,
+		MatchID:         next.Submission.MatchID,
+		ParentRunID:     textValue(next.Submission.ParentRunID),
+		RunKind:         string(next.Submission.RunKind),
+		Official:        next.Submission.Official,
+		GameID:          next.Submission.Game.GameID,
+		GameVersion:     next.Submission.Game.GameVersion,
+		RulesetVersion:  next.Submission.Game.RulesetVersion,
+		PlayersJson:     playersJSON,
+		OutputDir:       next.Submission.OutputDir,
+		AttemptCount:    attemptCount,
+		State:           string(next.State),
+		WorkerID:        textValueFromLease(next.Lease),
+		LeaseDeadline:   timestamptzFromLease(next.Lease, true),
+		LastHeartbeatAt: timestamptzFromLease(next.Lease, false),
+		TerminalJson:    terminalJSON,
+		SubmissionID:    next.Submission.RunID,
 	}); err != nil {
 		return fmt.Errorf("service: update queue record: %w", err)
 	}
@@ -263,6 +329,8 @@ func (s *PostgresQueueStore) List(ctx context.Context) ([]QueueRecord, error) {
 			row.AttemptCount,
 			row.State,
 			row.WorkerID,
+			row.LeaseDeadline,
+			row.LastHeartbeatAt,
 			row.TerminalJson,
 		)
 		if err != nil {
@@ -305,6 +373,8 @@ func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, tx pgx.Tx, runID 
 				row.AttemptCount,
 				row.State,
 				row.WorkerID,
+				row.LeaseDeadline,
+				row.LastHeartbeatAt,
 				row.TerminalJson,
 			)
 		}
@@ -327,6 +397,8 @@ func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, tx pgx.Tx, runID 
 				row.AttemptCount,
 				row.State,
 				row.WorkerID,
+				row.LeaseDeadline,
+				row.LastHeartbeatAt,
 				row.TerminalJson,
 			)
 		}
@@ -354,6 +426,8 @@ func queueRecordFromFields(
 	attemptCount int32,
 	state string,
 	workerID pgtype.Text,
+	leaseDeadline pgtype.Timestamptz,
+	lastHeartbeatAt pgtype.Timestamptz,
 	terminalJSON []byte,
 ) (QueueRecord, error) {
 	var players []SubmittedPlayer
@@ -381,7 +455,7 @@ func queueRecordFromFields(
 	record.Submission.Game.RulesetVersion = rulesetVersion
 
 	if workerID.Valid && strings.TrimSpace(workerID.String) != "" {
-		record.Lease = &WorkerLease{WorkerID: workerID.String}
+		record.Lease = &WorkerLease{WorkerID: workerID.String, Deadline: leaseDeadline.Time, LastHeartbeat: lastHeartbeatAt.Time}
 	}
 	if len(terminalJSON) > 0 {
 		var terminal TerminalArtifacts
@@ -406,6 +480,20 @@ func textValueFromLease(lease *WorkerLease) pgtype.Text {
 		return pgtype.Text{}
 	}
 	return textValue(lease.WorkerID)
+}
+
+func timestamptzValue(value time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: value.UTC(), Valid: true}
+}
+
+func timestamptzFromLease(lease *WorkerLease, deadline bool) pgtype.Timestamptz {
+	if lease == nil {
+		return pgtype.Timestamptz{}
+	}
+	if deadline {
+		return timestamptzValue(lease.Deadline)
+	}
+	return timestamptzValue(lease.LastHeartbeat)
 }
 
 func validatePostgresQueueStoreSchema(ctx context.Context, pool *pgxpool.Pool) error {

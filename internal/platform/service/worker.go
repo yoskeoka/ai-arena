@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
@@ -45,6 +46,8 @@ func (w *Worker) ProcessNext(ctx context.Context, workerID string) (QueueRecord,
 	if err != nil {
 		return QueueRecord{}, err
 	}
+	stopHeartbeat := w.heartbeat(ctx, record.Submission.RunID, workerID)
+	defer stopHeartbeat()
 
 	record.State = StateRunning
 	if err := w.queue.Update(ctx, record); err != nil {
@@ -114,6 +117,25 @@ func (w *Worker) ProcessNext(ctx context.Context, workerID string) (QueueRecord,
 		return cloneQueueRecord(record), runErr
 	}
 	return cloneQueueRecord(record), nil
+}
+
+func (w *Worker) heartbeat(ctx context.Context, runID, workerID string) func() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(workerLeaseDuration / 3)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			case <-ticker.C:
+				_ = w.queue.Heartbeat(ctx, runID, workerID)
+			}
+		}
+	}()
+	return func() { close(done) }
 }
 
 func (w *Worker) shouldAutoPromote(ctx context.Context, record QueueRecord) (bool, error) {

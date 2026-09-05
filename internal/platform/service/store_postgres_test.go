@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 )
@@ -87,6 +88,57 @@ func TestPostgresQueueStoreSharesQueueAcrossInstances(t *testing.T) {
 	}
 	if next.Submission.RunID != submission2.RunID {
 		t.Fatalf("Claim(second) run_id = %q, want %q", next.Submission.RunID, submission2.RunID)
+	}
+}
+
+func TestPostgresQueueStoreRecoversExpiredLease(t *testing.T) {
+	dsn := postgresTestDSN(t)
+	ctx := context.Background()
+	store := newTestPostgresQueueStore(t, ctx, dsn, true)
+	submission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))
+	submission.RunID = "run-pg-recovery"
+	submission.MatchID = "match-pg-recovery"
+	if _, err := store.Enqueue(ctx, submission); err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+	record, err := store.Claim(ctx, "abandoned-worker")
+	if err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+	record.State = StateRunning
+	record.Lease.Deadline = time.Now().UTC().Add(-time.Second)
+	if err := store.Update(ctx, record); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	recovered, err := store.RecoverExpired(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("RecoverExpired() error = %v", err)
+	}
+	if recovered != 1 {
+		t.Fatalf("RecoverExpired() = %d, want 1", recovered)
+	}
+	loaded, err := store.Get(ctx, submission.RunID)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if loaded.State != StateQueued || loaded.Lease != nil {
+		t.Fatalf("recovered record = %+v, want queued record without lease", loaded)
+	}
+}
+
+func TestPostgresQueueStoreRejectsSecondWorkerGuard(t *testing.T) {
+	dsn := postgresTestDSN(t)
+	ctx := context.Background()
+	first := newTestPostgresQueueStore(t, ctx, dsn, true)
+	second := newTestPostgresQueueStore(t, ctx, dsn, false)
+	release, err := first.AcquireWorker(ctx, "worker-one")
+	if err != nil {
+		t.Fatalf("first AcquireWorker() error = %v", err)
+	}
+	defer release()
+	if _, err := second.AcquireWorker(ctx, "worker-two"); err == nil {
+		t.Fatal("second AcquireWorker() error = nil, want single-worker guard rejection")
 	}
 }
 

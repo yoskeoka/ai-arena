@@ -54,7 +54,7 @@ durable write model の最小保存単位は、1 回の `match submission` に�
 - queue ordering identity:
   queued 順序を再現し、claim 順を安定させるための durable ordering key
 - lease metadata:
-  現在の worker identity
+  現在の worker identity、lease deadline、最後の heartbeat
 - terminal summary:
   `match_dir`、`record` locator、`result-summary` locator、player stderr locator 群、terminal match status、terminal error summary
 
@@ -71,6 +71,8 @@ retry / rerun は parent run の snapshot を再利用し、後から active rel
 - `enqueue` は validation 済み submission を queued record として保存しなければならない
 - `claim` は queued record のうち最も早いものを 1 worker だけへ lease しなければならない
 - `claim` 後の worker identity は、以後の lifecycle update より前に durable に観測できなければならない
+- `claim` は有限の lease deadline を設定しなければならない。worker は lease が有効な間、heartbeat を
+  durable に更新しなければならない
 - `update` は `queued -> leased -> running -> persisting -> terminal` の許可遷移だけを保存する
 - `cancel` は queued record に対してだけ許可し、cancel 後は worker claim できてはならない
 - terminal artifact persist が成功したとき、write model は terminal artifact locator と terminal match summary を保持しなければならない
@@ -79,6 +81,17 @@ single logical queue authority の最初の到達点は明確に絞る。
 複数 process が同じ backend を共有しても、
 1 queued record が同時に複数 worker へ lease されないことだけをまず保証する。
 multi-node fairness や retry redelivery はこの spec の対象外とする。
+
+## In-flight Recovery と観測
+
+service startup と worker poll は、lease deadline を超えた `leased`、`running`、`persisting` record を
+`queued` に復旧しなければならない。復旧後は旧 worker identity、deadline、heartbeat を残してはならない。
+未期限 lease と terminal record は recovery 対象外とする。復旧は process crash からの再実行であり、
+後から game release / bot revision を再解決せず、durable submission snapshot を使う。
+
+queue read model は、queued count と oldest queued age、active lease worker identity、lease deadline、
+heartbeat age を operator が確認できる形で提供しなければならない。これらは監視用の派生情報であり、
+queue lifecycle の source-of-truth を置き換えない。
 
 ## Artifact Source-Of-Truth との境界
 
