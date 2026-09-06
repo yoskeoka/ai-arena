@@ -15,7 +15,7 @@ credentials 付きで `GET /auth/session` を呼び出すとき、TypeSpec HTTP 
 許可していない requested header は CORS 許可を得られないことである。session cookie の属性・発行、OAuth
 flow、route の payload、runtime dependency version、origin allowlist 自体は変更しない。
 
-## Root Cause and Decision
+## 根本原因と採用済みの方針
 
 `operator-ui/src/lib/operatorApiClient.ts` は `getClient` の default browser pipeline を使い、local
 `credentialsPolicy` は `request.withCredentials = true` のみを設定する。`@typespec/ts-http-runtime` 0.2.1 の
@@ -26,18 +26,32 @@ default pipeline は `userAgentPolicy` を追加し、browser platform 実装で
 `Access-Control-Allow-Headers: Content-Type` だけを返す。browser は `x-ms-useragent` を許可されないため
 actual `GET /auth/session` を送らず、UI は `Failed to fetch` を session error として表示する。
 
-次を採用する。
+実装は次の固定方針に従う。実装者が別案を選ぶ余地はない。
 
-- backend に小さく固定した CORS request-header allowlist (`Content-Type`, `x-ms-useragent`) を置く。
-- `OPTIONS` の `Access-Control-Request-Headers` を case-insensitive に parse し、空要素を除いた全 header が
-  allowlist に含まれるときだけ CORS response headers を返す。任意 header の echo や wildcard は使わない。
-- valid preflight の `Access-Control-Allow-Headers` は canonical な固定リストとして返す。これにより JSON POST、
-  multipart upload、runtime telemetry header が同じ contract で通る。
+- backend の CORS request-header allowlist は `Content-Type` と `x-ms-useragent` の2個だけとする。
+- `OPTIONS` の `Access-Control-Request-Headers` は comma 区切りで parse し、trim 後の空要素を捨て、
+  大小文字を区別せず全 token が allowlist に含まれることを判定する。
+- exact origin allowlist と requested-header 判定の両方を満たす preflight だけが、
+  `Access-Control-Allow-Headers: Content-Type, x-ms-useragent`、既存の methods、
+  `Access-Control-Allow-Credentials: true`、request の origin を受け取る。
+- unknown origin、または既知 origin でも allowlist 外の requested header を含む preflight は `204` のままとし、
+  `Access-Control-Allow-Origin`、`Access-Control-Allow-Headers`、`Access-Control-Allow-Methods`、
+  `Access-Control-Allow-Credentials` を返さない。任意 header の echo や wildcard は使わない。
+- `Access-Control-Request-Method` の個別検証は今回追加しない。methods の contract は既存どおり
+  `GET, POST, OPTIONS` の固定値とする。
+- `operator-ui` の runtime dependency、`userAgentPolicy`、credentials policy、session cookie code は変更しない。
+  JSON POST、multipart upload、runtime telemetry header は同じ CORS contract を通す。
 
 `x-ms-useragent` を UI policy で削除する案は採らない。runtime の default telemetry policy に依存した順序で
 header を除去する必要があり、dependency update で再発しやすく、session 以外の credentialed operator request
 との挙動も分断する。header を固定列挙するだけで requested header を検証しない案より、上記は許可範囲を
 明確に保ったまま unexpected header の CORS grant を防げる。
+
+## 実装前に残る判断
+
+なし。response header の正確な値、invalid preflight の response shape、UI/runtime を変更しない境界、remote
+browser assertion の有効化 flag はこの plan で固定した。将来 runtime が別の non-safelisted request header を追加した
+場合は、この allowlist を自動的に広げず、再現と必要性を記録した別 plan を作成する。
 
 ## Existing References
 
@@ -88,10 +102,11 @@ TypeSpec の route/payload contract と cookie attribute contract は変更し�
   - staging/prod preflight、credentials、unknown origin、unknown requested header、session JSON response、JSON/multipart
     preflight coverage を table-driven で追加または拡張する。
 - `operator-ui/tests/operator-ui.ci.spec.js` (MODIFY)
-  - remote staging lane で configured auth backend に anonymous `/operator` を開き、`/auth/session` の
-    `authenticated: false` が login route へ遷移し、`Session check failed` にならないことを browser で観測する。
+  - `OPERATOR_UI_ASSERT_ANONYMOUS_SESSION_REDIRECT=1` の remote staging lane で configured auth backend に
+    anonymous `/operator` を開き、ship した `OperatorApiClient` の `/auth/session` が `authenticated: false` を受け、
+    login route へ遷移して `Session check failed` にならないことを browser で観測する。
 - `.github/workflows/online-release-staging-verify.yml` (MODIFY)
-  - remote lane に上記 anonymous auth-session CORS assertion を明示的に有効化する environment flag を渡す。
+  - remote lane に `OPERATOR_UI_ASSERT_ANONYMOUS_SESSION_REDIRECT=1` を渡し、上記 assertion を常に有効化する。
 
 ## Execution Steps
 
@@ -110,7 +125,8 @@ TypeSpec の route/payload contract と cookie attribute contract は変更し�
    - unknown origin と known origin + unknown requested header に CORS allow headers がないこと。
    - auth-enabled/no-cookie `/auth/session` が `200` と `authenticated: false` を返すこと。
 4. remote Playwright staging verification を更新する。
-   - opt-in flag 下で deployed Pages の `/operator` を anonymous browser context で開く。
+   - `OPERATOR_UI_ASSERT_ANONYMOUS_SESSION_REDIRECT=1` のときだけ、deployed Pages の `/operator` を anonymous
+     browser context で開く test を追加する。
    - login heading/route を待ち、Auth Error と `Session check failed` が表示されないことを assert する。
    - runtime の user-agent policy と CORS preflight を実際に通すため、この test は native fetch の代替ではなく、
      ship した `OperatorApiClient` を使わなければならない。
