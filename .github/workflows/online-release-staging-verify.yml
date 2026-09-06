@@ -134,6 +134,7 @@ jobs:
           OPERATOR_UI_BASE_URL: ${{ needs.prepare.outputs.frontend_url }}
           OPERATOR_UI_BACKEND_BASE_URL: ${{ needs.prepare.outputs.backend_url }}
           OPERATOR_UI_PRESET_ID: ${{ needs.prepare.outputs.preset_id }}
+          OPERATOR_UI_ASSERT_ANONYMOUS_SESSION_REDIRECT: "1"
 
       - name: Upload staging verification artifacts
         if: always()

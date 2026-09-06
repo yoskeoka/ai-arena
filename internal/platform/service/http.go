@@ -20,6 +20,11 @@ var allowedOperatorOrigins = map[string]struct{}{
 	"https://ai-arena.pages.dev":         {},
 }
 
+var allowedOperatorRequestHeaders = map[string]struct{}{
+	"content-type":   {},
+	"x-ms-useragent": {},
+}
+
 // ArtifactAccessMetadata is derived, non-durable access info for one artifact.
 type ArtifactAccessMetadata struct {
 	Locator     string     `json:"locator"`
@@ -740,11 +745,27 @@ func applyOperatorCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	if _, ok := allowedOperatorOrigins[origin]; !ok {
 		return
 	}
+	if r.Method == http.MethodOptions && !operatorCORSRequestHeadersAllowed(r.Header.Get("Access-Control-Request-Headers")) {
+		return
+	}
 	w.Header().Add("Vary", "Origin")
 	w.Header().Set("Access-Control-Allow-Origin", origin)
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, x-ms-useragent")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
+}
+
+func operatorCORSRequestHeadersAllowed(raw string) bool {
+	for _, requested := range strings.Split(raw, ",") {
+		header := strings.ToLower(strings.TrimSpace(requested))
+		if header == "" {
+			continue
+		}
+		if _, ok := allowedOperatorRequestHeaders[header]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func addArtifactPath(artifacts map[string]string, kind, path string) {

@@ -20,10 +20,24 @@ const authSignupUserID = process.env.OPERATOR_UI_AUTH_SIGNUP_USER_ID ?? "operato
 const authSignupLogin = process.env.OPERATOR_UI_AUTH_SIGNUP_LOGIN ?? authSignupUserID;
 const frontendHost = process.env.OPERATOR_UI_FRONTEND_HOST ?? "127.0.0.1";
 const frontendPort = process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173";
+const assertAnonymousSessionRedirect = process.env.OPERATOR_UI_ASSERT_ANONYMOUS_SESSION_REDIRECT === "1";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const artifactRef = process.env.OPERATOR_UI_TEST_ARTIFACT_REF ?? path.resolve(testDir, "../../testdata/ai/echo/echo-ai-2turn");
 
 test.setTimeout(120_000);
+
+test("remote anonymous operator session reaches the login flow", async ({ page }) => {
+  test.skip(
+    process.env.OPERATOR_UI_TEST_SCENARIO !== "remote" || !assertAnonymousSessionRedirect,
+    "remote anonymous session assertion is disabled",
+  );
+
+  await page.goto("/operator");
+  await expect(page).toHaveURL(/\/login\?return_to=/);
+  await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
+  await expect(page.getByText("Session check failed")).toHaveCount(0);
+  await expect(page.getByText("Auth Error")).toHaveCount(0);
+});
 
 test("auth-enabled signup lane bootstraps a signup-only GitHub user via invite", async ({ page }) => {
   test.skip(!authEnabled, "auth-only scenario");

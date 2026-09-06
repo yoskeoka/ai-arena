@@ -423,8 +423,142 @@ func TestOperatorAPIAllowsConfiguredCORSOrigins(t *testing.T) {
 	if got := optionsResp.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
 		t.Fatalf("OPTIONS allow-methods = %q, want %q", got, "GET, POST, OPTIONS")
 	}
-	if got := optionsResp.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type" {
-		t.Fatalf("OPTIONS allow-headers = %q, want Content-Type", got)
+	if got := optionsResp.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, x-ms-useragent" {
+		t.Fatalf("OPTIONS allow-headers = %q, want %q", got, "Content-Type, x-ms-useragent")
+	}
+	if got := optionsResp.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Fatalf("OPTIONS allow-credentials = %q, want true", got)
+	}
+}
+
+func TestOperatorAPIPreflightCORSContract(t *testing.T) {
+	tests := []struct {
+		name            string
+		path            string
+		requestMethod   string
+		origin          string
+		requested       string
+		wantAllow       bool
+		wantAllowOrigin string
+	}{
+		{
+			name:            "staging session runtime header",
+			path:            "/auth/session",
+			requestMethod:   http.MethodGet,
+			origin:          "https://staging.ai-arena.pages.dev",
+			requested:       "x-ms-useragent",
+			wantAllow:       true,
+			wantAllowOrigin: "https://staging.ai-arena.pages.dev",
+		},
+		{
+			name:            "production JSON post mixed case and empty tokens",
+			path:            "/api/v1/preset-matches",
+			requestMethod:   http.MethodPost,
+			origin:          "https://ai-arena.pages.dev",
+			requested:       " content-type, X-MS-USERAGENT, , ",
+			wantAllow:       true,
+			wantAllowOrigin: "https://ai-arena.pages.dev",
+		},
+		{
+			name:            "production multipart upload",
+			path:            "/api/v1/game-bundles",
+			requestMethod:   http.MethodPost,
+			origin:          "https://ai-arena.pages.dev",
+			requested:       "Content-Type, x-ms-useragent",
+			wantAllow:       true,
+			wantAllowOrigin: "https://ai-arena.pages.dev",
+		},
+		{
+			name:          "unknown origin",
+			path:          "/auth/session",
+			requestMethod: http.MethodGet,
+			origin:        "https://example.com",
+			requested:     "x-ms-useragent",
+		},
+		{
+			name:          "unknown requested header",
+			path:          "/auth/session",
+			requestMethod: http.MethodGet,
+			origin:        "https://staging.ai-arena.pages.dev",
+			requested:     "content-type, x-operator-debug",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := withOperatorCORS(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				t.Fatal("preflight reached the wrapped handler")
+			}))
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, tt.path, nil)
+			req.Header.Set("Origin", tt.origin)
+			req.Header.Set("Access-Control-Request-Method", tt.requestMethod)
+			req.Header.Set("Access-Control-Request-Headers", tt.requested)
+			resp := httptest.NewRecorder()
+			handler.ServeHTTP(resp, req)
+
+			if resp.Code != http.StatusNoContent {
+				t.Fatalf("OPTIONS status = %d, want %d", resp.Code, http.StatusNoContent)
+			}
+			if !tt.wantAllow {
+				for _, header := range []string{
+					"Access-Control-Allow-Origin",
+					"Access-Control-Allow-Headers",
+					"Access-Control-Allow-Methods",
+					"Access-Control-Allow-Credentials",
+				} {
+					if got := resp.Header().Get(header); got != "" {
+						t.Fatalf("%s = %q, want empty", header, got)
+					}
+				}
+				return
+			}
+
+			if got := resp.Header().Get("Access-Control-Allow-Origin"); got != tt.wantAllowOrigin {
+				t.Fatalf("allow-origin = %q, want %q", got, tt.wantAllowOrigin)
+			}
+			if got := resp.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
+				t.Fatalf("allow-methods = %q, want GET, POST, OPTIONS", got)
+			}
+			if got := resp.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, x-ms-useragent" {
+				t.Fatalf("allow-headers = %q, want %q", got, "Content-Type, x-ms-useragent")
+			}
+			if got := resp.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+				t.Fatalf("allow-credentials = %q, want true", got)
+			}
+			if got := resp.Header().Get("Vary"); got != "Origin" {
+				t.Fatalf("vary = %q, want Origin", got)
+			}
+		})
+	}
+}
+
+func TestOperatorAPISessionStatusAllowsAnonymousCrossOriginRequest(t *testing.T) {
+	auth, err := NewAuthService(AuthConfig{
+		GitHubClientID:       "client-id",
+		GitHubClientSecret:   "client-secret",
+		AllowedReturnOrigins: []string{"https://staging.ai-arena.pages.dev"},
+	}, &memoryAuthStore{}, fakeGitHubAuthProvider{})
+	if err != nil {
+		t.Fatalf("NewAuthService() error = %v", err)
+	}
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/session", nil)
+	req.Header.Set("Origin", "https://staging.ai-arena.pages.dev")
+	(&OperatorAPI{auth: auth}).Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /auth/session status = %d, want %d", resp.Code, http.StatusOK)
+	}
+	if got := resp.Header().Get("Access-Control-Allow-Origin"); got != "https://staging.ai-arena.pages.dev" {
+		t.Fatalf("allow-origin = %q, want staging Pages origin", got)
+	}
+	var payload SessionStatusResponse
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal(session) error = %v", err)
+	}
+	if payload.AuthMode != authModeEnabled || payload.Authenticated {
+		t.Fatalf("session payload = %+v, want enabled unauthenticated session", payload)
 	}
 }
 
