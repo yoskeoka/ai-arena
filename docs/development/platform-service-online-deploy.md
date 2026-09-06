@@ -451,6 +451,18 @@ repo で使う canonical workflow 名は次で固定する。
 - production release:
   `.github/workflows/online-release-production.yml`
 
+## Phase 7 staging recovery
+
+staging deploy は migration apply を Render deploy より先に完了させる。service runtime は migration を
+実行しない。Render の同居 worker は 1 process / 1 worker に限定し、lease deadline を過ぎた in-flight
+run は次の startup / poll で queue へ復旧する。operator は active worker identity、heartbeat age、queue
+lag を確認してから restart を行う。
+
+`online-release-staging-verify` は deploy 済みの operator flow を diagnostic preset で確認する自動 lane
+であり、特定ゲームの公開 release asset を download、upload、register する release gate ではない。
+Reversi game の登録可否は、人間が local または staging 環境で必要な bundle を選んで確認する運用上の
+受け入れ項目として扱う。
+
 repo workflow は `verified commit` を主語にしつつ、trigger は次で自動化する。
 
 - staging deploy:

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
@@ -77,7 +78,9 @@ type QueueRecord struct {
 
 // WorkerLease records which worker currently owns a queued submission.
 type WorkerLease struct {
-	WorkerID string `json:"worker_id"`
+	WorkerID      string    `json:"worker_id"`
+	Deadline      time.Time `json:"deadline"`
+	LastHeartbeat time.Time `json:"last_heartbeat"`
 }
 
 // ExecutionRequest is the worker-to-runner execution handoff.
@@ -105,6 +108,8 @@ type TerminalArtifacts struct {
 type QueueStore interface {
 	Enqueue(context.Context, MatchSubmission) (QueueRecord, error)
 	Claim(context.Context, string) (QueueRecord, error)
+	Heartbeat(context.Context, string, string) error
+	RecoverExpired(context.Context, time.Time) (int, error)
 	Update(context.Context, QueueRecord) error
 	CancelQueued(context.Context, string) (QueueRecord, error)
 	Get(context.Context, string) (QueueRecord, error)

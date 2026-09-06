@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
@@ -45,13 +46,17 @@ func (w *Worker) ProcessNext(ctx context.Context, workerID string) (QueueRecord,
 	if err != nil {
 		return QueueRecord{}, err
 	}
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stopHeartbeat := w.heartbeat(runCtx, record.Submission.RunID, workerID, cancel)
+	defer stopHeartbeat()
 
 	record.State = StateRunning
 	if err := w.queue.Update(ctx, record); err != nil {
 		return QueueRecord{}, err
 	}
 
-	result, runErr := w.runner.Run(ctx, ExecutionRequest{Submission: record.Submission})
+	result, runErr := w.runner.Run(runCtx, ExecutionRequest{Submission: record.Submission})
 	if result.Record.MatchID == "" {
 		record.State = StateFailed
 		if updateErr := w.queue.Update(ctx, record); updateErr != nil {
@@ -114,6 +119,28 @@ func (w *Worker) ProcessNext(ctx context.Context, workerID string) (QueueRecord,
 		return cloneQueueRecord(record), runErr
 	}
 	return cloneQueueRecord(record), nil
+}
+
+func (w *Worker) heartbeat(ctx context.Context, runID, workerID string, cancel context.CancelFunc) func() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(workerLeaseDuration / 3)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			case <-ticker.C:
+				if err := w.queue.Heartbeat(ctx, runID, workerID); err != nil {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return func() { close(done) }
 }
 
 func (w *Worker) shouldAutoPromote(ctx context.Context, record QueueRecord) (bool, error) {

@@ -87,23 +87,25 @@ type GameRelease struct {
 }
 
 type ServiceQueueRecord struct {
-	SubmissionID   string
-	QueueOrder     int64
-	MatchID        string
-	ParentRunID    pgtype.Text
-	RunKind        string
-	Official       bool
-	GameID         string
-	GameVersion    string
-	RulesetVersion string
-	PlayersJson    []byte
-	OutputDir      string
-	AttemptCount   int32
-	State          string
-	WorkerID       pgtype.Text
-	TerminalJson   []byte
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	SubmissionID    string
+	QueueOrder      int64
+	MatchID         string
+	ParentRunID     pgtype.Text
+	RunKind         string
+	Official        bool
+	GameID          string
+	GameVersion     string
+	RulesetVersion  string
+	PlayersJson     []byte
+	OutputDir       string
+	AttemptCount    int32
+	State           string
+	WorkerID        pgtype.Text
+	LeaseDeadline   pgtype.Timestamptz
+	LastHeartbeatAt pgtype.Timestamptz
+	TerminalJson    []byte
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
 }
 
 type SignupInvite struct {

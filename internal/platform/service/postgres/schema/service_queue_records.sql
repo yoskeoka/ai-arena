@@ -13,6 +13,8 @@ CREATE TABLE service_queue_records (
     attempt_count INTEGER NOT NULL,
     state TEXT NOT NULL,
     worker_id TEXT,
+    lease_deadline TIMESTAMPTZ,
+    last_heartbeat_at TIMESTAMPTZ,
     terminal_json JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
