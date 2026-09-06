@@ -1,0 +1,158 @@
+# operator-cors-session-preflight
+> **Execution**: Use `/execute-task` to implement this plan. After implementation is complete, use `/review-task` to prepare and create the PR.
+
+Addresses: N/A
+
+## Objective
+
+staging と production の canonical Cloudflare Pages origin から operator UI が
+credentials 付きで `GET /auth/session` を呼び出すとき、TypeSpec HTTP runtime が送る
+`x-ms-useragent` による CORS preflight を通過させる。未認証 session は transport/CORS error ではなく
+`200` の `authenticated: false` として UI の login flow に渡さなければならない。
+
+完了境界は、許可済み staging / production origin だけが `Content-Type` と
+`x-ms-useragent` を要求する preflight で CORS credentials contract を得られ、unknown origin または
+許可していない requested header は CORS 許可を得られないことである。session cookie の属性・発行、OAuth
+flow、route の payload、runtime dependency version、origin allowlist 自体は変更しない。
+
+## Root Cause and Decision
+
+`operator-ui/src/lib/operatorApiClient.ts` は `getClient` の default browser pipeline を使い、local
+`credentialsPolicy` は `request.withCredentials = true` のみを設定する。`@typespec/ts-http-runtime` 0.2.1 の
+default pipeline は `userAgentPolicy` を追加し、browser platform 実装では header 名を
+`x-ms-useragent` とする。そのため cross-origin session request は preflight される。
+
+一方 `internal/platform/service/http.go` の `applyOperatorCORSHeaders` は許可済み origin に
+`Access-Control-Allow-Headers: Content-Type` だけを返す。browser は `x-ms-useragent` を許可されないため
+actual `GET /auth/session` を送らず、UI は `Failed to fetch` を session error として表示する。
+
+次を採用する。
+
+- backend に小さく固定した CORS request-header allowlist (`Content-Type`, `x-ms-useragent`) を置く。
+- `OPTIONS` の `Access-Control-Request-Headers` を case-insensitive に parse し、空要素を除いた全 header が
+  allowlist に含まれるときだけ CORS response headers を返す。任意 header の echo や wildcard は使わない。
+- valid preflight の `Access-Control-Allow-Headers` は canonical な固定リストとして返す。これにより JSON POST、
+  multipart upload、runtime telemetry header が同じ contract で通る。
+
+`x-ms-useragent` を UI policy で削除する案は採らない。runtime の default telemetry policy に依存した順序で
+header を除去する必要があり、dependency update で再発しやすく、session 以外の credentialed operator request
+との挙動も分断する。header を固定列挙するだけで requested header を検証しない案より、上記は許可範囲を
+明確に保ったまま unexpected header の CORS grant を防げる。
+
+## Existing References
+
+- `internal/platform/service/http.go:18-21`
+  - staging と production の canonical origin allowlist。
+- `internal/platform/service/http.go:159-196`
+  - `/auth/session` を含む handler tree と CORS wrapper の適用点。
+- `internal/platform/service/http.go:724-750`
+  - OPTIONS short-circuit と現在の CORS response header 固定値。
+- `internal/platform/service/http_test.go:372-467`
+  - 許可 origin と unknown origin の CORS regression coverage。
+- `internal/platform/service/auth.go:164-179`
+  - 無効または absent cookie を `auth_mode: enabled`, `authenticated: false` の `200` として返す session contract。
+- `operator-ui/src/lib/operatorApiClient.ts:69-94`
+  - TypeSpec browser client、credentialed request policy、`/auth/session` adapter。
+- `operator-ui/src/App.tsx:44-87`
+  - unauthenticated session response を login route に送る UI behavior と transport error surface。
+- `operator-ui/tests/operator-ui.ci.spec.js:7-43,319-337`
+  - remote lane と browser-context HTTP request helper。
+- `tools/dev/run-operator-ui-playwright.sh:77-84` と
+  `.github/workflows/online-release-staging-verify.yml:129-139`
+  - deployed Pages/backend を使う remote staging verification の entrypoint。
+- `docs/specs/platform-product-auth.md:74-87`
+  - split-origin credentialed fetch と allowlisted-origin CORS の browser session contract。
+
+## Black-box Specification Changes
+
+`docs/specs/platform-product-auth.md` を implementation の最初に更新し、split-origin browser session の CORS
+contract を次の observable behavior に明確化する。
+
+- staging と production の canonical Pages origin だけが credentialed cross-origin operator API request を許可される。
+- allowed origin からの preflight は `GET`, `POST`, `OPTIONS` と `Content-Type`, `x-ms-useragent` だけを許可し、
+  `Access-Control-Allow-Credentials: true` を維持する。
+- unknown origin、または allowlist 外の requested header を含む preflight は CORS permission headers を受け取らない。
+- unauthenticated `GET /auth/session` は CORS transport failure ではなく既存 TypeSpec session response を返し、
+  frontend は login flow に進む。
+
+TypeSpec の route/payload contract と cookie attribute contract は変更しない。
+
+## Code Change Map
+
+- `docs/specs/platform-product-auth.md` (MODIFY)
+  - split-origin browser session の origin/header/credentials/unauthenticated behavior を black-box CORS contract として追記する。
+- `internal/platform/service/http.go` (MODIFY)
+  - fixed request-header allowlist と OPTIONS requested-header validation を導入し、valid preflight に
+    `Content-Type, x-ms-useragent` を返す。exact origin allowlist、`Vary: Origin`、credentials、method set を維持する。
+- `internal/platform/service/http_test.go` (MODIFY)
+  - staging/prod preflight、credentials、unknown origin、unknown requested header、session JSON response、JSON/multipart
+    preflight coverage を table-driven で追加または拡張する。
+- `operator-ui/tests/operator-ui.ci.spec.js` (MODIFY)
+  - remote staging lane で configured auth backend に anonymous `/operator` を開き、`/auth/session` の
+    `authenticated: false` が login route へ遷移し、`Session check failed` にならないことを browser で観測する。
+- `.github/workflows/online-release-staging-verify.yml` (MODIFY)
+  - remote lane に上記 anonymous auth-session CORS assertion を明示的に有効化する environment flag を渡す。
+
+## Execution Steps
+
+1. `docs/specs/platform-product-auth.md` に CORS contract を先に追加する。
+   - canonical origin と credentialed cookie contract は変更せず、allowed request header と rejected preflight の
+     observable behavior だけを固定する。
+2. `internal/platform/service/http.go` で CORS policy を実装する。
+   - existing exact-origin map を唯一の origin authority とする。
+   - preflight request-header token を lowercase/trim して allowlist subset を判定する。
+   - unknown origin または invalid requested header に CORS grant を返さず、valid request には fixed canonical header
+     list・credentials・methods・origin vary を返す。
+3. Go HTTP regression tests を追加する。
+   - canonical staging origin の `GET /auth/session` preflight with `x-ms-useragent`。
+   - production origin の JSON POST と multipart upload に必要な `content-type, x-ms-useragent` preflight。
+   - both canonical origins の credentials/origin/method/header response contract。
+   - unknown origin と known origin + unknown requested header に CORS allow headers がないこと。
+   - auth-enabled/no-cookie `/auth/session` が `200` と `authenticated: false` を返すこと。
+4. remote Playwright staging verification を更新する。
+   - opt-in flag 下で deployed Pages の `/operator` を anonymous browser context で開く。
+   - login heading/route を待ち、Auth Error と `Session check failed` が表示されないことを assert する。
+   - this test must use the shipped `OperatorApiClient`, not a native-fetch substitute, so the runtime user-agent policy and
+     CORS preflight are exercised.
+5. focused Go tests、operator UI build、remote staging verification workflow を最新 implementation head で実行し、
+   origin/header/credentials response evidence を PR に残す。
+
+## Dependencies and Parallelism
+
+- Step 1 must precede Step 2 because the CORS behavior is a product/service contract.
+- Go policy implementation and Go tests are one serialized change in `http.go`/`http_test.go`.
+- After the spec contract is fixed, the remote Playwright assertion can be prepared in parallel with the Go test design, but
+  must run only against the implementation deploy.
+- staging verification requires a backend with auth enabled and the canonical Pages build-time API base URL; no human OAuth
+  secret or authenticated account is required for the anonymous session assertion.
+
+## Verification
+
+- `go test ./internal/platform/service` proves:
+  - staging `OPTIONS /auth/session` requesting `x-ms-useragent` succeeds with canonical origin, credentials, methods, and
+    both allowed request headers;
+  - production JSON POST and multipart-upload preflights succeed with `content-type, x-ms-useragent`;
+  - unknown origin and known origin with an unrecognized requested header receive no CORS permission headers;
+  - no-cookie auth-enabled session remains `200 {auth_mode: enabled, authenticated: false}`.
+- Run the applicable repository Go quality gates and `pnpm run build` in `operator-ui/`.
+- On the deployed staging implementation head, issue an OPTIONS request with
+  `Origin: https://staging.ai-arena.pages.dev`, `Access-Control-Request-Method: GET`, and
+  `Access-Control-Request-Headers: x-ms-useragent`; record the exact CORS response headers.
+- Run the remote staging Playwright lane on that same deployment head. It must reach login for an anonymous browser without
+  `Failed to fetch`, then retain the existing operator-flow verification for its configured auth mode.
+- Confirm production uses the same static policy by Go regression test before release; after deployment, repeat the
+  header-only OPTIONS check from the production canonical origin before declaring production fixed.
+
+## Risks and Mitigations
+
+- A reflective `Access-Control-Allow-Headers` implementation would widen cross-origin permissions.
+  - mitigation: fixed case-insensitive allowlist, no wildcard, no request-value reflection.
+- Changing or deleting the runtime header only for session could leave JSON POST/upload behavior inconsistent or recur after
+  a runtime upgrade.
+  - mitigation: keep the generated client/pipeline unchanged and authorize the known runtime header at the server boundary.
+- A CORS test that uses only Go HTTP requests cannot prove browser preflight behavior.
+  - mitigation: retain focused Go contract tests and add the deployed Pages-to-Render anonymous browser assertion.
+- Cookie behavior could be accidentally weakened while fixing preflight.
+  - mitigation: explicitly assert `Access-Control-Allow-Credentials: true`; do not modify auth cookie code or attributes.
+- The staging flow may be checked on stale frontend/backend bytes.
+  - mitigation: bind remote workflow evidence to the latest implementation PR head and record deployed frontend/backend URLs.
