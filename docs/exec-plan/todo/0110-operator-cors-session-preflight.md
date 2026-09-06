@@ -112,47 +112,47 @@ TypeSpec の route/payload contract と cookie attribute contract は変更し�
 4. remote Playwright staging verification を更新する。
    - opt-in flag 下で deployed Pages の `/operator` を anonymous browser context で開く。
    - login heading/route を待ち、Auth Error と `Session check failed` が表示されないことを assert する。
-   - this test must use the shipped `OperatorApiClient`, not a native-fetch substitute, so the runtime user-agent policy and
-     CORS preflight are exercised.
+   - runtime の user-agent policy と CORS preflight を実際に通すため、この test は native fetch の代替ではなく、
+     ship した `OperatorApiClient` を使わなければならない。
 5. focused Go tests、operator UI build、remote staging verification workflow を最新 implementation head で実行し、
    origin/header/credentials response evidence を PR に残す。
 
 ## Dependencies and Parallelism
 
-- Step 1 must precede Step 2 because the CORS behavior is a product/service contract.
-- Go policy implementation and Go tests are one serialized change in `http.go`/`http_test.go`.
-- After the spec contract is fixed, the remote Playwright assertion can be prepared in parallel with the Go test design, but
-  must run only against the implementation deploy.
-- staging verification requires a backend with auth enabled and the canonical Pages build-time API base URL; no human OAuth
-  secret or authenticated account is required for the anonymous session assertion.
+- Step 1 は CORS behavior が product/service contract であるため Step 2 に先行しなければならない。
+- Go policy implementation と Go tests は `http.go`/`http_test.go` に対する一つの直列変更とする。
+- spec contract 固定後、remote Playwright assertion は Go test design と並行して準備できるが、実行は implementation
+  deploy に対してだけ行う。
+- staging verification には auth enabled backend と canonical Pages build-time API base URL が必要である。anonymous
+  session assertion に human OAuth secret または authenticated account は不要である。
 
 ## Verification
 
-- `go test ./internal/platform/service` proves:
-  - staging `OPTIONS /auth/session` requesting `x-ms-useragent` succeeds with canonical origin, credentials, methods, and
-    both allowed request headers;
-  - production JSON POST and multipart-upload preflights succeed with `content-type, x-ms-useragent`;
-  - unknown origin and known origin with an unrecognized requested header receive no CORS permission headers;
-  - no-cookie auth-enabled session remains `200 {auth_mode: enabled, authenticated: false}`.
-- Run the applicable repository Go quality gates and `pnpm run build` in `operator-ui/`.
-- On the deployed staging implementation head, issue an OPTIONS request with
+- `go test ./internal/platform/service` で次を確認する。
+  - `x-ms-useragent` を要求する staging `OPTIONS /auth/session` が canonical origin、credentials、methods、
+    両方の allowed request header つきで成功する。
+  - production の JSON POST と multipart-upload preflight が `content-type, x-ms-useragent` で成功する。
+  - unknown origin、および認識しない requested header を含む known origin が CORS permission headers を受け取らない。
+  - cookie を持たない auth-enabled session が `200 {auth_mode: enabled, authenticated: false}` のままである。
+- 適用対象の repository Go quality gates と `operator-ui/` の `pnpm run build` を実行する。
+- deployed staging implementation head に対し、次を含む OPTIONS request を送る。
   `Origin: https://staging.ai-arena.pages.dev`, `Access-Control-Request-Method: GET`, and
-  `Access-Control-Request-Headers: x-ms-useragent`; record the exact CORS response headers.
-- Run the remote staging Playwright lane on that same deployment head. It must reach login for an anonymous browser without
-  `Failed to fetch`, then retain the existing operator-flow verification for its configured auth mode.
-- Confirm production uses the same static policy by Go regression test before release; after deployment, repeat the
-  header-only OPTIONS check from the production canonical origin before declaring production fixed.
+  `Access-Control-Request-Headers: x-ms-useragent`。exact CORS response headers を記録する。
+- 同じ deployment head に対して remote staging Playwright lane を実行する。anonymous browser が `Failed to fetch`
+  なしで login へ到達し、設定済み auth mode 向けの既存 operator-flow verification を維持しなければならない。
+- release 前に Go regression test で production も同じ static policy を使うことを確認する。deployment 後、
+  production canonical origin から header-only OPTIONS check を再実行してから production fixed を宣言する。
 
 ## Risks and Mitigations
 
-- A reflective `Access-Control-Allow-Headers` implementation would widen cross-origin permissions.
-  - mitigation: fixed case-insensitive allowlist, no wildcard, no request-value reflection.
-- Changing or deleting the runtime header only for session could leave JSON POST/upload behavior inconsistent or recur after
-  a runtime upgrade.
-  - mitigation: keep the generated client/pipeline unchanged and authorize the known runtime header at the server boundary.
-- A CORS test that uses only Go HTTP requests cannot prove browser preflight behavior.
-  - mitigation: retain focused Go contract tests and add the deployed Pages-to-Render anonymous browser assertion.
-- Cookie behavior could be accidentally weakened while fixing preflight.
-  - mitigation: explicitly assert `Access-Control-Allow-Credentials: true`; do not modify auth cookie code or attributes.
-- The staging flow may be checked on stale frontend/backend bytes.
-  - mitigation: bind remote workflow evidence to the latest implementation PR head and record deployed frontend/backend URLs.
+- reflective な `Access-Control-Allow-Headers` implementation は cross-origin permissions を広げてしまう。
+  - mitigation: fixed case-insensitive allowlist とし、wildcard と request-value reflection を使わない。
+- session だけで runtime header を変更または削除すると、JSON POST/upload behavior が不整合になったり、runtime upgrade 後に
+  再発したりする。
+  - mitigation: generated client/pipeline を変更せず、既知の runtime header を server boundary で許可する。
+- Go HTTP request だけを使う CORS test では browser preflight behavior を証明できない。
+  - mitigation: focused Go contract tests を維持し、deployed Pages-to-Render anonymous browser assertion を追加する。
+- preflight 修正中に cookie behavior を誤って弱める可能性がある。
+  - mitigation: `Access-Control-Allow-Credentials: true` を明示的に assert し、auth cookie code と attributes を変更しない。
+- stale frontend/backend bytes に対して staging flow を確認してしまう可能性がある。
+  - mitigation: remote workflow evidence を最新 implementation PR head に結び、deployed frontend/backend URLs を記録する。
