@@ -122,6 +122,16 @@ current split-origin では first landing の正本にしない。
   session cookie は secure cross-site fetch に耐える属性で発行しなければならない
 - backend CORS は allowlisted frontend origin に対して
   credentials 付き request を許可しなければならない
+- current split-origin の canonical frontend origin は staging と production の Pages origin に限り、
+  credentialed operator API request の送信元として許可しなければならない
+- 許可された origin からの preflight は `GET`, `POST`, `OPTIONS` と
+  `Content-Type`, `x-ms-useragent` の request header だけを許可し、
+  credentials の送信許可を維持しなければならない
+- unknown origin、または許可されていない requested header を含む preflight は、
+  CORS permission header を返してはならない。request header の値をそのまま許可したり、
+  wildcard で許可範囲を広げたりしてはならない
+- cookie を持たない auth-enabled browser の `GET /auth/session` は CORS transport failure ではなく、
+  既存の未認証 session response を返し、frontend は login flow に進まなければならない
 
 ## Gated Signup Contract
 
