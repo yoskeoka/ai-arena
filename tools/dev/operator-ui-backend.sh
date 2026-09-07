@@ -33,7 +33,9 @@ fi
 
 cd "$repo_root"
 
-export GOPATH="${GOPATH:-/tmp/ai-arena-operator-ui-go}"
+go_path="${GOPATH:-/tmp/ai-arena-operator-ui-go}"
+go_path="${go_path%%:*}"
+export GOPATH="$go_path"
 export GOMODCACHE="${GOMODCACHE:-$GOPATH/pkg/mod}"
 export GOCACHE="${GOCACHE:-/tmp/ai-arena-operator-ui-go-build}"
 mkdir -p "$GOPATH" "$GOMODCACHE" "$GOCACHE"

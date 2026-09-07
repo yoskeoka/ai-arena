@@ -291,7 +291,7 @@ test("service-backed operator UI browser lane covers registration, request execu
     await page.goto("/operator");
     await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
   }
-}, 120_000);
+});
 
 async function createLegacyAISubmission(api, { submissionID, registrationID, artifactRef, displayName }) {
   const response = await api.postJSON(`${backendBaseURL}/api/v1/ai-submissions`, {

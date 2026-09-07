@@ -96,7 +96,7 @@ minimal operator UI は nav 上で少なくとも次の page/surface を持つ�
   digest は read-only confirmation として表示してよいが、artifact digest、AI submission ID、runtime/AI identity、
   artifact reference を入力する control を page に置いてはならない。create/revise 成功時は form state を reset して
   selected scope の bot list を refresh する。file の再選択または upload failure は prior admission を invalidate し、
- 既存 list を壊さず form-local error として表示する。legacy AI submission の create/list surface は migration
+  既存 list を壊さず form-local error として表示する。legacy AI submission の create/list surface は migration
   compatibility のため HTTP API に残り得るが、この page には表示しない
 - requests page:
   accepted match request list と create form

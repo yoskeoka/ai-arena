@@ -47,6 +47,8 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
   const invalidateAdmission = () => {
     setAdmission(undefined);
     setUploadState("idle");
+    setWriteState("idle");
+    setWriteError(undefined);
   };
 
   const handleUpload = async () => {
