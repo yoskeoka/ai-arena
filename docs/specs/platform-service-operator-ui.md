@@ -65,7 +65,7 @@ Phase 7 の operator route family は少なくとも次を持たなければな�
 - `/operator/games`
   - game registration list / create
 - `/operator/submissions`
-  - AI submission list / create
+  - AI bot list / create / revision
 - `/operator/requests`
   - match request list / create
 - `/operator/rankings`
@@ -89,7 +89,13 @@ minimal operator UI は nav 上で少なくとも次の page/surface を持つ�
   されない artifact の cleanup はこの surface の範囲外であり、`docs/issues/0038-unactivated-game-bundle-retention.md`
   を参照する
 - submissions page:
-  admitted AI list と create form
+  scope、bot name、new bot / existing bot revision の choice、AI bundle ZIP の file chooser、admission
+  status/error、admitted artifact digest の read-only confirmation、bot create/revise action、sign-in 済み principal
+  の bot list。
+  bundle upload は selected scope とともに行い、admission 成功後だけ create/revise を可能にする。create/revise
+  成功時は form state を reset して bot list を refresh する。file の再選択または upload failure は prior admission
+  を invalidate し、既存 list を壊さず form-local error として表示する。legacy AI submission の create/list
+  surface は migration compatibility のため HTTP API に残り得るが、この page には表示しない
 - requests page:
   accepted match request list と create form
 - rankings page:
@@ -104,7 +110,8 @@ browser verification は、少なくとも次の acceptance surface を route �
 - overview page で preset queue panel、active runs panel、completed runs panel を表示できる
 - invites page で `participant|developer|operator` のいずれかの invite を 1 件作成し、`invite_token` と `invite_url` を表示できる
 - games page で registered game を 1 件以上作成し、list へ反映できる
-- submissions page で AI submission を 1 件以上作成し、list へ反映できる
+- submissions page で scope-compatible AI bundle ZIP を upload し、admitted artifact digest を確認して bot を
+  1 件作成または revision し、bot list へ反映できる
 - requests page で manual match request を 1 件以上作成し、accepted request と latest run を表示できる
 - run detail page で selected run の `result_summary` と artifact access entry を表示できる
 - rankings page で completed official run の scope を選び、snapshot entry を表示できる

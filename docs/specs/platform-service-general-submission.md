@@ -29,12 +29,20 @@ wire contract の正本は `typespec/` とする。
 game form は ZIP を upload して admission 成功 response を受け、その response の admitted artifact と
 manifest 由来の ruleset のうち operator が選択した一つだけで activate する。client は game ID、game
 version、artifact digest、legacy registration ID を手入力または改変して activation してはならない。複数
-ruleset を持つ bundle では、選択肢は admission response が返す候補に限定する。AI form は scope、bot name、uploaded AI artifact、および new
-bot / existing bot revision の choice だけを送る。
+ruleset を持つ bundle では、選択肢は admission response が返す候補に限定する。AI form は scope、bot name、
+new bot / existing bot revision の choice と AI bundle ZIP を受け取る。client は選択した scope と ZIP を
+admission へ渡し、成功 response の admitted AI artifact identity だけで bot を create/revise する。client が
+artifact digest、runtime/AI identity、または artifact reference を手入力・改変して bot revision を作成しては
+ならない。AI admission の失敗時は bot/revision を作成してはならない。
 
 既存の metadata-only game registration request は migration-period の compatibility input として
 受け付けてよいが、新規 operator operation の正本ではない。この input から作る legacy scope は
 artifact-backed activation を代替しない。
+
+既存の AI submission create/list HTTP surface も、bot/revision identity 導入前の match request を移行または
+再現する compatibility input として維持してよい。ただし新規 operator UI はこの legacy surface を create/list
+の入口として表示してはならず、artifact reference を要求してはならない。legacy record を参照する既存 match
+request の挙動は変えない。
 
 - selected game release と ruleset は admitted immutable artifact から解決可能でなければならない。
 - artifact digest を指定する activation は、その digest に対応する admitted game release を exact に解決する。
