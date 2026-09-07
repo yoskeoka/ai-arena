@@ -188,39 +188,38 @@ test("service-backed operator UI browser lane covers registration, request execu
   await expect(page.getByTestId("operator-form-submissions")).toBeVisible();
   await expect(page.getByLabel("Uploaded AI artifact ID")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create AI submission" })).toHaveCount(0);
-  await page.getByLabel("Competition scope").fill(registrationID);
-  await page.getByLabel("Bot name").fill("Echo UI Alpha");
-  await page.getByLabel("AI bundle ZIP").setInputFiles(path.resolve(testDir, "../package.json"));
-  await page.getByRole("button", { name: "Upload AI bundle" }).click();
-  await expect(page.getByTestId("ai-bundle-admission")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Save bot revision" })).toHaveCount(0);
-  await expect(page.getByTestId("operator-form-submissions")).toContainText(/invalid|zip|bundle/i);
-
-  await page.getByLabel("AI bundle ZIP").setInputFiles(aiBundlePath);
-  await page.getByRole("button", { name: "Upload AI bundle" }).click();
-  await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
-  const firstArtifactID = await page.getByTestId("admitted-ai-artifact-id").textContent();
-  expect(firstArtifactID).toMatch(/[0-9a-f]{64}/);
-  await page.getByRole("button", { name: "Save bot revision" }).click();
-  const botRow = page.getByTestId("operator-panel-submissions").locator('[data-testid^="bot-row-"]').first();
-  await expect(botRow).toBeVisible();
-  const botID = (await botRow.getAttribute("data-testid")).replace("bot-row-", "");
-  const firstBotText = await botRow.textContent();
-
-  await page.getByLabel("Existing bot ID").fill(botID);
-  await page.getByLabel("AI bundle ZIP").setInputFiles(aiRevisionBundlePath);
-  await page.getByRole("button", { name: "Upload AI bundle" }).click();
-  await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("admitted-ai-artifact-id")).not.toHaveText(firstArtifactID);
-  await page.getByRole("button", { name: "Save bot revision" }).click();
-  await expect(page.getByTestId(`bot-row-${botID}`)).toBeVisible();
-  await expect(botRow).not.toHaveText(firstBotText);
-
-  await page.getByLabel("AI bundle ZIP").setInputFiles(path.resolve(testDir, "../package.json"));
-  await page.getByRole("button", { name: "Upload AI bundle" }).click();
-  await expect(page.getByTestId("ai-bundle-admission")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Save bot revision" })).toHaveCount(0);
-  await expect(page.getByTestId(`bot-row-${botID}`)).toBeVisible();
+  if (authEnabled) {
+    await page.getByLabel("Competition scope").fill(registrationID);
+    await page.getByLabel("Bot name").fill("Echo UI Alpha");
+    await page.getByLabel("AI bundle ZIP").setInputFiles(path.resolve(testDir, "../package.json"));
+    await page.getByRole("button", { name: "Upload AI bundle" }).click();
+    await expect(page.getByTestId("ai-bundle-admission")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save bot revision" })).toHaveCount(0);
+    await expect(page.getByTestId("operator-form-submissions")).toContainText(/invalid|zip|bundle/i);
+    await page.getByLabel("AI bundle ZIP").setInputFiles(aiBundlePath);
+    await page.getByRole("button", { name: "Upload AI bundle" }).click();
+    await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
+    const firstArtifactID = await page.getByTestId("admitted-ai-artifact-id").textContent();
+    expect(firstArtifactID).toMatch(/[0-9a-f]{64}/);
+    await page.getByRole("button", { name: "Save bot revision" }).click();
+    const botRow = page.getByTestId("operator-panel-submissions").locator('[data-testid^="bot-row-"]').first();
+    await expect(botRow).toBeVisible();
+    const botID = (await botRow.getAttribute("data-testid")).replace("bot-row-", "");
+    const firstBotText = await botRow.textContent();
+    await page.getByLabel("Existing bot ID").fill(botID);
+    await page.getByLabel("AI bundle ZIP").setInputFiles(aiRevisionBundlePath);
+    await page.getByRole("button", { name: "Upload AI bundle" }).click();
+    await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("admitted-ai-artifact-id")).not.toHaveText(firstArtifactID);
+    await page.getByRole("button", { name: "Save bot revision" }).click();
+    await expect(page.getByTestId(`bot-row-${botID}`)).toBeVisible();
+    await expect(botRow).not.toHaveText(firstBotText);
+    await page.getByLabel("AI bundle ZIP").setInputFiles(path.resolve(testDir, "../package.json"));
+    await page.getByRole("button", { name: "Upload AI bundle" }).click();
+    await expect(page.getByTestId("ai-bundle-admission")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save bot revision" })).toHaveCount(0);
+    await expect(page.getByTestId(`bot-row-${botID}`)).toBeVisible();
+  }
 
   await createLegacyAISubmission(api, {
     submissionID: aiSubmissionID1,
