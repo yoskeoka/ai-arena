@@ -228,23 +228,32 @@ func (s *GeneralSubmissionService) registerArtifactBackedGame(ctx context.Contex
 	if rulesetVersion == "" {
 		rulesetVersion = strings.TrimSpace(req.Game.RulesetVersion)
 	}
-	if (strings.TrimSpace(req.Game.GameID) != "" && req.Game.GameID != bundle.Manifest.GameID) || (strings.TrimSpace(req.Game.GameVersion) != "" && req.Game.GameVersion != bundle.Manifest.GameVersion) || (strings.TrimSpace(req.Game.RulesetVersion) != "" && strings.TrimSpace(req.RulesetVersion) != "" && req.Game.RulesetVersion != req.RulesetVersion) {
+	requestedGameID := strings.TrimSpace(req.Game.GameID)
+	requestedGameVersion := strings.TrimSpace(req.Game.GameVersion)
+	requestedGameRuleset := strings.TrimSpace(req.Game.RulesetVersion)
+	requestedRuleset := strings.TrimSpace(req.RulesetVersion)
+	if (requestedGameID != "" && requestedGameID != bundle.Manifest.GameID) || (requestedGameVersion != "" && requestedGameVersion != bundle.Manifest.GameVersion) || (requestedGameRuleset != "" && requestedRuleset != "" && requestedGameRuleset != requestedRuleset) {
 		return RegisteredGame{}, fmt.Errorf("%w: service: requested game metadata does not match selected artifact", ErrBadRequest)
 	}
 	game := contract.GameMetadata{GameID: bundle.Manifest.GameID, GameVersion: bundle.Manifest.GameVersion, RulesetVersion: rulesetVersion}
 	if err := catalog.ValidateMetadata(catalog.GameMetadata(game)); err != nil {
 		return RegisteredGame{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
 	}
-	if !slicesContain(descriptor.BuildConstraints.SupportedRulesets, rulesetVersion) {
-		return RegisteredGame{}, fmt.Errorf("%w: service: admitted game descriptor does not support ruleset %q", ErrBadRequest, rulesetVersion)
-	}
 	var playerCount, maxActiveBotsPerOwner int
+	foundRuleset := false
 	for _, ruleset := range bundle.Manifest.Rulesets {
 		if ruleset.RulesetVersion == rulesetVersion {
 			playerCount = ruleset.PlayerCount
 			maxActiveBotsPerOwner = ruleset.MaxActiveBotsPerOwner
+			foundRuleset = true
 			break
 		}
+	}
+	if !foundRuleset {
+		return RegisteredGame{}, fmt.Errorf("%w: service: selected ruleset %q is not declared by artifact manifest", ErrBadRequest, rulesetVersion)
+	}
+	if !slicesContain(descriptor.BuildConstraints.SupportedRulesets, rulesetVersion) {
+		return RegisteredGame{}, fmt.Errorf("%w: service: admitted game descriptor does not support ruleset %q", ErrBadRequest, rulesetVersion)
 	}
 	if playerCount < 1 || maxActiveBotsPerOwner < 1 {
 		return RegisteredGame{}, fmt.Errorf("%w: service: selected ruleset is missing player or bot limits", ErrBadRequest)

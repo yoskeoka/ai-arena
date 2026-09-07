@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/yoskeoka/ai-arena/artifactbundle"
@@ -84,7 +85,15 @@ func TestGeneralSubmissionServiceRegistersAdmittedArtifactWithoutBuiltInGame(t *
 	}
 	service.WithBundleStore(bundles)
 
-	registered, err := service.RegisterGame(ctx, GameRegistrationRequest{ArtifactID: bundle.Digest, RulesetVersion: "standard"})
+	registered, err := service.RegisterGame(ctx, GameRegistrationRequest{
+		ArtifactID:     bundle.Digest,
+		RulesetVersion: " standard ",
+		Game: contract.GameMetadata{
+			GameID:         " admitted-game ",
+			GameVersion:    " 1.2.3 ",
+			RulesetVersion: " standard ",
+		},
+	})
 	if err != nil {
 		t.Fatalf("RegisterGame() error = %v", err)
 	}
@@ -95,13 +104,18 @@ func TestGeneralSubmissionServiceRegistersAdmittedArtifactWithoutBuiltInGame(t *
 		t.Fatalf("registered limits = %d/%d, want 2/3", registered.PlayerCount, registered.MaxActiveBotsPerOwner)
 	}
 
-	for _, req := range []GameRegistrationRequest{
-		{ArtifactID: "sha256:missing", RulesetVersion: "standard"},
-		{ArtifactID: bundle.Digest, RulesetVersion: "missing"},
-		{ArtifactID: bundle.Digest, Game: contract.GameMetadata{GameID: "different-game", RulesetVersion: "standard"}},
+	for _, tc := range []struct {
+		req     GameRegistrationRequest
+		message string
+	}{
+		{req: GameRegistrationRequest{ArtifactID: "sha256:missing", RulesetVersion: "standard"}},
+		{req: GameRegistrationRequest{ArtifactID: bundle.Digest, RulesetVersion: "missing"}, message: "is not declared by artifact manifest"},
+		{req: GameRegistrationRequest{ArtifactID: bundle.Digest, Game: contract.GameMetadata{GameID: "different-game", RulesetVersion: "standard"}}},
 	} {
-		if _, err := service.RegisterGame(ctx, req); err == nil {
-			t.Fatalf("RegisterGame(%+v) returned nil error", req)
+		if _, err := service.RegisterGame(ctx, tc.req); err == nil {
+			t.Fatalf("RegisterGame(%+v) returned nil error", tc.req)
+		} else if tc.message != "" && !strings.Contains(err.Error(), tc.message) {
+			t.Fatalf("RegisterGame(%+v) error = %q, want message containing %q", tc.req, err, tc.message)
 		}
 	}
 	registeredGames, err := service.ListGames(ctx)
