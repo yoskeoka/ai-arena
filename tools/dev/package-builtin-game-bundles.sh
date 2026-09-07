@@ -24,7 +24,6 @@ pack_game() {
   "artifact_kind": "game",
   "game_id": "$game_id",
   "game_version": "$version",
-  "game_master_protocol_version": "v1",
   "rulesets": [{"ruleset_version": "$ruleset", "player_count": 2, "max_active_bots_per_owner": 1}],
   "runtime": {"kind": "wasm-wasi", "module": "module.wasm", "args": $args}
 }

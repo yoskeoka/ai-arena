@@ -33,6 +33,12 @@ fi
 
 cd "$repo_root"
 
+if [ -n "${OPERATOR_UI_TEST_SCENARIO:-}" ]; then
+  game_bundle_dir="${OPERATOR_UI_GAME_BUNDLE_DIR:-$repo_root/.local/operator-ui-game-bundles}"
+  "$repo_root/tools/dev/package-builtin-game-bundles.sh" "$game_bundle_dir"
+  export OPERATOR_UI_GAME_BUNDLE="${OPERATOR_UI_GAME_BUNDLE:-$game_bundle_dir/echo-count.arena-bundle.zip}"
+fi
+
 echo "operator-ui backend mode: $mode"
 echo "artifact dir: $artifact_dir"
 

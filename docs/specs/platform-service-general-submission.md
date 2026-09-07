@@ -26,8 +26,10 @@ wire contract の正本は `typespec/` とする。
 
 ## Validation and Lifecycle
 
-game form は manifest の technical field や arbitrary artifact ref を持たず、uploaded game
-artifact の activate だけを送る。AI form は scope、bot name、uploaded AI artifact、および new
+game form は ZIP を upload して admission 成功 response を受け、その response の admitted artifact と
+manifest 由来の ruleset のうち operator が選択した一つだけで activate する。client は game ID、game
+version、artifact digest、legacy registration ID を手入力または改変して activation してはならない。複数
+ruleset を持つ bundle では、選択肢は admission response が返す候補に限定する。AI form は scope、bot name、uploaded AI artifact、および new
 bot / existing bot revision の choice だけを送る。
 
 既存の metadata-only game registration request は migration-period の compatibility input として

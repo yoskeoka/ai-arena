@@ -82,7 +82,12 @@ minimal operator UI は nav 上で少なくとも次の page/surface を持つ�
 - invites page:
   role-select invite issuance form と one-shot result view
 - games page:
-  registered game list と create form
+  registered game list、game bundle ZIP の file chooser、admission status/error、manifest 由来の read-only
+  game ID / game version / artifact digest、supported rulesets selector、activation action。activation は
+  admission 成功後だけ可能であり、成功時は form state を reset して scope list を refresh する。upload または
+  activation failure は既存 list を壊さず form-local error として表示する。admission 後に activation
+  されない artifact の cleanup はこの surface の範囲外であり、`docs/issues/0038-unactivated-game-bundle-retention.md`
+  を参照する
 - submissions page:
   admitted AI list と create form
 - requests page:
@@ -226,6 +231,8 @@ real local inspection/capture lane と dedicated CI browser lane では、preset
 games page、submissions page、requests page は、operator-facing write route を使う minimal form surface を持たなければならない。
 
 - successful create 後は、対応 list を即時 refresh してよい
+- games page は file selection -> bundle admission -> manifest-derived review and ruleset selection -> activation
+  の順に進む。game ID、game version、artifact digest、registration ID の manual field は新規 flow に提供してはならない
 - requests page の item は `latest_run_id` を run detail deep-link として表示してよい
 - rankings page は completed official run の scope または operator-selected scope から `GET /api/v1/rankings` を呼び、stored snapshot を read-only 表示してよい
 
