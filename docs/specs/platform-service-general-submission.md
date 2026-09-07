@@ -31,9 +31,10 @@ manifest 由来の ruleset のうち operator が選択した一つだけで act
 version、artifact digest、legacy registration ID を手入力または改変して activation してはならない。複数
 ruleset を持つ bundle では、選択肢は admission response が返す候補に限定する。AI form は scope、bot name、
 new bot / existing bot revision の choice と AI bundle ZIP を受け取る。client は選択した scope と ZIP を
-admission へ渡し、成功 response の admitted AI artifact identity だけで bot を create/revise する。client が
-artifact digest、runtime/AI identity、または artifact reference を手入力・改変して bot revision を作成しては
-ならない。AI admission の失敗時は bot/revision を作成してはならない。
+admission へ渡し、現在選択中の scope と file に対応する最新の成功 response の admitted AI artifact identity
+だけで bot を create/revise する。client が artifact digest、AI submission ID、runtime/AI identity、または
+artifact reference を手入力・改変して bot revision を作成してはならない。file/scope の変更または AI admission
+の失敗時は prior admission を無効化し、bot/revision を作成してはならない。
 
 既存の metadata-only game registration request は migration-period の compatibility input として
 受け付けてよいが、新規 operator operation の正本ではない。この input から作る legacy scope は

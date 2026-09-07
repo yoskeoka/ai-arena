@@ -18,6 +18,12 @@ test("operator route alias serves the same operator surface", async ({ page }) =
   await page.getByTestId("operator-nav-invites").click();
   await expect(page.getByTestId("operator-form-invites")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Issue Signup Invite" })).toBeVisible();
+
+  await page.getByTestId("operator-nav-submissions").click();
+  await expect(page.getByTestId("operator-form-submissions")).toBeVisible();
+  await expect(page.getByLabel("AI bundle ZIP")).toBeVisible();
+  await expect(page.getByLabel("Uploaded AI artifact ID")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Create AI submission" })).toHaveCount(0);
 });
 
 test("local operator UI browser lane covers queue, active, completed detail, and artifact access", async ({ page, request }) => {

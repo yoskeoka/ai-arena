@@ -11,19 +11,16 @@ type SubmissionsPageProps = {
 export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
   const client = useMemo(() => new OperatorApiClient(normalizeBaseUrl(baseUrl)), [baseUrl]);
   const [items, setItems] = useState<AiBot[]>([]);
-  const [legacyItems, setLegacyItems] = useState<AiSubmission[]>([]);
   const [listState, setListState] = useState<LoadState>("loading");
   const [listError, setListError] = useState<string>();
+  const [uploadState, setUploadState] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [writeState, setWriteState] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [writeError, setWriteError] = useState<string>();
   const [scopeID, setScopeID] = useState("");
   const [botID, setBotID] = useState("");
   const [botName, setBotName] = useState("");
-  const [artifactID, setArtifactID] = useState("");
-  const [legacySubmissionID, setLegacySubmissionID] = useState("");
-  const [legacyGameRegistrationID, setLegacyGameRegistrationID] = useState("");
-  const [legacyArtifactRef, setLegacyArtifactRef] = useState("");
-  const [legacyDisplayName, setLegacyDisplayName] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File>();
+  const [admission, setAdmission] = useState<AiSubmission>();
 
   const load = async () => {
     setListState((current) => (current === "ready" ? current : "loading"));
@@ -47,21 +44,45 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
     void load();
   }, [client, scopeID]);
 
-  const loadLegacy = async () => {
+  const invalidateAdmission = () => {
+    setAdmission(undefined);
+    setUploadState("idle");
+    setWriteState("idle");
+    setWriteError(undefined);
+  };
+
+  const handleUpload = async () => {
+    invalidateAdmission();
+    if (!scopeID.trim()) {
+      setUploadState("error");
+      setWriteError("Choose a competition scope before uploading an AI bundle.");
+      return;
+    }
+    if (!selectedFile) {
+      setUploadState("error");
+      setWriteError("Choose an AI bundle ZIP before uploading.");
+      return;
+    }
+    setUploadState("submitting");
+    setWriteError(undefined);
     try {
-      setLegacyItems(await client.listAiSubmissions());
-    } catch {
-      // The durable bot flow remains available when a pre-migration service has no legacy endpoint.
-      setLegacyItems([]);
+      const response = await client.uploadAIBundle(selectedFile, scopeID.trim(), botName);
+      if (!response.artifactId) {
+        throw new Error("AI bundle admission did not return an artifact identity.");
+      }
+      setAdmission(response);
+      setUploadState("success");
+    } catch (error) {
+      setUploadState("error");
+      setWriteError(messageOf(error));
     }
   };
 
-  useEffect(() => {
-    void loadLegacy();
-  }, [client]);
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!admission?.artifactId) {
+      return;
+    }
     setWriteState("submitting");
     setWriteError(undefined);
     try {
@@ -69,29 +90,15 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
         scopeId: scopeID.trim(),
         botId: botID.trim() || undefined,
         botName: botName.trim() || undefined,
-        artifactId: artifactID.trim(),
+        artifactId: admission.artifactId,
       });
       setWriteState("success");
+      setBotID("");
+      setBotName("");
+      setSelectedFile(undefined);
+      setAdmission(undefined);
+      setUploadState("idle");
       await load();
-    } catch (error) {
-      setWriteState("error");
-      setWriteError(messageOf(error));
-    }
-  };
-
-  const handleLegacySubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setWriteState("submitting");
-    setWriteError(undefined);
-    try {
-      await client.createAiSubmission({
-        aiSubmissionId: legacySubmissionID.trim() || undefined,
-        gameRegistrationId: legacyGameRegistrationID.trim(),
-        artifactRef: legacyArtifactRef.trim(),
-        displayName: legacyDisplayName.trim() || undefined,
-      });
-      setWriteState("success");
-      await loadLegacy();
     } catch (error) {
       setWriteState("error");
       setWriteError(messageOf(error));
@@ -116,36 +123,47 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
       <Panel
         title="Create or revise AI bot"
         subtitle="A revision keeps the selected bot and ranking identity."
-        status={writeState}
+        status={writeState === "submitting" || uploadState === "submitting" ? "submitting" : writeState === "error" ? "error" : uploadState}
         error={writeError}
         hint={hintFor(writeError)}
         testId="operator-form-submissions"
       >
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <TextField label="Competition scope" value={scopeID} onChange={setScopeID} placeholder="reversi-v1-regular" required />
+          <TextField label="Competition scope" value={scopeID} onChange={(value) => { setScopeID(value); invalidateAdmission(); }} placeholder="reversi-v1-regular" required />
           <TextField
             label="Existing bot ID"
             value={botID}
-            onChange={setBotID}
+            onChange={(value) => { setBotID(value); invalidateAdmission(); }}
             placeholder="leave empty for a new bot"
           />
-          <TextField label="Bot name" value={botName} onChange={setBotName} placeholder="required for a new bot" />
-          <TextField label="Uploaded AI artifact ID" value={artifactID} onChange={setArtifactID} placeholder="SHA-256 digest from bundle upload" required />
-          <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit">
-            Save bot revision
+          <TextField label="Bot name" value={botName} onChange={(value) => { setBotName(value); invalidateAdmission(); }} placeholder="required for a new bot" />
+          <label className="flex flex-col gap-2 text-sm">
+            <span className="font-medium text-black/70">AI bundle ZIP</span>
+            <input
+              aria-label="AI bundle ZIP"
+              className="rounded-2xl border border-black/15 bg-white px-4 py-3 shadow-sm"
+              type="file"
+              accept=".zip,application/zip"
+              onChange={(event) => {
+                setSelectedFile(event.target.files?.[0]);
+                invalidateAdmission();
+                setWriteState("idle");
+                setWriteError(undefined);
+              }}
+            />
+          </label>
+          <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" type="button" onClick={() => void handleUpload()} disabled={!selectedFile || uploadState === "submitting" || writeState === "submitting"}>
+            {uploadState === "submitting" ? "Uploading AI bundle…" : "Upload AI bundle"}
           </button>
-        </form>
-        <form className="mt-8 border-t border-black/10 pt-6" onSubmit={handleLegacySubmit}>
-          <p className="mb-4 text-sm text-black/65">Legacy AI submissions remain available only for existing match-request migrations.</p>
-          <div className="space-y-4">
-            <TextField label="AI Submission ID" value={legacySubmissionID} onChange={setLegacySubmissionID} placeholder="optional stable id" />
-            <TextField label="Game Registration ID" value={legacyGameRegistrationID} onChange={setLegacyGameRegistrationID} placeholder="existing competition scope" required />
-            <TextField label="Artifact Ref" value={legacyArtifactRef} onChange={setLegacyArtifactRef} placeholder="/abs/path/to/ai" required />
-            <TextField label="Display Name" value={legacyDisplayName} onChange={setLegacyDisplayName} placeholder="Echo Bot 01" />
-            <button className="rounded-full border border-black/20 px-5 py-3 text-sm font-semibold" type="submit">
-              Create AI submission
-            </button>
-          </div>
+          {admission?.artifactId ? (
+            <div className="space-y-2 rounded-2xl border border-black/10 bg-white p-4" data-testid="ai-bundle-admission">
+              <p><strong>Artifact digest:</strong> <span data-testid="admitted-ai-artifact-id">{admission.artifactId}</span></p>
+              <p><strong>AI:</strong> <span>{admission.displayName}</span></p>
+              <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" type="submit" disabled={writeState === "submitting"}>
+                {writeState === "submitting" ? "Saving bot revision…" : "Save bot revision"}
+              </button>
+            </div>
+          ) : null}
         </form>
       </Panel>
 
@@ -189,19 +207,6 @@ export function SubmissionsPage({ baseUrl }: SubmissionsPageProps) {
             ))}
           </div>
         )}
-        {legacyItems.length > 0 ? (
-          <div className="mt-6 border-t border-black/10 pt-5">
-            <p className="text-sm font-semibold">Legacy AI submissions</p>
-            <div className="mt-3 space-y-3">
-              {legacyItems.map((item) => (
-                <article key={item.aiSubmissionId} className="rounded-3xl border border-black/10 bg-paper p-4" data-testid={`submission-row-${item.aiSubmissionId}`}>
-                  <p className="font-semibold">{item.displayName}</p>
-                  <p className="mt-1 text-xs text-black/60">{item.aiSubmissionId}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </Panel>
     </section>
   );

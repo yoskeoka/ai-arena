@@ -134,6 +134,29 @@ export class OperatorApiClient {
     }
   }
 
+  async uploadAIBundle(bundle: File, gameRegistrationId: string, displayName?: string, signal?: AbortSignal): Promise<AiSubmission> {
+    const form = new FormData();
+    form.append("bundle", bundle, bundle.name);
+    form.append("game_registration_id", gameRegistrationId);
+    if (displayName?.trim()) {
+      form.append("display_name", displayName.trim());
+    }
+    try {
+      const response = await fetch(this.url("/api/v1/ai-bundles"), {
+        method: "POST",
+        body: form,
+        credentials: "include",
+        signal,
+      });
+      if (response.status !== 201) {
+        throw new Error(await fetchResponseErrorMessage(response));
+      }
+      return jsonAiSubmissionToApplicationTransform(await response.json());
+    } catch (error) {
+      throw normalizeOperatorError(error);
+    }
+  }
+
   async listAiSubmissions(signal?: AbortSignal): Promise<AiSubmission[]> {
     const response = await this.get("/api/v1/ai-submissions", signal);
     return jsonAiSubmissionListResponseToApplicationTransform(response.body)!.items;

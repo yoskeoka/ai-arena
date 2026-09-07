@@ -31,7 +31,27 @@ EOF
   (cd "$bundle_dir" && zip -q -X "$output_dir/$name.arena-bundle.zip" manifest.json module.wasm)
 }
 
+pack_ai() {
+  local name="$1" ai_id="$2"
+  local bundle_dir="$work_dir/$name"
+  mkdir -p "$bundle_dir"
+  (cd "$repo_root" && GOOS=wasip1 GOARCH=wasm go build -o "$bundle_dir/module.wasm" ./testdata/ai/echo/echo-ai)
+  cat >"$bundle_dir/manifest.json" <<EOF
+{
+  "schema_version": "arena-bundle/v1",
+  "artifact_kind": "ai",
+  "ai_id": "$ai_id",
+  "game_id": "echo-count",
+  "game_version": "2.0.0",
+  "runtime": {"kind": "wasm-wasi", "module": "module.wasm"}
+}
+EOF
+  (cd "$bundle_dir" && zip -q -X "$output_dir/$name.arena-bundle.zip" manifest.json module.wasm)
+}
+
 pack_game "echo-count" "./cmd/echo-count-gamemaster" "echo-count" "2.0.0" "phase2-simultaneous-3turn" '["--game-version", "2.0.0", "--ruleset", "phase2-simultaneous-3turn"]'
 pack_game "janken" "./cmd/janken-gamemaster" "janken" "2.1.0" "regular" '[]'
+pack_ai "echo-ai" "echo-ai"
+pack_ai "echo-ai-revision" "echo-ai-revision"
 
 echo "wrote game bundles to $output_dir"
