@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { GameRegistration, OperatorApiClient } from "../../lib/operatorApiClient";
+import { GameBundleAdmission, GameRegistration, OperatorApiClient } from "../../lib/operatorApiClient";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
@@ -13,13 +13,12 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
   const [items, setItems] = useState<GameRegistration[]>([]);
   const [listState, setListState] = useState<LoadState>("loading");
   const [listError, setListError] = useState<string>();
-  const [writeState, setWriteState] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const [uploadState, setUploadState] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const [activationState, setActivationState] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [writeError, setWriteError] = useState<string>();
+  const [selectedFile, setSelectedFile] = useState<File>();
+  const [admission, setAdmission] = useState<GameBundleAdmission>();
   const [rulesetVersion, setRulesetVersion] = useState("");
-  const [artifactID, setArtifactID] = useState("");
-  const [registrationID, setRegistrationID] = useState("");
-  const [gameID, setGameID] = useState("");
-  const [gameVersion, setGameVersion] = useState("");
 
   const load = async () => {
     setListState((current) => (current === "ready" ? current : "loading"));
@@ -38,21 +37,46 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
     void load();
   }, [client]);
 
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setUploadState("error");
+      setWriteError("Choose a game bundle ZIP before uploading.");
+      return;
+    }
+    setUploadState("submitting");
+    setWriteError(undefined);
+    setAdmission(undefined);
+    setRulesetVersion("");
+    try {
+      const response = await client.uploadGameBundle(selectedFile);
+      setAdmission(response);
+      setRulesetVersion(response.supportedRulesets[0] ?? "");
+      setUploadState("success");
+    } catch (error) {
+      setUploadState("error");
+      setWriteError(messageOf(error));
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setWriteState("submitting");
+    if (!admission || rulesetVersion === "") {
+      return;
+    }
+    setActivationState("submitting");
     setWriteError(undefined);
     try {
       await client.createGameRegistration({
-        registrationId: registrationID.trim() || undefined,
-        game: gameID.trim() ? { gameId: gameID.trim(), gameVersion: gameVersion.trim(), rulesetVersion: rulesetVersion.trim() } : undefined,
-        artifactId: artifactID.trim() || undefined,
-        rulesetVersion: rulesetVersion.trim() || undefined,
+        artifactId: admission.artifactId,
+        rulesetVersion,
       });
-      setWriteState("success");
+      setActivationState("success");
+      setSelectedFile(undefined);
+      setAdmission(undefined);
+      setRulesetVersion("");
       await load();
     } catch (error) {
-      setWriteState("error");
+      setActivationState("error");
       setWriteError(messageOf(error));
     }
   };
@@ -62,26 +86,48 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
       <Panel
         title="Activate uploaded game"
         subtitle="Select an admitted game bundle and one ruleset for a stable competition scope."
-        status={writeState}
+        status={activationState === "submitting" || uploadState === "submitting" ? "submitting" : activationState === "error" ? "error" : uploadState}
         error={writeError}
         hint={hintFor(writeError)}
         testId="operator-form-games"
       >
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <TextField label="Registration ID" value={registrationID} onChange={setRegistrationID} placeholder="legacy compatibility id" />
-          <TextField label="Game ID" value={gameID} onChange={setGameID} placeholder="derived from uploaded artifact when omitted" />
-          <TextField label="Game Version" value={gameVersion} onChange={setGameVersion} placeholder="derived from uploaded artifact when omitted" />
-          <TextField
-            label="Ruleset Version"
-            value={rulesetVersion}
-            onChange={setRulesetVersion}
-            placeholder="regular"
-            required
-          />
-          <TextField label="Uploaded game artifact ID" value={artifactID} onChange={setArtifactID} placeholder="SHA-256 digest from bundle upload" />
-          <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90" type="submit">
-            Create game registration
+          <label className="flex flex-col gap-2 text-sm">
+            <span className="font-medium text-black/70">Game bundle ZIP</span>
+            <input
+              aria-label="Game bundle ZIP"
+              className="rounded-2xl border border-black/15 bg-white px-4 py-3 shadow-sm"
+              type="file"
+              accept=".zip,application/zip"
+              onChange={(event) => {
+                setSelectedFile(event.target.files?.[0]);
+                setAdmission(undefined);
+                setRulesetVersion("");
+                setUploadState("idle");
+                setActivationState("idle");
+                setWriteError(undefined);
+              }}
+            />
+          </label>
+          <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" type="button" onClick={() => void handleUpload()} disabled={!selectedFile || uploadState === "submitting" || activationState === "submitting"}>
+            {uploadState === "submitting" ? "Uploading game bundle…" : "Upload game bundle"}
           </button>
+          {admission ? (
+            <div className="space-y-3 rounded-2xl border border-black/10 bg-white p-4" data-testid="game-bundle-admission">
+              <p><strong>Game ID:</strong> <span data-testid="admitted-game-id">{admission.gameId}</span></p>
+              <p><strong>Game Version:</strong> <span data-testid="admitted-game-version">{admission.gameVersion}</span></p>
+              <p><strong>Artifact digest:</strong> <span data-testid="admitted-artifact-id">{admission.artifactId}</span></p>
+              <label className="flex flex-col gap-2 text-sm">
+                <span className="font-medium text-black/70">Ruleset Version</span>
+                <select value={rulesetVersion} onChange={(event) => setRulesetVersion(event.target.value)} required>
+                  {admission.supportedRulesets.map((ruleset) => <option key={ruleset} value={ruleset}>{ruleset}</option>)}
+                </select>
+              </label>
+              <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" type="submit" disabled={activationState === "submitting" || rulesetVersion === ""}>
+                {activationState === "submitting" ? "Activating game…" : "Activate game"}
+              </button>
+            </div>
+          ) : null}
         </form>
       </Panel>
 
@@ -119,32 +165,5 @@ export function GamesPage({ baseUrl }: GamesPageProps) {
         )}
       </Panel>
     </section>
-  );
-}
-
-function TextField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  required,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  required?: boolean;
-}) {
-  return (
-    <label className="flex flex-col gap-2 text-sm">
-      <span className="font-medium text-black/70">{label}</span>
-      <input
-        className="rounded-2xl border border-black/15 bg-white px-4 py-3 shadow-sm outline-none transition focus:border-accent"
-        value={value ?? ""}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder ?? ""}
-        required={required === true}
-      />
-    </label>
   );
 }

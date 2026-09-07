@@ -6,6 +6,7 @@ import {
   jsonAiSubmissionToApplicationTransform,
   jsonBotRevisionRequestToTransportTransform,
   jsonBotRevisionResponseToApplicationTransform,
+  jsonGameBundleAdmissionToApplicationTransform,
   jsonAiBotToApplicationTransform,
   jsonAiBotListResponseToApplicationTransform,
   jsonGameRegistrationListResponseToApplicationTransform,
@@ -32,6 +33,7 @@ import type {
   AuthPrincipal,
   GameRegistration,
   GameRegistrationRequest,
+  GameBundleAdmission,
   MatchDetailResponse,
   MatchRequest,
   MatchRequestCreateRequest,
@@ -54,6 +56,7 @@ export type {
   AuthPrincipal,
   GameRegistration,
   GameRegistrationRequest,
+  GameBundleAdmission,
   MatchDetailResponse,
   MatchRequest,
   MatchRequestCreateRequest,
@@ -110,6 +113,25 @@ export class OperatorApiClient {
       signal,
     );
     return jsonGameRegistrationToApplicationTransform(response.body)!;
+  }
+
+  async uploadGameBundle(bundle: File, signal?: AbortSignal): Promise<GameBundleAdmission> {
+    const form = new FormData();
+    form.append("bundle", bundle, bundle.name);
+    try {
+      const response = await fetch(this.url("/api/v1/game-bundles"), {
+        method: "POST",
+        body: form,
+        credentials: "include",
+        signal,
+      });
+      if (response.status !== 201) {
+        throw new Error(await fetchResponseErrorMessage(response));
+      }
+      return jsonGameBundleAdmissionToApplicationTransform(await response.json());
+    } catch (error) {
+      throw normalizeOperatorError(error);
+    }
   }
 
   async listAiSubmissions(signal?: AbortSignal): Promise<AiSubmission[]> {
@@ -317,4 +339,23 @@ function responseErrorMessage(response: PathUncheckedResponse) {
     }
   }
   return `request failed with status ${response.status}`;
+}
+
+async function fetchResponseErrorMessage(response: Response) {
+  const body = await response.text();
+  if (body.trim() === "") {
+    return `request failed with status ${response.status}`;
+  }
+  try {
+    const parsed = JSON.parse(body) as { error?: string | { message?: string } };
+    if (typeof parsed.error === "string" && parsed.error.trim() !== "") {
+      return parsed.error;
+    }
+    if (typeof parsed.error === "object" && typeof parsed.error?.message === "string" && parsed.error.message.trim() !== "") {
+      return parsed.error.message;
+    }
+  } catch {
+    // Preserve a plain-text server error below.
+  }
+  return body;
 }

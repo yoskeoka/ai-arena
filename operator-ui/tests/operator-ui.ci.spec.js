@@ -22,7 +22,12 @@ const frontendHost = process.env.OPERATOR_UI_FRONTEND_HOST ?? "127.0.0.1";
 const frontendPort = process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173";
 const assertAnonymousSessionRedirect = process.env.OPERATOR_UI_ASSERT_ANONYMOUS_SESSION_REDIRECT === "1";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
-const artifactRef = process.env.OPERATOR_UI_TEST_ARTIFACT_REF ?? path.resolve(testDir, "../../testdata/ai/echo/echo-ai-2turn");
+const artifactRef = process.env.OPERATOR_UI_TEST_ARTIFACT_REF ?? path.resolve(testDir, "../../testdata/ai/echo/echo-ai");
+const gameBundlePath =
+  process.env.OPERATOR_UI_GAME_BUNDLE ??
+  (process.env.OPERATOR_UI_TEST_SCENARIO === "remote"
+    ? undefined
+    : path.resolve(testDir, "../../.local/operator-ui-game-bundles/echo-count.arena-bundle.zip"));
 
 test.setTimeout(120_000);
 
@@ -86,6 +91,9 @@ test("service-backed operator UI browser lane covers registration, request execu
   page,
   request,
 }) => {
+  if (!gameBundlePath) {
+    throw new Error("OPERATOR_UI_GAME_BUNDLE is required for remote game bundle upload verification");
+  }
   if (captureArtifacts) {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
   }
@@ -139,19 +147,29 @@ test("service-backed operator UI browser lane covers registration, request execu
   }
 
   const suffix = Date.now().toString();
-  const registrationID = `echo-count-ui-${suffix}`;
+  const registrationID = "echo-count-v2-phase2-simultaneous-3turn";
   const aiSubmissionID1 = `ai-ui-${suffix}-01`;
   const aiSubmissionID2 = `ai-ui-${suffix}-02`;
   const requestOutputDir = path.join(os.tmpdir(), `operator-ui-request-${suffix}`);
 
   await page.getByTestId("operator-nav-games").click();
   await expect(page.getByTestId("operator-form-games")).toBeVisible();
-  await page.getByLabel("Registration ID").fill(registrationID);
-  await page.getByLabel("Game ID").fill("echo-count");
-  await page.getByLabel("Game Version").fill("2.0.0");
-  await page.getByLabel("Ruleset Version").fill("phase2-simultaneous-2turn");
-  await page.getByRole("button", { name: "Create game registration" }).click();
+  await page.getByLabel("Game bundle ZIP").setInputFiles(path.resolve(testDir, "../package.json"));
+  await page.getByRole("button", { name: "Upload game bundle" }).click();
+  await expect(page.getByTestId("game-bundle-admission")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Activate game" })).toHaveCount(0);
+  await expect(page.getByTestId("operator-form-games")).toContainText(/invalid|zip|bundle/i);
+
+  await page.getByLabel("Game bundle ZIP").setInputFiles(gameBundlePath);
+  await page.getByRole("button", { name: "Upload game bundle" }).click();
+  await expect(page.getByTestId("game-bundle-admission")).toBeVisible();
+  await expect(page.getByTestId("admitted-game-id")).toHaveText("echo-count");
+  await expect(page.getByTestId("admitted-game-version")).toHaveText("2.0.0");
+  await expect(page.getByTestId("admitted-artifact-id")).toHaveText(/[0-9a-f]{64}/);
+  await page.getByLabel("Ruleset Version").selectOption("phase2-simultaneous-3turn");
+  await page.getByRole("button", { name: "Activate game" }).click();
   await expect(page.getByTestId(`game-row-${registrationID}`)).toBeVisible();
+  await expect(page.getByTestId(`game-row-${registrationID}`)).toContainText(/[0-9a-f]{64}/);
 
   await page.getByTestId("operator-nav-submissions").click();
   await expect(page.getByTestId("operator-form-submissions")).toBeVisible();
