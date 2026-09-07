@@ -90,7 +90,8 @@ minimal operator UI は nav 上で少なくとも次の page/surface を持つ�
   を参照する
 - submissions page:
   scope、bot name、new bot / existing bot revision の choice、AI bundle ZIP の file chooser、admission
-  status/error、admitted artifact digest の read-only confirmation、bot create/revise action、owner の bot list。
+  status/error、admitted artifact digest の read-only confirmation、bot create/revise action、sign-in 済み principal
+  の bot list。
   bundle upload は selected scope とともに行い、admission 成功後だけ create/revise を可能にする。create/revise
   成功時は form state を reset して bot list を refresh する。file の再選択または upload failure は prior admission
   を invalidate し、既存 list を壊さず form-local error として表示する。legacy AI submission の create/list
