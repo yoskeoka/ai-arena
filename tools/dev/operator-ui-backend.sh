@@ -33,19 +33,21 @@ fi
 
 cd "$repo_root"
 
-if [ -n "${OPERATOR_UI_TEST_SCENARIO:-}" ]; then
-  game_bundle_dir="${OPERATOR_UI_GAME_BUNDLE_DIR:-$repo_root/.local/operator-ui-game-bundles}"
-  "$repo_root/tools/dev/package-builtin-game-bundles.sh" "$game_bundle_dir"
-  export OPERATOR_UI_GAME_BUNDLE="${OPERATOR_UI_GAME_BUNDLE:-$game_bundle_dir/echo-count.arena-bundle.zip}"
-fi
-
-echo "operator-ui backend mode: $mode"
-echo "artifact dir: $artifact_dir"
-
 export GOPATH="${GOPATH:-/tmp/ai-arena-operator-ui-go}"
 export GOMODCACHE="${GOMODCACHE:-$GOPATH/pkg/mod}"
 export GOCACHE="${GOCACHE:-/tmp/ai-arena-operator-ui-go-build}"
 mkdir -p "$GOPATH" "$GOMODCACHE" "$GOCACHE"
+
+if [ -n "${OPERATOR_UI_TEST_SCENARIO:-}" ]; then
+  game_bundle_dir="${OPERATOR_UI_GAME_BUNDLE_DIR:-$repo_root/.local/operator-ui-game-bundles}"
+  "$repo_root/tools/dev/package-builtin-game-bundles.sh" "$game_bundle_dir"
+  export OPERATOR_UI_GAME_BUNDLE="${OPERATOR_UI_GAME_BUNDLE:-$game_bundle_dir/echo-count.arena-bundle.zip}"
+  export OPERATOR_UI_AI_BUNDLE="${OPERATOR_UI_AI_BUNDLE:-$game_bundle_dir/echo-ai.arena-bundle.zip}"
+  export OPERATOR_UI_AI_REVISION_BUNDLE="${OPERATOR_UI_AI_REVISION_BUNDLE:-$game_bundle_dir/echo-ai-revision.arena-bundle.zip}"
+fi
+
+echo "operator-ui backend mode: $mode"
+echo "artifact dir: $artifact_dir"
 
 case "$mode" in
   file-backed)

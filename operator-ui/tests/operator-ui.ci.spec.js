@@ -28,6 +28,16 @@ const gameBundlePath =
   (process.env.OPERATOR_UI_TEST_SCENARIO === "remote"
     ? undefined
     : path.resolve(testDir, "../../.local/operator-ui-game-bundles/echo-count.arena-bundle.zip"));
+const aiBundlePath =
+  process.env.OPERATOR_UI_AI_BUNDLE ??
+  (process.env.OPERATOR_UI_TEST_SCENARIO === "remote"
+    ? undefined
+    : path.resolve(testDir, "../../.local/operator-ui-game-bundles/echo-ai.arena-bundle.zip"));
+const aiRevisionBundlePath =
+  process.env.OPERATOR_UI_AI_REVISION_BUNDLE ??
+  (process.env.OPERATOR_UI_TEST_SCENARIO === "remote"
+    ? undefined
+    : path.resolve(testDir, "../../.local/operator-ui-game-bundles/echo-ai-revision.arena-bundle.zip"));
 
 test.setTimeout(120_000);
 
@@ -93,6 +103,9 @@ test("service-backed operator UI browser lane covers registration, request execu
 }) => {
   if (!gameBundlePath) {
     throw new Error("OPERATOR_UI_GAME_BUNDLE is required for remote game bundle upload verification");
+  }
+  if (!aiBundlePath || !aiRevisionBundlePath) {
+    throw new Error("OPERATOR_UI_AI_BUNDLE and OPERATOR_UI_AI_REVISION_BUNDLE are required for remote AI bundle upload verification");
   }
   if (captureArtifacts) {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
@@ -162,7 +175,7 @@ test("service-backed operator UI browser lane covers registration, request execu
 
   await page.getByLabel("Game bundle ZIP").setInputFiles(gameBundlePath);
   await page.getByRole("button", { name: "Upload game bundle" }).click();
-  await expect(page.getByTestId("game-bundle-admission")).toBeVisible();
+  await expect(page.getByTestId("game-bundle-admission")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("admitted-game-id")).toHaveText("echo-count");
   await expect(page.getByTestId("admitted-game-version")).toHaveText("2.0.0");
   await expect(page.getByTestId("admitted-artifact-id")).toHaveText(/[0-9a-f]{64}/);
@@ -173,20 +186,54 @@ test("service-backed operator UI browser lane covers registration, request execu
 
   await page.getByTestId("operator-nav-submissions").click();
   await expect(page.getByTestId("operator-form-submissions")).toBeVisible();
-  await createAISubmission(page, {
+  await expect(page.getByLabel("Uploaded AI artifact ID")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Create AI submission" })).toHaveCount(0);
+  await page.getByLabel("Competition scope").fill(registrationID);
+  await page.getByLabel("Bot name").fill("Echo UI Alpha");
+  await page.getByLabel("AI bundle ZIP").setInputFiles(path.resolve(testDir, "../package.json"));
+  await page.getByRole("button", { name: "Upload AI bundle" }).click();
+  await expect(page.getByTestId("ai-bundle-admission")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save bot revision" })).toHaveCount(0);
+  await expect(page.getByTestId("operator-form-submissions")).toContainText(/invalid|zip|bundle/i);
+
+  await page.getByLabel("AI bundle ZIP").setInputFiles(aiBundlePath);
+  await page.getByRole("button", { name: "Upload AI bundle" }).click();
+  await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
+  const firstArtifactID = await page.getByTestId("admitted-ai-artifact-id").textContent();
+  expect(firstArtifactID).toMatch(/[0-9a-f]{64}/);
+  await page.getByRole("button", { name: "Save bot revision" }).click();
+  const botRow = page.getByTestId("operator-panel-submissions").locator('[data-testid^="bot-row-"]').first();
+  await expect(botRow).toBeVisible();
+  const botID = (await botRow.getAttribute("data-testid")).replace("bot-row-", "");
+  const firstBotText = await botRow.textContent();
+
+  await page.getByLabel("Existing bot ID").fill(botID);
+  await page.getByLabel("AI bundle ZIP").setInputFiles(aiRevisionBundlePath);
+  await page.getByRole("button", { name: "Upload AI bundle" }).click();
+  await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("admitted-ai-artifact-id")).not.toHaveText(firstArtifactID);
+  await page.getByRole("button", { name: "Save bot revision" }).click();
+  await expect(page.getByTestId(`bot-row-${botID}`)).toBeVisible();
+  await expect(botRow).not.toHaveText(firstBotText);
+
+  await page.getByLabel("AI bundle ZIP").setInputFiles(path.resolve(testDir, "../package.json"));
+  await page.getByRole("button", { name: "Upload AI bundle" }).click();
+  await expect(page.getByTestId("ai-bundle-admission")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save bot revision" })).toHaveCount(0);
+  await expect(page.getByTestId(`bot-row-${botID}`)).toBeVisible();
+
+  await createLegacyAISubmission(api, {
     submissionID: aiSubmissionID1,
     registrationID,
     artifactRef,
     displayName: "Echo UI Alpha",
   });
-  await expect(page.getByTestId(`submission-row-${aiSubmissionID1}`)).toBeVisible();
-  await createAISubmission(page, {
+  await createLegacyAISubmission(api, {
     submissionID: aiSubmissionID2,
     registrationID,
     artifactRef,
     displayName: "Echo UI Beta",
   });
-  await expect(page.getByTestId(`submission-row-${aiSubmissionID2}`)).toBeVisible();
 
   await page.getByTestId("operator-nav-requests").click();
   await expect(page.getByTestId("operator-form-requests")).toBeVisible();
@@ -245,14 +292,16 @@ test("service-backed operator UI browser lane covers registration, request execu
     await page.goto("/operator");
     await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
   }
-});
+}, 120_000);
 
-async function createAISubmission(page, { submissionID, registrationID, artifactRef, displayName }) {
-  await page.getByLabel("AI Submission ID").fill(submissionID);
-  await page.getByLabel("Game Registration ID").fill(registrationID);
-  await page.getByLabel("Artifact Ref").fill(artifactRef);
-  await page.getByLabel("Display Name").fill(displayName);
-  await page.getByRole("button", { name: "Create AI submission" }).click();
+async function createLegacyAISubmission(api, { submissionID, registrationID, artifactRef, displayName }) {
+  const response = await api.postJSON(`${backendBaseURL}/api/v1/ai-submissions`, {
+    ai_submission_id: submissionID,
+    game_registration_id: registrationID,
+    artifact_ref: artifactRef,
+    display_name: displayName,
+  });
+  expect(response.ok).toBeTruthy();
 }
 
 async function createLegacyMatchRequest(api, registrationID, outputDir, firstSubmissionID, secondSubmissionID) {
