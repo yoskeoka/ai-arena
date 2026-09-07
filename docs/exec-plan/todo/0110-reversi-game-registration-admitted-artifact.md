@@ -141,7 +141,7 @@ admission と整合性検証で決まり、built-in descriptor の hard-code へ
 - 同一 major に複数 release がある場合、通常の latest lookup を使わず、指定 artifact digest の release が選択される。
 - `make test`、`make lint`、`git diff --check` を実行する。TypeSpec / generated client は wire contract 無変更である
   ことを確認する。
-- staging で Reversi v0.1.0 の upload が HTTP `201`、registration が成功し、scope に `reversi@1.0.0 / standard` と
+- staging で Reversi release asset `v0.1.0` の upload が HTTP `201`、manifest の game version `1.0.0` に対する registration が成功し、scope に `reversi@1.0.0 / standard` と
   `sha256:98bd46609016dc763bcbfff747c6705c7f1608a86d164d77b38db208d0d1c0df` が表示される。
 
 ## Risks and Mitigations

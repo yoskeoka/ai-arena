@@ -27,7 +27,7 @@ service: bad request: registry: unsupported game "reversi"
 ## Suspected Cause
 
 arena-service は upload 時に `registry.NewWASIOverlay` から作った writable registry へ game descriptor を
-登録する。一方、general submission service は registry を `nil` で生成されるため `registry.Default()` を
+登録する。一方、general submission service は registry を `nil` で生成するため `registry.Default()` を
 使い、built-in の echo / janken descriptor だけを参照する。
 
 さらに artifact-backed registration でも、指定された digest の exact lookup ではなく
