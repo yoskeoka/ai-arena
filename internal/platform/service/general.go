@@ -184,24 +184,8 @@ func NewGeneralSubmissionService(baseDir string, reg *registry.Registry, games G
 
 // RegisterGame validates and stores one operator-facing registered game view.
 func (s *GeneralSubmissionService) RegisterGame(ctx context.Context, req GameRegistrationRequest) (RegisteredGame, error) {
-	if strings.TrimSpace(req.ArtifactID) != "" && strings.TrimSpace(req.Game.GameID) == "" {
-		if s.bundles == nil {
-			return RegisteredGame{}, fmt.Errorf("%w: service: game bundle upload is not configured", ErrBadRequest)
-		}
-		data, err := s.bundles.Read(ctx, strings.TrimSpace(req.ArtifactID))
-		if err != nil {
-			return RegisteredGame{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
-		}
-		bundle, err := artifactbundle.Read(data)
-		if err != nil {
-			return RegisteredGame{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
-		}
-		if bundle.Manifest.ArtifactKind != "game" {
-			return RegisteredGame{}, fmt.Errorf("%w: service: selected artifact is not a game bundle", ErrBadRequest)
-		}
-		req.Game.GameID = bundle.Manifest.GameID
-		req.Game.GameVersion = bundle.Manifest.GameVersion
-		req.Game.RulesetVersion = strings.TrimSpace(req.RulesetVersion)
+	if strings.TrimSpace(req.ArtifactID) != "" {
+		return s.registerArtifactBackedGame(ctx, req)
 	}
 	registrationID := strings.TrimSpace(req.RegistrationID)
 	if registrationID == "" {
@@ -211,35 +195,74 @@ func (s *GeneralSubmissionService) RegisterGame(ctx context.Context, req GameReg
 	if err != nil {
 		return RegisteredGame{}, err
 	}
-	if artifactID := strings.TrimSpace(req.ArtifactID); artifactID != "" {
-		if s.bundles == nil {
-			return RegisteredGame{}, fmt.Errorf("%w: service: game bundle upload is not configured", ErrBadRequest)
-		}
-		data, err := s.bundles.Read(ctx, artifactID)
-		if err != nil {
-			return RegisteredGame{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
-		}
-		bundle, err := artifactbundle.Read(data)
-		if err != nil {
-			return RegisteredGame{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
-		}
-		if bundle.Manifest.ArtifactKind != "game" || bundle.Manifest.GameID != req.Game.GameID || bundle.Manifest.GameVersion != req.Game.GameVersion {
-			return RegisteredGame{}, fmt.Errorf("%w: service: uploaded game bundle does not match requested release", ErrBadRequest)
-		}
-		found := false
-		for _, ruleset := range bundle.Manifest.Rulesets {
-			if ruleset.RulesetVersion == req.Game.RulesetVersion {
-				record.PlayerCount = ruleset.PlayerCount
-				record.MaxActiveBotsPerOwner = ruleset.MaxActiveBotsPerOwner
-				found = true
-				break
-			}
-		}
-		if !found || record.PlayerCount < 1 || record.MaxActiveBotsPerOwner < 1 {
-			return RegisteredGame{}, fmt.Errorf("%w: service: selected ruleset is missing player or bot limits", ErrBadRequest)
-		}
-		record.ArtifactID = artifactID
+	if err := s.games.Save(ctx, record); err != nil {
+		return RegisteredGame{}, wrapConflict(err)
 	}
+	return record, nil
+}
+
+func (s *GeneralSubmissionService) registerArtifactBackedGame(ctx context.Context, req GameRegistrationRequest) (RegisteredGame, error) {
+	if s.bundles == nil {
+		return RegisteredGame{}, fmt.Errorf("%w: service: game bundle upload is not configured", ErrBadRequest)
+	}
+	artifactID := strings.TrimSpace(req.ArtifactID)
+	data, err := s.bundles.Read(ctx, artifactID)
+	if err != nil {
+		return RegisteredGame{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
+	}
+	bundle, err := artifactbundle.Read(data)
+	if err != nil {
+		return RegisteredGame{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
+	}
+	if bundle.Digest != artifactID || bundle.Manifest.ArtifactKind != "game" {
+		return RegisteredGame{}, fmt.Errorf("%w: service: selected artifact is not a game bundle", ErrBadRequest)
+	}
+	descriptor, err := s.registry.LookupArtifact(ctx, artifactID)
+	if err != nil {
+		return RegisteredGame{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
+	}
+	if descriptor.ArtifactID != artifactID || descriptor.GameID != bundle.Manifest.GameID || descriptor.GameVersion != bundle.Manifest.GameVersion || descriptor.BuildMode != registry.BuildModeWASMWASI || descriptor.BuilderID != "artifact/"+artifactID {
+		return RegisteredGame{}, fmt.Errorf("%w: service: admitted game descriptor does not match artifact manifest", ErrBadRequest)
+	}
+	rulesetVersion := strings.TrimSpace(req.RulesetVersion)
+	if rulesetVersion == "" {
+		rulesetVersion = strings.TrimSpace(req.Game.RulesetVersion)
+	}
+	requestedGameID := strings.TrimSpace(req.Game.GameID)
+	requestedGameVersion := strings.TrimSpace(req.Game.GameVersion)
+	requestedGameRuleset := strings.TrimSpace(req.Game.RulesetVersion)
+	requestedRuleset := strings.TrimSpace(req.RulesetVersion)
+	if (requestedGameID != "" && requestedGameID != bundle.Manifest.GameID) || (requestedGameVersion != "" && requestedGameVersion != bundle.Manifest.GameVersion) || (requestedGameRuleset != "" && requestedRuleset != "" && requestedGameRuleset != requestedRuleset) {
+		return RegisteredGame{}, fmt.Errorf("%w: service: requested game metadata does not match selected artifact", ErrBadRequest)
+	}
+	game := contract.GameMetadata{GameID: bundle.Manifest.GameID, GameVersion: bundle.Manifest.GameVersion, RulesetVersion: rulesetVersion}
+	if err := catalog.ValidateMetadata(catalog.GameMetadata(game)); err != nil {
+		return RegisteredGame{}, fmt.Errorf("%w: %w", ErrBadRequest, err)
+	}
+	var playerCount, maxActiveBotsPerOwner int
+	foundRuleset := false
+	for _, ruleset := range bundle.Manifest.Rulesets {
+		if ruleset.RulesetVersion == rulesetVersion {
+			playerCount = ruleset.PlayerCount
+			maxActiveBotsPerOwner = ruleset.MaxActiveBotsPerOwner
+			foundRuleset = true
+			break
+		}
+	}
+	if !foundRuleset {
+		return RegisteredGame{}, fmt.Errorf("%w: service: selected ruleset %q is not declared by artifact manifest", ErrBadRequest, rulesetVersion)
+	}
+	if !slicesContain(descriptor.BuildConstraints.SupportedRulesets, rulesetVersion) {
+		return RegisteredGame{}, fmt.Errorf("%w: service: admitted game descriptor does not support ruleset %q", ErrBadRequest, rulesetVersion)
+	}
+	if playerCount < 1 || maxActiveBotsPerOwner < 1 {
+		return RegisteredGame{}, fmt.Errorf("%w: service: selected ruleset is missing player or bot limits", ErrBadRequest)
+	}
+	registrationID := strings.TrimSpace(req.RegistrationID)
+	if registrationID == "" {
+		registrationID = defaultGameRegistrationID(game)
+	}
+	record := RegisteredGame{RegistrationID: registrationID, Game: game, ArtifactID: artifactID, PlayerCount: playerCount, MaxActiveBotsPerOwner: maxActiveBotsPerOwner, BuildMode: descriptor.BuildMode, BuilderID: descriptor.BuilderID, SupportedRulesets: append([]string(nil), descriptor.BuildConstraints.SupportedRulesets...), Source: SourceManual}
 	if err := s.games.Save(ctx, record); err != nil {
 		return RegisteredGame{}, wrapConflict(err)
 	}

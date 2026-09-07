@@ -133,6 +133,11 @@ runner が dev overlay manifest を受け取る場合でも、責務分離の原
 
 どちらの path でも、runner が後段で扱うのは同じ `GameDescriptor` 抽象である。
 
+official sandboxed artifact の admission registry は、built-in descriptor を名前で引く通常 lookup とは別に、
+admission 済み descriptor record を immutable artifact identity で exact に解決できなければならない。
+artifact-backed game activation はこの exact path を使う。uploaded descriptor の eligibility は bundle admission と
+manifest / descriptor の整合性で決まり、built-in descriptor や game ID hard-code へ fallback してはならない。
+
 ## registered game の最小要件
 
 platform に registered game を追加するには、少なくとも以下を持つ登録情報と runtime 入口を用意する。

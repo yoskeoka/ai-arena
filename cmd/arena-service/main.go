@@ -304,7 +304,7 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		previousClose := closeFn
 		closeFn = func() { postgresGames.Close(); previousClose() }
 	}
-	general, err := service.NewGeneralSubmissionService(baseDir, nil, gameStore, nil)
+	general, err := service.NewGeneralSubmissionService(baseDir, admissionRegistry, gameStore, nil)
 	if err != nil {
 		return nil, err
 	}

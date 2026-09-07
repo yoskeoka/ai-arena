@@ -35,6 +35,13 @@ bot / existing bot revision の choice だけを送る。
 artifact-backed activation を代替しない。
 
 - selected game release と ruleset は admitted immutable artifact から解決可能でなければならない。
+- artifact digest を指定する activation は、その digest に対応する admitted game release を exact に解決する。
+  この経路では built-in registry の事前登録、game ID の whitelist、または同一 major の latest release
+  lookup を eligibility の前提にしてはならない。artifact manifest は game identity、exact version、
+  ruleset と runtime/build metadata の source of truth とする。
+- artifact-backed activation は、selected digest、manifest、admitted descriptor の game identity、exact version、
+  requested ruleset、build mode、builder identity が整合するときだけ保存する。未 admission の digest、
+  game 以外の artifact、manifest にない ruleset、または metadata の不整合は同期的に拒否し、scope を保存してはならない。
 - player count と owner quota は selected ruleset manifest 由来でなければならない。
 - AI artifact の game id、semver major、ruleset、runtime は target scope と互換でなければならない。
 - bot name は owner + scope 内で trim、Unicode case-fold、連続 whitespace の一文字化をした

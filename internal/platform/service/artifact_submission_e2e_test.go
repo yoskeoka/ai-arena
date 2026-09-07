@@ -17,7 +17,7 @@ import (
 )
 
 func TestArtifactSubmissionUploadToWASIStartAcrossBundleStores(t *testing.T) {
-	gameBytes := buildWASIBundle(t, "./cmd/janken-gamemaster", `{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"janken","game_version":"2.1.0","rulesets":[{"ruleset_version":"regular","player_count":2}],"runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024}}`)
+	gameBytes := buildWASIBundle(t, "./cmd/janken-gamemaster", `{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"janken","game_version":"2.1.0","rulesets":[{"ruleset_version":"regular","player_count":2,"max_active_bots_per_owner":2}],"runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024}}`)
 	aiBytes := buildWASIBundle(t, "./testdata/ai/janken/janken-go-wasm-ai", `{"schema_version":"arena-bundle/v1","artifact_kind":"ai","ai_id":"janken-go-wasm-ai","game_id":"janken","game_version":"2.1.0","runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024}}`)
 
 	for _, backend := range []struct {
@@ -89,9 +89,12 @@ func runArtifactSubmissionProof(t *testing.T, bundles BundleStore, gameBytes, ai
 		t.Fatal(err)
 	}
 	general.WithBundleStore(bundles)
-	game, err := general.RegisterGame(ctx, GameRegistrationRequest{Game: contract.GameMetadata{GameID: "janken", GameVersion: "2.1.0", RulesetVersion: "regular"}})
+	game, err := general.RegisterGame(ctx, GameRegistrationRequest{ArtifactID: gameBundle.Digest, RulesetVersion: "regular"})
 	if err != nil {
 		t.Fatalf("RegisterGame() error = %v", err)
+	}
+	if game.ArtifactID != gameBundle.Digest || game.Game.GameID != gameBundle.Manifest.GameID || game.Game.GameVersion != gameBundle.Manifest.GameVersion {
+		t.Fatalf("registered game = %+v, want selected artifact manifest identity", game)
 	}
 	ai1, err := general.RegisterAIBundle(ctx, AISubmissionRequest{AISubmissionID: "ai-1", GameRegistrationID: game.RegistrationID, DisplayName: "Echo 1"}, aiBytes)
 	if err != nil {
