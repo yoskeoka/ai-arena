@@ -1,7 +1,7 @@
 # games-inline-bundle-upload
 > **Execution**: Use `/execute-task` to implement this plan. After implementation is complete, use `/review-task` to prepare and create the PR.
 
-Addresses: `docs/issues/0038-unactivated-game-bundle-retention.md`
+Addresses: N/A
 
 ## Objective
 
