@@ -45,7 +45,7 @@ current references:
 - `typespec/namespaces/operator/health.tsp:12-14` と `typespec/namespaces/shared.tsp:106-114`
   - health wire contract の正本。
 - `.github/workflows/online-release-staging.yml:271-294`
-  - version convergence の後に readiness helper を接続する release path。
+  - 現在は Render deploy hook と summary だけを持つ。`0114` の実装が exact version convergence を追加した後、その直後に readiness helper を接続する。
 - `.github/workflows/online-release-staging-verify.yml:97-163`
   - workflow_run / dispatch remote verification path。
 - `operator-ui/tests/operator-ui.ci.spec.js:7-118,399-432`
