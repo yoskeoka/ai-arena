@@ -53,6 +53,14 @@ request の挙動は変えない。
 - artifact-backed activation は、selected digest、manifest、admitted descriptor の game identity、exact version、
   requested ruleset、build mode、builder identity が整合するときだけ保存する。未 admission の digest、
   game 以外の artifact、manifest にない ruleset、または metadata の不整合は同期的に拒否し、scope を保存してはならない。
+- artifact-backed scope から作る match submission は、scope が snapshot した selected game artifact identity を
+ そのまま引き継がなければならない。match admission は、その identity の admitted descriptor を exact に解決し、
+  submission の game ID、exact game version、ruleset と descriptor が一致することを queue record の保存および
+  dry-run より前に検証する。未 admission の digest、exact lookup の失敗、game ID / version / ruleset の不一致は
+  同期的に拒否し、その場合は version lookup や built-in fallback を行わず、queue record を作成してはならない。
+- artifact identity を持たない legacy または local built-in submission は compatibility path として扱う。ただし
+  artifact-backed scope の match をこの path に落としてはならず、外部 admission release が選択可能な online
+  service ではその release を優先する通常 registry lookup の結果だけを使用する。
 - player count と owner quota は selected ruleset manifest 由来でなければならない。
 - AI artifact の game id、semver major、ruleset、runtime は target scope と互換でなければならない。
 - bot name は owner + scope 内で trim、Unicode case-fold、連続 whitespace の一文字化をした

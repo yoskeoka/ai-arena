@@ -74,8 +74,8 @@ func (s *cleanupSession) Shutdown(ctx context.Context) error {
 	return err
 }
 
-// NewWASIOverlay preserves built-in descriptors while adding a writable WASI
-// artifact admission registry for the service process.
+// NewWASIOverlay preserves built-in descriptors as a fallback while adding a
+// writable WASI artifact admission tier for the service process.
 func NewWASIOverlay(materializer BundleMaterializer) (*Registry, error) {
 	wasi, err := NewWASIResolver(materializer)
 	if err != nil {
@@ -85,17 +85,11 @@ func NewWASIOverlay(materializer BundleMaterializer) (*Registry, error) {
 	if !ok {
 		return nil, fmt.Errorf("registry: default store is not cloneable")
 	}
-	store, err := NewInMemoryStore()
+	fallback, err := cloneInMemoryStore(base)
 	if err != nil {
 		return nil, err
 	}
-	for _, releases := range base.records {
-		for _, record := range releases {
-			if err := store.Register(record); err != nil {
-				return nil, err
-			}
-		}
-	}
+	store := newTieredStore(fallback)
 	return New(store, modeResolver{fallback: defaultRegistry.resolver, wasi: wasi})
 }
 

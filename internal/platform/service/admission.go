@@ -41,9 +41,27 @@ func (v *DefaultAdmissionValidator) Validate(ctx context.Context, submission Mat
 		return err
 	}
 
-	descriptor, err := v.registry.LookupVersion(ctx, submission.Game.GameID, submission.Game.GameVersion)
-	if err != nil {
-		return err
+	var descriptor registry.GameDescriptor
+	var err error
+	artifactID := submission.GameArtifactID
+	if artifactID != "" {
+		descriptor, err = v.registry.LookupArtifact(ctx, artifactID)
+		if err != nil {
+			return err
+		}
+		if descriptor.ArtifactID != artifactID || descriptor.GameID != submission.Game.GameID || descriptor.GameVersion != submission.Game.GameVersion {
+			return fmt.Errorf(
+				"service: game artifact %q does not match game %q version %q",
+				artifactID,
+				submission.Game.GameID,
+				submission.Game.GameVersion,
+			)
+		}
+	} else {
+		descriptor, err = v.registry.LookupVersion(ctx, submission.Game.GameID, submission.Game.GameVersion)
+		if err != nil {
+			return err
+		}
 	}
 	if !slicesContain(descriptor.BuildConstraints.SupportedRulesets, submission.Game.RulesetVersion) {
 		return fmt.Errorf(

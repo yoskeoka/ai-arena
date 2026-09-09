@@ -65,6 +65,12 @@ release は bundle manifest の exact semantic `game_version` と immutable arti
 - prerelease を official registry に admission するか、同一 release を再 upload したときの
   idempotency は artifact bundle contract が定める。通常 lookup は admission 済みの release だけを比較する。
 
+online service の通常 lookup では、admission 済みの外部 release と built-in release を同じ候補集合として
+比較してはならない。外部 admission tier に対象の `game_id + game_version major` が 1 件以上ある場合は、
+その tier の release だけから最大 semantic version を選び、built-in release は shadow される。外部 admission
+tier に対象 key がない場合に限り、built-in release tier を fallback として通常どおり解決する。この優先順位は
+upload 済み release の選択に適用され、active scope が exact artifact digest を snapshot する契約を置き換えない。
+
 ## persisted descriptor record
 
 永続化 backend に保存する registered game metadata は、runtime の function を含まない plain data として扱う。
@@ -136,7 +142,8 @@ runner が dev overlay manifest を受け取る場合でも、責務分離の原
 official sandboxed artifact の admission registry は、built-in descriptor を名前で引く通常 lookup とは別に、
 admission 済み descriptor record を immutable artifact identity で exact に解決できなければならない。
 artifact-backed game activation はこの exact path を使う。uploaded descriptor の eligibility は bundle admission と
-manifest / descriptor の整合性で決まり、built-in descriptor や game ID hard-code へ fallback してはならない。
+manifest / descriptor の整合性で決まり、exact identity の lookup 失敗や metadata 不整合時に version lookup、
+built-in descriptor、game ID hard-code へ fallback してはならない。
 
 ## registered game の最小要件
 

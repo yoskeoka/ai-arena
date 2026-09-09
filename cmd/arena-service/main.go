@@ -245,11 +245,20 @@ type artifactRuntime struct {
 }
 
 func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, artifactRuntime artifactRuntimeConfig) (*cliApp, error) {
+	runtime, err := newArtifactRuntime(context.Background(), baseDir, artifactRuntime)
+	if err != nil {
+		return nil, err
+	}
+	admissionRegistry, err := registry.NewWASIOverlay(runtime.bundles)
+	if err != nil {
+		return nil, err
+	}
 	dryRun, err := service.NewLocalDryRunChecker(baseDir)
 	if err != nil {
 		return nil, err
 	}
-	validator, err := service.NewDefaultAdmissionValidator(nil, dryRun)
+	dryRun.WithBundleStore(runtime.bundles)
+	validator, err := service.NewDefaultAdmissionValidator(admissionRegistry, dryRun)
 	if err != nil {
 		return nil, err
 	}
@@ -274,15 +283,6 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		}
 	}()
 	commands, err := service.NewCommandService(store, validator)
-	if err != nil {
-		return nil, err
-	}
-	runtime, err := newArtifactRuntime(context.Background(), baseDir, artifactRuntime)
-	if err != nil {
-		return nil, err
-	}
-	dryRun.WithBundleStore(runtime.bundles)
-	admissionRegistry, err := registry.NewWASIOverlay(runtime.bundles)
 	if err != nil {
 		return nil, err
 	}
