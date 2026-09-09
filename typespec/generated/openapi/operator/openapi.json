@@ -661,6 +661,24 @@
           }
         }
       }
+    },
+    "/version": {
+      "get": {
+        "operationId": "Operator_version",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shared.VersionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1597,6 +1615,15 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "Shared.VersionResponse": {
+        "type": "object",
+        "required": ["version_sha"],
+        "properties": {
+          "version_sha": {
+            "type": "string"
           }
         }
       }

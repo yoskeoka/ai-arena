@@ -9,12 +9,35 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
 )
+
+func TestOperatorAPIVersionIsPublicAndHasExactJSONShape(t *testing.T) {
+	const versionSHA = "0123456789abcdef0123456789abcdef01234567"
+	api := (&OperatorAPI{auth: &AuthService{}}).WithVersion(versionSHA)
+	response := httptest.NewRecorder()
+
+	api.Handler().ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/version", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET /version status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if contentType := response.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+		t.Fatalf("GET /version Content-Type = %q, want application/json", contentType)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal(version) error = %v", err)
+	}
+	if len(payload) != 1 || payload["version_sha"] != versionSHA {
+		t.Fatalf("GET /version payload = %#v, want exactly version_sha", payload)
+	}
+}
 
 func TestOperatorAPIAdmitsGameBundleWithCreatedResponse(t *testing.T) {
 	store, err := NewFilesystemBundleStore(t.TempDir())

@@ -28,6 +28,7 @@ import {
   jsonSignupInviteRequestToTransportTransform,
   jsonSignupInviteResponseToApplicationTransform,
   jsonStoredRankingSnapshotToApplicationTransform,
+  jsonVersionResponseToApplicationTransform,
 } from "../models/internal/serializers.js";
 import type {
   AiBot,
@@ -55,6 +56,7 @@ import type {
   SignupInviteRequest,
   SignupInviteResponse,
   StoredRankingSnapshot,
+  VersionResponse,
 } from "../models/models.js";
 
 export interface HealthzOptions extends OperationOptions {}
@@ -76,6 +78,28 @@ export async function healthz(
     response.headers["content-type"]?.includes("application/json")
   ) {
     return jsonHealthResponseToApplicationTransform(response.body)!;
+  }
+  throw createRestError(response);
+}
+export interface VersionOptions extends OperationOptions {}
+export async function version(
+  client: OperatorClientContext,
+  options?: VersionOptions,
+): Promise<VersionResponse> {
+  const path = parse("/version").expand({});
+  const httpRequestOptions = {
+    headers: {},
+  };
+  const response = await client.pathUnchecked(path).get(httpRequestOptions);
+
+  if (typeof options?.operationOptions?.onResponse === "function") {
+    options?.operationOptions?.onResponse(response);
+  }
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.includes("application/json")
+  ) {
+    return jsonVersionResponseToApplicationTransform(response.body)!;
   }
   throw createRestError(response);
 }

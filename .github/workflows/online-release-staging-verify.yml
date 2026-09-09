@@ -17,11 +17,6 @@ on:
         required: false
         default: https://ai-arena-staging-p4ml.onrender.com
         type: string
-      preset_id:
-        description: Preset ID to enqueue during verification
-        required: false
-        default: echo-reference
-        type: string
   workflow_run:
     workflows:
       - online-release-staging
@@ -39,7 +34,6 @@ jobs:
       target_sha: ${{ steps.prepare.outputs.target_sha }}
       frontend_url: ${{ steps.prepare.outputs.frontend_url }}
       backend_url: ${{ steps.prepare.outputs.backend_url }}
-      preset_id: ${{ steps.prepare.outputs.preset_id }}
     steps:
       - name: Evaluate staging verification trigger
         id: prepare
@@ -76,7 +70,6 @@ jobs:
               core.setOutput("target_sha", targetSha);
               core.setOutput("frontend_url", inputs.frontend_url ?? "");
               core.setOutput("backend_url", inputs.backend_url ?? "");
-              core.setOutput("preset_id", inputs.preset_id ?? "");
               core.info(`resolved workflow_dispatch commit_sha to ${targetSha}`);
               return;
             }
@@ -92,7 +85,6 @@ jobs:
             core.setOutput("should_verify", "true");
             core.setOutput("frontend_url", "https://staging.ai-arena.pages.dev");
             core.setOutput("backend_url", "https://ai-arena-staging-p4ml.onrender.com");
-            core.setOutput("preset_id", "echo-reference");
 
   verify-staging:
     needs: prepare
@@ -126,15 +118,14 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: operator-ui
 
-      - name: Verify remote staging operator flow
+      - name: Verify remote staging read-only smoke
         run: pnpm run verify:remote
         working-directory: operator-ui
         env:
           CI: "true"
           OPERATOR_UI_BASE_URL: ${{ needs.prepare.outputs.frontend_url }}
           OPERATOR_UI_BACKEND_BASE_URL: ${{ needs.prepare.outputs.backend_url }}
-          OPERATOR_UI_PRESET_ID: ${{ needs.prepare.outputs.preset_id }}
-          OPERATOR_UI_ASSERT_ANONYMOUS_SESSION_REDIRECT: "1"
+          OPERATOR_UI_EXPECT_VERSION_SHA: ${{ needs.prepare.outputs.target_sha }}
 
       - name: Upload staging verification artifacts
         if: always()

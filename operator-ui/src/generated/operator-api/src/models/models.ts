@@ -5,6 +5,9 @@ export type String = string;
 export interface HealthResponse {
   status: string;
 }
+export interface VersionResponse {
+  versionSha: string;
+}
 export interface SessionStatusResponse {
   authMode: "disabled" | "enabled";
   authenticated: boolean;

@@ -10,6 +10,7 @@ if (process.env.OPERATOR_UI_TEST_SCENARIO === "remote" && !process.env.OPERATOR_
 
 const backendBaseURL =
   process.env.OPERATOR_UI_BACKEND_BASE_URL ?? `http://127.0.0.1:${process.env.OPERATOR_UI_BACKEND_PORT ?? "10000"}`;
+const expectedVersionSHA = process.env.OPERATOR_UI_EXPECT_VERSION_SHA;
 const delegatedDownloadExpectation = process.env.OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD ?? "0";
 const captureArtifacts = process.env.OPERATOR_UI_CAPTURE_ARTIFACTS === "1";
 const artifactDir = process.env.OPERATOR_UI_ARTIFACT_DIR ?? "./test-results";
@@ -20,7 +21,6 @@ const authSignupUserID = process.env.OPERATOR_UI_AUTH_SIGNUP_USER_ID ?? "operato
 const authSignupLogin = process.env.OPERATOR_UI_AUTH_SIGNUP_LOGIN ?? authSignupUserID;
 const frontendHost = process.env.OPERATOR_UI_FRONTEND_HOST ?? "127.0.0.1";
 const frontendPort = process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173";
-const assertAnonymousSessionRedirect = process.env.OPERATOR_UI_ASSERT_ANONYMOUS_SESSION_REDIRECT === "1";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const artifactRef = process.env.OPERATOR_UI_TEST_ARTIFACT_REF ?? path.resolve(testDir, "../../testdata/ai/echo/echo-ai");
 const gameBundlePath =
@@ -41,12 +41,22 @@ const aiRevisionBundlePath =
 
 test.setTimeout(120_000);
 
-test("remote anonymous operator session reaches the login flow", async ({ page }) => {
-  test.skip(
-    process.env.OPERATOR_UI_TEST_SCENARIO !== "remote" || !assertAnonymousSessionRedirect,
-    "remote anonymous session assertion is disabled",
-  );
+test("remote read-only smoke verifies version, anonymous session, and operator login redirect", async ({ page, request }) => {
+  test.skip(process.env.OPERATOR_UI_TEST_SCENARIO !== "remote", "remote-only scenario");
+  if (!expectedVersionSHA) {
+    throw new Error("OPERATOR_UI_EXPECT_VERSION_SHA is required when OPERATOR_UI_TEST_SCENARIO=remote");
+  }
 
+  const version = await request.get(`${backendBaseURL}/version`);
+  expect(version.status()).toBe(200);
+  expect(await version.json()).toEqual({ version_sha: expectedVersionSHA });
+
+  const session = await request.get(`${backendBaseURL}/auth/session`);
+  expect(session.status()).toBe(200);
+  expect(await session.json()).toEqual({ auth_mode: "enabled", authenticated: false });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
   await page.goto("/operator");
   await expect(page).toHaveURL(/\/login\?return_to=/);
   await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
@@ -101,11 +111,12 @@ test("service-backed operator UI browser lane covers registration, request execu
   page,
   request,
 }) => {
+  test.skip(process.env.OPERATOR_UI_TEST_SCENARIO === "remote", "remote lane is limited to read-only smoke");
   if (!gameBundlePath) {
-    throw new Error("OPERATOR_UI_GAME_BUNDLE is required for remote game bundle upload verification");
+    throw new Error("OPERATOR_UI_GAME_BUNDLE is required for game bundle upload verification");
   }
   if (!aiBundlePath || !aiRevisionBundlePath) {
-    throw new Error("OPERATOR_UI_AI_BUNDLE and OPERATOR_UI_AI_REVISION_BUNDLE are required for remote AI bundle upload verification");
+    throw new Error("OPERATOR_UI_AI_BUNDLE and OPERATOR_UI_AI_REVISION_BUNDLE are required for AI bundle upload verification");
   }
   if (captureArtifacts) {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
