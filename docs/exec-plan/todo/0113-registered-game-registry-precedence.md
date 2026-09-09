@@ -89,7 +89,7 @@ registry は `registry.Default()` に置換されるため、built-in の echo /
 - `docs/specs/platform-game-registry.md` (MODIFY): online service の external-admitted / built-in
   lookup precedence と digest exact-resolution の observable contract を追加する。
 - `docs/specs/platform-service-general-submission.md` (MODIFY): activated scope が固定した game artifact
-  identityと admission rejection boundary を追加する。
+  identity と admission rejection boundary を追加する。
 - `internal/platform/registry/store.go` (MODIFY): external admitted release tier と built-in fallback tier を
   区別して lookup し、tier 内だけで最大 semver を選ぶ store / overlay composition を提供する。
 - `internal/platform/registry/wasm_resolver.go` (MODIFY): `NewWASIOverlay` を external-first tier と
