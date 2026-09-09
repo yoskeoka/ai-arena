@@ -23,7 +23,7 @@ non-`200` にして old instance の shutdown を循環待ちにしてはなら�
 worker ownership と first recovery の後だけ staging release/remote smoke が ready を成功と扱う
 ことである。production の同じ post-release verification と automatic rollback は `0117` の責務である。
 
-## Preconditions and Current References
+## 前提条件と現行参照
 
 この plan は次の実装済み contract を前提とする。
 
@@ -51,9 +51,9 @@ current references:
 - `operator-ui/tests/operator-ui.ci.spec.js:7-118,399-432`
   - remote backend request helper と anonymous browser assertion。
 
-## Adopted Design
+## 採用する設計
 
-### Readiness state
+### readiness state
 
 - `WorkerLoop` は race-safe な readiness state と `Ready()` accessor を持つ。
 - state は worker guard 取得後、first `RecoverExpired` が成功した時点で true になる。
@@ -63,7 +63,7 @@ current references:
 - `serve` は running `WorkerLoop` の callback を `OperatorAPI` に渡す。
 - fixture backend は worker を起動しないため、static fixture service が ready である callback を明示的に渡す。
 
-### `/healthz` body and liveness
+### `/healthz` body と liveness
 
 - `/healthz` は auth middleware 外の public route として残す。
 - handler に到達して JSON を返せる限り HTTP `200` を返す。`api` はこの状態で `OK` とする。
@@ -73,7 +73,7 @@ current references:
 - TypeSpec、OpenAPI、generated client を新 body へ再生成する。既存 `status`-only model を参照する
   repository consumer は migration audit の上で更新する。
 
-### Staging readiness polling
+### staging readiness polling
 
 `0114` の successful exact version polling の直後、repo-owned helper で
 `${STAGING_BACKEND_URL}/healthz` を確認する。
@@ -92,7 +92,7 @@ current references:
 remote Playwright も exact version の後に同じ health body を確認する。local fixture / CI auth-mock
 lane の protected operator flow は維持し、remote lane は read-only のままとする。
 
-## Code and Documentation Change Map
+## 変更対象
 
 - `(MODIFY) internal/platform/service/worker_loop.go`
   - race-safe readiness state、`Ready()`、guard/recovery/exit lifecycle を追加する。
@@ -130,7 +130,7 @@ lane の protected operator flow は維持し、remote lane は read-only のま
   - staging version-then-readiness sequence、7 分 timeout、summary evidence を記録する。
 - `(DELETE) N/A`
 
-## Black-Box Specification Changes
+## black-box contract の変更
 
 ### `GET /healthz`
 
@@ -141,13 +141,13 @@ lane の protected operator flow は維持し、remote lane は read-only のま
 - Render: HTTP `200` だけを health-check success として扱う
 - GitHub Actions: `api` と `worker` の両方が `OK` のときだけ release readiness success とする
 
-### Staging release completion
+### staging release の完了条件
 
 staging workflow は `/version.version_sha` が target SHA と一致した後、7 分以内に `/healthz` の
 api/worker components がともに `OK` になったときだけ成功する。worker pending、timeout、malformed
 body、request failure は release workflow failure であり、queue execution を ready と推測してはならない。
 
-## Subtasks and Dependencies
+## サブタスクと依存関係
 
 1. `0114` と `0115` の implementation PR が latest `main` に到達していることを確認する。
 2. behavioral specs と runbook に liveness/readiness の責務分離を先に記録する。
@@ -159,7 +159,7 @@ body、request failure は release workflow failure であり、queue execution 
 Steps 3 and 4 は black-box contract 合意後に並行できる。Workflow / remote verification は both に依存する。
 `0117-online-release-production-readiness-rollback` はこの plan の implementation 後に着手する。
 
-## Verification
+## 検証
 
 - `pnpm --dir typespec build`
 - `go test ./internal/platform/service/...`
@@ -169,7 +169,7 @@ Steps 3 and 4 は black-box contract 合意後に並行できる。Workflow / re
 - `make test`、`make lint`、workflow linter、textlint、`git diff --check`
 - staging deploy で new process が `NOT_READY` を返し得る間も Render health check は通過し、old lock release 後だけ `worker=OK` となることを確認する。
 
-## Non-goals and Rejection Conditions
+## 非目標と拒否条件
 
 - worker lock retry algorithm、retry interval、maximum ownership wait は変更しない。
 - `/healthz` を worker pending 時に HTTP non-`200` にしない。
