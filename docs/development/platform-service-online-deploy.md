@@ -458,6 +458,17 @@ staging deploy は migration apply を Render deploy より先に完了させる
 run は次の startup / poll で queue へ復旧する。operator は active worker identity、heartbeat age、queue
 lag を確認してから restart を行う。
 
+Render の zero-downtime rollout では、新旧 revision が一時的に同じ Neon Postgres queue を共有する。
+新 revision は HTTP port を listen して `/healthz` で HTTP 200 を返した後も、旧 revision が advisory
+lock を解放するまで queue worker を開始しない。ownership conflict は 10 秒ごと、最大 5 分待機する。
+待機中には recovery、claim、match execution を行わないため、liveness 成功は worker readiness や queue
+実行開始を意味しない。
+
+ownership timeout は queue safety failure として扱い、lease expiry による lock takeover や二重 worker
+実行で復旧してはならない。DB failure は retry 対象外である。staging と production の両方でこの handoff
+を確認対象とするが、production release workflow による external readiness verification と automatic
+rollback は `0117-online-release-production-readiness-rollback` の責務である。
+
 `online-release-staging-verify` は deploy 済みの operator flow を diagnostic preset で確認する自動 lane
 であり、特定ゲームの公開 release asset を download、upload、register する release gate ではない。
 Reversi game の登録可否は、人間が local または staging 環境で必要な bundle を選んで確認する運用上の

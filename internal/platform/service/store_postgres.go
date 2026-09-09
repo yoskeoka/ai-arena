@@ -44,7 +44,7 @@ func (s *PostgresQueueStore) AcquireWorker(ctx context.Context, workerID string)
 	}
 	if !acquired {
 		conn.Release()
-		return nil, fmt.Errorf("service: another worker already owns this queue")
+		return nil, fmt.Errorf("service: acquire worker guard: %w", ErrWorkerQueueOwned)
 	}
 	return func() {
 		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

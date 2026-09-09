@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -139,10 +140,19 @@ func TestPostgresQueueStoreRejectsSecondWorkerGuard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first AcquireWorker() error = %v", err)
 	}
-	defer release()
-	if _, err := second.AcquireWorker(ctx, "worker-two"); err == nil {
-		t.Fatal("second AcquireWorker() error = nil, want single-worker guard rejection")
+	if _, err := second.AcquireWorker(ctx, "worker-two"); !errors.Is(err, ErrWorkerQueueOwned) {
+		t.Fatalf("second AcquireWorker() error = %v, want %v", err, ErrWorkerQueueOwned)
 	}
+	if acquired := second.pool.Stat().AcquiredConns(); acquired != 0 {
+		t.Fatalf("second pool acquired connections = %d, want 0 after ownership rejection", acquired)
+	}
+	release()
+
+	nextRelease, err := second.AcquireWorker(ctx, "worker-two")
+	if err != nil {
+		t.Fatalf("second AcquireWorker() after release error = %v", err)
+	}
+	nextRelease()
 }
 
 func TestPostgresQueueStoreCancelQueued(t *testing.T) {
