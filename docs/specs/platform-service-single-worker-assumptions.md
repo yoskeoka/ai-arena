@@ -54,6 +54,20 @@ fairness はこの phase の範囲外である。
 既存の生存 worker が観測される構成を許可する場合は fail closed とし、operator が lease expiry
 を待つか明示的に復旧させるまで、2 本目の worker が run を実行してはならない。
 
+Render の zero-downtime rollout では、旧 revision と新 revision が短時間同じ Postgres queue を
+共有してよい。新 process は ownership conflict のとき 10 秒間隔、最大 5 分の bounded handoff
+wait を行う。この待機中は queue recovery、claim、match execution を開始してはならない。各試行は
+ownership を再確認し、取得できた process だけが queue mutation を開始する。
+
+ownership timeout は queue safety failure として fail closed にする。DB 接続または query failure
+は retry せず最初の試行で失敗させる。context cancellation は graceful shutdown として wait を止め、
+ownership を保持しない。lease expiry は crash recovery の責務に留め、advisory lock を強制的に
+takeover する手段に使ってはならない。
+
+HTTP liveness は worker ownership と独立した契約である。新 revision は ownership 待機中でも
+`/healthz` に HTTP 200 を返す。この handoff contract は staging と production の同じ service
+runtime に適用する。
+
 ## Lease、回復、shutdown
 
 worker が claim した run には worker identity、lease deadline、最後の heartbeat を durable に
