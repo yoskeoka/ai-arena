@@ -1,0 +1,208 @@
+# online-release-version-verification
+> **Execution**: Use `/execute-task` to implement this plan. After implementation is complete, use `/review-task` to prepare and create the PR.
+
+Addresses: N/A
+
+## Objective
+
+staging の Render backend に、現在の deploy commit SHA を read-only に返す
+`GET /version` endpoint を追加する。response は次の JSON object に限定する。
+
+```json
+{"version_sha":"<full commit SHA>"}
+```
+
+`online-release-staging.yml` は Render deploy hook を起動した後、backend の
+`/version` が `target_sha` と一致するまで待機する。これにより、workflow summary
+だけでなく、実際に staging traffic を処理している backend が想定 commit を返すことを
+deploy の完了条件にする。
+
+`online-release-staging-verify.yml` は次の read-only remote smoke surface を確認する。
+
+- frontend に接続できる
+- backend `GET /healthz` が成功する
+- backend `GET /version` が検証対象の full SHA を返す
+- backend `GET /auth/session` が `auth_mode=enabled`、`authenticated=false` を返す
+- 匿名 browser の `/operator` が login route へ redirect する
+
+完了境界は、staging deploy が version identity の一致を待って成功し、後続の remote
+verification が同じ SHA と匿名認証境界を確認することである。staging 用 machine account、
+OIDC provider、`OPERATOR_UI_TEST_AUTH`、game/AI/bot ZIP upload、registration、match、
+ranking の remote mutation 検証はこの計画に含めない。
+
+## Context and Current References
+
+- `.github/workflows/online-release-staging.yml:271-280`
+  - Render deploy hook に `ref=${TARGET_SHA}` を付けて起動するが、deploy が traffic に反映されたことを待たずに workflow が完了している。
+- `.github/workflows/online-release-staging-verify.yml:97-163`
+  - `workflow_run` の `head_sha` または dispatch input を検証対象として受け取る。
+  - 現在は remote URL を指定して既存の managed operator UI flow を実行する。
+- `internal/platform/service/http.go:164-201,396-405`
+  - `/healthz` と `/auth/session` は認証 middleware の外側にあり、`/api/v1/` は auth-enabled service では operator role を要求する。
+- `cmd/arena-service/main.go:369-401,509-528`
+  - Render runtime の auth と `OperatorAPI` の handler が構築される。version identity は service constructor の既存引数を増やさず、request 時に deployment environment を読む。
+- `typespec/namespaces/operator/health.tsp:12-14`
+  - 現在の operational endpoint の TypeSpec source。
+- `typespec/namespaces/shared.tsp:106-114`
+  - `HealthResponse` などの shared response model。
+- `typespec/main.tsp:5-9`
+  - TypeSpec namespace import の entrypoint。
+- `operator-ui/playwright.config.js:3-55`
+  - `remote` scenario は web server を起動せず、指定された staging frontend URL へ接続する。
+- `operator-ui/tests/operator-ui.ci.spec.js:7-118,399-432`
+  - remote の anonymous redirect assertion、service-backed protected flow、backend URL を使う request helper の実装。
+- `docs/specs/platform-service-operator-ui.md`
+  - operator browser surface と auth-enabled regression lane の observable contract。
+- `docs/development/platform-service-online-deploy.md:454-565`
+  - staging deploy / verification の現在の運用契約。protected mutation を remote smoke として記述している箇所は今回の境界に合わせて更新する。
+- `docs/exec-plan/todo/0092-operator-ui-auth-playwright-local-oidc-provider.md`
+  - local/CI 専用の auth regression seam を扱う既存 plan。staging machine account の実装を今回の依存にはしない。
+
+Render は service/deploy の commit SHA を `RENDER_GIT_COMMIT` として runtime に提供する。
+したがって、`.git` の存在や追加の build-time linker flag に依存せず、`/version` handler が
+この値を返す。Render deploy hook の `ref` は `target_sha` を指定しているため、polling の
+比較対象と runtime の version source は同じ commit identity になる。
+
+## Adopted Design
+
+### Version endpoint
+
+- endpoint は public read-only の `GET /version` とする。
+- auth middleware の外側に登録し、匿名 request でも取得できるようにする。
+- `version_sha` は `RENDER_GIT_COMMIT` の trim 済み値を返す。
+- Render 外の local fixture service では provider variable が空になり得るため、response shape は維持したまま空文字を返してよい。staging acceptance では空文字を成功とみなさず、target SHA との完全一致を要求する。
+- `version_sha` に短縮 SHA、branch 名、build 時刻、hostname、追加 metadata を含めない。
+
+TypeSpec を wire contract の正本とし、version 用 namespace/operation と response model を
+追加して OpenAPI と generated operator client を再生成する。operator UI 本体に version
+表示を追加することは今回の範囲外である。
+
+### Render deploy readiness
+
+既存の Render deploy hook 呼び出し直後に、repo-owned helper を使った polling step を追加する。
+
+- endpoint: `${STAGING_BACKEND_URL}/version`
+- expected value: `needs.prepare.outputs.target_sha`
+- interval: 15 seconds
+- maximum attempts: 40（最大 10 分）
+- one-request timeout: 15 seconds
+- HTTP error、connection failure、malformed JSON、empty `version_sha`、SHA mismatch は retry 対象。
+- 最大試行回数を超えた場合は step を fail し、最後に観測した HTTP status と version value を log/summary に残す。
+- secret、session cookie、Access token は polling request に付けない。
+
+この wait step を staging deploy workflow の成功条件にする。`workflow_run` による verify は
+その後に起動するため、automatic path では version-ready であることを引き継ぐ。dispatch による
+verification path では、verify job 自身が `/version` を同じ target SHA と比較し、別 commit の
+staging に対して成功しないようにする。
+
+### Remote smoke boundary
+
+`verify:remote` は protected operator mutation を実行しない remote-specific test surface に
+整理する。
+
+- current service-backed test の remote 実行を skip または remote smoke と分離し、bundle path、operator nav、mutation API を要求しない。
+- remote version test は backend `/version` の JSON と `OPERATOR_UI_EXPECT_VERSION_SHA` を完全一致で確認する。
+- anonymous session test は既存の frontend redirect を維持する。
+- backend `/auth/session` は remote scenario で直接取得し、`auth_mode=enabled` かつ `authenticated=false` を確認する。
+- local fixture、real-local、CI auth-mock lane の protected operator flow と fixture ZIP は変更しない。
+- remote workflow の未使用 `preset_id` input/output/env は削除し、remote lane の契約を smoke surface に合わせる。
+
+## Change Map
+
+- `typespec/namespaces/operator/version.tsp` (NEW)
+  - `GET /version` operation を定義する。
+- `typespec/namespaces/shared.tsp` (MODIFY)
+  - `VersionResponse` の JSON model を追加する。
+- `typespec/main.tsp` (MODIFY)
+  - version namespace を import する。
+- `typespec/generated/openapi/operator/openapi.json` (MODIFY)
+  - TypeSpec build で `/version` contract を再生成する。
+- `operator-ui/src/generated/operator-api/` (MODIFY)
+  - generated client/model/serializer に version operation を反映する。
+- `internal/platform/service/http.go` (MODIFY)
+  - public `/version` route と `RENDER_GIT_COMMIT` response handler を追加する。
+- `internal/platform/service/http_test.go` (MODIFY)
+  - full SHA を設定した `/version` response、status、content type、JSON shape を検証する。
+- `tools/dev/wait-for-remote-version.sh` (NEW)
+  - Render backend の version identity を bounded polling する repo-owned helper を追加する。
+- `.github/workflows/online-release-staging.yml` (MODIFY)
+  - Render deploy hook 後に wait helper を実行し、version mismatch を deploy failure とする。
+- `.github/workflows/online-release-staging-verify.yml` (MODIFY)
+  - target SHA を remote smoke test へ渡し、`/version`、`/healthz`、`/auth/session` を検証する。
+  - protected operator flow、ZIP env、未使用 preset input/output/env を remote path から除外する。
+- `operator-ui/tests/operator-ui.ci.spec.js` (MODIFY)
+  - remote version/session smoke test を追加し、protected service-backed test を remote では実行しない。
+- `docs/specs/index.md` (MODIFY)
+  - `typespec/namespaces/operator/version.tsp` を operator route lookup に追加する。
+- `docs/specs/platform-service-operator-ui.md` (MODIFY)
+  - remote staging verification の read-only/auth boundary と version identity assertion を追記する。
+- `docs/development/platform-service-online-deploy.md` (MODIFY)
+  - Render deploy の version-ready completion condition、bounded wait、remote smoke checklist、summary evidence を更新する。
+- `DELETE: N/A`
+
+## Black-box Contract Changes
+
+### `GET /version`
+
+- status: `200`
+- content type: `application/json`
+- response: exactly one `version_sha` string property
+- staging: `version_sha` is the full commit SHA currently serving the Render backend
+- auth: no session or role required
+- failure behavior: endpoint itself does not fabricate a SHA; staging verification rejects empty or mismatched values
+
+### Staging deploy completion
+
+The staging deploy workflow is not complete when the Render hook accepts the request. It is complete
+only after `/version.version_sha` equals the canonical full `target_sha` within the bounded polling
+window. A timeout or mismatch prevents the downstream staging verification from being treated as
+successful.
+
+### Remote verification
+
+The automatic staging lane is read-only with respect to operator data. It validates deployed commit
+identity and public/anonymous boundaries only. It does not create game registrations, upload bundles,
+create bots, enqueue matches, update rankings, or consume staging data.
+
+## Sub-tasks and Dependencies
+
+1. Update the behavioral spec and online deploy runbook with the new public version identity and remote smoke boundary.
+2. Add the TypeSpec route/model and regenerate OpenAPI/generated client outputs.
+3. Implement the public handler and focused service tests using a deterministic `RENDER_GIT_COMMIT` value.
+4. Add the bounded polling helper and unit/script-level validation for exact match, retry, and timeout behavior where practical.
+5. Update both staging workflows. Keep Render deploy wait before workflow completion and keep verify-side exact comparison as defense in depth.
+6. Update the Playwright remote scenario while retaining protected coverage in local/CI auth-enabled lanes.
+7. Run repo quality gates and perform one staging release verification against the latest head.
+
+Steps 2-3 and 4-6 can proceed in parallel after step 1 is agreed; generated contract updates must land
+before implementation code depends on them. Workflow lint and staging acceptance depend on all changes being
+present.
+
+## Verification
+
+### Local and repository gates
+
+- `pnpm --dir typespec build` completes and leaves no generated OpenAPI/client drift.
+- focused Go tests cover `/version` with a full SHA and ensure the route remains public when auth is configured.
+- remote Playwright tests cover frontend connectivity, `/healthz`, exact `/version`, anonymous `/auth/session`, and `/operator` redirect.
+- local/CI fixture and auth-enabled lanes continue to cover their existing protected operator surface and ZIP fixture flow.
+- applicable `make test`, `make lint`, workflow linter, textlint, and `git diff --check` pass.
+
+### Staging acceptance
+
+- `online-release-staging` triggers Render with the canonical target SHA.
+- the wait step retries while the old service, 404, 5xx, transport error, or malformed response is observed.
+- the wait step succeeds only after the backend returns the exact full target SHA.
+- `online-release-staging-verify` then succeeds for the same SHA and records frontend URL, backend URL,
+  target SHA, observed version SHA, and smoke-test artifact locations in its summary.
+- no staging operator mutation or authentication credential is introduced by this plan.
+
+## Non-goals and Rejection Conditions
+
+- Do not add a staging machine account, OIDC provider, OAuth test double, service token, or access cookie.
+- Do not set `OPERATOR_UI_TEST_AUTH` in the staging workflow.
+- Do not reintroduce game/AI/bot ZIP upload or registration into the automatic staging lane.
+- Do not make `/version` an authenticated operator endpoint; its purpose is deployment provenance/readiness.
+- Do not accept a branch name, short SHA, stale SHA, empty string, or merely successful deploy-hook response as proof of deployment.
+- Do not change production release behavior in this plan except for shared API generation if required.
+
