@@ -43,7 +43,7 @@ func TestAcquireWorkerWithRetryFailsFastForNonOwnershipError(t *testing.T) {
 func TestAcquireWorkerWithRetryTimesOutAndStopsOnCancellation(t *testing.T) {
 	t.Run("timeout", func(t *testing.T) {
 		guard := &sequenceWorkerGuard{errs: []error{ErrWorkerQueueOwned}, repeatLast: true}
-		_, err := acquireWorkerWithRetry(context.Background(), guard, "worker-one", time.Millisecond, 5*time.Millisecond)
+		_, err := acquireWorkerWithRetry(context.Background(), guard, "worker-one", 5*time.Millisecond, 100*time.Millisecond)
 		if !errors.Is(err, ErrWorkerOwnershipTimeout) {
 			t.Fatalf("acquireWorkerWithRetry() error = %v, want %v", err, ErrWorkerOwnershipTimeout)
 		}

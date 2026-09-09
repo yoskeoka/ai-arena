@@ -140,6 +140,11 @@ func TestPostgresQueueStoreRejectsSecondWorkerGuard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first AcquireWorker() error = %v", err)
 	}
+	t.Cleanup(func() {
+		if release != nil {
+			release()
+		}
+	})
 	if _, err := second.AcquireWorker(ctx, "worker-two"); !errors.Is(err, ErrWorkerQueueOwned) {
 		t.Fatalf("second AcquireWorker() error = %v, want %v", err, ErrWorkerQueueOwned)
 	}
@@ -147,12 +152,13 @@ func TestPostgresQueueStoreRejectsSecondWorkerGuard(t *testing.T) {
 		t.Fatalf("second pool acquired connections = %d, want 0 after ownership rejection", acquired)
 	}
 	release()
+	release = nil
 
 	nextRelease, err := second.AcquireWorker(ctx, "worker-two")
 	if err != nil {
 		t.Fatalf("second AcquireWorker() after release error = %v", err)
 	}
-	nextRelease()
+	t.Cleanup(nextRelease)
 }
 
 func TestPostgresQueueStoreCancelQueued(t *testing.T) {
