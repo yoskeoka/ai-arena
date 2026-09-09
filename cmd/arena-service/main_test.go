@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -10,10 +11,96 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yoskeoka/ai-arena/artifactbundle"
 	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/service"
 )
+
+func TestNewCLIAppUsesSharedArtifactRegistryForAdmission(t *testing.T) {
+	app, err := newCLIApp(t.TempDir(), 0, "", artifactRuntimeConfig{backend: "filesystem"})
+	if err != nil {
+		t.Fatalf("newCLIApp() error = %v", err)
+	}
+	defer app.close()
+
+	record, err := app.artifactAdmission.RegisterGameBundle(context.Background(), testCLIAppGameBundle(t))
+	if err != nil {
+		t.Fatalf("RegisterGameBundle() error = %v", err)
+	}
+	aiBundle, err := artifactbundle.Read(testCLIAppAIBundle(t))
+	if err != nil {
+		t.Fatalf("artifactbundle.Read(ai) error = %v", err)
+	}
+	if err := app.bundles.Put(context.Background(), aiBundle); err != nil {
+		t.Fatalf("BundleStore.Put(ai) error = %v", err)
+	}
+	_, err = app.commands.Submit(context.Background(), service.MatchSubmission{
+		RunID:          "run-shared-registry",
+		MatchID:        "match-shared-registry",
+		GameArtifactID: record.ArtifactID,
+		Game: contract.GameMetadata{
+			GameID:         record.GameID,
+			GameVersion:    record.GameVersion,
+			RulesetVersion: "phase2-simultaneous-3turn",
+		},
+		Players:      []service.SubmittedPlayer{{PlayerID: "p1", ArtifactID: aiBundle.Digest}},
+		OutputDir:    t.TempDir(),
+		AttemptCount: 1,
+		RunKind:      service.RunKindInitial,
+	})
+	if err != nil {
+		t.Fatalf("Submit() error = %v", err)
+	}
+}
+
+func testCLIAppAIBundle(t *testing.T) []byte {
+	t.Helper()
+	var out bytes.Buffer
+	writer := zip.NewWriter(&out)
+	manifest, err := writer.Create("manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manifest.Write([]byte(`{"schema_version":"arena-bundle/v1","artifact_kind":"ai","ai_id":"test-ai","game_id":"echo-count","game_version":"2.0.0","rulesets":[{"ruleset_version":"phase2-simultaneous-3turn"}],"runtime":{"kind":"wasm-wasi","module":"module.wasm"}}`)); err != nil {
+		t.Fatal(err)
+	}
+	module, err := writer.Create("module.wasm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := module.Write([]byte{0, 97, 115, 109, 1, 0, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
+}
+
+func testCLIAppGameBundle(t *testing.T) []byte {
+	t.Helper()
+	var out bytes.Buffer
+	writer := zip.NewWriter(&out)
+	manifest, err := writer.Create("manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manifest.Write([]byte(`{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"echo-count","game_version":"2.0.0","rulesets":[{"ruleset_version":"phase2-simultaneous-3turn","player_count":1,"max_active_bots_per_owner":1}],"runtime":{"kind":"wasm-wasi","module":"module.wasm"}}`)); err != nil {
+		t.Fatal(err)
+	}
+	module, err := writer.Create("module.wasm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := module.Write([]byte{0, 97, 115, 109, 1, 0, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
+}
 
 func TestRunResolvesRelativeOutputDirAgainstBaseDir(t *testing.T) {
 	baseDir := repoRoot(t)

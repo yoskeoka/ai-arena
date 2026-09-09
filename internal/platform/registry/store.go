@@ -10,7 +10,8 @@ import (
 
 // InMemoryStore is a registry store backed by an in-memory map.
 type InMemoryStore struct {
-	records map[RegistryKey][]DescriptorRecord
+	records  map[RegistryKey][]DescriptorRecord
+	fallback *InMemoryStore
 }
 
 // NewInMemoryStore constructs a store preloaded with descriptor records.
@@ -43,18 +44,23 @@ func (s *InMemoryStore) Register(record DescriptorRecord) error {
 }
 
 // Lookup resolves a descriptor record by registry key.
-func (s *InMemoryStore) Lookup(_ context.Context, key RegistryKey) (DescriptorRecord, error) {
+func (s *InMemoryStore) Lookup(ctx context.Context, key RegistryKey) (DescriptorRecord, error) {
 	if err := validateRegistryKey(key); err != nil {
 		return DescriptorRecord{}, err
 	}
 	releases, ok := s.records[key]
-	if !ok {
-		if s.hasGameID(key.GameID) {
-			return DescriptorRecord{}, fmt.Errorf("registry: unsupported game version major %d for game %q", key.GameVersionMajor, key.GameID)
-		}
-		return DescriptorRecord{}, fmt.Errorf("registry: unsupported game %q", key.GameID)
+	if ok {
+		return copyDescriptorRecord(latestRelease(releases)), nil
 	}
-	return copyDescriptorRecord(latestRelease(releases)), nil
+	if s.fallback != nil {
+		if record, err := s.fallback.Lookup(ctx, key); err == nil {
+			return record, nil
+		}
+	}
+	if s.hasGameID(key.GameID) {
+		return DescriptorRecord{}, fmt.Errorf("registry: unsupported game version major %d for game %q", key.GameVersionMajor, key.GameID)
+	}
+	return DescriptorRecord{}, fmt.Errorf("registry: unsupported game %q", key.GameID)
 }
 
 // LookupArtifact finds an exact admitted release by its immutable digest.
@@ -75,7 +81,30 @@ func (s *InMemoryStore) hasGameID(gameID string) bool {
 			return true
 		}
 	}
-	return false
+	return s.fallback != nil && s.fallback.hasGameID(gameID)
+}
+
+// newTieredStore creates a writable primary store with a read-only fallback tier.
+func newTieredStore(fallback *InMemoryStore) *InMemoryStore {
+	return &InMemoryStore{
+		records:  make(map[RegistryKey][]DescriptorRecord),
+		fallback: fallback,
+	}
+}
+
+func cloneInMemoryStore(source *InMemoryStore) (*InMemoryStore, error) {
+	clone, err := NewInMemoryStore()
+	if err != nil {
+		return nil, err
+	}
+	for _, releases := range source.records {
+		for _, record := range releases {
+			if err := clone.Register(record); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return clone, nil
 }
 
 func validateDescriptorRecord(record DescriptorRecord) error {

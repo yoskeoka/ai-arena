@@ -171,6 +171,9 @@ func runArtifactSubmissionProof(t *testing.T, bundles BundleStore, gameBytes, ai
 	if completed.State != StateCompleted || completed.Terminal == nil || completed.Terminal.MatchStatus != contract.StatusCompleted {
 		t.Fatalf("completed record = %+v, want completed WASI run", completed)
 	}
+	if completed.Submission.GameArtifactID != gameBundle.Digest {
+		t.Fatalf("completed game artifact_id = %q, want %q", completed.Submission.GameArtifactID, gameBundle.Digest)
+	}
 	if completed.Submission.Players[0].ArtifactID != aiBundle.Digest || completed.Submission.Players[1].ArtifactID != aiBundle.Digest {
 		t.Fatalf("queued AI digests = %+v, want %q", completed.Submission.Players, aiBundle.Digest)
 	}

@@ -66,6 +66,131 @@ func TestInMemoryStoreLookupSelectsLatestReleaseWithinMajor(t *testing.T) {
 	}
 }
 
+func TestTieredStorePrefersExternalReleaseWithinMajor(t *testing.T) {
+	fallback, err := NewInMemoryStore(DescriptorRecord{
+		RegistryKey: RegistryKey{GameID: "tiered-game", GameVersionMajor: 2},
+		GameID:      "tiered-game",
+		GameVersion: "2.99.0",
+		ArtifactID:  "sha256:builtin",
+		BuildMode:   BuildModeInProcess,
+		BuilderID:   "builtin-builder",
+		BuildConstraints: BuildConstraints{
+			SupportedRulesets: []string{"regular"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewInMemoryStore(fallback): %v", err)
+	}
+	store := newTieredStore(fallback)
+	if err := store.Register(DescriptorRecord{
+		RegistryKey: RegistryKey{GameID: "tiered-game", GameVersionMajor: 2},
+		GameID:      "tiered-game",
+		GameVersion: "2.1.0",
+		ArtifactID:  "sha256:external",
+		BuildMode:   BuildModeInProcess,
+		BuilderID:   "external-builder",
+		BuildConstraints: BuildConstraints{
+			SupportedRulesets: []string{"regular"},
+		},
+	}); err != nil {
+		t.Fatalf("Register(external): %v", err)
+	}
+
+	record, err := store.Lookup(context.Background(), RegistryKey{GameID: "tiered-game", GameVersionMajor: 2})
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if record.GameVersion != "2.1.0" || record.ArtifactID != "sha256:external" {
+		t.Fatalf("Lookup = %+v, want external release", record)
+	}
+}
+
+func TestTieredStoreSelectsLatestExternalReleaseAndFallsBackByKey(t *testing.T) {
+	fallback, err := NewInMemoryStore(DescriptorRecord{
+		RegistryKey: RegistryKey{GameID: "fallback-game", GameVersionMajor: 2},
+		GameID:      "fallback-game",
+		GameVersion: "2.0.0",
+		ArtifactID:  "sha256:fallback",
+		BuildMode:   BuildModeInProcess,
+		BuilderID:   "fallback-builder",
+		BuildConstraints: BuildConstraints{
+			SupportedRulesets: []string{"regular"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewInMemoryStore(fallback): %v", err)
+	}
+	store := newTieredStore(fallback)
+	for _, version := range []string{"2.4.0", "2.10.0"} {
+		if err := store.Register(DescriptorRecord{
+			RegistryKey: RegistryKey{GameID: "external-game", GameVersionMajor: 2},
+			GameID:      "external-game",
+			GameVersion: version,
+			ArtifactID:  "sha256:external-" + version,
+			BuildMode:   BuildModeInProcess,
+			BuilderID:   "external-builder",
+			BuildConstraints: BuildConstraints{
+				SupportedRulesets: []string{"regular"},
+			},
+		}); err != nil {
+			t.Fatalf("Register(%s): %v", version, err)
+		}
+	}
+
+	external, err := store.Lookup(context.Background(), RegistryKey{GameID: "external-game", GameVersionMajor: 2})
+	if err != nil {
+		t.Fatalf("Lookup(external): %v", err)
+	}
+	if external.GameVersion != "2.10.0" {
+		t.Fatalf("Lookup(external).GameVersion = %q, want 2.10.0", external.GameVersion)
+	}
+	fallbackRecord, err := store.Lookup(context.Background(), RegistryKey{GameID: "fallback-game", GameVersionMajor: 2})
+	if err != nil {
+		t.Fatalf("Lookup(fallback): %v", err)
+	}
+	if fallbackRecord.ArtifactID != "sha256:fallback" {
+		t.Fatalf("Lookup(fallback).ArtifactID = %q, want fallback release", fallbackRecord.ArtifactID)
+	}
+}
+
+func TestTieredStoreLookupArtifactOnlyResolvesExternalTier(t *testing.T) {
+	fallback, err := NewInMemoryStore(DescriptorRecord{
+		RegistryKey: RegistryKey{GameID: "fallback-game", GameVersionMajor: 2},
+		GameID:      "fallback-game",
+		GameVersion: "2.0.0",
+		ArtifactID:  "sha256:builtin",
+		BuildMode:   BuildModeInProcess,
+		BuilderID:   "fallback-builder",
+		BuildConstraints: BuildConstraints{
+			SupportedRulesets: []string{"regular"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewInMemoryStore(fallback): %v", err)
+	}
+	store := newTieredStore(fallback)
+	if err := store.Register(DescriptorRecord{
+		RegistryKey: RegistryKey{GameID: "external-game", GameVersionMajor: 2},
+		GameID:      "external-game",
+		GameVersion: "2.1.0",
+		ArtifactID:  "sha256:external",
+		BuildMode:   BuildModeInProcess,
+		BuilderID:   "external-builder",
+		BuildConstraints: BuildConstraints{
+			SupportedRulesets: []string{"regular"},
+		},
+	}); err != nil {
+		t.Fatalf("Register(external): %v", err)
+	}
+
+	if record, err := store.LookupArtifact(context.Background(), "sha256:external"); err != nil || record.ArtifactID != "sha256:external" {
+		t.Fatalf("LookupArtifact(external) = %+v, %v", record, err)
+	}
+	if _, err := store.LookupArtifact(context.Background(), "sha256:builtin"); err == nil || !strings.Contains(err.Error(), `registry: unsupported artifact "sha256:builtin"`) {
+		t.Fatalf("LookupArtifact(builtin) error = %v, want external-tier rejection", err)
+	}
+}
+
 func TestDescriptorBuildSessionReturnsRulesetError(t *testing.T) {
 	descriptor, err := Lookup(echo.GameID, echo.GameVersion)
 	if err != nil {
