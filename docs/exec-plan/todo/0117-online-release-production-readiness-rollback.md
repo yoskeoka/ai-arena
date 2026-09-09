@@ -19,7 +19,7 @@ workflow を終えることである。target failure は rollback が成功し�
 Cloudflare Pages frontend の deployed commit identity と frontend rollback の証明は別 exec-plan とし、
 この plan は frontend が reachable であることを backend success の根拠にしない。
 
-## Preconditions and Current References
+## 前提条件と現行参照
 
 この plan は次の implementation が `main` にあることを前提とする。
 
@@ -43,9 +43,9 @@ current references:
 - `README.md:94-99`
   - production tag は same-SHA staging verification 後に作る contract。
 
-## Adopted Design
+## 採用する設計
 
-### Capture and validate the rollback target
+### rollback target の capture と validation
 
 production workflow は migration や deploy hook の前に `${PRODUCTION_BACKEND_URL}/version` を取得する。
 
@@ -61,7 +61,7 @@ production workflow は migration や deploy hook の前に `${PRODUCTION_BACKEN
 migration は既存 runbook の backward-compatible expand/dual-read-write contract を満たさなければならず、
 code rollback で schema を戻してはならない。
 
-### Target verification and automatic backend rollback
+### target verification と automatic backend rollback
 
 production target deploy hook の直後に、prerequisite helper を順に実行する。
 
@@ -80,7 +80,7 @@ rollback hook、rollback version verification、rollback readiness verification 
 workflow を incident failure として終了する。rollback が成功しても target release は failed とし、tag を
 release success として扱わない。automatic retry loops や alternate SHA の探索は行わない。
 
-### Production scope and operator boundary
+### production scope と operator boundary
 
 - `RENDER_PRODUCTION_DEPLOY_HOOK_URL` だけを deploy/rollback mutation identity とする。Render API token、
   machine account、OIDC provider は追加しない。
@@ -90,7 +90,7 @@ release success として扱わない。automatic retry loops や alternate SHA 
 - target backend failure 後の frontend/backend version skew は backward-compatible API release contract で短時間許容し、
   frontend identity/rollback plan が導入されるまで production promotion evidence と混同しない。
 
-## Code and Documentation Change Map
+## 変更対象
 
 - `(MODIFY) .github/workflows/online-release-production.yml`
   - legacy-aware previous SHA input を追加する。
@@ -111,9 +111,9 @@ release success として扱わない。automatic retry loops や alternate SHA 
   - public version/readiness endpoint が production deployment evidence に使われることを記録する。
 - `(DELETE) N/A`
 
-## Black-Box Specification Changes
+## black-box contract の変更
 
-### Production backend release completion
+### production backend release の完了条件
 
 - target success: `/version` が target full SHA、続く `/healthz` が HTTP `200` / `api=OK` / `worker=OK`
 - target failure: target backend is not accepted; previous SHA がある場合は exactly one rollback deploy を試みる
@@ -122,13 +122,13 @@ release success として扱わない。automatic retry loops や alternate SHA 
 - initial legacy bootstrap: operator-supplied `previous_commit_sha` が full/reachable SHA でなければ deploy mutation を開始しない
 - schema: code rollback は schema rollback を含まない。migration compatibility は release 前提である
 
-### Evidence boundary
+### evidence の境界
 
 production summary は少なくとも target SHA、previous SHA、target version/readiness observation、rollback attempt
 の有無と result、backend URL、verification helper artifact/log location を含む。secret、cookie、deploy hook URL、
 database DSN を含めない。frontend deployment identity はこの contract の証明対象外である。
 
-## Subtasks and Dependencies
+## サブタスクと依存関係
 
 1. `0114`、`0115`、`0116` の latest-main implementation と staging acceptance evidence を確認する。
 2. production release spec/runbook に preflight、target verification、single rollback、schema boundary を先に記録する。
@@ -140,7 +140,7 @@ database DSN を含めない。frontend deployment identity はこの contract �
 Steps 2 and 3 は並行できる。Workflow mutation is dependent on both. Production acceptance は staging
 rehearsal と all repository quality gates の後にだけ行う。
 
-## Verification
+## 検証
 
 - local fake HTTP server で target/previous version、ready/pending/malformed health、timeout を helper-level に確認する。
 - SHA helper が short SHA、unknown SHA、target==previous、legacy dispatch input を拒否/受理する境界を確認する。
@@ -150,7 +150,7 @@ rehearsal と all repository quality gates の後にだけ行う。
 - human-approved production acceptance で target success を 1 回確認し、summary に full SHA evidence が残ることを確認する。
 - production target failure scenario は live incident を意図的に起こさない。rollback logic の failure branches は local/staging rehearsal で確認する。
 
-## Non-goals and Rejection Conditions
+## 非目標と拒否条件
 
 - frontend deployed commit identity、Pages rollback、frontend/backend skew の恒久解消を実装しない。
 - database down migration、destructive data rollback、release artifact deletion を行わない。
