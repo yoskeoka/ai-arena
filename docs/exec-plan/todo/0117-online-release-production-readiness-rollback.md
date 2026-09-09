@@ -49,7 +49,7 @@ current references:
 
 production workflow は migration や deploy hook の前に `${PRODUCTION_BACKEND_URL}/version` を取得する。
 
-- response は valid JSON、full 40-character SHA、repository 内で canonical に解決できる commit でなければならない
+- response は valid JSON、40 文字の lowercase hexadecimal full commit SHA (`^[0-9a-f]{40}$`)、repository 内で canonical に解決できる commit でなければならない
 - value を `previous_version_sha` として job output に保存する
 - current version が endpoint 未導入の legacy deployment で取得できない最初の rollout だけは、manual dispatch の
   required `previous_commit_sha` input を使う。入力値も canonical full SHA に正規化・検証する
@@ -102,7 +102,7 @@ release success として扱わない。automatic retry loops や alternate SHA 
 - `(MODIFY) tools/dev/wait-for-remote-health.sh`
   - production/staging 共用の api/worker readiness、last observation、exit-code contract を確認し、必要なら reusable inputs を追加する。
 - `(NEW) tools/dev/validate-release-commit-sha.sh`
-  - full SHA、repository reachability、target/previous non-equality を shell-safe に検証する helper を追加する。
+  - 40 文字 hexadecimal full SHA と repository reachability を shell-safe に検証する helper を追加する。target/previous non-equality は rollback を実行する分岐でだけ検証する。
 - `(MODIFY) docs/development/platform-service-online-deploy.md`
   - production preflight、legacy bootstrap dispatch、target verification、single rollback attempt、DB rollback exclusion、incident handling を記録する。
 - `(MODIFY) README.md`
@@ -119,7 +119,7 @@ release success として扱わない。automatic retry loops や alternate SHA 
 - target failure: target backend is not accepted; previous SHA がある場合は exactly one rollback deploy を試みる
 - rollback success: previous full SHA と ready worker が観測される。workflow は target failure として non-zero で終了する
 - rollback failure: incident failure。workflow は recovery succeeded を主張しない
-- initial legacy bootstrap: operator-supplied `previous_commit_sha` が full/reachable SHA でなければ deploy mutation を開始しない
+- initial legacy bootstrap: operator-supplied `previous_commit_sha` が 40 文字 hexadecimal full/reachable SHA でなければ deploy mutation を開始しない
 - schema: code rollback は schema rollback を含まない。migration compatibility は release 前提である
 
 ### evidence の境界
