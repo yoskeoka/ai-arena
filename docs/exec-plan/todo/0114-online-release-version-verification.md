@@ -58,10 +58,10 @@ ranking の remote mutation 検証はこの計画に含めない。
 - `docs/exec-plan/todo/0092-operator-ui-auth-playwright-local-oidc-provider.md`
   - local/CI 専用の auth regression seam を扱う既存 plan。staging machine account の実装を今回の依存にはしない。
 
-Render は service/deploy の commit SHA を `RENDER_GIT_COMMIT` として runtime に提供する。
-したがって、`.git` の存在や追加の build-time linker flag に依存せず、`/version` handler が
-この値を返す。Render deploy hook の `ref` は `target_sha` を指定しているため、polling の
-比較対象と runtime の version source は同じ commit identity になる。
+`/version` の version source は Render 固有の `RENDER_GIT_COMMIT` には依存させず、build 時に
+checkout の `git rev-parse --verify HEAD` で取得した full SHA とする。Render の deploy hook
+には `ref=${TARGET_SHA}` を指定するため、Render build 時の checkout `HEAD` と polling の
+比較対象は同じ commit identity になる。
 
 ## Adopted Design
 
@@ -69,8 +69,10 @@ Render は service/deploy の commit SHA を `RENDER_GIT_COMMIT` として runti
 
 - endpoint は public read-only の `GET /version` とする。
 - auth middleware の外側に登録し、匿名 request でも取得できるようにする。
-- `version_sha` は `RENDER_GIT_COMMIT` の trim 済み値を返す。
-- Render 外の local fixture service では provider variable が空になり得るため、response shape は維持したまま空文字を返してよい。staging acceptance では空文字を成功とみなさず、target SHA との完全一致を要求する。
+- `version_sha` は `cmd/arena-service` の package variable `main.Version` を `serve` 起動時に service adapter へ渡した値を返す。
+- `make render-build` は `BUILD_VERSION_SHA ?= $(shell git rev-parse --verify HEAD 2>/dev/null)` を解決し、空なら build を失敗させたうえで、`-ldflags "-X main.Version=$(BUILD_VERSION_SHA)"` を使って binary に full SHA を埋め込む。
+- 既存の `VERSION` は PostgreSQL migration baseline 用の意味を持つため、git SHA のデフォルト値をそこへ設定しない。build identity には専用の `BUILD_VERSION_SHA` を使う。
+- linker flag なしで起動した local fixture/test binary では `version_sha` が空でも response shape は維持する。staging acceptance では空文字を成功とみなさず、target SHA との完全一致を要求する。
 - `version_sha` に短縮 SHA、branch 名、build 時刻、hostname、追加 metadata を含めない。
 
 TypeSpec を wire contract の正本とし、version 用 namespace/operation と response model を
@@ -119,10 +121,14 @@ staging に対して成功しないようにする。
   - TypeSpec build で `/version` contract を再生成する。
 - `operator-ui/src/generated/operator-api/` (MODIFY)
   - generated client/model/serializer に version operation を反映する。
+- `cmd/arena-service/main.go` (MODIFY)
+  - linker flag の注入先となる `main.Version` を定義し、`serve` から service adapter へ渡す。
+- `Makefile` (MODIFY)
+  - `render-build` で `git rev-parse --verify HEAD` を `BUILD_VERSION_SHA` として解決し、空値を拒否して `-X main.Version=...` を build に渡す。
 - `internal/platform/service/http.go` (MODIFY)
-  - public `/version` route と `RENDER_GIT_COMMIT` response handler を追加する。
+  - public `/version` route と build-time version response handler を追加する。
 - `internal/platform/service/http_test.go` (MODIFY)
-  - full SHA を設定した `/version` response、status、content type、JSON shape を検証する。
+  - adapter に full SHA を設定した `/version` response、status、content type、JSON shape、auth configured 下でも public であることを検証する。
 - `tools/dev/wait-for-remote-version.sh` (NEW)
   - Render backend の version identity を bounded polling する repo-owned helper を追加する。
 - `.github/workflows/online-release-staging.yml` (MODIFY)
@@ -168,7 +174,7 @@ create bots, enqueue matches, update rankings, or consume staging data.
 
 1. Update the behavioral spec and online deploy runbook with the new public version identity and remote smoke boundary.
 2. Add the TypeSpec route/model and regenerate OpenAPI/generated client outputs.
-3. Implement the public handler and focused service tests using a deterministic `RENDER_GIT_COMMIT` value.
+3. Add the build-time SHA variable/linker flag, pass it into the service adapter, and implement the public handler with focused tests using a deterministic full SHA.
 4. Add the bounded polling helper and unit/script-level validation for exact match, retry, and timeout behavior where practical.
 5. Update both staging workflows. Keep Render deploy wait before workflow completion and keep verify-side exact comparison as defense in depth.
 6. Update the Playwright remote scenario while retaining protected coverage in local/CI auth-enabled lanes.
@@ -205,4 +211,3 @@ present.
 - Do not make `/version` an authenticated operator endpoint; its purpose is deployment provenance/readiness.
 - Do not accept a branch name, short SHA, stale SHA, empty string, or merely successful deploy-hook response as proof of deployment.
 - Do not change production release behavior in this plan except for shared API generation if required.
-
