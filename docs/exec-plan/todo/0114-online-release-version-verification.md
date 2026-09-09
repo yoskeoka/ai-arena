@@ -26,7 +26,7 @@ JSON 表現と staging の worker-ready 判定は `0116-online-release-worker-re
 が、production の post-release verification と rollback は
 `0117-online-release-production-readiness-rollback` が扱う。
 
-## Context and Current References
+## 背景と現行参照
 
 - `.github/workflows/online-release-staging.yml:271-294`
   - Render deploy hook は `ref=${TARGET_SHA}` を指定するが、現在は hook の受付直後に workflow を成功させる。
@@ -51,9 +51,9 @@ Render deploy hook は full SHA を `ref` として受け取れる。`ref` 指�
 設定にも影響するため、既存の staging / production の明示 deploy hook 運用を維持し、その
 issuance path や secret value を workflow summary に出してはならない。
 
-## Adopted Design
+## 採用する設計
 
-### Public version identity
+### public version identity
 
 - `GET /version` は auth middleware の外にある public read-only endpoint とする。
 - response は `application/json`、`version_sha` だけを持つ object、HTTP `200` とする。
@@ -69,7 +69,7 @@ issuance path や secret value を workflow summary に出してはならない�
 TypeSpec を wire contract の正本とし、version namespace、response model、OpenAPI、generated
 operator client を再生成する。operator UI に version 表示を追加しない。
 
-### Staging version convergence
+### staging version convergence
 
 deploy hook の直後に repo-owned helper で `${STAGING_BACKEND_URL}/version` を polling する。
 
@@ -86,7 +86,7 @@ deploy hook の直後に repo-owned helper で `${STAGING_BACKEND_URL}/version` 
 terminal status を API なしに直接取得するものではない。timeout 後に provider state を成功と
 推測してはならず、Render deploy record を operator が確認する。
 
-### Remote smoke boundary
+### remote smoke の境界
 
 `verify:remote` は次の read-only surface に限定する。
 
@@ -99,7 +99,7 @@ protected operator API、bundle path、preset input/output/env、ZIP upload、re
 match enqueue、ranking を remote path から除外する。これらは local / CI auth-mock lane の責務に
 残す。`/healthz` の worker component はこの plan の success condition に含めない。
 
-## Code and Documentation Change Map
+## 変更対象
 
 - `(NEW) typespec/namespaces/operator/version.tsp`
   - public `GET /version` operation を定義する。
@@ -135,7 +135,7 @@ match enqueue、ranking を remote path から除外する。これらは local 
   - version convergence、20 分 acceptance window、summary evidence、provider-state investigation を記録する。
 - `(DELETE) N/A`
 
-## Black-Box Specification Changes
+## black-box contract の変更
 
 ### `GET /version`
 
@@ -145,14 +145,14 @@ match enqueue、ranking を remote path から除外する。これらは local 
 - auth: session、role、operator credential を要求しない
 - staging/prod release verification: full target SHA との完全一致だけを success とする
 
-### Staging deploy completion
+### staging deploy の完了条件
 
 staging deploy は Render hook が受理されたことだけでは成功としない。20 分以内に serving backend の
 `version_sha` が canonical target SHA と一致したときだけ version convergence を成功とする。
 timeout、mismatch、HTTP failure、malformed response は workflow failure であり、provider state を
 成功とみなさない。
 
-## Subtasks and Dependencies
+## サブタスクと依存関係
 
 1. behavioral spec と online deploy runbook に public version identity と remote smoke boundary を記録する。
 2. TypeSpec route/model を追加し、OpenAPI/generated client を再生成する。
@@ -164,7 +164,7 @@ timeout、mismatch、HTTP failure、malformed response は workflow failure で�
 この plan は worker lock retry に依存しない。`0116-online-release-worker-readiness-verification` は
 この plan と `0115-worker-lock-retry-on-render-rollout` の実装後に着手する。
 
-## Verification
+## 検証
 
 - `pnpm --dir typespec build` が成功し、generated OpenAPI/client に drift がない。
 - focused Go test が full SHA、content type、JSON shape、auth configured 下の public access を確認する。
@@ -173,7 +173,7 @@ timeout、mismatch、HTTP failure、malformed response は workflow failure で�
 - applicable な `make test`、`make lint`、workflow linter、textlint、`git diff --check` が成功する。
 - staging は hook 後に target full SHA を観測し、timeout 時は last observation と Render deploy record を確認する。
 
-## Non-goals and Rejection Conditions
+## 非目標と拒否条件
 
 - worker readiness、worker lock retry、`/healthz` response body の component state を追加しない。
 - staging machine account、OIDC provider、OAuth test double、service token、access cookie を追加しない。
