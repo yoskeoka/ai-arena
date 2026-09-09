@@ -29,7 +29,7 @@ automatic rollback は `0117-online-release-production-readiness-rollback` で�
 
 worker readiness の JSON body と release workflow によるその観測はこの plan の範囲外である。
 
-## Incident and Current References
+## incident と現行参照
 
 - `internal/platform/service/store_postgres.go:23-54`
   - `PostgresQueueStore.AcquireWorker` は dedicated pool connection 上の session-level advisory lock を取得する。
@@ -51,9 +51,9 @@ Render は新 instance を healthy として traffic を切り替えた 60 秒�
 は約 90 秒以内に lock を解放する見込みであり、5 分は provider jitter と異常観測に余裕を持たせる
 safety bound とする。
 
-## Adopted Design
+## 採用する設計
 
-### Worker ownership and error classification
+### worker ownership と error classification
 
 Postgres advisory lock と dedicated connection を queue authority の fencing として維持する。lock を
 持つ process だけが `RecoverExpired`、claim、match execution を実行できる。lock 待ち中の process
@@ -70,7 +70,7 @@ Postgres advisory lock と dedicated connection を queue authority の fencing 
 sentinel の名称と配置は既存 error 定義に合わせ、呼び出し側が error message の文字列比較に依存
 しないようにする。
 
-### Bounded retry and shutdown-delay invariant
+### bounded retry と shutdown-delay invariant
 
 `WorkerLoop.Run` の開始時に ownership acquisition を retry する。helper は context、retry interval、
 maximum wait を受け取り、unit test が短い duration を注入できるようにする。
@@ -91,7 +91,7 @@ English code comment として置く。
 wait と `0116` の readiness wait も同時に見直す ownership を明示する。5 分は current 30 秒設定を
 下回らず、上記の default lower bound 120 秒を十分に超える。
 
-### Liveness and handoff sequence
+### liveness と handoff sequence
 
 `serve` の concurrent HTTP / worker startup は維持し、次の sequence を成立させる。
 
@@ -107,7 +107,7 @@ wait と `0116` の readiness wait も同時に見直す ownership を明示す�
 `0116-online-release-worker-readiness-verification` は同じ `200` response の JSON body を GitHub
 Actions が読む readiness signal として拡張してよいが、Render health check の liveness 判定には使わない。
 
-## Black-Box Specification Changes
+## black-box contract の変更
 
 ### `(MODIFY) docs/specs/platform-service-single-worker-assumptions.md`
 
@@ -126,7 +126,7 @@ HTTP `200` になっても、lock を取得するまで queue を実行しない
 safety failure として扱うこと、production release workflow の external verification/rollback は
 `0117` が扱うことを記録する。
 
-## Code Change Map
+## 変更対象
 
 - `(MODIFY) internal/platform/service/errors.go`
   - `ErrWorkerQueueOwned` と ownership wait timeout の sentinel を定義する。
@@ -149,7 +149,7 @@ safety failure として扱うこと、production release workflow の external 
 `cmd/arena-service/main.go` と `internal/platform/service/http.go` はこの plan では変更しない。HTTP
 liveness に additional JSON readiness metadata を載せる場合は `0116` の責務とする。
 
-## Subtasks and Dependencies
+## サブタスクと依存関係
 
 1. single-worker spec と online deploy runbook に shared staging/production handoff contract を先に記録する。
 2. sentinel と Postgres store の false-return seam を追加する。
@@ -160,7 +160,7 @@ liveness に additional JSON readiness metadata を載せる場合は `0116` の
 この plan は `0114` に依存しない。`0116` はこの plan と `0114` の実装後に、release workflow に
 worker-readiness verification を追加する。
 
-## Verification
+## 検証
 
 - `go test ./internal/platform/service/...`
 - Postgres test lane で first/second worker rejection、release 後の retry acquisition、queue record の単一実行を確認する。
@@ -170,7 +170,7 @@ worker-readiness verification を追加する。
 - Render staging で new revision が HTTP `200` liveness を返した後、old revision の shutdown と lock release 後にだけ worker が queue を処理することを log / operator evidence で確認する。
 - old process が lock を解放しない test では 5 分後に queue execution が fail closed し、二重実行がないことを確認する。provider-side release/rollback 判定は `0117` の workflow acceptance と混同しない。
 
-## Alternatives and Non-goals
+## 代替案と非目標
 
 - blocking `pg_advisory_lock` に置換しない。context、timeout、error classification を application 側で保持するためである。
 - lease expiry で advisory lock を takeover しない。二重 worker 実行を防ぐためである。
