@@ -7,198 +7,173 @@ Incident reference: https://github.com/yoskeoka/ai-arena/pull/323
 
 ## Objective
 
-Render の zero-downtime deploy で旧 instance と新 instance が同じ Neon Postgres を
-一時的に共有しても、新 instance が worker lock の競合だけを理由に起動失敗しないようにする。
-新 instance は HTTP liveness を提供したまま、旧 worker が advisory lock を解放するまで
-queue worker の起動を bounded に待ち、lock 取得後にだけ queue の claim / 実行を開始する。
+Render の zero-downtime deploy で旧 instance と新 instance が同じ Neon Postgres を一時的に
+共有しても、新 instance が worker lock の競合だけを理由に起動失敗しないようにする。新 instance
+は HTTP liveness を提供したまま、旧 worker が advisory lock を解放するまで bounded に待ち、lock
+取得後にだけ queue worker を開始する。
+
+この shared `serve` path の変更は staging と production の両方に適用される。staging は rollout
+handoff の acceptance 環境とし、production の deployed SHA / worker-ready verification と
+automatic rollback は `0117-online-release-production-readiness-rollback` で別途扱う。
 
 完了境界は次のとおり。
 
-- lock 競合は識別可能な sentinel error として扱い、設定された有限時間まで retry する
-- DB connection failure や advisory-lock query failure は lock 競合と混同せず、即時に失敗させる
+- `pg_try_advisory_lock` の ownership conflict だけを識別可能な sentinel error として retry する
+- retry は 10 秒ごとに行い、最大 5 分で timeout する。lock 解放を 5 分間待ち続けるのではなく、各試行で ownership を再確認する
+- DB connection/query failure と input error は retry せず、最初の試行で返す
 - lock 未取得中は `RecoverExpired`、`Claim`、`ProcessNext` を呼び出さない
-- context cancellation は graceful shutdown として扱い、retry を停止して lock を保持しない
-- 有限時間内に旧 worker が終了しない場合は fail closed し、2 worker の同時 queue 実行を許さない
-- `/healthz` の HTTP liveness と worker ownership を分離したままにする
-- 現行の single-worker / single logical queue authority と、lease expiry による run recovery の責務を維持する
+- context cancellation は graceful shutdown として retry を止め、lock を保持しない
+- timeout は queue execution を fail closed し、2 worker の同時実行を許さない
+- `/healthz` は HTTP `200` を返す liveness endpoint のままとし、Render は response body を判定しない
+- lease expiry は crash recovery の責務に留め、advisory lock の強制 takeover に使わない
 
-この plan では version endpoint、Render 外部への log forwarding、Sentry 等の observability
-provider、multi-worker 化、worker を別 Render service へ分離することは扱わない。
+worker readiness の JSON body と release workflow によるその観測はこの plan の範囲外である。
 
-## Incident and Current Behavior
-
-今回の staging incident は、PR #323 の merge commit を対象にした Render deploy で、旧
-instance が session-level PostgreSQL advisory lock を保持したまま新 instance が起動し、
-新 worker が一度だけ `pg_try_advisory_lock` を試みて終了したものだった。
-
-現在の実装は次の構造になっている。
+## Incident and Current References
 
 - `internal/platform/service/store_postgres.go:23-54`
-  - `PostgresQueueStore.AcquireWorker` は専用の pool connection を保持し、
-    `pg_try_advisory_lock(hashtext('ai-arena-service-single-worker'))` で queue ownership を取る
-  - lock を取れなかった場合は connection を解放して、通常の formatted error を返す
-  - lock を取れた場合は、その connection を保持した release function を返す
-- `internal/platform/service/worker_loop.go:20-78`
-  - `WorkerLoop.Run` は開始時に `AcquireWorker` を一度だけ呼ぶ
-  - 失敗すると `RecoverExpired` や queue processing より前に return する
+  - `PostgresQueueStore.AcquireWorker` は dedicated pool connection 上の session-level advisory lock を取得する。
+- `internal/platform/service/worker_loop.go:11-77`
+  - `WorkerLoop.Run` は worker guard を一度だけ取得し、失敗時は recovery/queue processing 前に return する。
 - `cmd/arena-service/main.go:535-584`
-  - worker loop と HTTP server は別 goroutine で起動する
-  - worker loop が error を返すと HTTP server を shutdown して `serve` も error で終了する
+  - worker loop と HTTP server は別 goroutine で起動し、worker loop の起動 error は service shutdown につながる。
 - `internal/platform/service/http.go:166-167,396-398`
-  - `/healthz` は `{"status":"ok"}` を HTTP 200 で返す liveness endpoint であり、worker lock の状態を判定しない
+  - `/healthz` は public HTTP `200` liveness route である。
 - `internal/platform/service/store_postgres_test.go:138-153`
-  - 既存テストは同じ queue に対する二つ目の worker ownership を拒否する契約を確認している
+  - 現在は同じ queue に対する二つ目の worker ownership を拒否することを確認している。
+- `.github/workflows/online-release-staging.yml:271-294`
+  - deploy hook は current release workflow の起点である。
+- `docs/specs/platform-service-single-worker-assumptions.md:35-58`
+  - single logical queue authority、lease recovery、shutdown の既存契約を定義する。
 
-Render の HTTP health check は configured path への GET の `2xx` / `3xx` status を成功とし、
-response body は判定対象ではない。[Render Health Checks](https://render.com/docs/health-checks)
-したがって、新 worker が lock 待ち中でも `/healthz` を 200 にして Render が旧 instance の
-停止へ進めることが、今回の handoff の前提になる。
+Render は新 instance を healthy として traffic を切り替えた 60 秒後に旧 instance へ `SIGTERM` を
+送る。既定の graceful shutdown delay は 30 秒である。したがって default topology の通常 handoff
+は約 90 秒以内に lock を解放する見込みであり、5 分は provider jitter と異常観測に余裕を持たせる
+safety bound とする。
 
-## Design Contract
+## Adopted Design
 
-### Worker ownership
+### Worker ownership and error classification
 
-Postgres advisory lock と専用 connection を現行どおり queue authority の fencing として使う。
-lock を保持している process だけが `RecoverExpired`、claim、match execution を実行できる。
-lock 待ち中の process は HTTP request を受けられても、queue の mutation / execution を開始してはならない。
-
-lease expiry は process crash 後の queue record recovery 用であり、旧 process の advisory lock
-handoff を待たずに強制 takeover する仕組みとして再利用しない。
-
-### Error classification
+Postgres advisory lock と dedicated connection を queue authority の fencing として維持する。lock を
+持つ process だけが `RecoverExpired`、claim、match execution を実行できる。lock 待ち中の process
+は HTTP request を受けても queue mutation / execution を開始してはならない。
 
 `AcquireWorker` が `pg_try_advisory_lock` の `false` を受けた場合だけ、`errors.Is` で判定できる
-worker ownership conflict sentinel (`ErrWorkerQueueOwned`) を返す。
+`ErrWorkerQueueOwned` を返す。
 
-- lock が別 worker に保持されている: retry 対象
-- pool connection の acquire failure: retry 対象外
-- advisory-lock query / scan failure: retry 対象外
-- empty worker ID 等の入力エラー: retry 対象外
+- another worker owns the lock: retry 対象
+- pool connection acquire failure: retry 対象外
+- advisory-lock query/scan failure: retry 対象外
+- empty worker ID などの input error: retry 対象外
 
-sentinel の名称と配置は既存 error 定義との整合を保ち、呼び出し側が error message の文字列比較に
-依存しないようにする。
+sentinel の名称と配置は既存 error 定義に合わせ、呼び出し側が error message の文字列比較に依存
+しないようにする。
 
-### Bounded retry
+### Bounded retry and shutdown-delay invariant
 
-`WorkerLoop.Run` の開始時に worker ownership の取得を retry する。retry helper は context、
-retry interval、maximum wait を受け取れる形にして、時間依存の unit test を短い duration で
-実行できるようにする。
+`WorkerLoop.Run` の開始時に ownership acquisition を retry する。helper は context、retry interval、
+maximum wait を受け取り、unit test が短い duration を注入できるようにする。
 
-- 通常起動の retry interval は既存の worker poll interval と同程度の低頻度とする
-- maximum wait は有限の既定値を持たせ、Render の rolling deploy handoff を許容しつつ、
-  旧 worker が停止しない場合に無期限で process を残さない
-- sentinel 以外の error は最初の試行で返す
-- maximum wait に到達した場合は ownership timeout と分かる error を返し、`serve` を
-  fail closed させる
-- context cancellation は timeout / infrastructure failure と区別し、retry を中断して正常終了する
+- normal interval は 10 秒とする
+- normal maximum wait は 5 分とする
+- each retry は new `AcquireWorker` call を使い、lock 未取得時の dedicated connection が確実に release されることを確認する
+- sentinel 以外の error は first attempt で返す
+- maximum wait 到達時は ownership timeout sentinel/error を返し、queue execution を fail closed する
+- context cancellation は timeout/infrastructure failure と区別し、正常終了する
 
-実装では retry ごとに新しい `AcquireWorker` を呼び、lock 未取得時に返された専用 connection が
-確実に release されることを保証する。lock 取得後は既存の defer release を維持する。
+`internal/platform/service/worker_loop.go` で maximum wait の既定値を定義する箇所には、次の趣旨を
+English code comment として置く。
+
+> Keep this at least 60 seconds plus Render's configured maxShutdownDelaySeconds plus a 30-second buffer. If the Render setting changes from its 30-second default, update this value and the release readiness timeout together.
+
+この comment は、Render の `maxShutdownDelaySeconds` を 300 秒まで延ばす場合に、worker maximum
+wait と `0116` の readiness wait も同時に見直す ownership を明示する。5 分は current 30 秒設定を
+下回らず、上記の default lower bound 120 秒を十分に超える。
 
 ### Liveness and handoff sequence
 
-`serve` の HTTP / worker goroutine 構成は維持し、次の sequence を成立させる。
+`serve` の concurrent HTTP / worker startup は維持し、次の sequence を成立させる。
 
-1. 新 instance が HTTP port を listen する
-2. `/healthz` が 200 を返す。worker ownership はまだ pending でもよい
-3. Render が新 instance を healthy として扱い、旧 instance の shutdown を開始する
-4. 旧 instance の DB session が advisory lock を解放する
-5. 新 instance の retry が lock を取得する
-6. 新 instance が初めて `RecoverExpired` / `Claim` / match execution を行う
+1. new instance が HTTP port を listen する
+2. `/healthz` が HTTP `200` を返す。worker ownership は pending でもよい
+3. Render が new instance を healthy として traffic を切り替える
+4. 60 秒後に Render が old instance へ `SIGTERM` を送る
+5. old DB session が advisory lock を release する
+6. new instance の 10 秒ごとの retry が lock を取得する
+7. new instance が初めて `RecoverExpired` / `Claim` / match execution を行う
 
-`/healthz` を worker-ready endpoint に変更して、この sequence を循環待ちにしてはならない。
-worker readiness を将来観測する必要がある場合は別の contract として扱い、この plan の
-Render health check path には組み込まない。
+`/healthz` の HTTP status を worker ownership に応じて non-`200` に変更してはならない。後続の
+`0116-online-release-worker-readiness-verification` は同じ `200` response の JSON body を GitHub
+Actions が読む readiness signal として拡張してよいが、Render health check の liveness 判定には使わない。
 
 ## Black-Box Specification Changes
 
 ### `(MODIFY) docs/specs/platform-service-single-worker-assumptions.md`
 
-Phase 7 の「生存 worker を観測した場合は fail closed」という記述を、queue execution の
-exclusive ownership という不変条件と、deploy handoff 中の bounded wait を両立する形に更新する。
-少なくとも次を明記する。
+次を明記する。
 
-- lock 待ち中の新 process は worker として queue mutation を実行しない
-- lock 競合は bounded handoff wait の対象である
+- lock 待ち中の new process は queue mutation を行わない
+- ownership conflict は 10 秒間隔・最大 5 分の bounded handoff wait の対象である
 - timeout、DB failure、context cancellation の結果を区別する
 - timeout 後は fail closed し、lease expiry を advisory lock の代用にしない
-- HTTP liveness は worker ownership と別契約である
+- HTTP liveness は worker ownership と別契約であり、staging / production の共通 runtime に適用する
 
 ### `(MODIFY) docs/development/platform-service-online-deploy.md`
 
-Phase 7 staging recovery / deploy runbook に、Render rolling deploy 時の worker handoff と確認項目を
-追記する。新 revision の `/healthz` が先に 200 になっても、worker が lock を取得するまでは
-queue が実行されないこと、lock timeout なら deploy failure として旧 known-good revision を
-維持することを operator が確認できるようにする。
+Render staging / production rollout の handoff と確認項目を追記する。new revision の `/healthz` が
+HTTP `200` になっても、lock を取得するまで queue を実行しないこと、ownership timeout は queue
+safety failure として扱うこと、production release workflow の external verification/rollback は
+`0117` が扱うことを記録する。
 
 ## Code Change Map
 
 - `(MODIFY) internal/platform/service/errors.go`
-  - worker ownership conflict (`ErrWorkerQueueOwned`) と ownership wait timeout の sentinel を定義する
+  - `ErrWorkerQueueOwned` と ownership wait timeout の sentinel を定義する。
 - `(MODIFY) internal/platform/service/store_postgres.go`
-  - `pg_try_advisory_lock` の `false` を `ErrWorkerQueueOwned` で返す
-  - DB connection / query errors は既存の error wrapping を保つ
+  - advisory-lock `false` を `ErrWorkerQueueOwned` として返し、DB errors の wrapping は維持する。
 - `(MODIFY) internal/platform/service/worker_loop.go`
-  - ownership acquisition retry helper を追加する
-  - lock 取得前に既存 polling / recovery loop へ進まない
-  - bounded timeout と context cancellation を扱う
+  - 10 秒 interval / 5 分 maximum wait の retry helper を追加する。
+  - maximum wait の constant/configuration value に Render shutdown-delay invariant の English comment を置く。
+  - lock 取得前に existing polling/recovery loop へ進まないようにする。
 - `(NEW) internal/platform/service/worker_loop_test.go`
-  - fake worker guard を使い、lock conflict の retry、lock 取得前の queue 非実行、
-    timeout、context cancellation、non-conflict error の即時終了を検証する
+  - retry、lock 取得前の queue 非実行、5 分既定値を短い injected duration で検証する timeout、cancellation、non-conflict fast failure を確認する。
 - `(MODIFY) internal/platform/service/store_postgres_test.go`
-  - 二つ目の worker が ownership sentinel を返すことを `errors.Is` で検証する
-  - 先行 worker の release 後に後続 worker が ownership を取得できることを検証する
-  - 専用 connection による advisory lock lifecycle を壊していないことを確認する
+  - second worker が ownership sentinel を返すこと、release 後に後続 worker が取得できること、connection lifecycle を検証する。
 - `(MODIFY) docs/specs/platform-service-single-worker-assumptions.md`
-  - 上記の bounded handoff 契約を反映する
+  - bounded handoff と staging/production scope を反映する。
 - `(MODIFY) docs/development/platform-service-online-deploy.md`
-  - Render staging rollout の operator-facing handoff / failure contract を反映する
+  - Render rollout handoff と ownership timeout の operator contract を反映する。
 - `(DELETE) N/A`
 
-`cmd/arena-service/main.go` と `internal/platform/service/http.go` は、既存の concurrent startup
-と `/healthz` liveness が契約を満たすため、原則として変更しない。実装上変更が必要になった
-場合は、HTTP liveness と worker ownership の分離を壊さない差分に限定する。
+`cmd/arena-service/main.go` と `internal/platform/service/http.go` はこの plan では変更しない。HTTP
+liveness に additional JSON readiness metadata を載せる場合は `0116` の責務とする。
 
-## Dependencies and Parallelism
+## Subtasks and Dependencies
 
-1. spec update
-   - `platform-service-single-worker-assumptions.md` と online deploy runbook の black-box contract を先に更新する
-2. error / store seam
-   - sentinel を定義し、Postgres store の false-return path を分類する
-3. worker retry
-   - helper と `WorkerLoop.Run` を接続する。lock 未取得中の queue 非実行を維持する
-4. tests
-   - unit test と Postgres integration test を追加し、既存の second-worker rejection test を維持・強化する
-5. verification
-   - Go tests / lint と workflow checks を通してから、別途 Render staging deploy で handoff を確認する
+1. single-worker spec と online deploy runbook に shared staging/production handoff contract を先に記録する。
+2. sentinel と Postgres store の false-return seam を追加する。
+3. retry helper と `WorkerLoop.Run` を接続し、10 秒 / 5 分の default と shutdown-delay comment を実装する。
+4. unit test と Postgres integration test を追加し、exclusive ownership を確認する。
+5. quality gates の後、Render staging で old/new handoff を確認する。
 
-1 と 2 は black-box 契約を確定した後なら並行に検討できるが、実装の merge 順は spec first とする。
-3 は 2 に依存し、4 は 3 の retry semantics に依存する。Render 上の実機確認は全テスト完了後の
-独立した acceptance とする。
+この plan は `0114` に依存しない。`0116` はこの plan と `0114` の実装後に、release workflow に
+worker-readiness verification を追加する。
 
 ## Verification
 
-実装時には少なくとも次を確認する。
-
 - `go test ./internal/platform/service/...`
-- Postgres test lane で、同じ DB に対する first worker / second worker の拒否、release 後の再取得、
-  queue record の単一実行を確認する
+- Postgres test lane で first/second worker rejection、release 後の retry acquisition、queue record の単一実行を確認する。
 - `make lint`
 - `./tools/workflow-lint.sh --mode=pre-push`
 - `git diff --check`
-- Render staging で新 revision の `/healthz` が 200 になった後、旧 revision 停止後にだけ
-  worker が lock を取得して queue を処理することを deploy log / operator flow で確認する
-- 旧 process が lock を解放しない試験では maximum wait 後に deploy が fail closed し、
-  既存の known-good revision を維持することを確認する
+- Render staging で new revision が HTTP `200` liveness を返した後、old revision の shutdown と lock release 後にだけ worker が queue を処理することを log / operator evidence で確認する。
+- old process が lock を解放しない test では 5 分後に queue execution が fail closed し、二重実行がないことを確認する。provider-side release/rollback 判定は `0117` の workflow acceptance と混同しない。
 
-## Alternatives and Non-Goals
+## Alternatives and Non-goals
 
-- Render の zero-downtime を無効化するために persistent disk を導入する案は、provider-specific
-  な運用変更と追加コストを伴うため採用しない。[Render Disks](https://render.com/docs/disks)
-- Render の複数 deploy の overlapping policy を変更する案は、旧/new instance の同時稼働に
-  よる DB advisory lock 競合を解消しないため採用しない
-- blocking `pg_advisory_lock` へ単純に置き換える案は、context / timeout / error classification
-  をアプリケーション側で扱いにくくするため採用しない
-- queue lease の expiry を待たずに advisory lock を takeover する案は、二重 worker 実行の
-  リスクがあるため採用しない
-- multi-worker scheduling、fencing token、別 worker service への分離は後続の architectural plan とする
+- blocking `pg_advisory_lock` に置換しない。context、timeout、error classification を application 側で保持するためである。
+- lease expiry で advisory lock を takeover しない。二重 worker 実行を防ぐためである。
+- multi-worker scheduling、fencing token、separate worker service は後続の architectural plan とする。
+- `/healthz` を non-`200` worker readiness endpoint にしない。
+- production backend の version/readiness verification、automatic rollback、frontend identity verification は実装しない。
