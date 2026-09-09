@@ -21,6 +21,9 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/service"
 )
 
+// Version is set for release builds with -ldflags.
+var Version string
+
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -523,6 +526,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	if err != nil {
 		return err
 	}
+	api.WithVersion(Version)
 	api.WithArtifactAdmission(a.artifactAdmission)
 	api.WithBotOwnership(a.botOwnership)
 	logger := log.New(stderr, "arena-service: ", log.LstdFlags)

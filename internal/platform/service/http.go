@@ -50,6 +50,11 @@ type GameBundleAdmissionResponse struct {
 	SupportedRulesets []string `json:"supported_rulesets"`
 }
 
+// VersionResponse identifies the build serving this request.
+type VersionResponse struct {
+	VersionSHA string `json:"version_sha"`
+}
+
 // ArtifactAccessIssuer derives per-artifact access metadata from stable locators.
 type ArtifactAccessIssuer interface {
 	Issue(context.Context, MatchDetail) (map[string]ArtifactAccessMetadata, error)
@@ -106,6 +111,13 @@ type OperatorAPI struct {
 	auth              *AuthService
 	artifactAdmission *ArtifactAdmissionService
 	botOwnership      BotOwnershipStore
+	versionSHA        string
+}
+
+// WithVersion sets the build identity exposed by the public version endpoint.
+func (a *OperatorAPI) WithVersion(versionSHA string) *OperatorAPI {
+	a.versionSHA = versionSHA
+	return a
 }
 
 // WithBotOwnership enables authenticated bot revision and retirement routes.
@@ -165,6 +177,7 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, general *Ge
 func (a *OperatorAPI) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.handleHealthz)
+	mux.HandleFunc("GET /version", a.handleVersion)
 	mux.HandleFunc("GET /auth/session", a.handleSessionStatus)
 	if a.auth != nil {
 		mux.HandleFunc("GET /auth/github/login", a.auth.GitHubLogin)
@@ -395,6 +408,10 @@ func (a *OperatorAPI) handleGameBundleUpload(w http.ResponseWriter, r *http.Requ
 
 func (a *OperatorAPI) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (a *OperatorAPI) handleVersion(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, VersionResponse{VersionSHA: a.versionSHA})
 }
 
 func (a *OperatorAPI) handleSessionStatus(w http.ResponseWriter, r *http.Request) {

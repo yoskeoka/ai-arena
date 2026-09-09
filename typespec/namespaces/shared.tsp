@@ -113,6 +113,10 @@ model HealthResponse {
   status: string;
 }
 
+model VersionResponse {
+  version_sha: string;
+}
+
 model SignupInviteRequest {
   role: SignupInviteRole;
   ttl?: string;

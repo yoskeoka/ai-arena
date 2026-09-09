@@ -206,6 +206,18 @@ remote `Cloudflare Pages` deploy では、operator API base URL の初期値を 
 - remote `Pages` deploy では same-origin `/api` fallback を前提にしてはならない
 - staging / production deploy workflow は、それぞれの canonical backend URL を `VITE_OPERATOR_API_BASE_URL` として build に渡さなければならない
 
+## Remote Version Identity と Read-only Smoke
+
+backend は認証 middleware の外に public、read-only な `GET /version` を提供する。wire contract の正本は
+`typespec/namespaces/operator/version.tsp` と shared model であり、release verification はここで定義された
+`version_sha` が target の full commit SHA と完全一致した場合だけ成功とする。空値、短縮 SHA、branch 名、
+build 時刻、hostname、および response shape の不正はいずれも version identity にならない。
+
+staging の remote smoke は deploy 済み frontend への接続、backend の exact version identity、匿名
+`/auth/session`、および匿名 browser の `/operator` から login route への redirect だけを確認する。
+operator API の mutation、fixture ZIP、machine account、OIDC、test auth、game / bot registration、match、
+ranking は remote smoke の責務外であり、local または CI の auth-mock lane が継続して検証する。
+
 ## Polling Contract
 
 - overview active runs:

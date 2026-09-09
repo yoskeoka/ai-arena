@@ -4,6 +4,7 @@ import "@typespec/openapi3";
 
 import "./namespaces/shared.tsp";
 import "./namespaces/operator/health.tsp";
+import "./namespaces/operator/version.tsp";
 import "./namespaces/operator/auth.tsp";
 import "./namespaces/operator/api.tsp";
 import "./namespaces/public/api.tsp";

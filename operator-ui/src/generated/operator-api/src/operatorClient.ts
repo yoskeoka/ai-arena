@@ -54,6 +54,8 @@ import {
   type UploadAiBundleOptions,
   uploadGameBundle,
   type UploadGameBundleOptions,
+  version,
+  type VersionOptions,
 } from "./api/operatorClientOperations.js";
 import type {
   AiSubmissionRequest,
@@ -73,6 +75,9 @@ export class OperatorClient {
   }
   async healthz(options?: HealthzOptions) {
     return healthz(this.#context, options);
+  };
+  async version(options?: VersionOptions) {
+    return version(this.#context, options);
   };
   async session(options?: SessionOptions) {
     return session(this.#context, options);

@@ -492,8 +492,16 @@ staging deploy workflow は次を 1 run にまとめる。
      preview frontend が staging backend URL を直接参照できるようにする
 4. `Cloudflare Pages` preview へ `staging` branch alias で direct upload する
 5. `Render staging` を同じ commit SHA で deploy hook 起動する
-6. workflow summary に backend / frontend URL と commit SHA を残す
+6. deploy hook の後、backend の public `GET /version` が target の full commit SHA を返すまで 15 秒間隔で
+   最大 80 回（20 分）待機する。HTTP / transport failure、malformed JSON、empty value、SHA mismatch は retry
+   とし、cookie、access token、session secret は request に付けない
+7. workflow summary に backend / frontend URL、commit SHA、version convergence の最終観測値を残す
    - DB migration が deploy より前に完了したことも残す
+
+deploy hook の受付だけでは staging deploy は成功ではない。20 分以内に serving backend が target SHA を
+完全一致で返さなければ release acceptance は failed とし、最後に観測した HTTP status と version value を
+記録する。この timeout は provider-side deploy status を成功と推測する根拠にはならないため、operator は
+Render deploy record を確認する。
 
 auto trigger contract:
 
@@ -546,13 +554,15 @@ staging verification workflow は local / CI lane と acceptance surface をそ�
 
 確認対象:
 
-- backend `GET /healthz`
-- `POST /api/v1/preset-matches`
-- `GET /api/v1/matches/active`
-- `GET /api/v1/matches/completed`
-- `GET /api/v1/matches/{submission_id}`
-- frontend operator surface の queue / active / completed / detail 操作
-- delegated artifact download link の有無
+- frontend へ接続できること
+- backend `GET /version` が verified commit SHA と完全一致すること
+- 匿名 backend `GET /auth/session` が auth enabled / unauthenticated を返すこと
+- 匿名 browser の `/operator` が login route へ redirect すること
+
+remote verification は read-only boundary に限定する。protected operator API、bundle upload、fixture ZIP、
+machine account、OIDC、`OPERATOR_UI_TEST_AUTH`、registration、bot creation、match enqueue、ranking は対象外で、
+local / CI auth-mock lane が検証を継続する。`/healthz` の worker component は staging verification の成功条件に
+含めない。
 
 staging verification workflow は少なくとも次を artifact として残す。
 

@@ -18,9 +18,10 @@ operator-facing HTTP contract は TypeSpec を正本とする。
 - project entrypoint
   - `typespec/main.tsp`
 - operator route definitions
-  - `typespec/namespaces/operator/api.tsp`
-  - `typespec/namespaces/operator/auth.tsp`
-  - `typespec/namespaces/operator/health.tsp`
+- `typespec/namespaces/operator/api.tsp`
+- `typespec/namespaces/operator/auth.tsp`
+- `typespec/namespaces/operator/health.tsp`
+- `typespec/namespaces/operator/version.tsp`
 - shared schema
   - `typespec/namespaces/shared.tsp`
 - emitted artifacts

@@ -279,6 +279,12 @@ jobs:
           RENDER_STAGING_DEPLOY_HOOK_URL: ${{ secrets.RENDER_STAGING_DEPLOY_HOOK_URL }}
           TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
 
+      - name: Wait for staging backend version convergence
+        id: version
+        run: ./tools/dev/wait-for-remote-version.sh "${STAGING_BACKEND_URL}" "${TARGET_SHA}"
+        env:
+          TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
+
       - name: Write workflow summary
         run: |
           {
@@ -287,6 +293,7 @@ jobs:
             echo "- Commit SHA: \`${TARGET_SHA}\`"
             echo "- Frontend URL: ${STAGING_FRONTEND_URL}"
             echo "- Backend URL: ${STAGING_BACKEND_URL}"
+            echo "- Version convergence: backend returned the target SHA (last HTTP status: ${{ steps.version.outputs.last_http_status }}, last version SHA: \`${{ steps.version.outputs.last_version_sha }}\`)"
             echo "- DB migration: applied before Pages/Render deploy via \`NEON_STAGING_MIGRATION_DSN\`"
             echo "- Next step: \`online-release-staging-verify.yml\` will run automatically for the same commit SHA"
           } >> "$GITHUB_STEP_SUMMARY"

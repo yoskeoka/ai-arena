@@ -39,6 +39,7 @@ import type {
   StoredRankingSnapshot,
   SubmittedPlayer,
   VerificationSummary,
+  VersionResponse,
 } from "../models.js";
 
 export function decodeBase64(value: string): Uint8Array | undefined {
@@ -133,6 +134,24 @@ export function decodeBase64(value: string): Uint8Array | undefined {
   }
     return {
     status: input_.status
+  }!;
+}export function jsonVersionResponseToTransportTransform(
+  input_?: VersionResponse | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    version_sha: input_.versionSha
+  }!;
+}export function jsonVersionResponseToApplicationTransform(
+  input_?: any,
+): VersionResponse {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    versionSha: input_.version_sha
   }!;
 }export function jsonSessionStatusResponseToTransportTransform(
   input_?: SessionStatusResponse | null,

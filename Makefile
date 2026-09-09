@@ -3,6 +3,7 @@ CARGO ?= cargo
 RUSTUP ?= rustup
 ATLAS_VERSION ?= 0.30.0
 SQLC_VERSION ?= 1.31.0
+BUILD_VERSION_SHA ?= $(shell git rev-parse --verify HEAD 2>/dev/null)
 CACHE_ROOT ?= /tmp/ai-arena-go-quality-gates
 XDG_CACHE_HOME ?= $(CACHE_ROOT)/xdg-cache
 GOPATH = $(CACHE_ROOT)/go
@@ -38,7 +39,7 @@ REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtim
 REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
 REVIVE_PACKAGE_DIRS = $(shell mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)" >/dev/null 2>&1; env GOPATH="$(GOPATH)" GOMODCACHE="$(GOMODCACHE)" GOCACHE="$(GOCACHE)" $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
-.PHONY: up down migrate local-dummy-fixture local-invite-url invite-remote start-backend-local start-frontend-local test test-postgres postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage verify-reversi-release-artifacts test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-preset-bots render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: up down migrate local-dummy-fixture local-invite-url invite-remote start-backend-local start-frontend-local test test-postgres test-remote-version-helper postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage verify-reversi-release-artifacts test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-preset-bots render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 export COMPOSE_BAKE = false
 
@@ -70,6 +71,9 @@ test-postgres:
 	@mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	@$(MAKE) postgres-schema-apply
 	@./tools/dev/run-quiet-command.sh "make test-postgres" env -u ARENA_GITHUB_OAUTH_CLIENT_ID -u ARENA_GITHUB_OAUTH_CLIENT_SECRET AI_ARENA_PG_TEST_DSN="$(AI_ARENA_PG_TEST_DSN)" $(GO_ENV) $(GO) test ./...
+
+test-remote-version-helper:
+	./tools/dev/test-wait-for-remote-version.sh
 
 postgres-up:
 	docker compose -f tools/dev/postgres-compose.yml up -d postgres
@@ -188,8 +192,12 @@ build-preset-bots:
 
 render-build:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
+	@if [ -z "$(BUILD_VERSION_SHA)" ]; then \
+		echo "BUILD_VERSION_SHA is required for render-build" >&2; \
+		exit 1; \
+	fi
 	$(MAKE) build-preset-bots
-	$(GO_ENV) $(GO) build -tags netgo -ldflags '-s -w' -o app ./cmd/arena-service
+	$(GO_ENV) $(GO) build -tags netgo -ldflags '-s -w -X main.Version=$(BUILD_VERSION_SHA)' -o app ./cmd/arena-service
 
 render-start:
 	./app serve \
