@@ -15,18 +15,20 @@ staging の Render backend に、現在の deploy commit SHA を read-only に�
 `online-release-staging.yml` は Render deploy hook を起動した後、backend の
 `/version` が `target_sha` と一致するまで待機する。これにより、workflow summary
 だけでなく、実際に staging traffic を処理している backend が想定 commit を返すことを
-deploy の完了条件にする。
+確認する。さらに `/healthz` が HTTP server と worker loop の両方を `OK` と返すまで待機し、
+worker loop の起動前に HTTP server だけが応答する状態を deploy 成功とみなさない。
 
 `online-release-staging-verify.yml` は次の read-only remote smoke surface を確認する。
 
 - frontend に接続できる
-- backend `GET /healthz` が成功する
 - backend `GET /version` が検証対象の full SHA を返す
+- backend `GET /healthz` が HTTP `200` かつ `{"api":"OK","worker":"OK"}` を返す
 - backend `GET /auth/session` が `auth_mode=enabled`、`authenticated=false` を返す
 - 匿名 browser の `/operator` が login route へ redirect する
 
-完了境界は、staging deploy が version identity の一致を待って成功し、後続の remote
-verification が同じ SHA と匿名認証境界を確認することである。staging 用 machine account、
+完了境界は、staging deploy が version identity の一致後に HTTP server / worker loop の
+readiness を待って成功し、後続の remote verification が同じ SHA と匿名認証境界を確認する
+ことである。staging 用 machine account、
 OIDC provider、`OPERATOR_UI_TEST_AUTH`、game/AI/bot ZIP upload、registration、match、
 ranking の remote mutation 検証はこの計画に含めない。
 
@@ -39,12 +41,16 @@ ranking の remote mutation 検証はこの計画に含めない。
   - 現在は remote URL を指定して既存の managed operator UI flow を実行する。
 - `internal/platform/service/http.go:164-201,396-405`
   - `/healthz` と `/auth/session` は認証 middleware の外側にあり、`/api/v1/` は auth-enabled service では operator role を要求する。
-- `cmd/arena-service/main.go:369-401,509-528`
-  - Render runtime の auth と `OperatorAPI` の handler が構築される。version identity は service constructor の既存引数を増やさず、request 時に deployment environment を読む。
+- `internal/platform/service/worker_loop.go:11-77`
+  - worker loop は worker guard を取得した後、queue recovery と `ProcessNext` を繰り返すが、現在 readiness state を公開していない。
+- `cmd/arena-service/main.go:369-401,509-550`
+  - Render runtime の auth、`OperatorAPI`、worker loop が構築される。build-time version と worker readiness を API adapter へ渡す配線を追加する。
+- `cmd/operator-ui-fixture/main.go:85-105`
+  - fixture backend は worker loop を起動しないため、local fixture lane では deterministic な ready state を明示的に注入する必要がある。
 - `typespec/namespaces/operator/health.tsp:12-14`
   - 現在の operational endpoint の TypeSpec source。
 - `typespec/namespaces/shared.tsp:106-114`
-  - `HealthResponse` などの shared response model。
+  - `HealthResponse` などの shared response model。現在は `status` だけを持つ。
 - `typespec/main.tsp:5-9`
   - TypeSpec namespace import の entrypoint。
 - `operator-ui/playwright.config.js:3-55`
@@ -79,6 +85,21 @@ TypeSpec を wire contract の正本とし、version 用 namespace/operation と
 追加して OpenAPI と generated operator client を再生成する。operator UI 本体に version
 表示を追加することは今回の範囲外である。
 
+### Health readiness
+
+- `GET /healthz` は public endpoint のままとし、response body を次の JSON object に変更する。
+  - ready: `{"api":"OK","worker":"OK"}`、HTTP `200`
+  - worker loop 未起動または初回 queue recovery 前: `{"api":"OK","worker":"NOT_READY"}`、HTTP `503`
+- request が handler まで到達して JSON を返せる時点で `api` は `OK` とする。HTTP server
+  自体が listen していなければ response は返らないため、別の api readiness flag は設けない。
+- `WorkerLoop` に race-safe な `Ready()` state を追加し、worker guard の取得と初回の
+  `RecoverExpired` 成功後に ready とする。`Run` の終了時は not ready に戻す。
+- `serve` は同じ `WorkerLoop` の readiness callback を `OperatorAPI` に渡す。local fixture
+  は実 worker loop を持たないため、fixture が static backend として ready であることを
+  明示的に adapter へ渡す。
+- `/healthz` は auth middleware の外側に置き、auth configured staging でも匿名で確認できる
+  ようにする。HTTP `503`、`worker != "OK"`、malformed body はすべて not ready として扱う。
+
 ### Render deploy readiness
 
 既存の Render deploy hook 呼び出し直後に、repo-owned helper を使った polling step を追加する。
@@ -91,6 +112,14 @@ TypeSpec を wire contract の正本とし、version 用 namespace/operation と
 - HTTP error、connection failure、malformed JSON、empty `version_sha`、SHA mismatch は retry 対象。
 - 最大試行回数を超えた場合は step を fail し、最後に観測した HTTP status と version value を log/summary に残す。
 - secret、session cookie、Access token は polling request に付けない。
+
+version polling が成功した後、同じ backend の `${STAGING_BACKEND_URL}/healthz` を同じ bounded
+policy で polling する。
+
+- ready condition: HTTP `200`、JSON object の `api == "OK"`、`worker == "OK"`
+- HTTP `503`、connection failure、malformed JSON、いずれかの component の non-`OK` は retry 対象。
+- timeout 時は最後に観測した HTTP status、`api`、`worker` を log/summary に残す。
+- version が一致しても health が ready にならなければ staging deploy workflow は失敗する。
 
 この wait step を staging deploy workflow の成功条件にする。`workflow_run` による verify は
 その後に起動するため、automatic path では version-ready であることを引き継ぐ。dispatch による
@@ -127,23 +156,35 @@ staging に対して成功しないようにする。
   - `render-build` で `git rev-parse --verify HEAD` を `BUILD_VERSION_SHA` として解決し、空値を拒否して `-X main.Version=...` を build に渡す。
 - `internal/platform/service/http.go` (MODIFY)
   - public `/version` route と build-time version response handler を追加する。
+  - `/healthz` を api/worker の JSON response と readiness に応じた `200` / `503` に変更する。
+- `internal/platform/service/worker_loop.go` (MODIFY)
+  - worker loop の race-safe readiness state と `Ready()` accessor を追加し、初回 queue recovery と終了境界を反映する。
 - `internal/platform/service/http_test.go` (MODIFY)
   - adapter に full SHA を設定した `/version` response、status、content type、JSON shape、auth configured 下でも public であることを検証する。
+  - worker readiness 前の `503` / `NOT_READY` と ready 後の `200` / `OK` response を検証する。
+- `cmd/operator-ui-fixture/main.go` (MODIFY)
+  - worker loop を持たない fixture の `/healthz` readiness を明示的に `OK` とする。
 - `tools/dev/wait-for-remote-version.sh` (NEW)
   - Render backend の version identity を bounded polling する repo-owned helper を追加する。
 - `.github/workflows/online-release-staging.yml` (MODIFY)
-  - Render deploy hook 後に wait helper を実行し、version mismatch を deploy failure とする。
+  - Render deploy hook 後に version wait、続けて health wait を実行し、SHA mismatch または worker not ready を deploy failure とする。
 - `.github/workflows/online-release-staging-verify.yml` (MODIFY)
-  - target SHA を remote smoke test へ渡し、`/version`、`/healthz`、`/auth/session` を検証する。
+  - target SHA を remote smoke test へ渡し、`/version` 確認後に `/healthz` の HTTP status と api/worker body を検証する。
   - protected operator flow、ZIP env、未使用 preset input/output/env を remote path から除外する。
 - `operator-ui/tests/operator-ui.ci.spec.js` (MODIFY)
-  - remote version/session smoke test を追加し、protected service-backed test を remote では実行しない。
+  - remote version/session/health smoke test を追加し、version 一致後に `api=OK` / `worker=OK` を検証する。protected service-backed test は remote では実行しない。
+- `operator-ui/tests/operator-ui.spec.js` (MODIFY)
+  - fixture local lane が新しい health response shape と `200` readiness を確認する。
 - `docs/specs/index.md` (MODIFY)
   - `typespec/namespaces/operator/version.tsp` を operator route lookup に追加する。
 - `docs/specs/platform-service-operator-ui.md` (MODIFY)
   - remote staging verification の read-only/auth boundary と version identity assertion を追記する。
 - `docs/development/platform-service-online-deploy.md` (MODIFY)
-  - Render deploy の version-ready completion condition、bounded wait、remote smoke checklist、summary evidence を更新する。
+  - Render deploy の version-ready 後の health-ready completion condition、bounded wait、remote smoke checklist、summary evidence を更新する。
+- `docs/development/operator-ui-local-verification.md` (MODIFY)
+  - local fixture / managed backend の `/healthz` readiness contract を更新する。
+- `tools/dev/wait-for-remote-health.sh` (NEW)
+  - backend の `api=OK` / `worker=OK` と HTTP `200` を bounded polling する repo-owned helper を追加する。
 - `DELETE: N/A`
 
 ## Black-box Contract Changes
@@ -161,8 +202,9 @@ staging に対して成功しないようにする。
 
 The staging deploy workflow is not complete when the Render hook accepts the request. It is complete
 only after `/version.version_sha` equals the canonical full `target_sha` within the bounded polling
-window. A timeout or mismatch prevents the downstream staging verification from being treated as
-successful.
+window and the subsequent `/healthz` response is HTTP `200` with both `api` and `worker` equal to
+`OK`. A timeout, mismatch, HTTP `503`, or non-OK component prevents the downstream staging
+verification from being treated as successful.
 
 ### Remote verification
 
@@ -175,10 +217,11 @@ create bots, enqueue matches, update rankings, or consume staging data.
 1. Update the behavioral spec and online deploy runbook with the new public version identity and remote smoke boundary.
 2. Add the TypeSpec route/model and regenerate OpenAPI/generated client outputs.
 3. Add the build-time SHA variable/linker flag, pass it into the service adapter, and implement the public handler with focused tests using a deterministic full SHA.
-4. Add the bounded polling helper and unit/script-level validation for exact match, retry, and timeout behavior where practical.
-5. Update both staging workflows. Keep Render deploy wait before workflow completion and keep verify-side exact comparison as defense in depth.
-6. Update the Playwright remote scenario while retaining protected coverage in local/CI auth-enabled lanes.
-7. Run repo quality gates and perform one staging release verification against the latest head.
+4. Add worker loop readiness state and health response/status tests, including explicit fixture readiness.
+5. Add the bounded version and health polling helpers and unit/script-level validation for exact match, retry, and timeout behavior where practical.
+6. Update both staging workflows. Keep version wait then health wait before workflow completion and keep verify-side exact comparisons as defense in depth.
+7. Update the Playwright remote scenario and fixture lane while retaining protected coverage in local/CI auth-enabled lanes.
+8. Run repo quality gates and perform one staging release verification against the latest head.
 
 Steps 2-3 and 4-6 can proceed in parallel after step 1 is agreed; generated contract updates must land
 before implementation code depends on them. Workflow lint and staging acceptance depend on all changes being
@@ -189,8 +232,8 @@ present.
 ### Local and repository gates
 
 - `pnpm --dir typespec build` completes and leaves no generated OpenAPI/client drift.
-- focused Go tests cover `/version` with a full SHA and ensure the route remains public when auth is configured.
-- remote Playwright tests cover frontend connectivity, `/healthz`, exact `/version`, anonymous `/auth/session`, and `/operator` redirect.
+- focused Go tests cover `/version` with a full SHA, ensure both routes remain public when auth is configured, and cover health readiness before/after worker loop startup.
+- remote Playwright tests cover frontend connectivity, exact `/version`, `/healthz` HTTP `200` plus `api=OK` / `worker=OK`, anonymous `/auth/session`, and `/operator` redirect.
 - local/CI fixture and auth-enabled lanes continue to cover their existing protected operator surface and ZIP fixture flow.
 - applicable `make test`, `make lint`, workflow linter, textlint, and `git diff --check` pass.
 
