@@ -69,9 +69,9 @@ checkout の `git rev-parse --verify HEAD` で取得した full SHA とする。
 には `ref=${TARGET_SHA}` を指定するため、Render build 時の checkout `HEAD` と polling の
 比較対象は同じ commit identity になる。
 
-## Adopted Design
+## 採用する設計
 
-### Version endpoint
+### `/version` endpoint の契約
 
 - endpoint は public read-only の `GET /version` とする。
 - auth middleware の外側に登録し、匿名 request でも取得できるようにする。
@@ -85,11 +85,14 @@ TypeSpec を wire contract の正本とし、version 用 namespace/operation と
 追加して OpenAPI と generated operator client を再生成する。operator UI 本体に version
 表示を追加することは今回の範囲外である。
 
-### Health readiness
+### health readiness の契約
 
 - `GET /healthz` は public endpoint のままとし、response body を次の JSON object に変更する。
   - ready: `{"api":"OK","worker":"OK"}`、HTTP `200`
-  - worker loop 未起動または初回 queue recovery 前: `{"api":"OK","worker":"NOT_READY"}`、HTTP `503`
+  - worker loop 未起動または初回 queue recovery 前: `{"api":"OK","worker":"NOT_READY"}`、HTTP `200`
+- HTTP server が request を処理できる限り health endpoint は常に HTTP `200` を返す。Render の
+  instance health check による instance termination を避けるため、worker not ready を HTTP
+  status code で表現しない。
 - request が handler まで到達して JSON を返せる時点で `api` は `OK` とする。HTTP server
   自体が listen していなければ response は返らないため、別の api readiness flag は設けない。
 - `WorkerLoop` に race-safe な `Ready()` state を追加し、worker guard の取得と初回の
@@ -98,9 +101,10 @@ TypeSpec を wire contract の正本とし、version 用 namespace/operation と
   は実 worker loop を持たないため、fixture が static backend として ready であることを
   明示的に adapter へ渡す。
 - `/healthz` は auth middleware の外側に置き、auth configured staging でも匿名で確認できる
-  ようにする。HTTP `503`、`worker != "OK"`、malformed body はすべて not ready として扱う。
+  ようにする。HTTP request failure、`worker != "OK"`、malformed body はすべて CI の not ready
+  として扱う。HTTP `200` でも body の component が `OK` でなければ readiness success にしない。
 
-### Render deploy readiness
+### Render deploy readiness の契約
 
 既存の Render deploy hook 呼び出し直後に、repo-owned helper を使った polling step を追加する。
 
@@ -117,7 +121,7 @@ version polling が成功した後、同じ backend の `${STAGING_BACKEND_URL}/
 policy で polling する。
 
 - ready condition: HTTP `200`、JSON object の `api == "OK"`、`worker == "OK"`
-- HTTP `503`、connection failure、malformed JSON、いずれかの component の non-`OK` は retry 対象。
+- HTTP `200` 以外、connection failure、malformed JSON、いずれかの component の non-`OK` は retry 対象。
 - timeout 時は最後に観測した HTTP status、`api`、`worker` を log/summary に残す。
 - version が一致しても health が ready にならなければ staging deploy workflow は失敗する。
 
@@ -126,7 +130,7 @@ policy で polling する。
 verification path では、verify job 自身が `/version` を同じ target SHA と比較し、別 commit の
 staging に対して成功しないようにする。
 
-### Remote smoke boundary
+### remote smoke boundary の契約
 
 `verify:remote` は protected operator mutation を実行しない remote-specific test surface に
 整理する。
@@ -138,7 +142,7 @@ staging に対して成功しないようにする。
 - local fixture、real-local、CI auth-mock lane の protected operator flow と fixture ZIP は変更しない。
 - remote workflow の未使用 `preset_id` input/output/env は削除し、remote lane の契約を smoke surface に合わせる。
 
-## Change Map
+## 変更対象
 
 - `typespec/namespaces/operator/version.tsp` (NEW)
   - `GET /version` operation を定義する。
@@ -156,12 +160,12 @@ staging に対して成功しないようにする。
   - `render-build` で `git rev-parse --verify HEAD` を `BUILD_VERSION_SHA` として解決し、空値を拒否して `-X main.Version=...` を build に渡す。
 - `internal/platform/service/http.go` (MODIFY)
   - public `/version` route と build-time version response handler を追加する。
-  - `/healthz` を api/worker の JSON response と readiness に応じた `200` / `503` に変更する。
+  - `/healthz` を api/worker の JSON response に変更し、HTTP server が応答できる限り常に `200` を返す。
 - `internal/platform/service/worker_loop.go` (MODIFY)
   - worker loop の race-safe readiness state と `Ready()` accessor を追加し、初回 queue recovery と終了境界を反映する。
 - `internal/platform/service/http_test.go` (MODIFY)
   - adapter に full SHA を設定した `/version` response、status、content type、JSON shape、auth configured 下でも public であることを検証する。
-  - worker readiness 前の `503` / `NOT_READY` と ready 後の `200` / `OK` response を検証する。
+  - worker readiness 前の `200` / `NOT_READY` と ready 後の `200` / `OK` response を検証する。
 - `cmd/operator-ui-fixture/main.go` (MODIFY)
   - worker loop を持たない fixture の `/healthz` readiness を明示的に `OK` とする。
 - `tools/dev/wait-for-remote-version.sh` (NEW)
@@ -187,7 +191,7 @@ staging に対して成功しないようにする。
   - backend の `api=OK` / `worker=OK` と HTTP `200` を bounded polling する repo-owned helper を追加する。
 - `DELETE: N/A`
 
-## Black-box Contract Changes
+## Black-box contract の変更
 
 ### `GET /version`
 
@@ -198,44 +202,45 @@ staging に対して成功しないようにする。
 - auth: no session or role required
 - failure behavior: endpoint itself does not fabricate a SHA; staging verification rejects empty or mismatched values
 
-### Staging deploy completion
+### staging deploy の完了条件
 
-The staging deploy workflow is not complete when the Render hook accepts the request. It is complete
-only after `/version.version_sha` equals the canonical full `target_sha` within the bounded polling
-window and the subsequent `/healthz` response is HTTP `200` with both `api` and `worker` equal to
-`OK`. A timeout, mismatch, HTTP `503`, or non-OK component prevents the downstream staging
-verification from being treated as successful.
+staging deploy workflow は Render hook が request を受け付けただけでは完了としない。
+bounded polling window 内に `/version.version_sha` が canonical な `target_sha` と一致し、
+続く `/healthz` が HTTP `200` かつ `api` と `worker` の両方が `OK` になった場合だけ完了とする。
+timeout、SHA mismatch、HTTP request failure、component の non-`OK` は後続 staging verification
+を成功扱いにしない。`worker != "OK"` の response は HTTP `200` のままとし、Render が instance
+を failed health として扱わないようにする。
 
-### Remote verification
+### remote verification
 
-The automatic staging lane is read-only with respect to operator data. It validates deployed commit
-identity and public/anonymous boundaries only. It does not create game registrations, upload bundles,
-create bots, enqueue matches, update rankings, or consume staging data.
+automatic staging lane は operator data に対して read-only とする。deploy 済み commit identity と
+public/anonymous boundary だけを検証し、game registration の作成、bundle upload、bot 作成、
+match enqueue、ranking 更新、staging data の消費は行わない。
 
-## Sub-tasks and Dependencies
+## サブタスクと依存関係
 
-1. Update the behavioral spec and online deploy runbook with the new public version identity and remote smoke boundary.
-2. Add the TypeSpec route/model and regenerate OpenAPI/generated client outputs.
-3. Add the build-time SHA variable/linker flag, pass it into the service adapter, and implement the public handler with focused tests using a deterministic full SHA.
-4. Add worker loop readiness state and health response/status tests, including explicit fixture readiness.
-5. Add the bounded version and health polling helpers and unit/script-level validation for exact match, retry, and timeout behavior where practical.
-6. Update both staging workflows. Keep version wait then health wait before workflow completion and keep verify-side exact comparisons as defense in depth.
-7. Update the Playwright remote scenario and fixture lane while retaining protected coverage in local/CI auth-enabled lanes.
-8. Run repo quality gates and perform one staging release verification against the latest head.
+1. behavioral spec と online deploy runbook に、新しい public version identity と remote smoke boundary を追記する。
+2. TypeSpec route/model を追加し、OpenAPI/generated client outputs を再生成する。
+3. build-time SHA variable/linker flag を追加して service adapter へ渡し、deterministic な full SHA を使う focused test と public handler を実装する。
+4. worker loop readiness state と health response/status test を追加し、fixture の readiness も明示する。
+5. bounded version/health polling helper と、exact match・retry・timeout を確認する unit/script-level validation を、可能な範囲で追加する。
+6. staging workflow を更新する。workflow 完了前は version wait、続けて health wait を行い、verify 側の exact comparison は defense in depth として残す。
+7. Playwright remote scenario と fixture lane を更新し、protected coverage は local/CI auth-enabled lane に維持する。
+8. repo quality gate を実行し、latest head に対する staging release verification を 1 回行う。
 
 Steps 2-3 and 4-6 can proceed in parallel after step 1 is agreed; generated contract updates must land
 before implementation code depends on them. Workflow lint and staging acceptance depend on all changes being
 present.
 
-## Verification
+## 検証
 
-### Local and repository gates
+### Local と repository の quality gate
 
-- `pnpm --dir typespec build` completes and leaves no generated OpenAPI/client drift.
-- focused Go tests cover `/version` with a full SHA, ensure both routes remain public when auth is configured, and cover health readiness before/after worker loop startup.
-- remote Playwright tests cover frontend connectivity, exact `/version`, `/healthz` HTTP `200` plus `api=OK` / `worker=OK`, anonymous `/auth/session`, and `/operator` redirect.
-- local/CI fixture and auth-enabled lanes continue to cover their existing protected operator surface and ZIP fixture flow.
-- applicable `make test`, `make lint`, workflow linter, textlint, and `git diff --check` pass.
+- `pnpm --dir typespec build` が完了し、generated OpenAPI/client に drift が残らない。
+- focused Go test で、full SHA の `/version`、auth configured 下でも両 endpoint が public であること、worker loop 起動前後の health readiness を確認する。
+- remote Playwright test で、frontend 接続、exact `/version`、HTTP `200` かつ `api=OK` / `worker=OK` の `/healthz`、anonymous `/auth/session`、`/operator` redirect を確認する。
+- local/CI の fixture lane と auth-enabled lane は、既存の protected operator surface と ZIP fixture flow を継続して確認する。
+- applicable な `make test`、`make lint`、workflow linter、textlint、`git diff --check` が成功する。
 
 ### Staging acceptance
 
