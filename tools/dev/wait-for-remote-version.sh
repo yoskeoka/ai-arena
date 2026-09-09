@@ -24,6 +24,10 @@ if [[ ! $max_attempts =~ ^[1-9][0-9]*$ ]]; then
   echo "REMOTE_VERSION_MAX_ATTEMPTS must be a positive integer" >&2
   exit 2
 fi
+if ! command -v jq >/dev/null 2>&1; then
+  echo "jq is required to validate the version response" >&2
+  exit 2
+fi
 
 response_file=$(mktemp)
 trap 'rm -f "$response_file"' EXIT
