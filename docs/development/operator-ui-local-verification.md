@@ -21,7 +21,9 @@ local verification は 3 lane を既存の repo-owned `pnpm` command で扱う�
 
 この local verification が確認するもの:
 
-- backend の `/healthz` 応答
+- backend の `/healthz` 応答。HTTP status は `200` で、fixture は `api=OK` / `worker=OK` を返す
+- real service lane では worker ownership と initial recovery 前の `worker=NOT_READY` が liveness を壊さず、
+  readiness 完了後に `worker=OK` になること
 - preset queue panel が visible で、1 action で enqueue できること
 - active matches panel に queued submission が表示されること
 - completed matches panel と completed detail が visible であること
@@ -41,6 +43,18 @@ canonical command surface は次を正本とする。
 
 長い env var 列は helper 側へ閉じ込め、
 human と AI agent は既存 script 名をそのまま使えばよい。
+
+## Health response contract
+
+`GET /healthz` は auth や session を要求しない。handler が応答可能なら HTTP `200` を返し、response の
+component state は TypeSpec の `HealthResponse` を正本とする。
+
+- fixture backend は real worker loop を持たないため、static fixture service として readiness を `OK` にする
+- actual `arena-service` は worker の ownership 取得と initial `RecoverExpired` 成功の後だけ readiness を `OK`
+  にする
+- ownership handoff 中は `api=OK` / `worker=NOT_READY` を返してよいが、HTTP non-`200` にしてはならない
+- `worker=OK` は queue execution が可能であることを示すが、local browser lane は protected flow の実行を
+  remote release smoke の代用にしない
 
 default は quiet mode とし、成功時は lane summary と exec log path だけを返す。
 詳細な tool 出力が必要なときだけ `VERBOSE=1` を付けてよい。

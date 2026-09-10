@@ -3,7 +3,8 @@
  */
 export type String = string;
 export interface HealthResponse {
-  status: string;
+  api: "OK" | "NOT_READY";
+  worker: "OK" | "NOT_READY";
 }
 export interface VersionResponse {
   versionSha: string;

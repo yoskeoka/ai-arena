@@ -1058,10 +1058,15 @@
       },
       "Shared.HealthResponse": {
         "type": "object",
-        "required": ["status"],
+        "required": ["api", "worker"],
         "properties": {
-          "status": {
-            "type": "string"
+          "api": {
+            "type": "string",
+            "enum": ["OK", "NOT_READY"]
+          },
+          "worker": {
+            "type": "string",
+            "enum": ["OK", "NOT_READY"]
           }
         }
       },

@@ -28,7 +28,8 @@ test("operator route alias serves the same operator surface", async ({ page }) =
 
 test("local operator UI browser lane covers queue, active, completed detail, and artifact access", async ({ page, request }) => {
   const health = await request.get("http://127.0.0.1:10000/healthz");
-  expect(health.ok()).toBeTruthy();
+  expect(health.status()).toBe(200);
+  expect(await health.json()).toEqual({ api: "OK", worker: "OK" });
 
   await page.goto("/");
 

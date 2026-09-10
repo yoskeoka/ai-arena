@@ -51,6 +51,10 @@ test("remote read-only smoke verifies version, anonymous session, and operator l
   expect(version.status()).toBe(200);
   expect(await version.json()).toEqual({ version_sha: expectedVersionSHA });
 
+  const health = await request.get(`${backendBaseURL}/healthz`);
+  expect(health.status()).toBe(200);
+  expect(await health.json()).toEqual({ api: "OK", worker: "OK" });
+
   const session = await request.get(`${backendBaseURL}/auth/session`);
   expect(session.status()).toBe(200);
   expect(await session.json()).toEqual({ auth_mode: "enabled", authenticated: false });
@@ -124,7 +128,10 @@ test("service-backed operator UI browser lane covers registration, request execu
 
   const api = authEnabled ? createBrowserAPI(page) : createRequestAPI(request);
   const health = await request.get(`${backendBaseURL}/healthz`);
-  expect(health.ok()).toBeTruthy();
+  expect(health.status()).toBe(200);
+  const healthBody = await health.json();
+  expect(healthBody).toMatchObject({ api: "OK" });
+  expect(["OK", "NOT_READY"]).toContain(healthBody.worker);
 
   await page.goto("/");
 

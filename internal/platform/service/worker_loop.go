@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -22,6 +23,7 @@ type WorkerLoop struct {
 	ownershipRetryInterval time.Duration
 	ownershipMaximumWait   time.Duration
 	onError                func(error)
+	ready                  atomic.Bool
 }
 
 // NewWorkerLoop constructs one in-process queue poller.
@@ -45,8 +47,16 @@ func NewWorkerLoop(worker *Worker, workerID string, pollInterval time.Duration, 
 	}, nil
 }
 
+// Ready reports whether the worker owns the queue and completed its initial recovery.
+func (l *WorkerLoop) Ready() bool {
+	return l.ready.Load()
+}
+
 // Run keeps processing queued submissions until the context is canceled.
 func (l *WorkerLoop) Run(ctx context.Context) error {
+	l.ready.Store(false)
+	defer l.ready.Store(false)
+
 	if guard, ok := l.worker.queue.(workerProcessGuard); ok {
 		release, err := acquireWorkerWithRetry(ctx, guard, l.workerID, l.ownershipRetryInterval, l.ownershipMaximumWait)
 		if err != nil {
@@ -67,12 +77,14 @@ func (l *WorkerLoop) Run(ctx context.Context) error {
 		case <-timer.C:
 		}
 		if _, err := l.worker.queue.RecoverExpired(ctx, time.Now().UTC()); err != nil {
+			l.ready.Store(false)
 			if l.onError != nil {
 				l.onError(fmt.Errorf("recover expired leases: %w", err))
 			}
 			timer.Reset(l.pollInterval)
 			continue
 		}
+		l.ready.Store(true)
 
 		_, err := l.worker.ProcessNext(ctx, l.workerID)
 		switch {

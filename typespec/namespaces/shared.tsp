@@ -6,6 +6,7 @@ alias RegistrationSource = "manual" | "preset";
 alias RunKind = "initial" | "retry" | "rerun";
 alias SignupInviteRole = "participant" | "developer" | "operator";
 alias ValidationState = "ready";
+alias HealthComponentStatus = "OK" | "NOT_READY";
 
 model GameMetadata {
   game_id: string;
@@ -110,7 +111,8 @@ model SessionStatusResponse {
 }
 
 model HealthResponse {
-  status: string;
+  api: HealthComponentStatus;
+  worker: HealthComponentStatus;
 }
 
 model VersionResponse {

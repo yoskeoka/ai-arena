@@ -55,6 +55,12 @@ type VersionResponse struct {
 	VersionSHA string `json:"version_sha"`
 }
 
+// HealthResponse reports API liveness and worker readiness.
+type HealthResponse struct {
+	API    string `json:"api"`
+	Worker string `json:"worker"`
+}
+
 // ArtifactAccessIssuer derives per-artifact access metadata from stable locators.
 type ArtifactAccessIssuer interface {
 	Issue(context.Context, MatchDetail) (map[string]ArtifactAccessMetadata, error)
@@ -112,11 +118,18 @@ type OperatorAPI struct {
 	artifactAdmission *ArtifactAdmissionService
 	botOwnership      BotOwnershipStore
 	versionSHA        string
+	workerReady       func() bool
 }
 
 // WithVersion sets the build identity exposed by the public version endpoint.
 func (a *OperatorAPI) WithVersion(versionSHA string) *OperatorAPI {
 	a.versionSHA = versionSHA
+	return a
+}
+
+// WithWorkerReadiness sets the callback used by the public health endpoint.
+func (a *OperatorAPI) WithWorkerReadiness(workerReady func() bool) *OperatorAPI {
+	a.workerReady = workerReady
 	return a
 }
 
@@ -407,7 +420,11 @@ func (a *OperatorAPI) handleGameBundleUpload(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *OperatorAPI) handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	workerStatus := "NOT_READY"
+	if a.workerReady != nil && a.workerReady() {
+		workerStatus = "OK"
+	}
+	writeJSON(w, http.StatusOK, HealthResponse{API: "OK", Worker: workerStatus})
 }
 
 func (a *OperatorAPI) handleVersion(w http.ResponseWriter, _ *http.Request) {
