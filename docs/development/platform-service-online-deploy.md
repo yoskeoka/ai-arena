@@ -609,7 +609,7 @@ production release workflow は次を守る。
 - backend は `https://ai-arena.pages.dev` からの cross-origin fetch を受け付けなければならない
 - migration や deploy hook の前に public `GET /version` から current serving backend の canonical full SHA を
   capture する。valid JSON / lowercase 40 桁 SHA / repository reachability を満たさない値は previous target に
-  使わない
+  使わない。previous SHA も `origin/main` に到達可能でなければならない
 - legacy backend で `/version` が未導入（HTTP `404`）の最初の rollout だけ、manual dispatch の
   `previous_commit_sha` を必要とする。tag trigger は previous SHA を推測して deploy を開始してはならない
 - target deploy hook の直後、`/version` が target full SHA と完全一致することを 15 秒間隔・最大 20 分、続いて
