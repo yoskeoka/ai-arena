@@ -118,7 +118,7 @@ func TestWorkerLoopReadinessRequiresSuccessfulRecovery(t *testing.T) {
 	recoveryError := errors.New("database unavailable")
 	queue := &readinessQueueStore{
 		InMemoryQueueStore: NewInMemoryQueueStore(),
-		recoverResults:     []error{recoveryError, nil},
+		recoverResults:     []error{recoveryError, nil, nil},
 		recoverStarted:     make(chan struct{}, 2),
 	}
 	worker, err := NewWorker(queue, stubRunnerInvoker{}, stubTerminalPersister{})
@@ -155,6 +155,14 @@ func TestWorkerLoopReadinessRequiresSuccessfulRecovery(t *testing.T) {
 	case <-waitForWorkerReady(loop):
 	case <-time.After(time.Second):
 		t.Fatal("Ready() did not become true after successful recovery")
+	}
+	select {
+	case <-queue.recoverStarted:
+		if !loop.Ready() {
+			t.Fatal("Ready() during a later successful recovery = false, want true")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("later RecoverExpired() was not called")
 	}
 
 	cancel()

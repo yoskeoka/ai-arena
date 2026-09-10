@@ -76,8 +76,8 @@ func (l *WorkerLoop) Run(ctx context.Context) error {
 			return nil
 		case <-timer.C:
 		}
-		l.ready.Store(false)
 		if _, err := l.worker.queue.RecoverExpired(ctx, time.Now().UTC()); err != nil {
+			l.ready.Store(false)
 			if l.onError != nil {
 				l.onError(fmt.Errorf("recover expired leases: %w", err))
 			}
