@@ -39,6 +39,40 @@ func TestOperatorAPIVersionIsPublicAndHasExactJSONShape(t *testing.T) {
 	}
 }
 
+func TestOperatorAPIHealthzReportsLivenessAndWorkerReadiness(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		workerReady bool
+		wantWorker  string
+	}{
+		{name: "pending", workerReady: false, wantWorker: "NOT_READY"},
+		{name: "ready", workerReady: true, wantWorker: "OK"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			api := (&OperatorAPI{auth: &AuthService{}}).WithWorkerReadiness(func() bool {
+				return test.workerReady
+			})
+			response := httptest.NewRecorder()
+
+			api.Handler().ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil))
+
+			if response.Code != http.StatusOK {
+				t.Fatalf("GET /healthz status = %d, body = %s", response.Code, response.Body.String())
+			}
+			if contentType := response.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+				t.Fatalf("GET /healthz Content-Type = %q, want application/json", contentType)
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("json.Unmarshal(health) error = %v", err)
+			}
+			if len(payload) != 2 || payload["api"] != "OK" || payload["worker"] != test.wantWorker {
+				t.Fatalf("GET /healthz payload = %#v, want api=OK worker=%s", payload, test.wantWorker)
+			}
+		})
+	}
+}
+
 func TestOperatorAPIAdmitsGameBundleWithCreatedResponse(t *testing.T) {
 	store, err := NewFilesystemBundleStore(t.TempDir())
 	if err != nil {

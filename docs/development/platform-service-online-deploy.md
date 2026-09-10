@@ -767,6 +767,30 @@ current path では custom domain を導入しない。
   Render 設定更新後は `make render-build` / `make render-start` へ寄せる
   remote polling API を出す前に service command を上記 desired shape へ更新する必要がある
 
+## Staging version-then-readiness contract
+
+staging deploy の完了判定は、Render deploy hook の成功だけでは閉じない。対象 commit の backend が
+`GET /version` で target の full commit SHA を返した後、同じ backend の `GET /healthz` で API と worker の
+component がともに ready になるまで確認する。
+
+- helper: `./tools/dev/wait-for-remote-health.sh <backend-url>`
+- polling interval: 10 秒
+- maximum attempts: 42（最大 7 分）
+- 1 request の timeout: 15 秒
+- success: HTTP `200`、valid JSON、API component `OK`、worker component `OK`
+- retry: transport / HTTP failure、malformed JSON、component の non-`OK`
+- timeout: last observed HTTP status と component state を `GITHUB_STEP_SUMMARY` と workflow output に残し、
+  release workflow を failure にする
+
+`/healthz` は Render の HTTP liveness 用でもあるため、worker ownership handoff 中の response は HTTP `200`
+を維持する。`worker=NOT_READY` の間に queue mutation を開始したり、ready と推測して後続 smoke へ進んだり
+してはならない。`online-release-staging.yml` は `/version` の exact convergence の直後にこの readiness helper
+を実行し、summary には version と health の両方の last observation を残す。
+
+`online-release-staging-verify.yml` の remote Playwright lane も version 確認後に同じ health body を read-only
+で確認する。anonymous session、login redirect、protected operator mutation は従来どおり別の verification
+lane の責務とする。
+
 ## Release Runbook
 
 release operator は次の順で実行する。
@@ -782,6 +806,7 @@ release operator は次の順で実行する。
 5. staging verification
    - `online-release-staging-verify.yml` が同じ SHA で自動起動する
    - schema change を含む release では staging DB migration apply が summary に残ることを確認する
+   - exact `/version` の後に `/healthz` の API / worker readiness が確認されていることを確認する
 6. production release
    - GitHub Release 作成などで tag を push する
    - `online-release-production.yml` が tag SHA で自動起動する

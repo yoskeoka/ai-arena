@@ -285,6 +285,10 @@ jobs:
         env:
           TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
 
+      - name: Wait for staging backend worker readiness
+        id: health
+        run: ./tools/dev/wait-for-remote-health.sh "${STAGING_BACKEND_URL}"
+
       - name: Write workflow summary
         run: |
           {
@@ -294,6 +298,7 @@ jobs:
             echo "- Frontend URL: ${STAGING_FRONTEND_URL}"
             echo "- Backend URL: ${STAGING_BACKEND_URL}"
             echo "- Version convergence: backend returned the target SHA (last HTTP status: ${{ steps.version.outputs.last_http_status }}, last version SHA: \`${{ steps.version.outputs.last_version_sha }}\`)"
+            echo "- Worker readiness: backend returned api=\`${{ steps.health.outputs.last_api }}\` / worker=\`${{ steps.health.outputs.last_worker }}\` (last HTTP status: ${{ steps.health.outputs.last_http_status }})"
             echo "- DB migration: applied before Pages/Render deploy via \`NEON_STAGING_MIGRATION_DSN\`"
             echo "- Next step: \`online-release-staging-verify.yml\` will run automatically for the same commit SHA"
           } >> "$GITHUB_STEP_SUMMARY"

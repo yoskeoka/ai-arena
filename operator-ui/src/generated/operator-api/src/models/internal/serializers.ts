@@ -124,7 +124,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    status: input_.status
+    api: input_.api,worker: input_.worker
   }!;
 }export function jsonHealthResponseToApplicationTransform(
   input_?: any,
@@ -133,7 +133,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    status: input_.status
+    api: input_.api,worker: input_.worker
   }!;
 }export function jsonVersionResponseToTransportTransform(
   input_?: VersionResponse | null,

@@ -518,6 +518,13 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	if err != nil {
 		return err
 	}
+	logger := log.New(stderr, "arena-service: ", log.LstdFlags)
+	loop, err := service.NewWorkerLoop(worker, workerID, pollInterval, func(err error) {
+		logger.Printf("worker loop error: %v", err)
+	})
+	if err != nil {
+		return err
+	}
 	api, err := service.NewOperatorAPI(a.commands, a.queries, a.general, a.requests, resolvingPresetCatalog{
 		baseDir: a.baseDir,
 		opaque:  isOpaqueArtifactBackend(a.persister),
@@ -529,13 +536,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	api.WithVersion(Version)
 	api.WithArtifactAdmission(a.artifactAdmission)
 	api.WithBotOwnership(a.botOwnership)
-	logger := log.New(stderr, "arena-service: ", log.LstdFlags)
-	loop, err := service.NewWorkerLoop(worker, workerID, pollInterval, func(err error) {
-		logger.Printf("worker loop error: %v", err)
-	})
-	if err != nil {
-		return err
-	}
+	api.WithWorkerReadiness(loop.Ready)
 	server := &http.Server{
 		Addr:              listenAddr,
 		Handler:           api.Handler(),

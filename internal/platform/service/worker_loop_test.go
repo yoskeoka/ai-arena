@@ -102,9 +102,67 @@ func TestWorkerLoopDoesNotMutateQueueBeforeOwnership(t *testing.T) {
 	if got := queue.claimCalls.Load(); got != 0 {
 		t.Fatalf("Claim() calls while ownership pending = %d, want 0", got)
 	}
+	if loop.Ready() {
+		t.Fatal("Ready() while ownership pending = true, want false")
+	}
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("Run() error after cancellation = %v", err)
+	}
+	if loop.Ready() {
+		t.Fatal("Ready() after cancellation = true, want false")
+	}
+}
+
+func TestWorkerLoopReadinessRequiresSuccessfulRecovery(t *testing.T) {
+	recoveryError := errors.New("database unavailable")
+	queue := &readinessQueueStore{
+		InMemoryQueueStore: NewInMemoryQueueStore(),
+		recoverResults:     []error{recoveryError, nil},
+		recoverStarted:     make(chan struct{}, 2),
+	}
+	worker, err := NewWorker(queue, stubRunnerInvoker{}, stubTerminalPersister{})
+	if err != nil {
+		t.Fatalf("NewWorker() error = %v", err)
+	}
+	loop, err := NewWorkerLoop(worker, "worker-one", time.Millisecond, nil)
+	if err != nil {
+		t.Fatalf("NewWorkerLoop() error = %v", err)
+	}
+	loop.ownershipRetryInterval = time.Millisecond
+	loop.ownershipMaximumWait = time.Second
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- loop.Run(ctx) }()
+
+	select {
+	case <-queue.recoverStarted:
+	case <-time.After(time.Second):
+		t.Fatal("initial RecoverExpired() was not called")
+	}
+	if loop.Ready() {
+		t.Fatal("Ready() after failed recovery = true, want false")
+	}
+
+	select {
+	case <-queue.recoverStarted:
+	case <-time.After(time.Second):
+		t.Fatal("second RecoverExpired() was not called")
+	}
+	select {
+	case <-waitForWorkerReady(loop):
+	case <-time.After(time.Second):
+		t.Fatal("Ready() did not become true after successful recovery")
+	}
+
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("Run() error after cancellation = %v", err)
+	}
+	if loop.Ready() {
+		t.Fatal("Ready() after Run() exit = true, want false")
 	}
 }
 
@@ -157,6 +215,40 @@ type workerLoopQueueStore struct {
 	acquireStarted chan struct{}
 	recoverCalls   atomic.Int32
 	claimCalls     atomic.Int32
+}
+
+type readinessQueueStore struct {
+	*InMemoryQueueStore
+	recoverResults []error
+	recoverCalls   atomic.Int32
+	recoverStarted chan struct{}
+}
+
+func (s *readinessQueueStore) RecoverExpired(ctx context.Context, now time.Time) (int, error) {
+	call := int(s.recoverCalls.Add(1)) - 1
+	select {
+	case s.recoverStarted <- struct{}{}:
+	default:
+	}
+	if call < len(s.recoverResults) && s.recoverResults[call] != nil {
+		return 0, s.recoverResults[call]
+	}
+	return s.InMemoryQueueStore.RecoverExpired(ctx, now)
+}
+
+func (s *readinessQueueStore) AcquireWorker(context.Context, string) (func(), error) {
+	return func() {}, nil
+}
+
+func waitForWorkerReady(loop *WorkerLoop) <-chan struct{} {
+	ready := make(chan struct{})
+	go func() {
+		for !loop.Ready() {
+			time.Sleep(time.Millisecond)
+		}
+		close(ready)
+	}()
+	return ready
 }
 
 func (s *workerLoopQueueStore) AcquireWorker(context.Context, string) (func(), error) {

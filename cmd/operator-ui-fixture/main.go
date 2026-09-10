@@ -104,6 +104,7 @@ func newFixtureBackend(listenAddr string) (*fixtureBackend, error) {
 	if err != nil {
 		return nil, err
 	}
+	api.WithWorkerReadiness(func() bool { return true })
 	return &fixtureBackend{
 		api:         api.Handler(),
 		downloadURL: downloadURL,

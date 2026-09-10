@@ -218,6 +218,36 @@ staging の remote smoke は deploy 済み frontend への接続、backend の e
 operator API の mutation、fixture ZIP、machine account、OIDC、test auth、game / bot registration、match、
 ranking は remote smoke の責務外であり、local または CI の auth-mock lane が継続して検証する。
 
+## Public Liveness と Worker Readiness
+
+backend は認証 middleware の外に public、read-only な `GET /healthz` を提供する。wire response の正本は
+`typespec/namespaces/operator/health.tsp` と `typespec/namespaces/shared.tsp` であり、生成された OpenAPI
+および client はその出力でなければならない。
+
+`/healthz` の責務は HTTP liveness と worker readiness を分離することである。
+
+- handler が応答可能なら HTTP status は常に `200` とする。worker の pending state を Render health check
+  の failure にしてはならない
+- response は API component と worker component の状態を返す
+- API が応答可能で worker の ownership または initial recovery が未完了の間は worker component を
+  `NOT_READY` とする
+- worker guard の取得と initial queue recovery が完了した後だけ worker component を `OK` とする
+- worker process の終了、context cancellation、ownership timeout、guard/recovery failure の後は
+  `OK` を維持してはならない
+
+worker readiness は queue mutation の推測値ではない。worker が ready になる前に initial recovery、claim、
+match execution を開始してはならず、ready になった後だけ staging release verification が worker execution
+可能と扱う。fixture backend のように real worker を起動しない static service は、その fixture が提供する
+read-only backend 全体が利用可能であることを明示的に readiness として返してよい。
+
+staging release は、target commit の `/version` が exact に一致した後、同じ backend の `/healthz` が API と
+worker の両方を `OK` と返すまで待つ。polling は 10 秒間隔、最大 42 attempts（最大 7 分）、1 request 15 秒
+timeout とし、HTTP failure、malformed response、component の non-`OK` は retry する。最大 attempts 到達時は
+last observed HTTP status と component state を release summary に残し、release を failure とする。
+
+remote browser smoke も exact version の確認後に同じ health readiness を read-only に確認する。anonymous
+session、login redirect、既存の local fixture / auth-mock の protected flow の責務は変わらない。
+
 ## Polling Contract
 
 - overview active runs:
