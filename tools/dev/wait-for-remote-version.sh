@@ -13,6 +13,7 @@ interval_seconds=${REMOTE_VERSION_INTERVAL_SECONDS:-15}
 request_timeout_seconds=${REMOTE_VERSION_REQUEST_TIMEOUT_SECONDS:-15}
 curl_bin=${CURL_BIN:-curl}
 sleep_bin=${SLEEP_BIN:-sleep}
+verification_label=${REMOTE_VERSION_LABEL:-Remote}
 last_status=unavailable
 last_version=unavailable
 
@@ -22,6 +23,14 @@ if [[ ! $expected_sha =~ ^[0-9a-f]{40}$ ]]; then
 fi
 if [[ ! $max_attempts =~ ^[1-9][0-9]*$ ]]; then
   echo "REMOTE_VERSION_MAX_ATTEMPTS must be a positive integer" >&2
+  exit 2
+fi
+if [[ ! $interval_seconds =~ ^[1-9][0-9]*$ ]]; then
+  echo "REMOTE_VERSION_INTERVAL_SECONDS must be a positive integer" >&2
+  exit 2
+fi
+if [[ ! $request_timeout_seconds =~ ^[1-9][0-9]*$ ]]; then
+  echo "REMOTE_VERSION_REQUEST_TIMEOUT_SECONDS must be a positive integer" >&2
   exit 2
 fi
 if ! command -v jq >/dev/null 2>&1; then
@@ -41,7 +50,7 @@ write_observation() {
   fi
   if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then
     {
-      echo "### Staging version convergence"
+      echo "### $verification_label version convergence"
       echo
       echo "- Expected SHA: \`$expected_sha\`"
       echo "- Last HTTP status: \`$last_status\`"
@@ -65,7 +74,7 @@ for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
   fi
 
   if [[ $status == 200 && $version == "$expected_sha" ]]; then
-    echo "staging backend version converged on attempt $attempt: $expected_sha"
+    echo "$verification_label backend version converged on attempt $attempt: $expected_sha"
     write_observation
     exit 0
   fi
@@ -75,6 +84,6 @@ for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
   fi
 done
 
-echo "staging backend did not converge to expected version within $max_attempts attempts" >&2
+echo "$verification_label backend did not converge to expected version within $max_attempts attempts" >&2
 write_observation
 exit 1

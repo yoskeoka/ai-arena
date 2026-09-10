@@ -11,6 +11,10 @@ on:
         description: URL of the staging verification workflow run
         required: false
         type: string
+      previous_commit_sha:
+        description: Required only for a legacy backend without /version; full reachable SHA to use for one rollback attempt
+        required: false
+        type: string
   push:
     tags:
       - "*"
@@ -81,14 +85,49 @@ jobs:
       - name: Checkout target commit
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          fetch-depth: 0
           ref: ${{ needs.prepare.outputs.target_sha }}
 
       - name: Confirm target commit is on origin/main
         run: |
           git fetch --no-tags origin main
           git merge-base --is-ancestor "${TARGET_SHA}" origin/main
+          ./tools/dev/validate-release-commit-sha.sh "${TARGET_SHA}"
         env:
           TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
+
+      - name: Capture rollback backend SHA
+        id: capture-previous
+        run: |
+          response_file=$(mktemp)
+          trap 'rm -f "$response_file"' EXIT
+          if status=$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' --max-time 15 "${PRODUCTION_BACKEND_URL}/version"); then
+            :
+          else
+            status=transport-error
+          fi
+
+          if [[ $status == 200 ]]; then
+            previous_sha=$(jq -er 'if type == "object" and (keys == ["version_sha"]) and (.version_sha | type == "string") then .version_sha else empty end' "$response_file")
+            previous_sha=$(./tools/dev/validate-release-commit-sha.sh "$previous_sha")
+            source=serving-version
+          elif [[ $status == 404 && "${GITHUB_EVENT_NAME}" == workflow_dispatch && -n "${PREVIOUS_COMMIT_SHA}" ]]; then
+            previous_sha=$(./tools/dev/validate-release-commit-sha.sh "${PREVIOUS_COMMIT_SHA}")
+            source=legacy-dispatch
+          elif [[ $status == 404 ]]; then
+            echo "serving backend does not provide /version; use workflow_dispatch with previous_commit_sha" >&2
+            exit 1
+          else
+            echo "could not capture a valid serving backend version (HTTP status: $status)" >&2
+            exit 1
+          fi
+
+          {
+            echo "previous_version_sha=$previous_sha"
+            echo "previous_version_source=$source"
+          } >> "$GITHUB_OUTPUT"
+        env:
+          PREVIOUS_COMMIT_SHA: ${{ inputs.previous_commit_sha }}
 
       - name: Apply production DB migrations
         run: make postgres-migrate-apply
@@ -124,7 +163,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Trigger production Render deploy
+      - name: Trigger target production Render deploy
+        id: target-deploy
+        continue-on-error: true
         run: |
           case "${RENDER_PRODUCTION_DEPLOY_HOOK_URL}" in
             *\?*) deploy_url="${RENDER_PRODUCTION_DEPLOY_HOOK_URL}&ref=${TARGET_SHA}" ;;
@@ -135,12 +176,62 @@ jobs:
           RENDER_PRODUCTION_DEPLOY_HOOK_URL: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK_URL }}
           TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
 
+      - name: Verify target backend version
+        id: target-version
+        if: ${{ steps.target-deploy.outcome == 'success' }}
+        continue-on-error: true
+        run: ./tools/dev/wait-for-remote-version.sh "${PRODUCTION_BACKEND_URL}" "${TARGET_SHA}"
+        env:
+          TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
+          REMOTE_VERSION_LABEL: Production target
+
+      - name: Verify target backend worker readiness
+        id: target-health
+        if: ${{ steps.target-version.outcome == 'success' }}
+        continue-on-error: true
+        run: ./tools/dev/wait-for-remote-health.sh "${PRODUCTION_BACKEND_URL}"
+        env:
+          REMOTE_HEALTH_LABEL: Production target
+
+      - name: Trigger previous backend rollback
+        id: rollback-deploy
+        if: ${{ always() && (steps.target-deploy.outcome != 'success' || steps.target-version.outcome != 'success' || steps.target-health.outcome != 'success') && steps.capture-previous.outputs.previous_version_sha != needs.prepare.outputs.target_sha }}
+        continue-on-error: true
+        run: |
+          case "${RENDER_PRODUCTION_DEPLOY_HOOK_URL}" in
+            *\?*) deploy_url="${RENDER_PRODUCTION_DEPLOY_HOOK_URL}&ref=${PREVIOUS_SHA}" ;;
+            *) deploy_url="${RENDER_PRODUCTION_DEPLOY_HOOK_URL}?ref=${PREVIOUS_SHA}" ;;
+          esac
+          curl --fail --silent --show-error --request POST "${deploy_url}"
+        env:
+          RENDER_PRODUCTION_DEPLOY_HOOK_URL: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK_URL }}
+          PREVIOUS_SHA: ${{ steps.capture-previous.outputs.previous_version_sha }}
+
+      - name: Verify rollback backend version
+        id: rollback-version
+        if: ${{ always() && steps.rollback-deploy.outcome == 'success' }}
+        continue-on-error: true
+        run: ./tools/dev/wait-for-remote-version.sh "${PRODUCTION_BACKEND_URL}" "${PREVIOUS_SHA}"
+        env:
+          PREVIOUS_SHA: ${{ steps.capture-previous.outputs.previous_version_sha }}
+          REMOTE_VERSION_LABEL: Production rollback
+
+      - name: Verify rollback backend worker readiness
+        id: rollback-health
+        if: ${{ always() && steps.rollback-version.outcome == 'success' }}
+        continue-on-error: true
+        run: ./tools/dev/wait-for-remote-health.sh "${PRODUCTION_BACKEND_URL}"
+        env:
+          REMOTE_HEALTH_LABEL: Production rollback
+
       - name: Write workflow summary
+        if: ${{ always() }}
         run: |
           {
             echo "## Production release"
             echo
-            echo "- Promoted commit SHA: \`${TARGET_SHA}\`"
+            echo "- Target commit SHA: \`${TARGET_SHA}\`"
+            echo "- Previous backend SHA: \`${PREVIOUS_SHA:-unavailable}\` (${PREVIOUS_SOURCE:-unavailable})"
             if [ -n "${TAG_NAME}" ]; then
               echo "- Trigger tag: \`${TAG_NAME}\`"
             fi
@@ -150,9 +241,23 @@ jobs:
             echo "- Frontend URL: ${PRODUCTION_FRONTEND_URL}"
             echo "- Backend URL: ${PRODUCTION_BACKEND_URL}"
             echo "- DB migration: applied before Pages/Render deploy via \`NEON_PRODUCTION_MIGRATION_DSN\`"
-            echo "- Rollback: rerun this workflow with the previous known-good SHA"
+            echo "- Target deploy: ${{ steps.target-deploy.outcome }}"
+            echo "- Target version observation: HTTP ${{ steps.target-version.outputs.last_http_status || 'unavailable' }}, SHA \`${{ steps.target-version.outputs.last_version_sha || 'unavailable' }}\`"
+            echo "- Target readiness observation: HTTP ${{ steps.target-health.outputs.last_http_status || 'unavailable' }}, api=\`${{ steps.target-health.outputs.last_api || 'unavailable' }}\`, worker=\`${{ steps.target-health.outputs.last_worker || 'unavailable' }}\`"
+            echo "- Rollback deploy: ${{ steps.rollback-deploy.outcome || 'not-attempted' }}"
+            echo "- Rollback version observation: HTTP ${{ steps.rollback-version.outputs.last_http_status || 'unavailable' }}, SHA \`${{ steps.rollback-version.outputs.last_version_sha || 'unavailable' }}\`"
+            echo "- Rollback readiness observation: HTTP ${{ steps.rollback-health.outputs.last_http_status || 'unavailable' }}, api=\`${{ steps.rollback-health.outputs.last_api || 'unavailable' }}\`, worker=\`${{ steps.rollback-health.outputs.last_worker || 'unavailable' }}\`"
+            echo "- Verification evidence: this workflow's target and rollback helper step logs"
           } >> "$GITHUB_STEP_SUMMARY"
         env:
           TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
+          PREVIOUS_SHA: ${{ steps.capture-previous.outputs.previous_version_sha }}
+          PREVIOUS_SOURCE: ${{ steps.capture-previous.outputs.previous_version_source }}
           STAGING_VERIFICATION_RUN_URL: ${{ needs.prepare.outputs.verification_url }}
           TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+
+      - name: Mark target release failure
+        if: ${{ always() && (steps.target-deploy.outcome != 'success' || steps.target-version.outcome != 'success' || steps.target-health.outcome != 'success') }}
+        run: |
+          echo "target backend was not accepted; inspect rollback evidence in the workflow summary" >&2
+          exit 1
