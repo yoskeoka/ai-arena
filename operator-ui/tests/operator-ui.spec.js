@@ -20,6 +20,8 @@ test("operator route alias serves the same operator surface", async ({ page }) =
   await expect(page.getByTestId("operator-panel-active-matches")).toBeVisible();
   await expect(page.getByTestId("operator-panel-completed-matches")).toBeVisible();
   await expect(page.getByTestId("operator-panel-completed-detail")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Preset Queue", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Echo Reference", { exact: true })).toHaveCount(0);
   expect(presetRequests).toHaveLength(0);
 
   await page.getByTestId("operator-nav-invites").click();

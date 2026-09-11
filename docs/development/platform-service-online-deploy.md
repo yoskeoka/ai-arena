@@ -421,7 +421,8 @@ Phase 6 closure では、online confirmation を次の release flow として閉
 
 1. local verification
    - browser / backend / artifact lane を local で起動し、
-     `preset queue -> active/completed visibility -> completed detail` を確認する
+     `active/completed visibility -> selected run summary/detail` を確認する。preset queue UI は使用せず、
+     frontend が `/api/v1/preset-matches` を呼び出さないことも確認する
 2. CI
    - file-backed browser lane、Postgres-backed browser lane、
      既存 Go quality gate を通す
