@@ -12,6 +12,7 @@ interval_seconds=${REMOTE_HEALTH_INTERVAL_SECONDS:-10}
 request_timeout_seconds=${REMOTE_HEALTH_REQUEST_TIMEOUT_SECONDS:-15}
 curl_bin=${CURL_BIN:-curl}
 sleep_bin=${SLEEP_BIN:-sleep}
+verification_label=${REMOTE_HEALTH_LABEL:-Remote}
 last_status=unavailable
 last_api=unavailable
 last_worker=unavailable
@@ -46,7 +47,7 @@ write_observation() {
   fi
   if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then
     {
-      echo "### Staging worker readiness"
+      echo "### $verification_label worker readiness"
       echo
       echo "- Last HTTP status: \`$last_status\`"
       echo "- Last API component: \`$last_api\`"
@@ -72,7 +73,7 @@ for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
   fi
 
   if [[ $status == 200 && $last_api == OK && $last_worker == OK ]]; then
-    echo "staging backend worker readiness converged on attempt $attempt"
+    echo "$verification_label backend worker readiness converged on attempt $attempt"
     write_observation
     exit 0
   fi
@@ -82,6 +83,6 @@ for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
   fi
 done
 
-echo "staging backend worker readiness did not converge within $max_attempts attempts" >&2
+echo "$verification_label backend worker readiness did not converge within $max_attempts attempts" >&2
 write_observation
 exit 1

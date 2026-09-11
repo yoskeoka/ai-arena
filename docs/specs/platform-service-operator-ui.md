@@ -248,6 +248,15 @@ last observed HTTP status と component state を release summary に残し、re
 remote browser smoke も exact version の確認後に同じ health readiness を read-only に確認する。anonymous
 session、login redirect、既存の local fixture / auth-mock の protected flow の責務は変わらない。
 
+production backend release も同じ public endpoint を deployment evidence に使う。migration や deploy mutation の
+前に serving backend の full SHA を取得し、target の exact version と ready worker を順に確認する。target
+verification が失敗した場合だけ、capture した previous full SHA に対して 1 回だけ backend deploy を起動し、
+同じ version/readiness contract で recovery を確認する。verified rollback は target release の成功を意味せず、
+workflow は release failure として終了する。version endpoint がない legacy backend の最初の rollout は、manual
+dispatch で repository 内に存在する previous full SHA を明示しなければ deploy mutation を開始してはならない。
+code rollback は DB schema rollback を含まず、frontend deployment identity と frontend rollback はこの evidence
+scope 外とする。
+
 ## Polling Contract
 
 - overview active runs:

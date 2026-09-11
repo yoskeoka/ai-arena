@@ -607,7 +607,22 @@ production release workflow は次を守る。
 - frontend deploy は `Cloudflare Pages` production へ同じ commit build artifact を upload する
   - build-time に `VITE_OPERATOR_API_BASE_URL=${PRODUCTION_BACKEND_URL}` を渡す
 - backend は `https://ai-arena.pages.dev` からの cross-origin fetch を受け付けなければならない
-- workflow summary に promoted commit SHA と trigger tag を残す
+- migration や deploy hook の前に public `GET /version` から current serving backend の canonical full SHA を
+  capture する。valid JSON / lowercase 40 桁 SHA / repository reachability を満たさない値は previous target に
+  使わない。previous SHA も `origin/main` に到達可能でなければならない
+- legacy backend で `/version` が未導入（HTTP `404`）の最初の rollout だけ、manual dispatch の
+  `previous_commit_sha` を必要とする。tag trigger は previous SHA を推測して deploy を開始してはならない
+- target deploy hook の直後、`/version` が target full SHA と完全一致することを 15 秒間隔・最大 20 分、続いて
+  `/healthz` が HTTP `200` / `api=OK` / `worker=OK` となることを 10 秒間隔・最大 7 分確認する
+- target verification failure 時は、target と異なる captured previous SHA へ `ref` を付けて production Render
+  deploy hook を 1 回だけ起動し、同じ version/readiness contract で rollback backend を確認する。retry loop や
+  alternate SHA の探索は行わない
+- rollback verification が成功しても target release は failure として終了する。rollback hook または verification
+  が失敗した場合は incident failure とし、recovery 成功を主張しない
+- workflow summary には target、previous、最後の target/rollback observation、rollback attempt/result、backend URL、
+  helper log location を残す。secret、cookie、deploy hook URL、DSN は残さない
+- code rollback は DB schema rollback を含まない。production migration は rollback 前後の backend と互換な
+  expand / dual-read-write contract を満たす
 
 repo に必要な GitHub secret 名:
 
@@ -621,16 +636,13 @@ repo workflow は、tag-triggered path では tag 名と promoted SHA を最小�
 
 ### Rollback Contract
 
-rollback は「前回の known-good commit SHA を staging / production workflow に再入力する」形を canonical とする。
+production workflow は target failure 後に captured previous backend SHA へ automatic backend rollback を 1 回だけ
+試みる。operator が SHA を転記して retry することは通常の recovery path ではない。`/version` が未導入の legacy
+backend だけは、operator が manual dispatch の `previous_commit_sha` として canonical full SHA を明示する。
 
-- staging rollback:
-  `online-release-staging.yml` に previous good SHA を渡して再実行する
-- production rollback:
-  `online-release-production.yml` に previous good SHA と元の staging verification evidence を渡して再実行する
-- `previous good SHA` は full SHA を優先し、短縮 SHA を使う場合も repository 内で一意に解決できる値だけを使う
-
-Phase 6 では DB schema rollback や object migration rollback の自動化までは扱わない。
-この line の rollback は backend/frontend process を known-good SHA に戻すところまでを正本とする。
+staging rollback は `online-release-staging.yml` へ previous good SHA を渡して再実行してよい。production の
+automatic rollback と staging rerun のいずれも DB schema rollback や object migration rollback を含まない。code
+rollback target は schema target ではなく、migration compatibility を満たす release だけを production に昇格する。
 
 ## Developer Access Inventory
 
@@ -810,6 +822,12 @@ release operator は次の順で実行する。
 6. production release
    - GitHub Release 作成などで tag を push する
    - `online-release-production.yml` が tag SHA で自動起動する
+   - migration/deploy 前に summary の previous backend SHA が public `/version` から capture されたことを確認する
+   - target SHA の exact `/version` と API / worker readiness が success evidence であることを確認する
+   - target failure 時は、previous SHA への 1 回の backend rollback とその version/readiness observation を確認する。
+     verified rollback でも target release は failed のままとし、incident として扱う
+   - legacy `/version` backend の bootstrap は、maintenance window で `previous_commit_sha` を指定した manual
+     dispatch だけで行う
 
 staging verification が failed の間は production tag を作らない。
 
@@ -827,5 +845,8 @@ PR review や release handoff で最低限残す evidence は次で固定する�
 - staging verification:
   Playwright artifact と workflow summary
 - production release:
-  workflow summary 上の promoted SHA と trigger tag
+  workflow summary 上の target / previous full SHA、target と rollback の version/readiness observation、rollback result、
+  backend URL、trigger tag
   - DB migration が先に適用されたこと
+  - target success または verified backend rollback のどちらで終了したか。ただし rollback success は target release
+    success として記録しないこと

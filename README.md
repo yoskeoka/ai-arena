@@ -94,6 +94,8 @@ For the Phase 6 online-service lane, the required release path is:
 4. Release that same verified commit SHA to production by creating a GitHub Release or otherwise pushing a tag for it.
    - the repo-owned production release automation runs for the tag SHA
    - the tag must point to a commit that is already in `origin/main`
+   - success requires the serving backend to report that exact full SHA and an `OK` API/worker readiness state
+   - if target verification fails, automation may verify one backend rollback to the captured previous SHA, but the release remains failed
 
 Do not create the production tag unless the automatic staging verification workflow passed for that same SHA.
 The detailed dispatch, rollback, and evidence rules live in `docs/development/platform-service-online-deploy.md`.
