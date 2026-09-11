@@ -15,7 +15,7 @@ label と value を反転選択なしに判読できるようにする。濃色�
 
 ## 現行参照と前提
 
-- `docs/specs/platform-service-operator-ui.md:86-91, 116-127`: run detail の compact summary と browser
+- `docs/specs/platform-service-operator-ui.md:105-107, 109-119`: run detail の compact summary と browser
   observation surface を定める。visual design を固定しないまま、operator が読める状態を observable behavior
   として補う。
 - `operator-ui/src/routes/operator/CompletedDetailPanel.tsx:45-61`: `bg-ink` summary と、その内側に置かれる
