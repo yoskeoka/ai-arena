@@ -85,6 +85,7 @@ type ExternalPrimaryStore struct {
 	fallback RegistryStore
 }
 
+// NewExternalPrimaryStore composes a primary registry store with a built-in fallback store.
 func NewExternalPrimaryStore(primary, fallback RegistryStore) (*ExternalPrimaryStore, error) {
 	if primary == nil || fallback == nil {
 		return nil, fmt.Errorf("registry: primary and fallback stores are required")
@@ -92,6 +93,7 @@ func NewExternalPrimaryStore(primary, fallback RegistryStore) (*ExternalPrimaryS
 	return &ExternalPrimaryStore{primary: primary, fallback: fallback}, nil
 }
 
+// Lookup resolves a descriptor from the primary store and falls back only when it is not found.
 func (s *ExternalPrimaryStore) Lookup(ctx context.Context, key RegistryKey) (DescriptorRecord, error) {
 	record, err := s.primary.Lookup(ctx, key)
 	if err == nil || !errors.Is(err, ErrRecordNotFound) {
@@ -100,6 +102,7 @@ func (s *ExternalPrimaryStore) Lookup(ctx context.Context, key RegistryKey) (Des
 	return s.fallback.Lookup(ctx, key)
 }
 
+// LookupArtifact resolves an exact artifact identity from the primary store without fallback.
 func (s *ExternalPrimaryStore) LookupArtifact(ctx context.Context, artifactID string) (DescriptorRecord, error) {
 	lookup, ok := s.primary.(ArtifactRecordLookup)
 	if !ok {
@@ -108,6 +111,7 @@ func (s *ExternalPrimaryStore) LookupArtifact(ctx context.Context, artifactID st
 	return lookup.LookupArtifact(ctx, artifactID)
 }
 
+// Register admits a descriptor through the primary registry store.
 func (s *ExternalPrimaryStore) Register(ctx context.Context, record DescriptorRecord) error {
 	registrar, ok := s.primary.(RecordRegistrar)
 	if !ok {

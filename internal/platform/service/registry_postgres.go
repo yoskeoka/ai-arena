@@ -18,6 +18,7 @@ import (
 // PostgresDescriptorStore is the durable external registry tier.
 type PostgresDescriptorStore struct{ pool *pgxpool.Pool }
 
+// NewPostgresDescriptorStore opens a PostgreSQL-backed durable descriptor store.
 func NewPostgresDescriptorStore(ctx context.Context, dsn string) (*PostgresDescriptorStore, error) {
 	pool, err := pgxpool.New(ctx, strings.TrimSpace(dsn))
 	if err != nil {
@@ -30,12 +31,14 @@ func NewPostgresDescriptorStore(ctx context.Context, dsn string) (*PostgresDescr
 	return &PostgresDescriptorStore{pool: pool}, nil
 }
 
+// Close releases the PostgreSQL connection pool used by the descriptor store.
 func (s *PostgresDescriptorStore) Close() {
 	if s != nil && s.pool != nil {
 		s.pool.Close()
 	}
 }
 
+// Register durably records an admitted descriptor and verifies its immutable metadata.
 func (s *PostgresDescriptorStore) Register(ctx context.Context, record registry.DescriptorRecord) error {
 	if err := registry.ValidateDescriptorRecord(record); err != nil {
 		return err
@@ -62,6 +65,7 @@ func (s *PostgresDescriptorStore) Register(ctx context.Context, record registry.
 	return nil
 }
 
+// Lookup resolves the latest descriptor for a game and semver major from PostgreSQL.
 func (s *PostgresDescriptorStore) Lookup(ctx context.Context, key registry.RegistryKey) (registry.DescriptorRecord, error) {
 	if key.GameID == "" || key.GameVersionMajor <= 0 {
 		return registry.DescriptorRecord{}, fmt.Errorf("registry: invalid lookup key")
@@ -96,6 +100,7 @@ func (s *PostgresDescriptorStore) Lookup(ctx context.Context, key registry.Regis
 	return latest, nil
 }
 
+// LookupArtifact resolves an exact admitted descriptor by its immutable artifact identity.
 func (s *PostgresDescriptorStore) LookupArtifact(ctx context.Context, artifactID string) (registry.DescriptorRecord, error) {
 	return s.lookupArtifact(ctx, artifactID)
 }
