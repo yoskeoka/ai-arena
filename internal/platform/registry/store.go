@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -55,12 +56,14 @@ func (s *InMemoryStore) Lookup(ctx context.Context, key RegistryKey) (Descriptor
 	if s.fallback != nil {
 		if record, err := s.fallback.Lookup(ctx, key); err == nil {
 			return record, nil
+		} else if !errors.Is(err, ErrRecordNotFound) {
+			return DescriptorRecord{}, err
 		}
 	}
 	if s.hasGameID(key.GameID) {
 		return DescriptorRecord{}, fmt.Errorf("registry: unsupported game version major %d for game %q", key.GameVersionMajor, key.GameID)
 	}
-	return DescriptorRecord{}, fmt.Errorf("registry: unsupported game %q", key.GameID)
+	return DescriptorRecord{}, fmt.Errorf("registry: unsupported game %q: %w", key.GameID, ErrRecordNotFound)
 }
 
 // LookupArtifact finds an exact admitted release by its immutable digest.
@@ -72,7 +75,45 @@ func (s *InMemoryStore) LookupArtifact(_ context.Context, artifactID string) (De
 			}
 		}
 	}
-	return DescriptorRecord{}, fmt.Errorf("registry: unsupported artifact %q", artifactID)
+	return DescriptorRecord{}, fmt.Errorf("registry: unsupported artifact %q: %w", artifactID, ErrRecordNotFound)
+}
+
+// ExternalPrimaryStore composes a durable admitted tier with immutable built-ins.
+// Only an explicit not-found result may fall through to the built-in tier.
+type ExternalPrimaryStore struct {
+	primary  RegistryStore
+	fallback RegistryStore
+}
+
+func NewExternalPrimaryStore(primary, fallback RegistryStore) (*ExternalPrimaryStore, error) {
+	if primary == nil || fallback == nil {
+		return nil, fmt.Errorf("registry: primary and fallback stores are required")
+	}
+	return &ExternalPrimaryStore{primary: primary, fallback: fallback}, nil
+}
+
+func (s *ExternalPrimaryStore) Lookup(ctx context.Context, key RegistryKey) (DescriptorRecord, error) {
+	record, err := s.primary.Lookup(ctx, key)
+	if err == nil || !errors.Is(err, ErrRecordNotFound) {
+		return record, err
+	}
+	return s.fallback.Lookup(ctx, key)
+}
+
+func (s *ExternalPrimaryStore) LookupArtifact(ctx context.Context, artifactID string) (DescriptorRecord, error) {
+	lookup, ok := s.primary.(ArtifactRecordLookup)
+	if !ok {
+		return DescriptorRecord{}, fmt.Errorf("registry: configured primary cannot look up artifact identity")
+	}
+	return lookup.LookupArtifact(ctx, artifactID)
+}
+
+func (s *ExternalPrimaryStore) Register(ctx context.Context, record DescriptorRecord) error {
+	registrar, ok := s.primary.(RecordRegistrar)
+	if !ok {
+		return fmt.Errorf("registry: configured primary is read-only")
+	}
+	return registrar.Register(ctx, record)
 }
 
 func (s *InMemoryStore) hasGameID(gameID string) bool {

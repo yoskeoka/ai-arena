@@ -11,6 +11,9 @@ manifest の正本は `schemas/arena-bundle-v1.schema.json` と typed Go model �
 - admission は archive path、重複 entry（大文字・小文字だけが異なるものを含む）、link、undeclared entry、WASM magic/version を拒否する。受け付ける archive は 64 MiB 以下、manifest は 1 MiB 以下、module の展開後サイズは 32 MiB 以下であり、各 entry の圧縮率は 100:1 以下でなければならない。
 - manifest は schema と同じ required field・kind ごとの形・resource budget を満たす。AI bundle では `ai_id` を必須とする。optional な数値 budget は未指定なら許可するが、明示した `0` は schema の minimum 違反として拒否する。runtime は compile 可能な WASI WebAssembly module であり、function、memory、table、global のいずれの import も未許可 module を要求してはならない。検証失敗は保存も registry 登録も行わない。
 - service は bundle bytes の SHA-256 digest を artifact identity として返し、同一 bytes を idempotently 保存する。
+- accepted game bundle は archive 保存後、manifest-derived の小さな immutable descriptor metadata を durable
+  store に保存してから admission 成功を返す。descriptor lookup は archive/ZIP/WASM bytes を load、download、
+  cache せず、bytes の materialization は WASI session start 時だけに行う。
 - filesystem と R2 の bundle store は同じ digest と同じ private materialization layout を返す。同一 digest への並行保存でも digest と異なる既存 bytes を上書きしない。
 - operated-service の受入証跡は、同一の検証済み game / AI bundle bytes を filesystem と S3-compatible store の両方へ upload し、registry 登録、queue acceptance、worker materialization、および game / AI WASI session start まで完走させる。完走した run は accepted digest を game と全 seat に保持し、temporary materialization directory を残さない。外部 game の release asset を検証する場合は、公開 URL と `SHA256SUMS` の pinned digest を照合してから同じ bundle-only runner input に渡す。
 - game bundle は ruleset と player-count / game-defined bot limit を宣言し、AI bundle は `ai_id` と対象 game/ruleset を宣言する。AI admission は selected game registration と game id、semver major、ruleset が互換であることを同期的に確認する。

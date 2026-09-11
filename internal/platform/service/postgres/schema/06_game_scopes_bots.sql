@@ -6,6 +6,8 @@ CREATE TABLE game_releases (
     build_mode TEXT NOT NULL DEFAULT '',
     builder_id TEXT NOT NULL DEFAULT '',
     supported_rulesets JSONB NOT NULL DEFAULT '[]',
+    runtime_args JSONB NOT NULL DEFAULT '[]',
+    memory_limit_pages INTEGER NOT NULL DEFAULT 0 CHECK (memory_limit_pages >= 0),
     source TEXT NOT NULL DEFAULT 'manual',
     source_id TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

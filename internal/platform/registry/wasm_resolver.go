@@ -76,7 +76,7 @@ func (s *cleanupSession) Shutdown(ctx context.Context) error {
 
 // NewWASIOverlay preserves built-in descriptors as a fallback while adding a
 // writable WASI artifact admission tier for the service process.
-func NewWASIOverlay(materializer BundleMaterializer) (*Registry, error) {
+func NewWASIOverlay(materializer BundleMaterializer, primary ...RegistryStore) (*Registry, error) {
 	wasi, err := NewWASIResolver(materializer)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,16 @@ func NewWASIOverlay(materializer BundleMaterializer) (*Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	store := newTieredStore(fallback)
+	var store RegistryStore = newTieredStore(fallback)
+	if len(primary) > 1 {
+		return nil, fmt.Errorf("registry: at most one external primary store is allowed")
+	}
+	if len(primary) == 1 {
+		store, err = NewExternalPrimaryStore(primary[0], fallback)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return New(store, modeResolver{fallback: defaultRegistry.resolver, wasi: wasi})
 }
 
