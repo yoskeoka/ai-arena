@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { MatchDetailResponse, OperatorApiClient, ResultListItem } from "../../lib/operatorApiClient";
-import { EnqueueState, isAbortError, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
+import { isAbortError, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
 const ACTIVE_POLL_MS = 5_000;
 const COMPLETED_POLL_MS = 10_000;
@@ -15,11 +15,9 @@ export function useOperatorPageState(baseUrl: string) {
   const [activeState, setActiveState] = useState<LoadState>("loading");
   const [completedState, setCompletedState] = useState<LoadState>("loading");
   const [detailState, setDetailState] = useState<LoadState>("idle");
-  const [enqueueState, setEnqueueState] = useState<EnqueueState>("idle");
   const [activeError, setActiveError] = useState<string>();
   const [completedError, setCompletedError] = useState<string>();
   const [detailError, setDetailError] = useState<string>();
-  const [enqueueError, setEnqueueError] = useState<string>();
   const [selectedRunId, setSelectedRunId] = useState<string>();
   const [detail, setDetail] = useState<MatchDetailResponse>();
   const [detailReloadToken, setDetailReloadToken] = useState(0);
@@ -136,37 +134,18 @@ export function useOperatorPageState(baseUrl: string) {
     };
   }, [client, detailReloadToken, selectedRunId]);
 
-  const handleEnqueue = async (presetId: string) => {
-    setEnqueueState("submitting");
-    setEnqueueError(undefined);
-    try {
-      await client.enqueuePreset(presetId);
-      setEnqueueState("success");
-      const items = await client.listActiveMatches();
-      setActiveItems(items);
-      setActiveState("ready");
-      setActiveError(undefined);
-    } catch (error) {
-      setEnqueueState("error");
-      setEnqueueError(messageOf(error));
-    }
-  };
-
   return {
     activeItems,
     completedItems,
     activeState,
     completedState,
     detailState,
-    enqueueState,
     activeError,
     completedError,
     detailError,
-    enqueueError,
     selectedRunId,
     setSelectedRunId,
     detail,
     reloadDetail: () => setDetailReloadToken((current) => current + 1),
-    enqueuePreset: handleEnqueue,
   };
 }

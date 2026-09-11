@@ -14,7 +14,7 @@
 - page-local fetch / polling / mutation contract
 - general registration / request / ranking read surface
 - invite issuance surface
-- preset queue / run follow-up action の最小 interaction
+- run follow-up action の最小 interaction
 - delegated artifact access metadata の表示順と refresh 振る舞い
 - browser verification が依存してよい stable observation surface
 
@@ -78,7 +78,7 @@ Phase 7 の operator route family は少なくとも次を持たなければな�
 minimal operator UI は nav 上で少なくとも次の page/surface を持つ。
 
 - overview page:
-  preset queue、active runs、completed runs、selected run summary
+  active runs、completed runs、selected run summary
 - invites page:
   role-select invite issuance form と one-shot result view
 - games page:
@@ -113,7 +113,7 @@ minimal operator UI は nav 上で少なくとも次の page/surface を持つ�
 browser verification は、少なくとも次の acceptance surface を route 遷移込みで観測できなければならない。
 
 - operator nav が visible で、`Overview`、`Invites`、`Games`、`Submissions`、`Requests`、`Rankings` を辿れる
-- overview page で preset queue panel、active runs panel、completed runs panel を表示できる
+- overview page で active runs panel、completed runs panel、selected run summary/detail を表示できる
 - invites page で `participant|developer|operator` のいずれかの invite を 1 件作成し、`invite_token` と `invite_url` を表示できる
 - games page で registered game を 1 件以上作成し、list へ反映できる
 - submissions page で scope-compatible AI bundle ZIP を upload し、admitted artifact digest を確認して bot を
@@ -135,9 +135,9 @@ browser verification lane は少なくとも次の 3 系統で同じ acceptance 
   fixture-seeded backend を使う軽量 regression lane
 - real local inspection/capture lane:
   actual `arena-service` と actual `operator-ui` を contributor または AI agent が同一環境で起動し、
-  preset queue から completed detail までを操作し、review artifact を保存する lane
+  active/completed run と completed detail までを操作し、review artifact を保存する lane
 - dedicated CI browser lane:
-  actual operator API request により preset queue から started/completed state を作り、
+  seeded または operator API request により active/completed state を用意し、
   同じ panel / detail / artifact observation surface を継続検証する lane
 - auth-enabled GitHub regression lane:
   auth-enabled backend と別 process の repo-owned provider test double を使い、
@@ -187,7 +187,6 @@ UI は少なくとも次の client state を持つ。
 
 - operator API base URL
 - selected operator route / selected run identity
-- preset catalog read model
 - active run items
 - completed run items
 - registered game items
@@ -275,20 +274,15 @@ list polling と detail polling は independent timer でよい。
 失敗時は最後に成功した表示を維持しつつ、panel ごとに error state を表示してよい。
 list/detail/ranking endpoint が expected JSON shape を返さない場合も、blank page や uncaught exception ではなく panel-local error state へ落とさなければならない。
 
-## Preset Queue Interaction
+## Overview Run Observation
 
-preset queue panel は、server-known preset catalog を operator が 1 click で enqueue できる surface とする。
+overview は active runs、completed runs、selected run summary/detail を read/follow-up surface として提供する。
 
-- 1 action は 1 preset request だけを送る
-- successful enqueue 後は active matches panel を即時 refresh してよい
-- `submission_id` や `match_id` の manual override は first landing では必須にしない
-
-first landing では preset catalog 自体を static UI config として配ってよい。
-ただし enqueue request の `preset_id` は API contract に従う server-known value と一致しなければならない。
-
-successful enqueue 後、local browser verification は preset queue action により active matches panel の row 増加または newly queued submission の可視化を観測できなければならない。
-
-real local inspection/capture lane と dedicated CI browser lane では、preset queue action のあと actual service backend が `queued|leased|running|persisting|completed` のいずれかへ進むことを backend poll で待ち、browser reload または subsequent polling により completed row / detail 表示まで到達できなければならない。
+- overview は preset catalog、preset queue action、preset 固有の mutation state/error を表示してはならない
+- browser load または overview 上の既存 interaction は `/api/v1/preset-matches` を呼び出してはならない
+- active/completed run list はそれぞれの polling cadence と panel-local error state を維持する
+- completed run を選択した場合は selected run detail を表示し、既存の run follow-up action は引き続き利用できる
+- completed runs がない場合は、selected run detail surface は empty state を表示してよい
 
 ## General Registration / Request / Ranking Interaction
 
