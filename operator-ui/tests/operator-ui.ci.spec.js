@@ -268,6 +268,12 @@ test("service-backed operator UI browser lane covers registration, request execu
   await page.getByRole("link", { name: "Open latest run detail" }).click();
   await expect(page).toHaveURL(new RegExp(`/operator/runs/${initialRun.run_id}$`));
   await expect(page.getByTestId(`match-detail-${initialRun.run_id}`)).toBeVisible();
+  const compactSummary = page.getByTestId(`match-detail-${initialRun.run_id}`).locator(".bg-ink");
+  for (const label of ["Attempt", "Game", "Ruleset", "Output Dir", "Result Summary"]) {
+    const metadata = compactSummary.getByText(label, { exact: true }).locator("..");
+    await expect(metadata.locator("dt")).toHaveClass(/text-paper\/70/);
+    await expect(metadata.locator("dd")).toHaveClass(/(?:^|\s)text-paper(?:\s|$)/);
+  }
   await expect(page.getByTestId("run-action-rerun")).toBeVisible();
   await page.getByTestId("run-action-rerun").click();
 

@@ -104,7 +104,11 @@ minimal operator UI は nav 上で少なくとも次の page/surface を持つ�
   selected scope の durable ranking snapshot read
 - run detail page:
   compact summary、submitted players、replay input locator group、
-  artifact access、queued cancel / retry / rerun / promote action
+  artifact access、queued cancel / retry / rerun / promote action。compact summary 内の metadata は、
+  lifecycle/action message だけでなく attempt、game identity、ruleset、output directory、result summary locator を
+  通常の operator display 状態で判読可能に表示しなければならない。dark background に置く metadata は、
+  background と十分に視覚的に区別できる foreground color を明示しなければならない。light surface の metadata
+  表示、route/API payload、polling、run follow-up action availability はこの要件によって変更しない
 
 browser verification は、少なくとも次の acceptance surface を route 遷移込みで観測できなければならない。
 

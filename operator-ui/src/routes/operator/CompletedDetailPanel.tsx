@@ -51,11 +51,11 @@ export function CompletedDetailPanel({
             <h2 className="mt-4 text-xl font-semibold">{detail.matchId}</h2>
             <p className="mt-1 text-sm text-paper/70">{detail.runId}</p>
             <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-              <Meta label="Attempt" value={String(detail.attemptCount)} />
-              <Meta label="Game" value={`${detail.gameId}@${detail.gameVersion}`} />
-              <Meta label="Ruleset" value={detail.rulesetVersion} />
-              <Meta label="Output Dir" value={detail.outputDir} />
-              <Meta label="Result Summary" value={detail.resultSummaryPath ?? "n/a"} />
+              <Meta label="Attempt" value={String(detail.attemptCount)} variant="dark" />
+              <Meta label="Game" value={`${detail.gameId}@${detail.gameVersion}`} variant="dark" />
+              <Meta label="Ruleset" value={detail.rulesetVersion} variant="dark" />
+              <Meta label="Output Dir" value={detail.outputDir} variant="dark" />
+              <Meta label="Result Summary" value={detail.resultSummaryPath ?? "n/a"} variant="dark" />
             </dl>
             {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
           </div>

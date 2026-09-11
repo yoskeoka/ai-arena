@@ -66,4 +66,14 @@ test("local operator UI browser lane covers queue, active, completed detail, and
   await expect
     .poll(async () => activePanel.locator('[data-testid^="match-row-"]').count())
     .toBeGreaterThan(initialActiveRows);
+
+  await page.goto("/operator/runs/run-completed-local");
+  const runDetail = page.getByTestId("match-detail-run-completed-local");
+  await expect(runDetail).toBeVisible();
+  const compactSummary = runDetail.locator(".bg-ink");
+  for (const label of ["Attempt", "Game", "Ruleset", "Output Dir", "Result Summary"]) {
+    const metadata = compactSummary.getByText(label, { exact: true }).locator("..");
+    await expect(metadata.locator("dt")).toHaveClass(/text-paper\/70/);
+    await expect(metadata.locator("dd")).toHaveClass(/(?:^|\s)text-paper(?:\s|$)/);
+  }
 });
