@@ -252,8 +252,29 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	if err != nil {
 		return nil, err
 	}
-	admissionRegistry, err := registry.NewWASIOverlay(runtime.bundles)
+	var descriptorStore *service.PostgresDescriptorStore
+	if strings.TrimSpace(postgresDSN) != "" {
+		descriptorStore, err = service.NewPostgresDescriptorStore(context.Background(), postgresDSN)
+		if err != nil {
+			return nil, err
+		}
+	}
+	closeDescriptor := descriptorStore != nil
+	defer func() {
+		if closeDescriptor {
+			descriptorStore.Close()
+		}
+	}()
+	var admissionRegistry *registry.Registry
+	if descriptorStore != nil {
+		admissionRegistry, err = registry.NewWASIOverlay(runtime.bundles, descriptorStore)
+	} else {
+		admissionRegistry, err = registry.NewWASIOverlay(runtime.bundles)
+	}
 	if err != nil {
+		if descriptorStore != nil {
+			descriptorStore.Close()
+		}
 		return nil, err
 	}
 	dryRun, err := service.NewLocalDryRunChecker(baseDir)
@@ -333,6 +354,15 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	}
 	closeQueue = false
 	closeAuth = false
+	previousClose := closeFn
+	closeFn = func() {
+		closeDescriptor = false
+		if descriptorStore != nil {
+			descriptorStore.Close()
+		}
+		previousClose()
+	}
+	closeDescriptor = false
 	return &cliApp{
 		commands:          commands,
 		queries:           queries,

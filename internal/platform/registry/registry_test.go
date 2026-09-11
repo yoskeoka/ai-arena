@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -11,6 +12,12 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
+
+type failingExternalStore struct{ err error }
+
+func (s failingExternalStore) Lookup(context.Context, RegistryKey) (DescriptorRecord, error) {
+	return DescriptorRecord{}, s.err
+}
 
 func TestLookupFindsDescriptorByGameIDAndMajorVersion(t *testing.T) {
 	descriptor, err := Lookup(janken.GameID, "2.9.4")
@@ -188,6 +195,22 @@ func TestTieredStoreLookupArtifactOnlyResolvesExternalTier(t *testing.T) {
 	}
 	if _, err := store.LookupArtifact(context.Background(), "sha256:builtin"); err == nil || !strings.Contains(err.Error(), `registry: unsupported artifact "sha256:builtin"`) {
 		t.Fatalf("LookupArtifact(builtin) error = %v, want external-tier rejection", err)
+	}
+}
+
+func TestExternalPrimaryStoreDoesNotFallbackOnPrimaryFailure(t *testing.T) {
+	fallback, err := NewInMemoryStore(DescriptorRecord{RegistryKey: RegistryKey{GameID: "fallback", GameVersionMajor: 1}, GameID: "fallback", BuildMode: BuildModeInProcess, BuilderID: "fallback", BuildConstraints: BuildConstraints{SupportedRulesets: []string{"regular"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := errors.New("database unavailable")
+	store, err := NewExternalPrimaryStore(failingExternalStore{err: want}, fallback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Lookup(context.Background(), RegistryKey{GameID: "fallback", GameVersionMajor: 1})
+	if !errors.Is(err, want) {
+		t.Fatalf("Lookup error = %v, want primary failure", err)
 	}
 }
 

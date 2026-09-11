@@ -79,12 +79,15 @@ upload 済み release の選択に適用され、active scope が exact artifact
 `DescriptorRecord` は少なくとも以下を持つ。
 
 - `game_id`
-- `game_version_major`
+- exact semantic `game_version` とそこから導く `game_version_major`
+- immutable artifact digest
 - `build_mode`
 - `builder_id`
 - ruleset / build 制約を表す metadata
+- WASI runtime args と memory-page limit
 
-canonical な一意キーは `game_id + game_version_major` の composite key とする。
+release の canonical な一意性は artifact digest と `game_id + exact game_version` で保つ。通常 lookup の
+key は `game_id + game_version_major` の composite key とする。
 必要なら `registry_key` という論理名を持ってよいが、これは composite key の derived /
 denormalized field として扱う。
 
@@ -97,6 +100,11 @@ official registration path は、runner-local overlay path とは別の admissio
 運営が review して built-in game として取り込む経路、制約付き runtime に載せて platform 管理下で
 運用する経路、trusted external backend を official external adapter として登録する経路は区別して扱う。
 どの経路でも persisted record 化してよいのは、その tier で admission 済みの registered game だけとする。
+
+admitted WASI bundle は archive 保存と validation の成功後、scope を作成する前に complete な immutable
+descriptor metadata を durable store へ保存する。保存失敗は admission の成功として返さない。このとき
+archive object が残ることは許容するが、lookup は archive bytes を読んだり補償削除を試みたりしない。
+scope は既存の exact admitted release を参照し、scope が新 release へ移っても過去 release record は保持する。
 
 operator-facing general lane では、runtime descriptor 自体ではなく、
 operator が選択・検証に使う plain-data metadata view を exposed してよい。
@@ -144,6 +152,12 @@ admission 済み descriptor record を immutable artifact identity で exact に
 artifact-backed game activation はこの exact path を使う。uploaded descriptor の eligibility は bundle admission と
 manifest / descriptor の整合性で決まり、exact identity の lookup 失敗や metadata 不整合時に version lookup、
 built-in descriptor、game ID hard-code へ fallback してはならない。
+
+Postgres を configured した operated service では external/admitted tier の metadata を durable store から
+毎回読む。通常 key lookup は durable tier に対象 key がない場合だけ built-in へ fallback してよいが、
+durable read failure または invalid metadata は lookup failure とし fallback してはならない。exact artifact
+lookup は external-only であり、version や built-in へ fallback しない。service restart/redeploy 後も同じ
+exact digest を request admission と worker session construction で解決できなければならない。
 
 ## registered game の最小要件
 

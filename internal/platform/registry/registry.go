@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
@@ -9,6 +10,9 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
+
+// ErrRecordNotFound distinguishes an external tier miss from a failed lookup.
+var ErrRecordNotFound = errors.New("registry: descriptor record not found")
 
 // BuildMode aliases the supported game-master hosting modes.
 type BuildMode = gamemaster.Mode
@@ -96,7 +100,11 @@ type Registry struct {
 }
 
 // RecordRegistrar is implemented by stores that admit new game releases.
-type RecordRegistrar interface{ Register(DescriptorRecord) error }
+type RecordRegistrar interface {
+	Register(context.Context, DescriptorRecord) error
+}
+
+type legacyRecordRegistrar interface{ Register(DescriptorRecord) error }
 
 // New constructs a registry from a store and resolver.
 func New(store RegistryStore, resolver DescriptorResolver) (*Registry, error) {
@@ -119,13 +127,19 @@ func (r *Registry) Lookup(ctx context.Context, key RegistryKey) (GameDescriptor,
 }
 
 // Register admits one descriptor release when the configured store is writable.
-func (r *Registry) Register(_ context.Context, record DescriptorRecord) error {
+func (r *Registry) Register(ctx context.Context, record DescriptorRecord) error {
 	registrar, ok := r.store.(RecordRegistrar)
-	if !ok {
-		return fmt.Errorf("registry: configured store is read-only")
+	if ok {
+		return registrar.Register(ctx, record)
 	}
-	return registrar.Register(record)
+	if legacy, ok := r.store.(legacyRecordRegistrar); ok {
+		return legacy.Register(record)
+	}
+	return fmt.Errorf("registry: configured store is read-only")
 }
+
+// ValidateDescriptorRecord validates durable descriptor metadata before storing or resolving it.
+func ValidateDescriptorRecord(record DescriptorRecord) error { return validateDescriptorRecord(record) }
 
 // LookupVersion resolves a descriptor by game id and semver version string.
 func (r *Registry) LookupVersion(ctx context.Context, gameID, gameVersion string) (GameDescriptor, error) {

@@ -81,6 +81,8 @@ type GameRelease struct {
 	BuildMode         string
 	BuilderID         string
 	SupportedRulesets []byte
+	RuntimeArgs       []byte
+	MemoryLimitPages  int32
 	Source            string
 	SourceID          string
 	CreatedAt         pgtype.Timestamptz
