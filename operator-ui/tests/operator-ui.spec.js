@@ -72,6 +72,8 @@ test("local operator UI browser lane covers queue, active, completed detail, and
   await expect(runDetail).toBeVisible();
   const compactSummary = runDetail.locator(".bg-ink");
   for (const label of ["Attempt", "Game", "Ruleset", "Output Dir", "Result Summary"]) {
-    await expect(compactSummary.getByText(label, { exact: true })).toHaveClass(/text-paper\/70/);
+    const metadata = compactSummary.getByText(label, { exact: true }).locator("..");
+    await expect(metadata.locator("dt")).toHaveClass(/text-paper\/70/);
+    await expect(metadata.locator("dd")).toHaveClass(/(?:^|\s)text-paper(?:\s|$)/);
   }
 });
