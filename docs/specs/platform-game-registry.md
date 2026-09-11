@@ -106,6 +106,13 @@ descriptor metadata を durable store へ保存する。保存失敗は admissio
 archive object が残ることは許容するが、lookup は archive bytes を読んだり補償削除を試みたりしない。
 scope は既存の exact admitted release を参照し、scope が新 release へ移っても過去 release record は保持する。
 
+同一 immutable artifact digest の検証済み bundle を再 admission したときは、complete な既存 descriptor を
+変更せず idempotent に扱う。過去 schema の都合で WASI runtime args と memory-page limit **だけ**が欠落した
+既存 descriptor は、同じ検証済み manifest から得た値で補完してよい。この repair は artifact digest、game
+identity、exact version、build mode、builder、ruleset metadata、scope identity を変更してはならない。いずれかの
+immutable metadata が一致しない場合、または runtime field 以外も欠落している場合は、既存 release を更新せず
+conflict/error とする。DB への推測値の一括 backfill や archive bytes の保存はこの経路に含めない。
+
 operator-facing general lane では、runtime descriptor 自体ではなく、
 operator が選択・検証に使う plain-data metadata view を exposed してよい。
 この view は少なくとも次を含む。
@@ -158,6 +165,10 @@ Postgres を configured した operated service では external/admitted tier �
 durable read failure または invalid metadata は lookup failure とし fallback してはならない。exact artifact
 lookup は external-only であり、version や built-in へ fallback しない。service restart/redeploy 後も同じ
 exact digest を request admission と worker session construction で解決できなければならない。
+
+この failure contract は incomplete durable descriptor にも適用する。通常 lookup と exact artifact lookup は
+incomplete row を skip して別 version や built-in を選んではならず、activation と match admission もその error を
+返す。usable 状態への復旧は lookup 時の補完ではなく、上記の検証済み同一 artifact の再 admission に限る。
 
 ## registered game の最小要件
 

@@ -474,6 +474,13 @@ rollback は `0117-online-release-production-readiness-rollback` の責務であ
 Reversi game の登録可否は、人間が local または staging 環境で必要な bundle を選んで確認する運用上の
 受け入れ項目として扱う。
 
+過去 migration により admitted release の runtime descriptor field だけが欠落した staging recovery では、DB
+console で値を推測して更新しない。release asset の exact checksum と operator に表示される artifact digest を
+照合した上で、同一の verified game ZIP を再 upload する。既存 scope を削除せず、対象 scope の game activation
+と selected two-seat bots による match request creation が成功することを記録する。upload の HTTP success や
+scope list の表示だけは acceptance evidence ではない。worker materialization は artifact-content の別境界として
+扱う。
+
 repo workflow は `verified commit` を主語にしつつ、trigger は次で自動化する。
 
 - staging deploy:
