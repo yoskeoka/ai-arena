@@ -4,7 +4,6 @@ import { Panel } from "../../shared/ui/Panel";
 import { hintFor } from "./operatorPageSupport";
 import { CompletedDetailPanel } from "./CompletedDetailPanel";
 import { MatchTable } from "./MatchTable";
-import { PresetQueuePanel } from "./PresetQueuePanel";
 import { useOperatorPageState } from "./useOperatorPageState";
 
 type OperatorPageProps = {
@@ -17,13 +16,7 @@ export function OperatorPage({ baseUrl, detailActions }: OperatorPageProps) {
 
   return (
     <>
-      <section className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
-        <PresetQueuePanel
-          enqueueState={state.enqueueState}
-          enqueueError={state.enqueueError}
-          onEnqueue={(presetId) => void state.enqueuePreset(presetId)}
-        />
-
+      <section className="grid gap-6">
         <CompletedDetailPanel
           detail={state.detail}
           detailState={state.detailState}
