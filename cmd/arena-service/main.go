@@ -259,6 +259,12 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 			return nil, err
 		}
 	}
+	closeDescriptor := descriptorStore != nil
+	defer func() {
+		if closeDescriptor {
+			descriptorStore.Close()
+		}
+	}()
 	var admissionRegistry *registry.Registry
 	if descriptorStore != nil {
 		admissionRegistry, err = registry.NewWASIOverlay(runtime.bundles, descriptorStore)
@@ -350,11 +356,13 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	closeAuth = false
 	previousClose := closeFn
 	closeFn = func() {
+		closeDescriptor = false
 		if descriptorStore != nil {
 			descriptorStore.Close()
 		}
 		previousClose()
 	}
+	closeDescriptor = false
 	return &cliApp{
 		commands:          commands,
 		queries:           queries,

@@ -40,16 +40,6 @@ func (s *PostgresDescriptorStore) Register(ctx context.Context, record registry.
 	if err := registry.ValidateDescriptorRecord(record); err != nil {
 		return err
 	}
-	existing, err := s.lookupArtifact(ctx, record.ArtifactID)
-	if err == nil {
-		if sameDescriptorRecord(existing, record) {
-			return nil
-		}
-		return fmt.Errorf("registry: conflicting descriptor for artifact %q", record.ArtifactID)
-	}
-	if !errors.Is(err, registry.ErrRecordNotFound) {
-		return err
-	}
 	rulesets, err := json.Marshal(record.BuildConstraints.SupportedRulesets)
 	if err != nil {
 		return err
@@ -58,8 +48,18 @@ func (s *PostgresDescriptorStore) Register(ctx context.Context, record registry.
 	if err != nil {
 		return err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO game_releases(release_id,game_id,game_version,artifact_id,build_mode,builder_id,supported_rulesets,runtime_args,memory_limit_pages,source,source_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'manual','')`, uuid.New(), record.GameID, record.GameVersion, record.ArtifactID, record.BuildMode, record.BuilderID, rulesets, args, record.MemoryLimitPages)
-	return err
+	_, err = s.pool.Exec(ctx, `INSERT INTO game_releases(release_id,game_id,game_version,artifact_id,build_mode,builder_id,supported_rulesets,runtime_args,memory_limit_pages,source,source_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'manual','') ON CONFLICT (artifact_id) DO NOTHING`, uuid.New(), record.GameID, record.GameVersion, record.ArtifactID, record.BuildMode, record.BuilderID, rulesets, args, record.MemoryLimitPages)
+	if err != nil {
+		return err
+	}
+	existing, err := s.lookupArtifact(ctx, record.ArtifactID)
+	if err != nil {
+		return err
+	}
+	if !sameDescriptorRecord(existing, record) {
+		return fmt.Errorf("registry: conflicting descriptor for artifact %q", record.ArtifactID)
+	}
+	return nil
 }
 
 func (s *PostgresDescriptorStore) Lookup(ctx context.Context, key registry.RegistryKey) (registry.DescriptorRecord, error) {
@@ -111,8 +111,9 @@ type descriptorRow interface{ Scan(...any) error }
 
 func scanDescriptor(row descriptorRow) (registry.DescriptorRecord, error) {
 	var record registry.DescriptorRecord
-	var rulesets, args []byte
-	var memory int
+	var rulesets []byte
+	var args *[]byte
+	var memory *int32
 	if err := row.Scan(&record.GameID, &record.GameVersion, &record.ArtifactID, &record.BuildMode, &record.BuilderID, &rulesets, &args, &memory); err != nil {
 		return record, err
 	}
@@ -120,15 +121,18 @@ func scanDescriptor(row descriptorRow) (registry.DescriptorRecord, error) {
 	if err != nil {
 		return record, fmt.Errorf("registry: invalid durable descriptor: %w", err)
 	}
-	if memory < 0 {
+	if args == nil || memory == nil {
+		return record, fmt.Errorf("registry: incomplete durable descriptor")
+	}
+	if *memory < 0 {
 		return record, fmt.Errorf("registry: invalid durable memory page limit")
 	}
 	record.RegistryKey = registry.RegistryKey{GameID: record.GameID, GameVersionMajor: major}
-	record.MemoryLimitPages = uint32(memory)
+	record.MemoryLimitPages = uint32(*memory)
 	if err := json.Unmarshal(rulesets, &record.BuildConstraints.SupportedRulesets); err != nil {
 		return record, err
 	}
-	if err := json.Unmarshal(args, &record.RuntimeArgs); err != nil {
+	if err := json.Unmarshal(*args, &record.RuntimeArgs); err != nil {
 		return record, err
 	}
 	if err := registry.ValidateDescriptorRecord(record); err != nil {
