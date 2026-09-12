@@ -289,6 +289,7 @@ async function runBundleAdmissionFlow(page, api, family) {
   }
 
   await page.getByTestId("operator-nav-rankings").click();
+  await expect(page.getByTestId("operator-form-rankings")).toContainText("ready");
   await page.getByLabel("Game ID").fill(family.gameID);
   await page.getByLabel("Game Version").fill(family.gameVersion);
   await page.getByLabel("Ruleset Version").fill(family.rulesetVersion);
