@@ -25,7 +25,7 @@ implementation を開始しない。その evidence を入力に、各 repo 最�
 
 ## 詳細 plan 作成の入力と受入条件
 
-- C の merged SHA と polling observability evidence から、latency percentile、concurrent spectator/load profile、reconnect/error
+- ai-arena public adapter と reversi-ai-arena viewer adapter の両方の C merged SHA、shared fixture/contract version、polling observability evidence から、latency percentile、concurrent spectator/load profile、reconnect/error
   profile、stale/terminal behavior、provider cost/operational constraints を引用する。
 - polling 継続または stream 導入の比較、採否、再評価条件を human review で決め、wire source、`(NEW)/(MODIFY)/(DELETE)` map、
   cross-repository client impact を exact symbols とともに記録する。

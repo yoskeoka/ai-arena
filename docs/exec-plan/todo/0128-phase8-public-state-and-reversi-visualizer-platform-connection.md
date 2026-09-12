@@ -10,13 +10,14 @@ versioned public resource を選択して terminal replay を再生し、running
 止める経路を扱う。
 
 `N/A - detail required before execution`: これは intentional parent plan である。A/B の実装 PR が merge され、実際の public
-fixture/envelope version、access policy、cache/retry hint、viewer bridge と polling evidence を確認するまで implementation を開始しない。
+fixture/envelope version、access policy、cache/retry hint、viewer bridge を確認するまで implementation を開始しない。
 その時点の各 repo 最新 `main` から、exact route/client symbols、cross-repository version compatibility、test lanes を持つ新しい詳細
 execution plan を作成する。この parent plan 自体は code/API mutation を行わない。
 
 ## 現時点の境界
 
-- input は A の public match metadata、terminal replay payload、final exported snapshot と B の selected viewer adapter だけとする。
+- input は A の public match metadata、running latest exported-state resource、terminal replay metadata/payload、final exported snapshot
+  と B の selected viewer adapter だけとする。
 - running match は A の cadence/version semantics に従い、older response を version で破棄し、terminal lifecycle 後は polling を
   stop する。
 - private artifact が unavailable/missing でも public contract だけで viewer が動作する。operator route、private locator、signed
@@ -25,7 +26,8 @@ execution plan を作成する。この parent plan 自体は code/API mutation 
 
 ## 詳細 plan 作成の入力と受入条件
 
-- A/B の merged SHA、public replay format/version、fixture location、visibility/access matrix、cache/retry/stale semantics を
+- ai-arena A と reversi-ai-arena B の merged SHA、public replay format/version、fixture location、visibility/access matrix、
+  running-state and cache/retry/stale semantics を
   evidence として引用する。
 - network adapter の `(NEW)/(MODIFY)/(DELETE)` map、TypeSpec/client generation impact、viewer fetch/error UX、CORS/origin
   policy、fixture-based integration E2E を exact symbols とともに定義する。
@@ -34,5 +36,4 @@ execution plan を作成する。この parent plan 自体は code/API mutation 
 
 ## 依存
 
-ai-arena の `0126` と reversi-ai-arena の `0001` の実装完了が必須である。`0129` の stream evaluation は本 parent を詳細化・実装して polling evidence を得た後にのみ
-開始できる。
+ai-arena の `0126` と reversi-ai-arena の `0001` の実装完了が必須である。本 parent を詳細化・実装して得る polling evidence が `0129` の stream evaluation の入力になる。

@@ -41,9 +41,9 @@ state cadence、viewer UX、stream transport は child plan で具体化し、�
 
 | 区分 | child plan | 現在の粒度 | 実行条件 |
 | --- | --- | --- | --- |
-| A | `0126-phase8-public-state-and-reversi-visualizer.md` | 詳細な実装 plan | public visibility / access policy を plan review で選択後 |
-| B | `reversi-ai-arena/docs/exec-plan/todo/0001-phase8-public-state-and-reversi-visualizer-reversi-replay-viewer.md` | 詳細な実装 plan | browser replay boundary の選択を plan review で選択後。A の versioned fixture を入力にする |
-| C | `0128-phase8-public-state-and-reversi-visualizer-platform-connection.md` | intentional parent | A と B の実装・versioned contract・polling evidence が揃った後に詳細 plan を新規作成する |
+| A | `0126-phase8-public-state-and-reversi-visualizer.md` | 詳細な実装 plan | 作成時 opt-in public visibility、匿名 read、official-run selection を固定済み |
+| B | `reversi-ai-arena/docs/exec-plan/todo/0001-phase8-public-state-and-reversi-visualizer-reversi-replay-viewer.md` | 詳細な実装 plan | TypeScript versioned neutral DTO と Reversi-owned shared public fixture を固定済み。A の fixture を先に入力にする |
+| C | `0128-phase8-public-state-and-reversi-visualizer-platform-connection.md` | intentional parent | A と B の実装・versioned contract・fixture が揃った後に詳細 plan を新規作成する。polling evidence は C の出力である |
 | D | `0129-phase8-public-state-and-reversi-visualizer-event-stream-evaluation.md` | intentional parent | C の polling load / latency / reconnect evidence を評価後に詳細 plan を新規作成する |
 
 以下は cross-repository dependency の roadmap summary である。各区分の implementation scope、spec-first change、
