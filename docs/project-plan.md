@@ -115,8 +115,9 @@
       `0119-staging-owned-bot-list-persistence`
 - [ ] Phase 8: public な external game state を読み取る観戦用ビジュアライザを整える
   - child item: public game state を取得・配信する API / artifact 契約を固める
-  - child item: spectator 向けの snapshot / event stream 読み取り導線を整える
-  - child item: game repo 側 visualizer と platform 側 state delivery を接続できる最小 viewer を成立させる
+  - child item: first delivery では認証なしの exported-state-only API と snapshot polling 読み取り導線を整える
+  - child item: game provider が任意形態で提供・host する visualizer と platform 側 state delivery を接続できる最小 viewer を成立させる
+    （ai-arena は game 固有 visualizer の asset / runtime / rendering を host しない）
 - [ ] Phase 9: Go 製 WASM AI 開発フローの外部向け導線を整え、Rust を複数言語評価の先行レーンとして取り込みつつ、多言語サポート拡張の準備を進める
   - child item: Go WASM を公式サポート言語として扱う guide / sample / verification assets を整える
   - child item: Rust を先行 evaluation lane として CI / sample / compatibility matrix に載せる
