@@ -78,7 +78,10 @@ Use one of these fixed accounts on the provider login form:
 | `tester01` | `local-oidc-password` | `operator` |
 | `tester02` | `local-oidc-password` | `developer` |
 
-These credentials are local/CI fixtures, not production credentials.
+These credentials are local/CI fixtures, not production credentials. The local
+OIDC provider idempotently seeds both users as existing AI Arena accounts with
+their listed roles and `local-oidc` identities, so neither account requires a
+signup invite.
 
 ## 6. Manual GitHub auth verification
 
