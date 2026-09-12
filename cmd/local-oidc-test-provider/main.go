@@ -42,7 +42,7 @@ func main() {
 	jwks := goidc.JSONWebKeySet{Keys: []goidc.JSONWebKey{{KeyID: "local-oidc", Key: key, Algorithm: "RS256", Use: "sig"}}}
 	op, err := provider.New(provider.Config{Issuer: *issuer, JWKS: func(context.Context) (goidc.JSONWebKeySet, error) { return jwks, nil }, IDTokenAlgs: []goidc.SignatureAlgorithm{goidc.SigAlgRS256}},
 		provider.WithAuthCodeGrant(provider.AuthCodeGrantConfig{ResponseTypes: []goidc.ResponseType{goidc.ResponseTypeCode}}, provider.WithAuthPolicies(passwordPolicy())),
-		provider.WithDCR(nil), provider.WithClaims(goidc.ClaimEmail, goidc.ClaimName, goidc.ClaimPreferredUsername),
+		provider.WithDCR(nil), provider.WithScopes(goidc.ScopeOpenID, goidc.ScopeProfile, goidc.ScopeEmail), provider.WithClaims(goidc.ClaimEmail, goidc.ClaimName, goidc.ClaimPreferredUsername),
 		provider.WithIDTokenClaims(func(_ context.Context, grant *goidc.Grant) map[string]any { return grant.Store }),
 	)
 	if err != nil {
