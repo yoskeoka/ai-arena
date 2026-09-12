@@ -30,8 +30,6 @@ type RegistrationSource string
 const (
 	// SourceManual means the operator registered the entity directly.
 	SourceManual RegistrationSource = "manual"
-	// SourcePreset means the entity was materialized from one preset definition.
-	SourcePreset RegistrationSource = "preset"
 )
 
 // ValidationState captures the current admission state of one AI submission.
@@ -317,71 +315,12 @@ func (s *GeneralSubmissionService) GetAI(ctx context.Context, aiSubmissionID str
 	return s.submissions.Get(ctx, aiSubmissionID)
 }
 
-// MaterializePreset converts one preset submission into general-lane identities.
-func (s *GeneralSubmissionService) MaterializePreset(ctx context.Context, presetID string, submission MatchSubmission) (RegisteredGame, []RegisteredAI, error) {
-	game, err := s.materializePresetGame(ctx, presetID, submission.Game)
-	if err != nil {
-		return RegisteredGame{}, nil, err
-	}
-	items := make([]RegisteredAI, 0, len(submission.Players))
-	for _, player := range submission.Players {
-		item, err := s.materializePresetAI(ctx, presetID, game, player)
-		if err != nil {
-			return RegisteredGame{}, nil, err
-		}
-		items = append(items, item)
-	}
-	return game, items, nil
-}
-
-func (s *GeneralSubmissionService) materializePresetGame(ctx context.Context, presetID string, game contract.GameMetadata) (RegisteredGame, error) {
-	record, err := s.buildRegisteredGame(ctx, defaultGameRegistrationID(game), game, SourcePreset, presetID)
-	if err != nil {
-		return RegisteredGame{}, err
-	}
-	err = s.games.Save(ctx, record)
-	if err == nil {
-		return record, nil
-	}
-	if !errors.Is(err, ErrConflict) {
-		return RegisteredGame{}, err
-	}
-	record, getErr := s.games.Get(ctx, defaultGameRegistrationID(game))
-	if getErr != nil {
-		return RegisteredGame{}, getErr
-	}
-	return record, nil
-}
-
-func (s *GeneralSubmissionService) materializePresetAI(ctx context.Context, presetID string, game RegisteredGame, player SubmittedPlayer) (RegisteredAI, error) {
-	record, err := s.buildRegisteredAI(defaultPresetAISubmissionID(presetID, player.PlayerID), game, player.ArtifactRef, player.PlayerID, SourcePreset, presetID)
-	if err != nil {
-		return RegisteredAI{}, err
-	}
-	err = s.submissions.Save(ctx, record)
-	if err == nil {
-		return record, nil
-	}
-	if !errors.Is(err, ErrConflict) {
-		return RegisteredAI{}, err
-	}
-	record, getErr := s.submissions.Get(ctx, defaultPresetAISubmissionID(presetID, player.PlayerID))
-	if getErr != nil {
-		return RegisteredAI{}, getErr
-	}
-	return record, nil
-}
-
 func defaultGameRegistrationID(game contract.GameMetadata) string {
 	major, err := catalog.MajorVersion(game.GameVersion)
 	if err != nil {
 		return strings.TrimSpace(game.GameID)
 	}
 	return fmt.Sprintf("%s-v%d-%s", strings.TrimSpace(game.GameID), major, strings.TrimSpace(game.RulesetVersion))
-}
-
-func defaultPresetAISubmissionID(presetID, playerID string) string {
-	return fmt.Sprintf("preset-%s-%s", strings.TrimSpace(presetID), strings.TrimSpace(playerID))
 }
 
 func wrapConflict(err error) error {

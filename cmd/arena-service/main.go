@@ -58,7 +58,6 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 		baseDir                string
 		workerID               string
 		listenAddr             string
-		presetConfig           string
 		pollInterval           time.Duration
 		matchTimeout           time.Duration
 		postgresDSN            string
@@ -75,7 +74,6 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	fs.StringVar(&baseDir, "base-dir", "", "base directory for resolving local artifact refs and output_dir")
 	fs.StringVar(&workerID, "worker-id", "cli-worker", "worker identifier for run-once")
 	fs.StringVar(&listenAddr, "listen-addr", ":8080", "listen address for serve")
-	fs.StringVar(&presetConfig, "preset-config", "", "preset config JSON path for serve")
 	fs.DurationVar(&pollInterval, "worker-poll-interval", 2*time.Second, "poll interval for serve worker loop")
 	fs.DurationVar(&matchTimeout, "match-timeout", 0, "match timeout for run-once")
 	fs.StringVar(&postgresDSN, "postgres-dsn", "", "PostgreSQL DSN for durable queue storage")
@@ -110,12 +108,9 @@ func runWithFactory(args []string, stdout, stderr io.Writer, factory cliAppFacto
 	defer app.close()
 
 	if subcommand == "serve" {
-		if presetConfig == "" {
-			presetConfig = strings.TrimSpace(os.Getenv("ARENA_SERVICE_PRESET_CONFIG"))
-		}
 		serveCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		return app.serve(serveCtx, listenAddr, presetConfig, workerID, pollInterval, stderr)
+		return app.serve(serveCtx, listenAddr, workerID, pollInterval, stderr)
 	}
 	if subcommand == "signup-invite-create" {
 		return createSignupInvite(stdout, postgresDSN, inviteRole, inviteTTL)
@@ -193,7 +188,7 @@ func usageFor(subcommand string) string {
 	case "read":
 		return "arena-service read --run-id <id> --artifact <result-summary|record|snapshot|history|exported-snapshot|stderr:<player-id>> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "serve":
-		return "arena-service serve [--listen-addr <addr>] [--preset-config <path>] [--worker-id <id>] [--worker-poll-interval <duration>] [--base-dir <dir>] [--match-timeout <duration>] [--postgres-dsn <dsn>]"
+		return "arena-service serve [--listen-addr <addr>] [--worker-id <id>] [--worker-poll-interval <duration>] [--base-dir <dir>] [--match-timeout <duration>] [--postgres-dsn <dsn>]"
 	case "ranking-get":
 		return "arena-service ranking-get --game-id <id> --game-version <version> --ruleset-version <version> [--base-dir <dir>] [--postgres-dsn <dsn>]"
 	case "ranking-recompute":
@@ -550,11 +545,7 @@ func (a *cliApp) rankingVerify(ctx context.Context, scope service.RankingScope, 
 	return encodeJSON(stdout, verification)
 }
 
-func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig string, workerID string, pollInterval time.Duration, stderr io.Writer) error {
-	presets, err := service.LoadPresetCatalog(resolveBaseDirPath(a.baseDir, presetConfig))
-	if err != nil {
-		return err
-	}
+func (a *cliApp) serve(ctx context.Context, listenAddr string, workerID string, pollInterval time.Duration, stderr io.Writer) error {
 	worker, err := a.newWorker()
 	if err != nil {
 		return err
@@ -566,11 +557,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 	if err != nil {
 		return err
 	}
-	api, err := service.NewOperatorAPI(a.commands, a.queries, a.general, a.requests, resolvingPresetCatalog{
-		baseDir: a.baseDir,
-		opaque:  isOpaqueArtifactBackend(a.persister),
-		next:    presets,
-	}, a.artifactAccess, a.auth, a.rankings)
+	api, err := service.NewOperatorAPI(a.commands, a.queries, a.general, a.requests, nil, a.artifactAccess, a.auth, a.rankings)
 	if err != nil {
 		return err
 	}
@@ -616,21 +603,6 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, presetConfig stri
 		return err
 	}
 	return <-loopErrCh
-}
-
-type resolvingPresetCatalog struct {
-	baseDir string
-	opaque  bool
-	next    service.PresetCatalog
-}
-
-func (c resolvingPresetCatalog) Build(ctx context.Context, req service.PresetMatchRequest) (service.MatchSubmission, error) {
-	submission, err := c.next.Build(ctx, req)
-	if err != nil {
-		return service.MatchSubmission{}, err
-	}
-	resolveOutputDir(c.baseDir, c.opaque, &submission)
-	return submission, nil
 }
 
 func encodeRecord(stdout io.Writer, record service.QueueRecord) error {

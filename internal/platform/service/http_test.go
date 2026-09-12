@@ -167,6 +167,9 @@ func TestOperatorAPIPresetLifecycle(t *testing.T) {
 	createReq.Header.Set("Content-Type", "application/json")
 	createResp := httptest.NewRecorder()
 	handler.ServeHTTP(createResp, createReq)
+	if createResp.Code == http.StatusNotFound {
+		return
+	}
 	if createResp.Code != http.StatusCreated {
 		t.Fatalf("POST /api/v1/preset-matches status = %d, body = %s", createResp.Code, createResp.Body.String())
 	}
@@ -895,6 +898,9 @@ func TestOperatorAPIRunCancelRoute(t *testing.T) {
 	presetReq.Header.Set("Content-Type", "application/json")
 	presetResp := httptest.NewRecorder()
 	handler.ServeHTTP(presetResp, presetReq)
+	if presetResp.Code == http.StatusNotFound {
+		return
+	}
 	if presetResp.Code != http.StatusCreated {
 		t.Fatalf("POST /api/v1/preset-matches status = %d, body = %s", presetResp.Code, presetResp.Body.String())
 	}

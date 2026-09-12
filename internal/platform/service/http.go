@@ -112,7 +112,6 @@ type OperatorAPI struct {
 	general           *GeneralSubmissionService
 	requests          *MatchRequestService
 	rankings          *RankingService
-	presets           PresetCatalog
 	artifactAccess    ArtifactAccessIssuer
 	auth              *AuthService
 	artifactAdmission *ArtifactAdmissionService
@@ -146,7 +145,7 @@ func (a *OperatorAPI) WithArtifactAdmission(admission *ArtifactAdmissionService)
 }
 
 // NewOperatorAPI constructs the HTTP adapter for operator routes.
-func NewOperatorAPI(commands *CommandService, queries *QueryService, general *GeneralSubmissionService, requests *MatchRequestService, presets PresetCatalog, artifactAccess ArtifactAccessIssuer, auth *AuthService, rankings ...*RankingService) (*OperatorAPI, error) {
+func NewOperatorAPI(commands *CommandService, queries *QueryService, general *GeneralSubmissionService, requests *MatchRequestService, _ any, artifactAccess ArtifactAccessIssuer, auth *AuthService, rankings ...*RankingService) (*OperatorAPI, error) {
 	if commands == nil {
 		return nil, fmt.Errorf("service: command service is required")
 	}
@@ -167,9 +166,6 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, general *Ge
 	if err != nil {
 		return nil, err
 	}
-	if presets == nil {
-		return nil, fmt.Errorf("service: preset catalog is required")
-	}
 	if artifactAccess == nil {
 		artifactAccess = DirectArtifactAccessIssuer{}
 	}
@@ -180,7 +176,6 @@ func NewOperatorAPI(commands *CommandService, queries *QueryService, general *Ge
 		general:        general,
 		requests:       requests,
 		rankings:       rankingService,
-		presets:        presets,
 		artifactAccess: artifactAccess,
 		auth:           auth,
 	}, nil
@@ -213,7 +208,6 @@ func (a *OperatorAPI) Handler() http.Handler {
 	protected.HandleFunc("/api/v1/match-requests", a.handleMatchRequests)
 	protected.HandleFunc("GET /api/v1/eligible-bots", a.handleEligibleBots)
 	protected.HandleFunc("GET /api/v1/rankings", a.handleRankings)
-	protected.HandleFunc("POST /api/v1/preset-matches", a.handlePresetMatches)
 	protected.HandleFunc("POST /api/v1/runs/{run_id}/cancel", a.handleRunCancel)
 	protected.HandleFunc("POST /api/v1/runs/{run_id}/retry", a.handleRunRetry)
 	protected.HandleFunc("POST /api/v1/runs/{run_id}/rerun", a.handleRunRerun)
@@ -531,34 +525,6 @@ func (a *OperatorAPI) handleAISubmissions(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (a *OperatorAPI) handlePresetMatches(w http.ResponseWriter, r *http.Request) {
-	req, err := decodeJSON[PresetMatchRequest](r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	submission, err := a.presets.Build(r.Context(), req)
-	if err != nil {
-		status := http.StatusBadRequest
-		if errors.Is(err, ErrPresetNotFound) {
-			status = http.StatusNotFound
-		}
-		writeError(w, status, err)
-		return
-	}
-	_, record, err := a.requests.CreatePreset(r.Context(), req.PresetID, submission)
-	if err != nil {
-		writeError(w, statusCodeForServiceError(err), err)
-		return
-	}
-	item, _, err := buildResultListItem(r.Context(), record, a.queries.reader)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, item)
-}
-
 func (a *OperatorAPI) handleMatchRequests(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -751,7 +717,7 @@ func writeError(w http.ResponseWriter, status int, err error) {
 
 func statusCodeForServiceError(err error) int {
 	switch {
-	case errors.Is(err, ErrQueueRecordNotFound), errors.Is(err, ErrPresetNotFound), errors.Is(err, ErrGameRegistrationNotFound), errors.Is(err, ErrAISubmissionNotFound), errors.Is(err, ErrRankingSnapshotNotFound):
+	case errors.Is(err, ErrQueueRecordNotFound), errors.Is(err, ErrGameRegistrationNotFound), errors.Is(err, ErrAISubmissionNotFound), errors.Is(err, ErrRankingSnapshotNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, ErrConflict):
 		return http.StatusConflict

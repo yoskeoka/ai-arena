@@ -144,8 +144,7 @@ pnpm run verify:local:real
 queue/state backend は Postgres を正本にする。
 artifact backend は local object storage を優先する。
 `SeaweedFS` bootstrap ができない環境では、artifact backend だけ file-backed fallback を使ってよい。
-この lane の preset bootstrap は `make render-build` が生成する prepared preset executable を使い、
-`presets.example.json` ではなく deploy-shaped catalog を正本にする。
+この lane は bundle admission 済みの registered game と admitted bot を使って match request を作成する。
 
 default DSN は local compose harness に合わせて次を使う。
 

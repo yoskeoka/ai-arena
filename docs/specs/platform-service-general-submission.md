@@ -78,8 +78,9 @@ request の挙動は変えない。
 - Postgres mode では release、scope、bot、revision、active revision relation は restart 後も残る。
   process-local store は Postgres mode の source of truth にしてはならない。
 
-## Preset Queue との関係
+## Retired Preset Read Compatibility
 
-preset lane は dedicated queue identity を持たず、必要な scope と bot/revision を materialize
-して general lane と同じ immutable artifact identity を参照する。match request / scheduling
-policy、ranking aggregate、public self-service portal、asynchronous review はこの文書の範囲外とする。
+新規の game、bot、match request は registered scope と admitted bot を明示する general lane
+だけで作成する。保存済みの `source=preset` record は read、detail、ranking、replay の互換性のため
+保持し、この lane はその record を削除または書換えない。match request / scheduling policy、ranking
+aggregate、public self-service portal、asynchronous review はこの文書の範囲外とする。

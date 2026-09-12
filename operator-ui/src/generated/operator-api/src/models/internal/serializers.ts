@@ -25,7 +25,6 @@ import type {
   MatchRequestParticipant,
   PathRefs,
   Placement,
-  PresetMatchRequest,
   RankingEntry,
   RankingScope,
   RankingSnapshot,
@@ -115,8 +114,6 @@ export function decodeBase64(value: string): Uint8Array | undefined {
   payload: SignupInviteRequest,
 ) {
   return jsonSignupInviteRequestToTransportTransform(payload)!;
-}export function enqueuePresetPayloadToTransport(payload: PresetMatchRequest) {
-  return jsonPresetMatchRequestToTransportTransform(payload)!;
 }export function jsonHealthResponseToTransportTransform(
   input_?: HealthResponse | null,
 ): any {
@@ -903,24 +900,6 @@ export function decodeBase64(value: string): Uint8Array | undefined {
   }
 
   return _transformedRecord;
-}export function jsonPresetMatchRequestToTransportTransform(
-  input_?: PresetMatchRequest | null,
-): any {
-  if(!input_) {
-    return input_ as any;
-  }
-    return {
-    preset_id: input_.presetId,run_id: input_.runId,match_id: input_.matchId,output_dir: input_.outputDir
-  }!;
-}export function jsonPresetMatchRequestToApplicationTransform(
-  input_?: any,
-): PresetMatchRequest {
-  if(!input_) {
-    return input_ as any;
-  }
-    return {
-    presetId: input_.preset_id,runId: input_.run_id,matchId: input_.match_id,outputDir: input_.output_dir
-  }!;
 }export function jsonResultListItemToTransportTransform(
   input_?: ResultListItem | null,
 ): any {
