@@ -236,6 +236,7 @@ async function runBundleAdmissionFlow(page, api, family) {
   expect(revisionArtifactID).not.toBe(alphaArtifactID);
   await page.getByRole("button", { name: "Save bot revision" }).click();
 
+  await page.getByLabel("Existing bot ID").fill("");
   await page.getByLabel("Bot name").fill(`${family.gameID} Beta`);
   await page.getByLabel("AI bundle ZIP").setInputFiles(family.betaBundle);
   await page.getByRole("button", { name: "Upload AI bundle" }).click();
