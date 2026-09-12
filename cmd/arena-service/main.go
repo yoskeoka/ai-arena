@@ -633,20 +633,6 @@ func resolveOutputDir(baseDir string, opaque bool, submission *service.MatchSubm
 	submission.OutputDir = filepath.Join(baseDir, filepath.Clean(submission.OutputDir))
 }
 
-func resolveBaseDirPath(baseDir, value string) string {
-	if strings.TrimSpace(value) == "" {
-		return ""
-	}
-	parsed, err := url.Parse(value)
-	if err == nil && parsed.Scheme != "" {
-		return value
-	}
-	if filepath.IsAbs(value) {
-		return filepath.Clean(value)
-	}
-	return filepath.Join(baseDir, filepath.Clean(value))
-}
-
 func splitCSV(raw string) []string {
 	if strings.TrimSpace(raw) == "" {
 		return nil
@@ -763,11 +749,6 @@ func newArtifactRuntime(ctx context.Context, baseDir string, cfg artifactRuntime
 	default:
 		return artifactRuntime{}, fmt.Errorf("unsupported artifact backend %q", cfg.backend)
 	}
-}
-
-func isOpaqueArtifactBackend(persister service.TerminalPersister) bool {
-	_, ok := persister.(*service.S3TerminalPersister)
-	return ok
 }
 
 func loadSubmission(path string, stdin io.Reader) (service.MatchSubmission, error) {
