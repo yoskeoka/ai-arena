@@ -14,7 +14,7 @@ command -v zip >/dev/null || { echo "zip is required" >&2; exit 1; }
 mkdir -p "$output_dir"
 
 pack_game() {
-  local name="$1" package="$2" game_id="$3" version="$4" ruleset="$5" args="$6"
+  local name="$1" package="$2" game_id="$3" version="$4" ruleset="$5" max_active_bots_per_owner="$6" args="$7"
   local bundle_dir="$work_dir/$name"
   mkdir -p "$bundle_dir"
   (cd "$repo_root" && GOOS=wasip1 GOARCH=wasm go build -o "$bundle_dir/module.wasm" "$package")
@@ -24,34 +24,45 @@ pack_game() {
   "artifact_kind": "game",
   "game_id": "$game_id",
   "game_version": "$version",
-  "rulesets": [{"ruleset_version": "$ruleset", "player_count": 2, "max_active_bots_per_owner": 1}],
-  "runtime": {"kind": "wasm-wasi", "module": "module.wasm", "args": $args}
+  "rulesets": [{"ruleset_version": "$ruleset", "player_count": 2, "max_active_bots_per_owner": $max_active_bots_per_owner}],
+  "runtime": {"kind": "wasm-wasi", "module": "module.wasm", "args": $args, "memory_limit_pages": 128}
 }
 EOF
-  (cd "$bundle_dir" && zip -q -X "$output_dir/$name.arena-bundle.zip" manifest.json module.wasm)
+  pack_zip "$bundle_dir" "$name"
 }
 
 pack_ai() {
-  local name="$1" ai_id="$2"
+  local name="$1" package="$2" ai_id="$3" game_id="$4" game_version="$5"
   local bundle_dir="$work_dir/$name"
   mkdir -p "$bundle_dir"
-  (cd "$repo_root" && GOOS=wasip1 GOARCH=wasm go build -o "$bundle_dir/module.wasm" ./testdata/ai/echo/echo-ai)
+  (cd "$repo_root" && GOOS=wasip1 GOARCH=wasm go build -o "$bundle_dir/module.wasm" "$package")
   cat >"$bundle_dir/manifest.json" <<EOF
 {
   "schema_version": "arena-bundle/v1",
   "artifact_kind": "ai",
   "ai_id": "$ai_id",
-  "game_id": "echo-count",
-  "game_version": "2.0.0",
+  "game_id": "$game_id",
+  "game_version": "$game_version",
   "runtime": {"kind": "wasm-wasi", "module": "module.wasm"}
 }
 EOF
+  pack_zip "$bundle_dir" "$name"
+}
+
+pack_zip() {
+  local bundle_dir="$1" name="$2"
+  touch -t 198001010000 "$bundle_dir/manifest.json" "$bundle_dir/module.wasm"
   (cd "$bundle_dir" && zip -q -X "$output_dir/$name.arena-bundle.zip" manifest.json module.wasm)
 }
 
-pack_game "echo-count" "./cmd/echo-count-gamemaster" "echo-count" "2.0.0" "phase2-simultaneous-3turn" '["--game-version", "2.0.0", "--ruleset", "phase2-simultaneous-3turn"]'
-pack_game "janken" "./cmd/janken-gamemaster" "janken" "2.1.0" "regular" '[]'
-pack_ai "echo-ai" "echo-ai"
-pack_ai "echo-ai-revision" "echo-ai-revision"
+pack_game "echo-count" "./cmd/echo-count-gamemaster" "echo-count" "2.0.0" "phase2-simultaneous-3turn" "2" '["module.wasm", "--game-version", "2.0.0", "--ruleset", "phase2-simultaneous-3turn"]'
+pack_game "janken" "./cmd/janken-gamemaster" "janken" "2.1.0" "regular" "2" '[]'
+
+pack_ai "echo-ai-alpha" "./testdata/ai/echo/echo-ai" "echo-ai-alpha" "echo-count" "2.0.0"
+pack_ai "echo-ai-revision" "./testdata/ai/echo/echo-ai" "echo-ai-revision" "echo-count" "2.0.0"
+pack_ai "echo-ai-beta" "./testdata/ai/echo/echo-ai" "echo-ai-beta" "echo-count" "2.0.0"
+pack_ai "janken-ai-alpha" "./testdata/ai/janken/janken-rock-ai-wasm" "janken-ai-alpha" "janken" "2.1.0"
+pack_ai "janken-ai-revision" "./testdata/ai/janken/janken-cycle-ai" "janken-ai-revision" "janken" "2.1.0"
+pack_ai "janken-ai-beta" "./testdata/ai/janken/janken-go-wasm-ai" "janken-ai-beta" "janken" "2.1.0"
 
 echo "wrote game bundles to $output_dir"

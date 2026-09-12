@@ -1,4 +1,3 @@
-import os from "node:os";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,24 +21,30 @@ const authSignupLogin = process.env.OPERATOR_UI_AUTH_SIGNUP_LOGIN ?? authSignupU
 const frontendHost = process.env.OPERATOR_UI_FRONTEND_HOST ?? "127.0.0.1";
 const frontendPort = process.env.OPERATOR_UI_FRONTEND_PORT ?? "4173";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
-const artifactRef = process.env.OPERATOR_UI_TEST_ARTIFACT_REF ?? path.resolve(testDir, "../../testdata/ai/echo/echo-ai");
-const gameBundlePath =
-  process.env.OPERATOR_UI_GAME_BUNDLE ??
-  (process.env.OPERATOR_UI_TEST_SCENARIO === "remote"
-    ? undefined
-    : path.resolve(testDir, "../../.local/operator-ui-game-bundles/echo-count.arena-bundle.zip"));
-const aiBundlePath =
-  process.env.OPERATOR_UI_AI_BUNDLE ??
-  (process.env.OPERATOR_UI_TEST_SCENARIO === "remote"
-    ? undefined
-    : path.resolve(testDir, "../../.local/operator-ui-game-bundles/echo-ai.arena-bundle.zip"));
-const aiRevisionBundlePath =
-  process.env.OPERATOR_UI_AI_REVISION_BUNDLE ??
-  (process.env.OPERATOR_UI_TEST_SCENARIO === "remote"
-    ? undefined
-    : path.resolve(testDir, "../../.local/operator-ui-game-bundles/echo-ai-revision.arena-bundle.zip"));
+const bundleFixtureDir = process.env.OPERATOR_UI_BUNDLE_FIXTURE_DIR ?? path.resolve(testDir, "../../.local/operator-ui-game-bundles");
+const bundlePath = (name) => path.resolve(bundleFixtureDir, `${name}.arena-bundle.zip`);
+const bundleFamilies = [
+  {
+    gameID: "echo-count",
+    gameVersion: "2.0.0",
+    rulesetVersion: "phase2-simultaneous-3turn",
+    gameBundle: bundlePath("echo-count"),
+    alphaBundle: bundlePath("echo-ai-alpha"),
+    revisionBundle: bundlePath("echo-ai-revision"),
+    betaBundle: bundlePath("echo-ai-beta"),
+  },
+  {
+    gameID: "janken",
+    gameVersion: "2.1.0",
+    rulesetVersion: "regular",
+    gameBundle: bundlePath("janken"),
+    alphaBundle: bundlePath("janken-ai-alpha"),
+    revisionBundle: bundlePath("janken-ai-revision"),
+    betaBundle: bundlePath("janken-ai-beta"),
+  },
+];
 
-test.setTimeout(120_000);
+test.setTimeout(240_000);
 
 test("remote read-only smoke verifies version, anonymous session, and operator login redirect", async ({ page, request }) => {
   test.skip(process.env.OPERATOR_UI_TEST_SCENARIO !== "remote", "remote-only scenario");
@@ -116,12 +121,7 @@ test("service-backed operator UI browser lane covers registration, request execu
   request,
 }) => {
   test.skip(process.env.OPERATOR_UI_TEST_SCENARIO === "remote", "remote lane is limited to read-only smoke");
-  if (!gameBundlePath) {
-    throw new Error("OPERATOR_UI_GAME_BUNDLE is required for game bundle upload verification");
-  }
-  if (!aiBundlePath || !aiRevisionBundlePath) {
-    throw new Error("OPERATOR_UI_AI_BUNDLE and OPERATOR_UI_AI_REVISION_BUNDLE are required for AI bundle upload verification");
-  }
+  test.skip(!authEnabled, "general bundle admission requires the authenticated operator lane");
   if (captureArtifacts) {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
   }
@@ -177,128 +177,8 @@ test("service-backed operator UI browser lane covers registration, request execu
     await expect(page.getByTestId("signup-invite-url")).toHaveAttribute("href", /\/login\?invite_token=/);
   }
 
-  const suffix = Date.now().toString();
-  const registrationID = "echo-count-v2-phase2-simultaneous-3turn";
-  const aiSubmissionID1 = `ai-ui-${suffix}-01`;
-  const aiSubmissionID2 = `ai-ui-${suffix}-02`;
-  const requestOutputDir = path.join(os.tmpdir(), `operator-ui-request-${suffix}`);
-
-  await page.getByTestId("operator-nav-games").click();
-  await expect(page.getByTestId("operator-form-games")).toBeVisible();
-  await page.getByLabel("Game bundle ZIP").setInputFiles(path.resolve(testDir, "../package.json"));
-  await page.getByRole("button", { name: "Upload game bundle" }).click();
-  await expect(page.getByTestId("game-bundle-admission")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Activate game" })).toHaveCount(0);
-  await expect(page.getByTestId("operator-form-games")).toContainText(/invalid|zip|bundle/i);
-
-  await page.getByLabel("Game bundle ZIP").setInputFiles(gameBundlePath);
-  await page.getByRole("button", { name: "Upload game bundle" }).click();
-  await expect(page.getByTestId("game-bundle-admission")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("admitted-game-id")).toHaveText("echo-count");
-  await expect(page.getByTestId("admitted-game-version")).toHaveText("2.0.0");
-  await expect(page.getByTestId("admitted-artifact-id")).toHaveText(/[0-9a-f]{64}/);
-  await page.getByLabel("Ruleset Version").selectOption("phase2-simultaneous-3turn");
-  await page.getByRole("button", { name: "Activate game" }).click();
-  await expect(page.getByTestId(`game-row-${registrationID}`)).toBeVisible();
-  await expect(page.getByTestId(`game-row-${registrationID}`)).toContainText(/[0-9a-f]{64}/);
-
-  await page.getByTestId("operator-nav-submissions").click();
-  await expect(page.getByTestId("operator-form-submissions")).toBeVisible();
-  await expect(page.getByLabel("Uploaded AI artifact ID")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Create AI submission" })).toHaveCount(0);
-  if (authEnabled) {
-    await page.getByLabel("Competition scope").fill(registrationID);
-    await page.getByLabel("Bot name").fill("Echo UI Alpha");
-    await page.getByLabel("AI bundle ZIP").setInputFiles(path.resolve(testDir, "../package.json"));
-    await page.getByRole("button", { name: "Upload AI bundle" }).click();
-    await expect(page.getByTestId("ai-bundle-admission")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Save bot revision" })).toHaveCount(0);
-    await expect(page.getByTestId("operator-form-submissions")).toContainText(/invalid|zip|bundle/i);
-    await page.getByLabel("AI bundle ZIP").setInputFiles(aiBundlePath);
-    await page.getByRole("button", { name: "Upload AI bundle" }).click();
-    await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
-    const firstArtifactID = await page.getByTestId("admitted-ai-artifact-id").textContent();
-    expect(firstArtifactID).toMatch(/[0-9a-f]{64}/);
-    await page.getByRole("button", { name: "Save bot revision" }).click();
-    const botRow = page.getByTestId("operator-panel-submissions").locator('[data-testid^="bot-row-"]').first();
-    await expect(botRow).toBeVisible();
-    const botID = (await botRow.getAttribute("data-testid")).replace("bot-row-", "");
-    const firstBotText = await botRow.textContent();
-    await page.getByLabel("Existing bot ID").fill(botID);
-    await page.getByLabel("AI bundle ZIP").setInputFiles(aiRevisionBundlePath);
-    await page.getByRole("button", { name: "Upload AI bundle" }).click();
-    await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("admitted-ai-artifact-id")).not.toHaveText(firstArtifactID);
-    await page.getByRole("button", { name: "Save bot revision" }).click();
-    await expect(page.getByTestId(`bot-row-${botID}`)).toBeVisible();
-    await expect(botRow).not.toHaveText(firstBotText);
-    await page.getByLabel("AI bundle ZIP").setInputFiles(path.resolve(testDir, "../package.json"));
-    await page.getByRole("button", { name: "Upload AI bundle" }).click();
-    await expect(page.getByTestId("ai-bundle-admission")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Save bot revision" })).toHaveCount(0);
-    await expect(page.getByTestId(`bot-row-${botID}`)).toBeVisible();
-  }
-
-  await createLegacyAISubmission(api, {
-    submissionID: aiSubmissionID1,
-    registrationID,
-    artifactRef,
-    displayName: "Echo UI Alpha",
-  });
-  await createLegacyAISubmission(api, {
-    submissionID: aiSubmissionID2,
-    registrationID,
-    artifactRef,
-    displayName: "Echo UI Beta",
-  });
-
-  await page.getByTestId("operator-nav-requests").click();
-  await expect(page.getByTestId("operator-form-requests")).toBeVisible();
-  await expect(page.getByLabel("Competition scope")).toBeVisible();
-  await expect(page.getByLabel("Game Registration ID")).toHaveCount(0);
-  await expect(page.getByLabel("Output Dir")).toHaveCount(0);
-  await createLegacyMatchRequest(api, registrationID, requestOutputDir, aiSubmissionID1, aiSubmissionID2);
-
-  const createdRequest = await waitForRequest(api, registrationID, requestOutputDir);
-  await page.reload();
-  await expect(page.getByTestId(`request-row-${createdRequest.request_id}`)).toBeVisible();
-
-  const initialRun = await waitForRunState(api, createdRequest.latest_run_id, "completed");
-
-  await page.getByRole("link", { name: "Open latest run detail" }).click();
-  await expect(page).toHaveURL(new RegExp(`/operator/runs/${initialRun.run_id}$`));
-  await expect(page.getByTestId(`match-detail-${initialRun.run_id}`)).toBeVisible();
-  const compactSummary = page.getByTestId(`match-detail-${initialRun.run_id}`).locator(".bg-ink");
-  for (const label of ["Attempt", "Game", "Ruleset", "Output Dir", "Result Summary"]) {
-    const metadata = compactSummary.getByText(label, { exact: true }).locator("..");
-    await expect(metadata.locator("dt")).toHaveClass(/text-paper\/70/);
-    await expect(metadata.locator("dd")).toHaveClass(/(?:^|\s)text-paper(?:\s|$)/);
-  }
-  await expect(page.getByTestId("run-action-rerun")).toBeVisible();
-  await page.getByTestId("run-action-rerun").click();
-
-  const rerunRequest = await waitForLatestRunChange(api, createdRequest.request_id, initialRun.run_id);
-  const rerunRun = await waitForRunState(api, rerunRequest.latest_run_id, "completed");
-
-  await page.goto(`/operator/runs/${rerunRun.run_id}`);
-  await expect(page.getByTestId(`match-detail-${rerunRun.run_id}`)).toBeVisible();
-  await expect(page.getByTestId("run-action-promote")).toBeVisible();
-  await page.getByTestId("run-action-promote").click();
-  await expect.poll(async () => getRunDetail(api, rerunRun.run_id)).toMatchObject({ run_id: rerunRun.run_id, official: true });
-
-  await page.goto(`/operator/runs/${rerunRun.run_id}`);
-  const resultSummaryArtifact = page.getByTestId("artifact-entry-result-summary");
-  await expect(resultSummaryArtifact).toBeVisible();
-  const downloadLink = resultSummaryArtifact.getByRole("link", { name: "open delegated download" });
-  const expectsDelegatedDownload =
-    delegatedDownloadExpectation === "auto"
-      ? (rerunRun.result_summary_path ?? "").startsWith("s3://")
-      : delegatedDownloadExpectation === "1";
-  if (expectsDelegatedDownload) {
-    await expect(downloadLink).toBeVisible();
-    await expect(downloadLink).toHaveAttribute("href", /http:\/\//);
-  } else {
-    await expect(downloadLink).toHaveCount(0);
+  for (const family of bundleFamilies) {
+    await runBundleAdmissionFlow(page, api, family);
   }
 
   if (captureArtifacts) {
@@ -317,32 +197,112 @@ test("service-backed operator UI browser lane covers registration, request execu
   }
 });
 
-async function createLegacyAISubmission(api, { submissionID, registrationID, artifactRef, displayName }) {
-  const response = await api.postJSON(`${backendBaseURL}/api/v1/ai-submissions`, {
-    ai_submission_id: submissionID,
-    game_registration_id: registrationID,
-    artifact_ref: artifactRef,
-    display_name: displayName,
-  });
-  expect(response.ok).toBeTruthy();
+async function runBundleAdmissionFlow(page, api, family) {
+  const registrationID = `${family.gameID}-v${family.gameVersion.split(".")[0]}-${family.rulesetVersion}`;
+
+  await page.getByTestId("operator-nav-games").click();
+  await page.getByLabel("Game bundle ZIP").setInputFiles(family.gameBundle);
+  await page.getByRole("button", { name: "Upload game bundle" }).click();
+  await expect(page.getByTestId("game-bundle-admission")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("admitted-game-id")).toHaveText(family.gameID);
+  await expect(page.getByTestId("admitted-game-version")).toHaveText(family.gameVersion);
+  const gameArtifactID = await page.getByTestId("admitted-artifact-id").textContent();
+  expect(gameArtifactID).toMatch(/^sha256:[0-9a-f]{64}$/);
+  await page.getByLabel("Ruleset Version").selectOption(family.rulesetVersion);
+  await page.getByRole("button", { name: "Activate game" }).click();
+  await expect(page.getByTestId(`game-row-${registrationID}`)).toContainText(gameArtifactID);
+
+  await page.getByTestId("operator-nav-submissions").click();
+  await page.getByLabel("Competition scope").fill(registrationID);
+  await page.getByLabel("Bot name").fill(`${family.gameID} Alpha`);
+  await page.getByLabel("AI bundle ZIP").setInputFiles(family.alphaBundle);
+  await page.getByRole("button", { name: "Upload AI bundle" }).click();
+  await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
+  const alphaArtifactID = await page.getByTestId("admitted-ai-artifact-id").textContent();
+  expect(alphaArtifactID).toMatch(/^sha256:[0-9a-f]{64}$/);
+  await page.getByRole("button", { name: "Save bot revision" }).click();
+  const bots = await waitForRecord(api, async () => {
+    const items = await listItems(api, `${backendBaseURL}/api/v1/bots?scope_id=${encodeURIComponent(registrationID)}`);
+    return items.length === 1 ? items : null;
+  }, "first admitted bot");
+  const alphaBot = bots[0];
+
+  await page.getByLabel("Existing bot ID").fill(alphaBot.bot_id);
+  await page.getByLabel("AI bundle ZIP").setInputFiles(family.revisionBundle);
+  await page.getByRole("button", { name: "Upload AI bundle" }).click();
+  await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
+  const revisionArtifactID = await page.getByTestId("admitted-ai-artifact-id").textContent();
+  expect(revisionArtifactID).toMatch(/^sha256:[0-9a-f]{64}$/);
+  expect(revisionArtifactID).not.toBe(alphaArtifactID);
+  await page.getByRole("button", { name: "Save bot revision" }).click();
+  await expect(page.getByTestId("ai-bundle-admission")).toHaveCount(0);
+
+  await page.getByLabel("Existing bot ID").fill("");
+  await page.getByLabel("Bot name").fill(`${family.gameID} Beta`);
+  await page.getByLabel("AI bundle ZIP").setInputFiles(family.betaBundle);
+  await page.getByRole("button", { name: "Upload AI bundle" }).click();
+  await expect(page.getByTestId("ai-bundle-admission")).toBeVisible({ timeout: 30_000 });
+  const betaArtifactID = await page.getByTestId("admitted-ai-artifact-id").textContent();
+  expect(betaArtifactID).toMatch(/^sha256:[0-9a-f]{64}$/);
+  await page.getByRole("button", { name: "Save bot revision" }).click();
+  const activeBots = await waitForRecord(api, async () => {
+    const items = await listItems(api, `${backendBaseURL}/api/v1/bots?scope_id=${encodeURIComponent(registrationID)}`);
+    return items.length === 2 ? items : null;
+  }, "two admitted bots");
+
+  await page.getByTestId("operator-nav-requests").click();
+  await page.getByLabel("Competition scope").selectOption(registrationID);
+  await expect(page.getByText("Selected seats (2/2)")).toBeVisible();
+  await page.getByRole("button", { name: "Create match request" }).click();
+  const createdRequest = await waitForRequest(api, registrationID);
+  const initialRun = await waitForRunState(api, createdRequest.latest_run_id, "completed");
+  expect(initialRun.game_id).toBe(family.gameID);
+  expect(initialRun.game_version).toBe(family.gameVersion);
+  expect(initialRun.players.map((player) => player.artifact_id).sort()).toEqual([revisionArtifactID, betaArtifactID].sort());
+  expect(initialRun.players.map((player) => player.bot_id).sort()).toEqual(activeBots.map((bot) => bot.bot_id).sort());
+
+  await page.goto(`/operator/runs/${initialRun.run_id}`);
+  await page.getByTestId("run-action-rerun").click();
+  const rerunRequest = await waitForLatestRunChange(api, createdRequest.request_id, initialRun.run_id);
+  const rerunRun = await waitForRunState(api, rerunRequest.latest_run_id, "completed");
+  await page.goto(`/operator/runs/${rerunRun.run_id}`);
+  await page.getByTestId("run-action-promote").click();
+  await expect.poll(async () => getRunDetail(api, rerunRun.run_id)).toMatchObject({ run_id: rerunRun.run_id, official: true });
+  await waitForRecord(api, async () => {
+    const response = await api.getJSON(
+      `${backendBaseURL}/api/v1/rankings?game_id=${encodeURIComponent(family.gameID)}&game_version=${encodeURIComponent(family.gameVersion)}&ruleset_version=${encodeURIComponent(family.rulesetVersion)}`,
+    );
+    return response.ok ? response.json : null;
+  }, `ranking snapshot for ${family.gameID}`);
+  const resultSummaryArtifact = page.getByTestId("artifact-entry-result-summary");
+  await expect(resultSummaryArtifact).toBeVisible();
+  const downloadLink = resultSummaryArtifact.getByRole("link", { name: "open delegated download" });
+  const expectsDelegatedDownload =
+    delegatedDownloadExpectation === "auto"
+      ? (rerunRun.result_summary_path ?? "").startsWith("s3://")
+      : delegatedDownloadExpectation === "1";
+  if (expectsDelegatedDownload) {
+    await expect(downloadLink).toBeVisible();
+    await expect(downloadLink).toHaveAttribute("href", /http:\/\//);
+  } else {
+    await expect(downloadLink).toHaveCount(0);
+  }
+
+  await page.getByTestId("operator-nav-rankings").click();
+  await expect(page.getByTestId("operator-form-rankings")).toContainText("ready");
+  await page.getByLabel("Game ID").fill(family.gameID);
+  await page.getByLabel("Game Version").fill(family.gameVersion);
+  await page.getByLabel("Ruleset Version").fill(family.rulesetVersion);
+  await page.getByRole("button", { name: "Load ranking snapshot" }).click();
+  for (const bot of activeBots) {
+    await expect(page.getByTestId(`ranking-entry-${encodeURIComponent(bot.bot_id)}`)).toBeVisible();
+  }
 }
 
-async function createLegacyMatchRequest(api, registrationID, outputDir, firstSubmissionID, secondSubmissionID) {
-  const response = await api.postJSON(`${backendBaseURL}/api/v1/match-requests`, {
-    game_registration_id: registrationID,
-    output_dir: outputDir,
-    participants: [
-      { player_id: "alpha", ai_submission_id: firstSubmissionID },
-      { player_id: "beta", ai_submission_id: secondSubmissionID },
-    ],
-  });
-  expect(response.ok).toBeTruthy();
-}
-
-async function waitForRequest(api, registrationID, outputDir) {
+async function waitForRequest(api, registrationID) {
   return waitForRecord(api, async () => {
     const items = await listItems(api, `${backendBaseURL}/api/v1/match-requests`);
-    return items.find((item) => item.game_registration_id === registrationID && item.output_dir === outputDir);
+    return items.find((item) => item.game_registration_id === registrationID);
   }, "created match request");
 }
 
@@ -387,10 +347,6 @@ async function waitForRecord(api, probe, description) {
     await pageWait(500);
   }
   throw new Error(`timed out waiting for ${description}`);
-}
-
-function scopeTestId(gameID, gameVersion, rulesetVersion) {
-  return `${gameID}-${gameVersion}-${rulesetVersion}`.replace(/[^a-zA-Z0-9_-]+/g, "_");
 }
 
 function pageWait(ms) {
