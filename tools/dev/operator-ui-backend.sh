@@ -133,6 +133,15 @@ case "$mode" in
     export ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID="${ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID:-admin}"
     export ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY="${ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY:-secret}"
     make postgres-schema-apply
+    go run ./cmd/local-oidc-test-provider --listen-addr "127.0.0.1:${oidc_mock_port}" --issuer "http://127.0.0.1:${oidc_mock_port}" --postgres-dsn "$ARENA_SERVICE_POSTGRES_DSN" >"$artifact_dir/local-oidc-test-provider.log" 2>&1 &
+    oidc_pid=$!
+    trap 'kill "$oidc_pid" 2>/dev/null || true' EXIT INT TERM
+    until curl -fsS "http://127.0.0.1:${oidc_mock_port}/.well-known/openid-configuration" >/dev/null; do sleep 1; done
+    oidc_registration=$(curl -fsS -X POST "http://127.0.0.1:${oidc_mock_port}/register" -H 'Content-Type: application/json' --data "{\"application_type\":\"native\",\"client_name\":\"AI Arena local OIDC\",\"redirect_uris\":[\"http://127.0.0.1:${port}/auth/local-oidc/callback\"],\"grant_types\":[\"authorization_code\"],\"response_types\":[\"code\"],\"scope\":\"openid\",\"token_endpoint_auth_method\":\"client_secret_post\"}")
+    export ARENA_AUTH_LOCAL_OIDC_ISSUER="http://127.0.0.1:${oidc_mock_port}"
+    export ARENA_AUTH_LOCAL_OIDC_CLIENT_ID=$(printf '%s' "$oidc_registration" | sed -n 's/.*"client_id":"\([^"]*\)".*/\1/p')
+    export ARENA_AUTH_LOCAL_OIDC_CLIENT_SECRET=$(printf '%s' "$oidc_registration" | sed -n 's/.*"client_secret":"\([^"]*\)".*/\1/p')
+    test -n "$ARENA_AUTH_LOCAL_OIDC_CLIENT_ID" && test -n "$ARENA_AUTH_LOCAL_OIDC_CLIENT_SECRET"
     if ! make seaweed-up || ! make seaweed-bootstrap; then
       export ARENA_SERVICE_ARTIFACT_BACKEND=file
     fi
