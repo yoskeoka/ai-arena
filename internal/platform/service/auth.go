@@ -549,6 +549,9 @@ func callbackURLForProvider(r *http.Request, provider string) string {
 	if !isHTTPSRequest(r) && provider == authProviderGitHub {
 		host = strings.Replace(host, "127.0.0.1", "localhost", 1)
 	}
+	if !isHTTPSRequest(r) && provider == authProviderLocalOIDC {
+		host = strings.Replace(host, "localhost", "127.0.0.1", 1)
+	}
 	return scheme + "://" + host + "/auth/" + provider + "/callback"
 }
 
