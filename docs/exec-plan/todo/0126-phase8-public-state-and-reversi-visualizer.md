@@ -14,12 +14,17 @@ endpoint は作らない。
 filesystem と S3-compatible backend における public read adapter と black-box verification である。Reversi UI、viewer と
 platform の接続、SSE/WebSocket は含めない。
 
-## 確定した public visibility / access decision
+## 確定した spectator access decision
 
-public spectator は opt-in である。operator が match 作成時に `public` visibility を明示した logical `match_id` だけを
-public resource に載せる。default は private であり、後から operator route の認可を弱めること、既存 private run を backfill
-すること、signed operator artifact URL を再利用することはない。public resource 自体は anonymous read とし、product session は
-要求しない。
+all match の spectator surface は exported-state-only であり、operator route ではない。通常の match は anonymous client には
+公開せず、valid な ai-arena user session を持つ client が current/terminal spectator resource を read できる。これは match owner、
+operator role、signed operator artifact URL を要求するものではない。一方、operator は match 作成時に
+`anonymous_spectator_access=true` を明示できる。この opt-in がある match だけは anonymous client も同じ spectator resource を
+read できる。default は `false` であり、既存 run の backfill や後付けの anonymous 化はしない。
+
+anonymous opt-in は、運営公式が event 等で観戦者層を広く取り、必要な capacity 増強・cache/load plan を実行できると判断した場合の
+operational decision である。A は選択値と audit metadata を durable に残し、cache/retry/load observability を提供するが、
+auto-scaling、capacity procurement、event runbook の実装を行わない。
 
 `match_id` は public list/detail/latest/replay の唯一の resource key であり、client が `run_id` を指定して任意 attempt を
 読むことはできない。server は completed official run がある場合はその run、ない場合は public match の current active/latest run
@@ -27,13 +32,15 @@ public resource に載せる。default は private であり、後から operato
 置換しない。promote は selection を atomically 切り替え、public-state version は `(match_id, selected_run_id)` scope で単調に
 増加する。client は selected run の変更を新しい version namespace として扱い、旧 run response を捨てる。
 
-| logical match visibility / selected run | list/detail | latest exported state | terminal replay |
+| access / selected run lifecycle | list/detail | latest exported state | terminal replay |
 | --- | --- | --- | --- |
-| private | 非公開 | 非公開 | 非公開 |
-| public, queued / leased | lifecycle のみ | `state_unavailable` | `replay_unavailable` |
-| public, running / persisting | 可 | latest published exported state。未 publish は `state_unavailable` | `replay_unavailable` |
-| public, completed official | 可 | final exported state | 可。public replay が bound を満たす場合だけ |
-| public, failed / canceled / non-official rerun | generic lifecycle のみ | 最後に成功して publish 済みの state があれば可、なければ unavailable | `replay_unavailable` |
+| anonymous, `anonymous_spectator_access=false` | 非公開 | 非公開 | 非公開 |
+| valid user session, queued / leased | spectator list には載せない | `state_unavailable` | `replay_unavailable` |
+| valid user session, running / persisting | 可 | latest published exported state。未 publish は `state_unavailable` | `replay_unavailable` |
+| valid user session, completed official | 可 | final exported state | 可。public replay が bound を満たす場合だけ |
+| anonymous opt-in, running / persisting | 可 | latest published exported state。未 publish は `state_unavailable` | `replay_unavailable` |
+| anonymous opt-in, completed official | 可 | final exported state | 可。public replay が bound を満たす場合だけ |
+| valid user session or anonymous opt-in, failed / canceled / non-official rerun | generic lifecycle のみ | 最後に成功して publish 済みの state があれば可、なければ unavailable | `replay_unavailable` |
 
 public detail は replay bytes を inline しない。terminal response は format/version/size/digest と availability だけを返し、
 dedicated replay resource が game-produced artifact を最大 1 MiB まで bounded response として返す。1 MiB 超、欠落、retention 済み、
@@ -77,17 +84,18 @@ unsupported version は同じ public `replay_unavailable` result に正規化し
 - `(NEW) internal/platform/service/public_state.go`、`public_state_memory.go`、`public_state_postgres.go`、
   `public_state_test.go`、`public_http.go`、`public_http_test.go`:
   `PublicStateStore`/publisher/selecter を追加する。in-memory と Postgres lane は selected run、monotonic version、published exported
-  snapshot、public visibility、replay metadata を atomic に扱い、`match_id` から official/current run を一意に選ぶ。public HTTP tree
-  は `OperatorAPI.Handler` の `/api/v1/` protected mux と別 mux へ mount し、operator auth/CORS/ArtifactAccessIssuer を再利用しない。
+  snapshot、anonymous spectator opt-in/audit metadata、replay metadata を atomic に扱い、`match_id` から official/current run を一意に選ぶ。
+  spectator HTTP tree は `OperatorAPI.Handler` の `/api/v1/` protected mux と別 mux へ mount し、optional user-session validation で
+  anonymous opt-in または authenticated spectator access を判定する。operator authorization/CORS/ArtifactAccessIssuer は再利用しない。
 - `(MODIFY) internal/platform/service/request.go:16-67`、`typespec/namespaces/operator/api.tsp`、
   `internal/platform/service/postgres/schema/service_queue_records.sql`、`postgres/query.sql`、generated `postgres/sqlc/*`、
   `postgres/migrations/<next>_public_spectator_state.sql`:
-  create-time `public` opt-in を `MatchSubmission` と queue row に snapshot し、retry/rerun/promotion が同じ logical match の policy と
-  official-run selection を保持できるようにする。request/read row は visibility を operator へ明示するが public list は private match を
-  existence も含めて返さない。
+  create-time `anonymous_spectator_access` opt-in と audit metadata を `MatchSubmission` と queue row に snapshot し、retry/rerun/promotion
+  が同じ logical match の policy と official-run selection を保持できるようにする。request/read row は opt-in を operator へ明示する。
+  spectator list は valid user session には running/terminal match を、anonymous client には opt-in match だけを返す。
 - `(MODIFY) internal/platform/service/http.go:172-236` と `cmd/arena-service/main.go:205-223`:
-  public API composition root、public store/publisher、filesystem/S3 reader を wire する。public API は `GET` only で anonymous
-  handler を使い、operator API handler を wrapper として公開しない。
+  spectator API composition root、public store/publisher、filesystem/S3 reader を wire する。API は `GET` only で、valid user session を
+  optional に検証し、anonymous request は opt-in record だけに限定する。operator API handler を wrapper として公開しない。
 - `(NEW) internal/platform/service/public_state_*_test.go`、`public_http_*_test.go`、
   `internal/platform/artifacts/*_test.go` と `(NEW) versioned public fixture`:
   in-progress / terminal / unavailable と public/private artifact boundary を filesystem / S3-compatible lane で検証する。
@@ -98,7 +106,8 @@ unsupported version は同じ public `replay_unavailable` result に正規化し
 
 ## Black-box contract
 
-- anonymous client は create-time public opt-in の match だけを discover / read できる。response は match identity、selected run identity、
+- valid user session client は running/persisting/terminal spectator match を discover / read でき、anonymous client は create-time
+  `anonymous_spectator_access=true` の match だけを discover / read できる。response は match identity、selected run identity、
   game metadata、lifecycle、monotonic public-state version/turn、opaque `public_state`、cache/retry hint と、terminal の場合だけ
   replay format/version/size/digest/availability を含む。replay bytes は dedicated bounded resource にしか含めない。正確な field 名と
   requiredness は TypeSpec を正本とする。
@@ -122,8 +131,8 @@ unsupported version は同じ public `replay_unavailable` result に正規化し
 2. match observer と `current_public_replay` producer protocol を追加し、in-flight exported state publication、public replay
    payload/format/version/size/digest、persist-before-terminal completion、filesystem/S3 parity を実装する。payload content は game repo
    の責務に残す。
-3. durable public state/selecter と terminal locator を読む dedicated public read adapter を実装し、official/current run selection、
-   cache/retry、lifecycle/retention mapping を anonymous route へ接続する。
+3. durable public state/selecter と terminal locator を読む dedicated spectator read adapter を実装し、official/current run selection、
+   cache/retry、lifecycle/retention mapping、anonymous opt-in/session authorization を spectator route へ接続する。
 4. versioned public fixture と public/private boundary test を追加する。fixture は B と C が private artifact なしで利用できる
    stable cross-repository input とする。
 5. TypeSpec output を regenerate し、contract test、service tests、filesystem/S3-compatible lane、staging evidence を実施する。
@@ -139,8 +148,9 @@ steps 2 と 4 は TypeSpec と artifact contract が fixed になった後に並
   retention/unavailable、stale response と terminal polling stop の判断材料を black-box test する。
 - public client の request から、private `record` / internal snapshot / `history` / structured log / stderr / AI/game bundle / storage
   credential が response、redirect、error のいずれにも出ないことを negative test する。
-- private/public と queued/running/persisting/completed/failed/canceled の anonymous matrix、retry/rerun/promotion selection、1 MiB
-  boundary を black-box test し、operator route を呼ばないことを request-level test で示す。
+- session absent/valid と anonymous opt-in false/true、queued/running/persisting/completed/failed/canceled の access matrix、
+  retry/rerun/promotion selection、1 MiB boundary を black-box test し、spectator route が operator authorization を呼ばないことを
+  request-level test で示す。
 - remote staging では provider deploy revision、exact `/version`、`/healthz` readiness、public API response を独立した証跡で確認する。
 
 ## 後続
