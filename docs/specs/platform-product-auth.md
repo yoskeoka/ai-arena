@@ -222,10 +222,13 @@ provider 固有 subject や login name は `account` に混ぜず、
   - provider authorize
   - `/auth/github/callback`
   - backend session cookie
-- local / CI の auth regression lane では、
-  public route を変えずに provider upstream だけ repo-owned test double へ切り替えてよい
-- この seam は verification 専用であり、
-  product に local 専用 login provider や別 public login button を増やしてはならない
+- local / CI の auth regression lane では、public GitHub route を変えずに
+  provider upstream だけ repo-owned test double へ切り替えてよい
+- この seam は verification 専用である。一方で、明示的に local / CI verification を
+  起動した backend は、repo-owned local OIDC provider への login hand を追加してよい。
+  その hand は production/staging では決して discoverable であってはならない。
+  local OIDC provider は generic OIDC provider seam の回帰にも使え、将来の Google
+  login 等を追加する際に GitHub 固有の test double へ依存しない。
 - backend は provider endpoint override として次だけを受け取ってよい
   - `ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL`
   - `ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL`
@@ -251,6 +254,13 @@ provider 固有 subject や login name は `account` に混ぜず、
   - signup-only user は seed 対象から外し、
     first signup invite flow の callback で初めて account bootstrap されなければならない
   - first signup invite flow は別 verification scenario として分離してよい
+- local OIDC provider は fixed password を要求する tester catalog を持つ。
+  `tester01` と `tester02` は別 subject でなければならず、browser login、callback、
+  session issuance の経路を確認できなければならない。MFA、passwordless、device flow、
+  TOTP、mail challenge は提供してはならない。
+- local OIDC provider の server は `github.com/luikyv/go-oidc` を用いる。backend は
+  issuer discovery、authorization-code exchange、ID token verification、normalized
+  identity mapping を責務とし、provider が session / role / invite を保持してはならない。
 - auth regression lane を起動する entrypoint は、
   auth table 未作成で詰まらないよう schema apply bootstrap を明示的に担わなければならない
 

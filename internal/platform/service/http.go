@@ -195,6 +195,8 @@ func (a *OperatorAPI) Handler() http.Handler {
 	if a.auth != nil {
 		mux.HandleFunc("GET /auth/github/login", a.auth.GitHubLogin)
 		mux.HandleFunc("GET /auth/github/callback", a.auth.GitHubCallback)
+		mux.HandleFunc("GET /auth/local-oidc/login", a.auth.LocalOIDCLogin)
+		mux.HandleFunc("GET /auth/local-oidc/callback", a.auth.LocalOIDCCallback)
 		mux.HandleFunc("POST /auth/logout", a.auth.Logout)
 	}
 	if a.auth != nil {

@@ -288,6 +288,12 @@ export class OperatorApiClient {
     return `${this.url("/auth/github/login")}?${params.toString()}`;
   }
 
+  localOIDCLoginURL(returnTo: string, inviteToken?: string): string {
+    const params = new URLSearchParams({ return_to: returnTo });
+    if (inviteToken?.trim()) params.set("invite_token", inviteToken.trim());
+    return `${this.url("/auth/local-oidc/login")}?${params.toString()}`;
+  }
+
   private endpoint() {
     if (this.#baseUrl !== "") {
       return this.#baseUrl;

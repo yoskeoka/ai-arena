@@ -54,11 +54,31 @@ if [ -n "$lane" ]; then
       set_default OPERATOR_UI_REPORT_DIR ./playwright-report/auth-local
       set_default OPERATOR_UI_PLAYWRIGHT_REPORTER dot
       ;;
+    oidc-local)
+      set_default OPERATOR_UI_TEST_SCENARIO real-local
+      set_default OPERATOR_UI_BACKEND_MODE oidc-mock
+      set_default OPERATOR_UI_TEST_AUTH 1
+      set_default OPERATOR_UI_TEST_LOCAL_OIDC 1
+      set_default OPERATOR_UI_FRONTEND_HOST 127.0.0.1
+      set_default OPERATOR_UI_RESET_POSTGRES 1
+      set_default OPERATOR_UI_ARTIFACT_DIR ./test-results/oidc-local
+      set_default OPERATOR_UI_REPORT_DIR ./playwright-report/oidc-local
+      set_default OPERATOR_UI_PLAYWRIGHT_REPORTER dot
+      ;;
     ci-auth)
       set_default OPERATOR_UI_TEST_SCENARIO ci
       set_default OPERATOR_UI_BACKEND_MODE auth-mock
       set_default OPERATOR_UI_TEST_AUTH 1
       set_default OPERATOR_UI_FRONTEND_HOST localhost
+      set_default OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD 0
+      set_default OPERATOR_UI_PLAYWRIGHT_REPORTER dot
+      ;;
+    ci-oidc)
+      set_default OPERATOR_UI_TEST_SCENARIO ci
+      set_default OPERATOR_UI_BACKEND_MODE oidc-mock
+      set_default OPERATOR_UI_TEST_AUTH 1
+      set_default OPERATOR_UI_TEST_LOCAL_OIDC 1
+      set_default OPERATOR_UI_FRONTEND_HOST 127.0.0.1
       set_default OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD 0
       set_default OPERATOR_UI_PLAYWRIGHT_REPORTER dot
       ;;
