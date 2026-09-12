@@ -10,6 +10,7 @@
     "test:e2e": "NODE_OPTIONS=--disable-warning=DEP0205 playwright test",
     "verify:local": "OPERATOR_UI_LANE=fixture-local NODE_OPTIONS=--disable-warning=DEP0205 ../tools/dev/run-operator-ui-playwright.sh",
     "verify:local:auth": "OPERATOR_UI_LANE=auth-local NODE_OPTIONS=--disable-warning=DEP0205 ../tools/dev/run-operator-ui-playwright.sh",
+    "verify:local:github": "OPERATOR_UI_LANE=auth-local NODE_OPTIONS=--disable-warning=DEP0205 ../tools/dev/run-operator-ui-playwright.sh",
     "verify:local:oidc": "OPERATOR_UI_LANE=oidc-local NODE_OPTIONS=--disable-warning=DEP0205 ../tools/dev/run-operator-ui-playwright.sh",
     "verify:local:real": "OPERATOR_UI_LANE=real-local NODE_OPTIONS=--disable-warning=DEP0205 ../tools/dev/run-operator-ui-playwright.sh",
     "verify:ci:auth": "OPERATOR_UI_LANE=ci-auth NODE_OPTIONS=--disable-warning=DEP0205 ../tools/dev/run-operator-ui-playwright.sh",

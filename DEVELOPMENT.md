@@ -60,15 +60,17 @@ This starts the Vite dev server on `http://localhost:5173` and also keeps logs a
 
 ## 5. Local OIDC verification
 
-The repo-owned local OIDC provider is intended for the Playwright-owned local/CI lane.
-Start it with:
+The repo-owned local auth backend starts both GitHub and local OIDC providers.
+Choose the login route to verify with:
 
 ```sh
 cd operator-ui
+pnpm run verify:local:github
 pnpm run verify:local:oidc
 ```
 
-It exposes `Continue with local OIDC` only for that local verification backend.
+Both commands expose `Continue with GitHub` and `Continue with local OIDC`; each
+verification command selects its named route.
 Use one of these fixed accounts on the provider login form:
 
 | Username | Password | Seeded role |
@@ -76,8 +78,7 @@ Use one of these fixed accounts on the provider login form:
 | `tester01` | `local-oidc-password` | `operator` |
 | `tester02` | `local-oidc-password` | `developer` |
 
-These credentials are local/CI fixtures, not production credentials. The normal
-`make start-backend-local` flow continues to use GitHub OAuth.
+These credentials are local/CI fixtures, not production credentials.
 
 ## 6. Manual GitHub auth verification
 

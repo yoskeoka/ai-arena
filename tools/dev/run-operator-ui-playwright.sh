@@ -44,7 +44,7 @@ if [ -n "$lane" ]; then
       ;;
     auth-local)
       set_default OPERATOR_UI_TEST_SCENARIO real-local
-      set_default OPERATOR_UI_BACKEND_MODE auth-mock
+      set_default OPERATOR_UI_BACKEND_MODE oidc-mock
       set_default OPERATOR_UI_TEST_AUTH 1
       set_default OPERATOR_UI_FRONTEND_HOST localhost
       set_default OPERATOR_UI_RESET_POSTGRES 1
@@ -67,7 +67,7 @@ if [ -n "$lane" ]; then
       ;;
     ci-auth)
       set_default OPERATOR_UI_TEST_SCENARIO ci
-      set_default OPERATOR_UI_BACKEND_MODE auth-mock
+      set_default OPERATOR_UI_BACKEND_MODE oidc-mock
       set_default OPERATOR_UI_TEST_AUTH 1
       set_default OPERATOR_UI_FRONTEND_HOST localhost
       set_default OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD 0
