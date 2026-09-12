@@ -235,6 +235,7 @@ async function runBundleAdmissionFlow(page, api, family) {
   expect(revisionArtifactID).toMatch(/^sha256:[0-9a-f]{64}$/);
   expect(revisionArtifactID).not.toBe(alphaArtifactID);
   await page.getByRole("button", { name: "Save bot revision" }).click();
+  await expect(page.getByTestId("ai-bundle-admission")).toHaveCount(0);
 
   await page.getByLabel("Existing bot ID").fill("");
   await page.getByLabel("Bot name").fill(`${family.gameID} Beta`);
