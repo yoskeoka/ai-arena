@@ -19,7 +19,9 @@ require (
 	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
+	github.com/luikyv/go-oidc v0.25.0
 	github.com/tetratelabs/wazero v1.11.0
+	golang.org/x/mod v0.35.0
 	golang.org/x/oauth2 v0.36.0
 )
 
@@ -89,7 +91,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
-	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect

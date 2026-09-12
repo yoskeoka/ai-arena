@@ -421,6 +421,17 @@ func newAuthService(postgresDSN string) (*service.AuthService, func(), error) {
 		AllowedReturnOrigins: splitCSV(os.Getenv("ARENA_AUTH_ALLOWED_RETURN_ORIGINS")),
 		CookieSigningSecret:  strings.TrimSpace(os.Getenv("ARENA_AUTH_COOKIE_SIGNING_SECRET")),
 	}
+	if os.Getenv("ARENA_AUTH_LOCAL_OIDC_ENABLED") == "1" {
+		issuer := strings.TrimSpace(os.Getenv("ARENA_AUTH_LOCAL_OIDC_ISSUER"))
+		localProvider, localErr := service.NewLocalOIDCAuthProvider(context.Background(), service.LocalOIDCAuthProviderConfig{
+			Issuer: issuer, ClientID: strings.TrimSpace(os.Getenv("ARENA_AUTH_LOCAL_OIDC_CLIENT_ID")), ClientSecret: strings.TrimSpace(os.Getenv("ARENA_AUTH_LOCAL_OIDC_CLIENT_SECRET")),
+		})
+		if localErr != nil {
+			store.Close()
+			return nil, nil, localErr
+		}
+		cfg.LocalOIDC = localProvider
+	}
 	provider, err := githubAuthProviderFromEnv(clientID, clientSecret)
 	if err != nil {
 		store.Close()

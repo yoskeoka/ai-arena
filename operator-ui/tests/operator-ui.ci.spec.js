@@ -14,6 +14,7 @@ const delegatedDownloadExpectation = process.env.OPERATOR_UI_EXPECT_DELEGATED_DO
 const captureArtifacts = process.env.OPERATOR_UI_CAPTURE_ARTIFACTS === "1";
 const artifactDir = process.env.OPERATOR_UI_ARTIFACT_DIR ?? "./test-results";
 const authEnabled = process.env.OPERATOR_UI_TEST_AUTH === "1";
+const localOIDCEnabled = process.env.OPERATOR_UI_TEST_LOCAL_OIDC === "1";
 const authMockUserID = process.env.OPERATOR_UI_AUTH_MOCK_USER_ID ?? "operator-user01";
 const authMockLogin = process.env.OPERATOR_UI_AUTH_MOCK_LOGIN ?? authMockUserID;
 const authSignupUserID = process.env.OPERATOR_UI_AUTH_SIGNUP_USER_ID ?? "operator-signup-user01";
@@ -74,7 +75,7 @@ test("remote read-only smoke verifies version, anonymous session, and operator l
 });
 
 test("auth-enabled signup lane bootstraps a signup-only GitHub user via invite", async ({ page }) => {
-  test.skip(!authEnabled, "auth-only scenario");
+  test.skip(!authEnabled || localOIDCEnabled, "GitHub auth-only scenario");
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
@@ -115,6 +116,18 @@ test("auth-enabled signup lane bootstraps a signup-only GitHub user via invite",
   await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
 });
 
+test("local OIDC lane signs in a second fixed tester account", async ({ page }) => {
+  test.skip(!localOIDCEnabled, "local OIDC-only scenario");
+  await page.goto("/");
+  await page.getByRole("link", { name: "Continue with local OIDC" }).click();
+  await expect(page.getByRole("heading", { name: "Local OIDC sign in" })).toBeVisible();
+  await page.getByLabel("Username").fill("tester02");
+  await page.getByLabel("Password").fill("local-oidc-password");
+  await page.getByRole("button", { name: "Login" }).click();
+  await expect(page).toHaveURL(/\/($|operator$)/);
+  await expect(page.getByText("Signed in as @tester02")).toBeVisible();
+});
+
 test("service-backed operator UI browser lane covers registration, request execution, ranking correction, and artifact access", async ({
   context,
   page,
@@ -137,9 +150,16 @@ test("service-backed operator UI browser lane covers registration, request execu
 
   if (authEnabled) {
     await expect(page.getByRole("heading", { name: "Sign in with GitHub" })).toBeVisible();
-    await page.getByRole("link", { name: "Continue with GitHub" }).click();
-    await expect(page.getByRole("heading", { name: "GitHub OAuth Test Double" })).toBeVisible();
-    await page.getByLabel("User ID").fill(authMockUserID);
+    if (localOIDCEnabled) {
+      await page.getByRole("link", { name: "Continue with local OIDC" }).click();
+      await expect(page.getByRole("heading", { name: "Local OIDC sign in" })).toBeVisible();
+      await page.getByLabel("Username").fill("tester01");
+      await page.getByLabel("Password").fill("local-oidc-password");
+    } else {
+      await page.getByRole("link", { name: "Continue with GitHub" }).click();
+      await expect(page.getByRole("heading", { name: "GitHub OAuth Test Double" })).toBeVisible();
+      await page.getByLabel("User ID").fill(authMockUserID);
+    }
     await page.getByRole("button", { name: "Login" }).click();
     await expect
       .poll(async () =>
@@ -151,10 +171,10 @@ test("service-backed operator UI browser lane covers registration, request execu
       .toMatchObject({
         auth_mode: "enabled",
         authenticated: true,
-        principal: { provider_login: authMockLogin },
+        principal: { provider_login: localOIDCEnabled ? "tester01" : authMockLogin },
       });
     await expect(page).toHaveURL(/\/($|operator$)/);
-    await expect(page.getByText(`Signed in as @${authMockLogin}`)).toBeVisible();
+    await expect(page.getByText(`Signed in as @${localOIDCEnabled ? "tester01" : authMockLogin}`)).toBeVisible();
   }
 
   await expect(page.getByRole("heading", { name: "AI Arena Operator Console" })).toBeVisible();

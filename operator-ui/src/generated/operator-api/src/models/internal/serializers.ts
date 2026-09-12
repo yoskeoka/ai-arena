@@ -160,7 +160,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    auth_mode: input_.authMode,authenticated: input_.authenticated,principal: jsonAuthPrincipalToTransportTransform(input_.principal)
+    auth_mode: input_.authMode,authenticated: input_.authenticated,principal: jsonAuthPrincipalToTransportTransform(input_.principal),local_oidc_available: input_.localOidcAvailable
   }!;
 }export function jsonSessionStatusResponseToApplicationTransform(
   input_?: any,
@@ -169,7 +169,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    authMode: input_.auth_mode,authenticated: input_.authenticated,principal: jsonAuthPrincipalToApplicationTransform(input_.principal)
+    authMode: input_.auth_mode,authenticated: input_.authenticated,principal: jsonAuthPrincipalToApplicationTransform(input_.principal),localOidcAvailable: input_.local_oidc_available
   }!;
 }export function jsonAuthPrincipalToTransportTransform(
   input_?: AuthPrincipal | null,

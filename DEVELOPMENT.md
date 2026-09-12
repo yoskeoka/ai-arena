@@ -58,7 +58,32 @@ make start-frontend-local
 
 This starts the Vite dev server on `http://localhost:5173` and also keeps logs attached to the current terminal.
 
-## 5. Manual auth verification
+## 5. Local OIDC verification
+
+The repo-owned local auth backend starts both GitHub and local OIDC providers.
+Choose the login route to verify with:
+
+```sh
+cd operator-ui
+pnpm run verify:local:github
+pnpm run verify:local:oidc
+```
+
+Both commands expose `Continue with GitHub` and `Continue with local OIDC`; each
+verification command selects its named route.
+Use one of these fixed accounts on the provider login form:
+
+| Username | Password | Seeded role |
+| --- | --- | --- |
+| `tester01` | `local-oidc-password` | `operator` |
+| `tester02` | `local-oidc-password` | `developer` |
+
+These credentials are local/CI fixtures, not production credentials. The local
+OIDC provider idempotently seeds both users as existing AI Arena accounts with
+their listed roles and `local-oidc` identities, so neither account requires a
+signup invite.
+
+## 6. Manual GitHub auth verification
 
 After both processes are up:
 

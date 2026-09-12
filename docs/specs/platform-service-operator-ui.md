@@ -113,6 +113,10 @@ minimal operator UI は nav 上で少なくとも次の page/surface を持つ�
 browser verification は、少なくとも次の acceptance surface を route 遷移込みで観測できなければならない。
 
 - operator nav が visible で、`Overview`、`Invites`、`Games`、`Submissions`、`Requests`、`Rankings` を辿れる
+- local / CI 専用 auth lane では、GitHub login hand に加えて `Continue with local OIDC` を表示してよい。
+  この hand は local/CI backend が availability を明示した場合だけ表示し、remote deploy と
+  public default login page には表示してはならない。OIDC lane は tester password login から
+  callback、session cookie、protected `/operator` 到達までを確認する。
 - overview page で active runs panel、completed runs panel、selected run summary/detail を表示できる
 - invites page で `participant|developer|operator` のいずれかの invite を 1 件作成し、`invite_token` と `invite_url` を表示できる
 - games page で registered game を 1 件以上作成し、list へ反映できる

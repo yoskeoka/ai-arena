@@ -8,6 +8,7 @@ port=${OPERATOR_UI_BACKEND_PORT:-10000}
 frontend_port=${OPERATOR_UI_FRONTEND_PORT:-4173}
 frontend_host=${OPERATOR_UI_FRONTEND_HOST:-127.0.0.1}
 auth_mock_port=${OPERATOR_UI_AUTH_MOCK_PORT:-10001}
+oidc_mock_port=${OPERATOR_UI_OIDC_MOCK_PORT:-10002}
 log_to_file=${OPERATOR_UI_LOG_TO_FILE:-}
 reset_postgres=${OPERATOR_UI_RESET_POSTGRES:-0}
 
@@ -80,6 +81,34 @@ case "$mode" in
     export ARENA_AUTH_ALLOWED_RETURN_ORIGINS="${ARENA_AUTH_ALLOWED_RETURN_ORIGINS:-http://${frontend_host}:${frontend_port},http://127.0.0.1:${frontend_port},http://localhost:${frontend_port},http://127.0.0.1:5173,http://localhost:5173}"
     make postgres-schema-apply
     ;;
+  oidc-mock)
+    if [ "${OPERATOR_UI_RESET_POSTGRES:-0}" = "1" ]; then
+      make postgres-down
+      make postgres-up
+    fi
+    export AI_ARENA_PG_TEST_DSN="${AI_ARENA_PG_TEST_DSN:-postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable}"
+    export AI_ARENA_PG_ATLAS_DEV_DSN="${AI_ARENA_PG_ATLAS_DEV_DSN:-postgres://arena:arena@127.0.0.1:55432/postgres?sslmode=disable}"
+    export ARENA_SERVICE_POSTGRES_DSN="${ARENA_SERVICE_POSTGRES_DSN:-$AI_ARENA_PG_TEST_DSN}"
+    export ARENA_SERVICE_PRESET_CONFIG="${ARENA_SERVICE_PRESET_CONFIG:-./config/platform-service/presets.operator-ui-file-backed.json}"
+    export PORT="${PORT:-$port}"
+    export ARENA_GITHUB_OAUTH_CLIENT_ID="${ARENA_GITHUB_OAUTH_CLIENT_ID:-playwright-client-id}"
+    export ARENA_GITHUB_OAUTH_CLIENT_SECRET="${ARENA_GITHUB_OAUTH_CLIENT_SECRET:-playwright-client-secret}"
+    export ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL="${ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL:-http://127.0.0.1:${auth_mock_port}}"
+    export ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL="${ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL:-http://127.0.0.1:${auth_mock_port}}"
+    export ARENA_AUTH_ALLOWED_RETURN_ORIGINS="${ARENA_AUTH_ALLOWED_RETURN_ORIGINS:-http://${frontend_host}:${frontend_port},http://127.0.0.1:${frontend_port},http://localhost:${frontend_port}}"
+    make postgres-schema-apply
+    go run ./cmd/local-oidc-test-provider --listen-addr "127.0.0.1:${oidc_mock_port}" --issuer "http://127.0.0.1:${oidc_mock_port}" --postgres-dsn "$ARENA_SERVICE_POSTGRES_DSN" >"$artifact_dir/local-oidc-test-provider.log" 2>&1 &
+    oidc_pid=$!
+    trap 'kill "$oidc_pid" 2>/dev/null || true' EXIT INT TERM
+    until curl -fsS "http://127.0.0.1:${oidc_mock_port}/.well-known/openid-configuration" >/dev/null; do sleep 1; done
+    # Native loopback registrations omit the port so the provider accepts the runtime callback port.
+    oidc_registration=$(curl -fsS -X POST "http://127.0.0.1:${oidc_mock_port}/register" -H 'Content-Type: application/json' --data "{\"application_type\":\"native\",\"client_name\":\"AI Arena local OIDC\",\"redirect_uris\":[\"http://127.0.0.1/auth/local-oidc/callback\"],\"grant_types\":[\"authorization_code\"],\"response_types\":[\"code\"],\"scope\":\"openid profile email\",\"token_endpoint_auth_method\":\"client_secret_post\"}")
+    export ARENA_AUTH_LOCAL_OIDC_ISSUER="http://127.0.0.1:${oidc_mock_port}"
+    export ARENA_AUTH_LOCAL_OIDC_ENABLED=1
+    export ARENA_AUTH_LOCAL_OIDC_CLIENT_ID=$(printf '%s' "$oidc_registration" | sed -n 's/.*"client_id":"\([^"]*\)".*/\1/p')
+    export ARENA_AUTH_LOCAL_OIDC_CLIENT_SECRET=$(printf '%s' "$oidc_registration" | sed -n 's/.*"client_secret":"\([^"]*\)".*/\1/p')
+    test -n "$ARENA_AUTH_LOCAL_OIDC_CLIENT_ID" && test -n "$ARENA_AUTH_LOCAL_OIDC_CLIENT_SECRET"
+    ;;
   postgres)
     export AI_ARENA_PG_TEST_DSN="${AI_ARENA_PG_TEST_DSN:-postgres://arena:arena@127.0.0.1:5432/arena_service?sslmode=disable}"
     export AI_ARENA_PG_ATLAS_DEV_DSN="${AI_ARENA_PG_ATLAS_DEV_DSN:-postgres://arena:arena@127.0.0.1:5432/postgres?sslmode=disable}"
@@ -112,6 +141,17 @@ case "$mode" in
     export ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID="${ARENA_SERVICE_ARTIFACT_R2_ACCESS_KEY_ID:-admin}"
     export ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY="${ARENA_SERVICE_ARTIFACT_R2_SECRET_ACCESS_KEY:-secret}"
     make postgres-schema-apply
+    go run ./cmd/local-oidc-test-provider --listen-addr "127.0.0.1:${oidc_mock_port}" --issuer "http://127.0.0.1:${oidc_mock_port}" --postgres-dsn "$ARENA_SERVICE_POSTGRES_DSN" >"$artifact_dir/local-oidc-test-provider.log" 2>&1 &
+    oidc_pid=$!
+    trap 'kill "$oidc_pid" 2>/dev/null || true' EXIT INT TERM
+    until curl -fsS "http://127.0.0.1:${oidc_mock_port}/.well-known/openid-configuration" >/dev/null; do sleep 1; done
+    # Native loopback registrations omit the port so the provider accepts the runtime callback port.
+    oidc_registration=$(curl -fsS -X POST "http://127.0.0.1:${oidc_mock_port}/register" -H 'Content-Type: application/json' --data "{\"application_type\":\"native\",\"client_name\":\"AI Arena local OIDC\",\"redirect_uris\":[\"http://127.0.0.1/auth/local-oidc/callback\"],\"grant_types\":[\"authorization_code\"],\"response_types\":[\"code\"],\"scope\":\"openid profile email\",\"token_endpoint_auth_method\":\"client_secret_post\"}")
+    export ARENA_AUTH_LOCAL_OIDC_ISSUER="http://127.0.0.1:${oidc_mock_port}"
+    export ARENA_AUTH_LOCAL_OIDC_ENABLED=1
+    export ARENA_AUTH_LOCAL_OIDC_CLIENT_ID=$(printf '%s' "$oidc_registration" | sed -n 's/.*"client_id":"\([^"]*\)".*/\1/p')
+    export ARENA_AUTH_LOCAL_OIDC_CLIENT_SECRET=$(printf '%s' "$oidc_registration" | sed -n 's/.*"client_secret":"\([^"]*\)".*/\1/p')
+    test -n "$ARENA_AUTH_LOCAL_OIDC_CLIENT_ID" && test -n "$ARENA_AUTH_LOCAL_OIDC_CLIENT_SECRET"
     if ! make seaweed-up || ! make seaweed-bootstrap; then
       export ARENA_SERVICE_ARTIFACT_BACKEND=file
     fi

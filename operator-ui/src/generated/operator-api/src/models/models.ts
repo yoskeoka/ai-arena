@@ -13,6 +13,7 @@ export interface SessionStatusResponse {
   authMode: "disabled" | "enabled";
   authenticated: boolean;
   principal?: AuthPrincipal;
+  localOidcAvailable?: boolean;
 }
 /**
  * Boolean with `true` and `false` values.

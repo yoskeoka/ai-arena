@@ -1540,6 +1540,9 @@
           },
           "principal": {
             "$ref": "#/components/schemas/Shared.AuthPrincipal"
+          },
+          "local_oidc_available": {
+            "type": "boolean"
           }
         }
       },

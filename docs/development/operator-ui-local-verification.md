@@ -42,6 +42,7 @@ canonical command surface は次を正本とする。
 - `pnpm run verify:local`
 - `pnpm run verify:local:real`
 - `pnpm run verify:local:auth`
+- `pnpm run verify:local:oidc`
 
 長い env var 列は helper 側へ閉じ込め、
 human と AI agent は既存 script 名をそのまま使えばよい。

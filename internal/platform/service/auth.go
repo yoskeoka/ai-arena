@@ -21,7 +21,8 @@ const (
 	authModeDisabled = "disabled"
 	authModeEnabled  = "enabled"
 
-	authProviderGitHub = "github"
+	authProviderGitHub    = "github"
+	authProviderLocalOIDC = "local-oidc"
 
 	sessionCookieName           = "arena_session"
 	pendingAuthCookieName       = "arena_github_oauth_pending"
@@ -51,6 +52,7 @@ type AuthConfig struct {
 	AllowedReturnOrigins []string
 	SessionTTL           time.Duration
 	CookieSigningSecret  string
+	LocalOIDC            OAuthIdentityProvider
 }
 
 // AuthStore persists account identities, sessions, and signup invites.
@@ -99,15 +101,17 @@ type SignupInviteResponse struct {
 
 // SessionStatusResponse reports whether the current browser session is authenticated.
 type SessionStatusResponse struct {
-	AuthMode      string         `json:"auth_mode"`
-	Authenticated bool           `json:"authenticated"`
-	Principal     *AuthPrincipal `json:"principal,omitempty"`
+	AuthMode           string         `json:"auth_mode"`
+	Authenticated      bool           `json:"authenticated"`
+	Principal          *AuthPrincipal `json:"principal,omitempty"`
+	LocalOIDCAvailable bool           `json:"local_oidc_available,omitempty"`
 }
 
 // AuthService coordinates GitHub OAuth, session issuance, and operator access control.
 type AuthService struct {
 	store                AuthStore
 	github               OAuthIdentityProvider
+	localOIDC            OAuthIdentityProvider
 	allowedReturnOrigins map[string]struct{}
 	sessionTTL           time.Duration
 	cookieSigningSecret  []byte
@@ -161,6 +165,7 @@ func NewAuthService(cfg AuthConfig, store AuthStore, github OAuthIdentityProvide
 	return &AuthService{
 		store:                store,
 		github:               github,
+		localOIDC:            cfg.LocalOIDC,
 		allowedReturnOrigins: allowed,
 		sessionTTL:           cfg.SessionTTL,
 		cookieSigningSecret:  []byte(signingSecret),
@@ -176,13 +181,14 @@ func (a *AuthService) SessionStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	principal, err := a.sessionPrincipal(r.Context(), r)
 	if err != nil {
-		writeJSON(w, http.StatusOK, SessionStatusResponse{AuthMode: authModeEnabled, Authenticated: false})
+		writeJSON(w, http.StatusOK, SessionStatusResponse{AuthMode: authModeEnabled, Authenticated: false, LocalOIDCAvailable: a.localOIDC != nil})
 		return
 	}
 	writeJSON(w, http.StatusOK, SessionStatusResponse{
-		AuthMode:      authModeEnabled,
-		Authenticated: true,
-		Principal:     &principal,
+		AuthMode:           authModeEnabled,
+		Authenticated:      true,
+		Principal:          &principal,
+		LocalOIDCAvailable: a.localOIDC != nil,
 	})
 }
 
@@ -206,8 +212,21 @@ func (a *AuthService) CreateSignupInvite(ctx context.Context, role string, ttl t
 
 // GitHubLogin starts the GitHub OAuth authorization-code flow.
 func (a *AuthService) GitHubLogin(w http.ResponseWriter, r *http.Request) {
+	a.startLogin(w, r, authProviderGitHub, a.github)
+}
+
+// LocalOIDCLogin starts the local-only OIDC authorization-code flow.
+func (a *AuthService) LocalOIDCLogin(w http.ResponseWriter, r *http.Request) {
+	a.startLogin(w, r, authProviderLocalOIDC, a.localOIDC)
+}
+
+func (a *AuthService) startLogin(w http.ResponseWriter, r *http.Request, providerName string, provider OAuthIdentityProvider) {
 	if a == nil {
 		writeError(w, http.StatusServiceUnavailable, ErrAuthDisabled)
+		return
+	}
+	if provider == nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("authentication provider is unavailable"))
 		return
 	}
 	returnTo, err := a.validatedReturnTo(r.URL.Query().Get("return_to"))
@@ -221,7 +240,7 @@ func (a *AuthService) GitHubLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pending := pendingAuth{
-		Provider:    authProviderGitHub,
+		Provider:    providerName,
 		StateNonce:  nonce,
 		ReturnTo:    returnTo,
 		InviteToken: strings.TrimSpace(r.URL.Query().Get("invite_token")),
@@ -231,13 +250,22 @@ func (a *AuthService) GitHubLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	redirectURL := a.github.AuthorizationURL(callbackURLForProvider(r, authProviderGitHub), nonce)
+	redirectURL := provider.AuthorizationURL(callbackURLForProvider(r, providerName), nonce)
 	// #nosec G710 -- the provider returns a GitHub authorize URL; return_to validation happens before this redirect.
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 // GitHubCallback completes the GitHub OAuth flow and issues the operator session cookie.
 func (a *AuthService) GitHubCallback(w http.ResponseWriter, r *http.Request) {
+	a.completeCallback(w, r, authProviderGitHub, a.github)
+}
+
+// LocalOIDCCallback completes the local-only OIDC flow and issues the operator session cookie.
+func (a *AuthService) LocalOIDCCallback(w http.ResponseWriter, r *http.Request) {
+	a.completeCallback(w, r, authProviderLocalOIDC, a.localOIDC)
+}
+
+func (a *AuthService) completeCallback(w http.ResponseWriter, r *http.Request, providerName string, provider OAuthIdentityProvider) {
 	if a == nil {
 		writeError(w, http.StatusServiceUnavailable, ErrAuthDisabled)
 		return
@@ -258,11 +286,11 @@ func (a *AuthService) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		a.redirectLoginError(w, r, pending.ReturnTo, pending.InviteToken, "missing_code")
 		return
 	}
-	if pending.Provider != authProviderGitHub {
+	if provider == nil || pending.Provider != providerName {
 		a.redirectLoginError(w, r, pending.ReturnTo, pending.InviteToken, "login_failed")
 		return
 	}
-	identity, err := a.github.ExchangeIdentity(r.Context(), code, callbackURLForProvider(r, pending.Provider))
+	identity, err := provider.ExchangeIdentity(r.Context(), code, callbackURLForProvider(r, pending.Provider))
 	if err != nil {
 		if errors.Is(err, ErrIdentityLookupFailed) {
 			a.redirectLoginError(w, r, pending.ReturnTo, pending.InviteToken, "github_profile_failed")
@@ -518,8 +546,11 @@ func callbackURLForProvider(r *http.Request, provider string) string {
 		scheme = "http"
 	}
 	host := r.Host
-	if !isHTTPSRequest(r) {
+	if !isHTTPSRequest(r) && provider == authProviderGitHub {
 		host = strings.Replace(host, "127.0.0.1", "localhost", 1)
+	}
+	if !isHTTPSRequest(r) && provider == authProviderLocalOIDC {
+		host = strings.Replace(host, "localhost", "127.0.0.1", 1)
 	}
 	return scheme + "://" + host + "/auth/" + provider + "/callback"
 }

@@ -108,6 +108,7 @@ model SessionStatusResponse {
   auth_mode: AuthMode;
   authenticated: boolean;
   principal?: AuthPrincipal;
+  local_oidc_available?: boolean;
 }
 
 model HealthResponse {

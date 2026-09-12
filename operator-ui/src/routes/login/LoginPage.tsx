@@ -12,6 +12,7 @@ export function LoginPage({ onAuthenticatedReturn }: LoginPageProps) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState<string>();
   const [authMode, setAuthMode] = useState<"disabled" | "enabled">("enabled");
+	const [localOIDCAvailable, setLocalOIDCAvailable] = useState(false);
 
   const inviteToken = queryParam("invite_token");
   const loginError = queryParam("error");
@@ -30,6 +31,7 @@ export function LoginPage({ onAuthenticatedReturn }: LoginPageProps) {
           return;
         }
         setAuthMode(session.authMode);
+		setLocalOIDCAvailable(session.localOidcAvailable ?? false);
         setState("ready");
       } catch (error) {
         if (canceled) {
@@ -46,6 +48,7 @@ export function LoginPage({ onAuthenticatedReturn }: LoginPageProps) {
   }, [client, onAuthenticatedReturn, returnTo]);
 
   const loginHref = client.githubLoginURL(returnTo, inviteToken);
+	const localOIDCLoginHref = client.localOIDCLoginURL(returnTo, inviteToken);
 
   return (
     <section className="rounded-[32px] border border-black/10 bg-white/85 p-8 shadow-sm backdrop-blur">
@@ -72,12 +75,19 @@ export function LoginPage({ onAuthenticatedReturn }: LoginPageProps) {
       ) : null}
       <div className="mt-6 flex flex-wrap items-center gap-3">
         {authMode === "enabled" ? (
-          <a
-            className="inline-flex items-center rounded-2xl bg-ink px-5 py-3 text-sm font-medium text-paper transition hover:opacity-90"
-            href={loginHref}
-          >
-            Continue with GitHub
-          </a>
+          <>
+            <a
+              className="inline-flex items-center rounded-2xl bg-ink px-5 py-3 text-sm font-medium text-paper transition hover:opacity-90"
+              href={loginHref}
+            >
+              Continue with GitHub
+            </a>
+            {localOIDCAvailable ? (
+              <a className="inline-flex items-center rounded-2xl border border-ink px-5 py-3 text-sm font-medium text-ink transition hover:bg-paper" href={localOIDCLoginHref}>
+                Continue with local OIDC
+              </a>
+            ) : null}
+          </>
         ) : (
           <a
             className="inline-flex items-center rounded-2xl bg-ink px-5 py-3 text-sm font-medium text-paper transition hover:opacity-90"
