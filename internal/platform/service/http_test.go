@@ -143,7 +143,7 @@ func TestOperatorAPIRetiresPresetMatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	api.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/preset-matches", nil))
+	api.Handler().ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/preset-matches", nil))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("POST /api/v1/preset-matches status = %d, want %d", response.Code, http.StatusNotFound)
 	}
