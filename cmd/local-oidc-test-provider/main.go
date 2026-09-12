@@ -19,6 +19,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/service"
 )
 
+// #nosec G101 -- this fixed password is intentionally published by the local/CI-only test provider.
 const testerPassword = "local-oidc-password"
 
 var testers = map[string]struct{ name, email string }{
