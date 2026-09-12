@@ -97,14 +97,22 @@
 - [x] Phase 5: ダンジョンゲーム MVP を、プラットフォーム改善と並行で進める
   - `dungeon-game-ai-arena` への切り出しと golden parity 確認を完了し、ai-arena 側には platform / SDK / artifact / registry の責務を残す
   - dungeon 固有コードが `internal/platform/*` に依存しない境界を整え、platform 側の public contract 候補を狭く固定する
-- [ ] Phase 6: match state・artifact・公開用 game state を扱える永続化基盤と service skeleton を整える
+- [x] Phase 6: match state・artifact・公開用 game state を扱える永続化基盤と service skeleton を整える
   - child item: match submission から result persist までを 1 本通す service skeleton を整える
   - child item: `record` / `event_log` / `snapshot` / `exported_snapshot` の保存モデルと read model を定義する
   - child item: resume / replay / audit に再利用できる source-of-truth artifact の置き場を固める
-- [ ] Phase 7: AI 提出、game 提出、matchmaking、ranking、早期 deploy pipeline を含むオンライン運営基盤を整える
+- [x] Phase 7: AI 提出、game 提出、matchmaking、ranking、早期 deploy pipeline を含むオンライン運営基盤を整える
   - child item: AI submission / game registration / validation / queueing の operator flow を成立させる
   - child item: matchmaking / ranking / rerun を含む最小運営サイクルを整える
   - child item: service / worker / storage の最小 deploy 形を定め、継続運用できる実行トポロジを固める
+  - deferred follow-up: metadata cache、ranking fact store、legacy API / artifact cleanup、operator test harness、
+    staging / production の外部 log retention は、成立済みの最小運営サイクルを拡張・保守する課題として残し、
+    Phase 8 の開始条件にはしない
+    - active plan: `0086-platform-online-foundation-03-04-matchmaking-ranking-follow-up-09-ranking-fact-store`、
+      `0096-operator-ui-browser-playwright-hang-runtime-alignment`、`0119-staging-game-registry-persistence-memory-cache`、
+      `0124-operator-registration-and-bot-cleanup`
+    - active issue: `0040-legacy-ai-submission-retirement`、`0041-staging-production-observability-evidence-gap`、
+      `0119-staging-owned-bot-list-persistence`
 - [ ] Phase 8: public な external game state を読み取る観戦用ビジュアライザを整える
   - child item: public game state を取得・配信する API / artifact 契約を固める
   - child item: spectator 向けの snapshot / event stream 読み取り導線を整える
