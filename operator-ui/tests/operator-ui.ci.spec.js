@@ -268,6 +268,12 @@ async function runBundleAdmissionFlow(page, api, family) {
   await page.goto(`/operator/runs/${rerunRun.run_id}`);
   await page.getByTestId("run-action-promote").click();
   await expect.poll(async () => getRunDetail(api, rerunRun.run_id)).toMatchObject({ run_id: rerunRun.run_id, official: true });
+  await waitForRecord(api, async () => {
+    const response = await api.getJSON(
+      `${backendBaseURL}/api/v1/rankings?game_id=${encodeURIComponent(family.gameID)}&game_version=${encodeURIComponent(family.gameVersion)}&ruleset_version=${encodeURIComponent(family.rulesetVersion)}`,
+    );
+    return response.ok ? response.json : null;
+  }, `ranking snapshot for ${family.gameID}`);
   const resultSummaryArtifact = page.getByTestId("artifact-entry-result-summary");
   await expect(resultSummaryArtifact).toBeVisible();
   const downloadLink = resultSummaryArtifact.getByRole("link", { name: "open delegated download" });
