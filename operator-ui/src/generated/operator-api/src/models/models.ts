@@ -279,12 +279,6 @@ export interface RankingEntry {
   lastMatchId: string;
   lastStatus: string;
 }
-export interface PresetMatchRequest {
-  presetId: string;
-  runId?: string;
-  matchId?: string;
-  outputDir?: string;
-}
 export interface ResultListItem {
   runId: string;
   matchId: string;

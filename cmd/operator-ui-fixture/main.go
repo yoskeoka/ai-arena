@@ -74,18 +74,6 @@ func newFixtureBackend(listenAddr string) (*fixtureBackend, error) {
 	}
 	requests.WithBotOwnership(service.NewInMemoryBotOwnershipStore())
 
-	presets, err := service.NewStaticPresetCatalog([]service.MatchPresetDefinition{
-		{
-			PresetID:  "echo-reference",
-			Game:      fixtureGame(),
-			Players:   fixturePlayers(),
-			OutputDir: filepath.Join(outputDir, "preset-queue"),
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	summaryPath, summaryBytes, err := writeResultSummary(outputDir)
 	if err != nil {
 		return nil, err
@@ -98,7 +86,7 @@ func newFixtureBackend(listenAddr string) (*fixtureBackend, error) {
 	}
 
 	downloadURL := fmt.Sprintf("http://%s/fixture-artifacts/result-summary.json", listenAddr)
-	api, err := service.NewOperatorAPI(commands, queries, general, requests, presets, fixtureArtifactAccessIssuer{
+	api, err := service.NewOperatorAPI(commands, queries, general, requests, fixtureArtifactAccessIssuer{
 		downloadURL: downloadURL,
 	}, nil)
 	if err != nil {

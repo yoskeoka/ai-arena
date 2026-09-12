@@ -39,7 +39,7 @@ REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtim
 REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
 REVIVE_PACKAGE_DIRS = $(shell mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)" >/dev/null 2>&1; env GOPATH="$(GOPATH)" GOMODCACHE="$(GOMODCACHE)" GOCACHE="$(GOCACHE)" $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
-.PHONY: up down migrate local-dummy-fixture local-invite-url invite-remote start-backend-local start-frontend-local test test-postgres test-remote-version-helper test-remote-health-helper test-release-commit-sha-helper postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-local-object-storage verify-reversi-release-artifacts test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive build-preset-bots render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: up down migrate local-dummy-fixture local-invite-url invite-remote start-backend-local start-frontend-local test test-postgres test-remote-version-helper test-remote-health-helper test-release-commit-sha-helper postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-reversi-release-artifacts test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 export COMPOSE_BAKE = false
 
@@ -96,10 +96,6 @@ seaweed-down:
 
 seaweed-bootstrap:
 	SEAWEED_DATA_DIR="$(SEAWEED_DATA_DIR)" SEAWEED_BUCKET="$(SEAWEED_BUCKET)" SEAWEED_ENDPOINT="$(SEAWEED_ENDPOINT)" AWS_CLI_IMAGE="$(AWS_CLI_IMAGE)" ./tools/dev/seaweed-bootstrap.sh
-
-verify-local-object-storage:
-	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	ARENA_SERVICE_BASE_URL="http://127.0.0.1:$${PORT:-10000}" $(GO_ENV) $(GO) run ./tools/dev/verify-local-object-storage.go
 
 verify-reversi-release-artifacts:
 	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
@@ -192,23 +188,16 @@ lint-revive:
 	@mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	@./tools/dev/run-quiet-command.sh "lint-revive" env $(GO_ENV) $(GO) tool revive -config revive.toml $(REVIVE_PACKAGE_DIRS) $(REVIVE_TESTDATA_DIRS)
 
-build-preset-bots:
-	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
-	$(GO_ENV) GO="$(GO)" ./tools/dev/build-preset-bots.sh
-
 render-build:
 	mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)"
 	@if [ -z "$(BUILD_VERSION_SHA)" ]; then \
 		echo "BUILD_VERSION_SHA is required for render-build" >&2; \
 		exit 1; \
 	fi
-	$(MAKE) build-preset-bots
 	$(GO_ENV) $(GO) build -tags netgo -ldflags '-s -w -X main.Version=$(BUILD_VERSION_SHA)' -o app ./cmd/arena-service
 
 render-start:
-	./app serve \
-		--listen-addr "0.0.0.0:$${PORT:-10000}" \
-		--preset-config "$${ARENA_SERVICE_PRESET_CONFIG:-./config/platform-service/presets.remote-bootstrap.json}"
+	./app serve --listen-addr "0.0.0.0:$${PORT:-10000}"
 
 start-backend-local:
 	@OPERATOR_UI_BACKEND_MODE=local OPERATOR_UI_LOG_TO_FILE=0 \

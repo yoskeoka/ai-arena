@@ -23,7 +23,6 @@ compact view と detail view の責務分離だけを固定する。
 この spec が定義しないもの:
 
 - public HTTP API
-- preset enqueue mutation route
 - spectator 向け public state delivery
 - ranking aggregate / leaderboard family
 - retention / pagination / free-text search

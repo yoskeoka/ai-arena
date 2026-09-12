@@ -16,8 +16,6 @@ import {
   type CreateOrReviseBotOptions,
   createSignupInvite,
   type CreateSignupInviteOptions,
-  enqueuePreset,
-  type EnqueuePresetOptions,
   getRanking,
   type GetRankingOptions,
   getRun,
@@ -63,7 +61,6 @@ import type {
   File,
   GameRegistrationRequest,
   MatchRequestCreateRequest,
-  PresetMatchRequest,
   SignupInviteRequest,
 } from "./models/models.js";
 
@@ -164,12 +161,6 @@ export class OperatorClient {
       rulesetVersion,
       options
     );
-  };
-  async enqueuePreset(
-    body: PresetMatchRequest,
-    options?: EnqueuePresetOptions,
-  ) {
-    return enqueuePreset(this.#context, body, options);
   };
   async cancelRun(runId: string, options?: CancelRunOptions) {
     return cancelRun(this.#context, runId, options);

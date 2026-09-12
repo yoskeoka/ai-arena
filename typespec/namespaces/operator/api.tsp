@@ -78,10 +78,6 @@ op getRanking(
   @query ruleset_version: string,
 ): StoredRankingSnapshot;
 
-@route("/api/v1/preset-matches")
-@post
-op enqueuePreset(@body body: PresetMatchRequest): ResultListItem;
-
 @route("/api/v1/runs/{run_id}/cancel")
 @post
 op cancelRun(@path run_id: string): ResultListItem;

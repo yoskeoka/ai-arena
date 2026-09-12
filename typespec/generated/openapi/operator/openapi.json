@@ -378,34 +378,6 @@
         }
       }
     },
-    "/api/v1/preset-matches": {
-      "post": {
-        "operationId": "Operator_enqueuePreset",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Shared.ResultListItem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Shared.PresetMatchRequest"
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/rankings": {
       "get": {
         "operationId": "Operator_getRanking",
@@ -1254,24 +1226,6 @@
           "place": {
             "type": "integer",
             "format": "int32"
-          }
-        }
-      },
-      "Shared.PresetMatchRequest": {
-        "type": "object",
-        "required": ["preset_id"],
-        "properties": {
-          "preset_id": {
-            "type": "string"
-          },
-          "run_id": {
-            "type": "string"
-          },
-          "match_id": {
-            "type": "string"
-          },
-          "output_dir": {
-            "type": "string"
           }
         }
       },

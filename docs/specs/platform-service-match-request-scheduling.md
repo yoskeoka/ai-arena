@@ -7,8 +7,8 @@
 最小 scheduling contract を定義する。
 
 ここで固定するのは、operator がどの単位で対戦要求を作るか、
-そして service が preset lane / general lane という異なる operator entry を
-どの policy で同じ実行 queue へ正規化するかである。
+そして service が registered scope と admitted bot の request を
+どの policy で実行 queue へ送るかである。
 
 ## この spec の責務範囲
 
@@ -17,7 +17,6 @@
 - `match request` の最小 identity と participant shape
 - logical `match_id` と per-attempt `run_id` の責務分離
 - general request が参照する `game registration` / `AI submission` の整合条件
-- preset lane と general lane を同じ scheduling 入口と queue authority へ正規化する責務
 - first scheduling policy の選択規則
 - retry / rerun / correction の match-run-group 境界
 - request visibility の最小 read model
@@ -60,9 +59,7 @@ service は request を validation し、scheduling policy に従って
 - `output_dir`
 - `source`
   - `manual`
-  - `preset`
 - `source_id`
-  - preset 由来なら `preset_id`
 - `match_id`
   - logical match identity
 - `latest_run_id`
@@ -117,24 +114,6 @@ service 内部の一覧 query は、domain model に対する再利用可能な�
 
 各外部 adapter は認可済みの principal と利用目的からこれらの option を組み立て、domain query の結果をその interface の response へ変換する。これにより domain-level の filter / retrieval logic は共有し、authorization と presentation の契約は interface ごとに独立して進化させる。
 
-## Preset Lane との関係
-
-preset lane は bootstrap 用の shortcut だが、
-general lane と別 queue policy や dedicated queue を持ってはならない。
-
-service は preset enqueue のとき、少なくとも次の順序で
-general lane と同じ scheduling 入口へ正規化しなければならない。
-
-1. preset definition から `game registration` を materialize する
-2. preset participant ごとに `AI submission` を materialize する
-3. materialized identity から `match request` を組み立てる
-4. general request と同じ scheduling policy で initial run を queue へ流す
-
-このため、preset queue は queue implementation を別に持つのではなく、
-general request と同じ single logical queue authority を共有する。
-違いは queue 前の operator entry にあり、queue へ入る時点では
-どちらも同じ logical `match_id` + first `run_id` contract に正規化される。
-
 ## First Scheduling Policy
 
 first scheduling policy は single logical queue authority 前提の FIFO とする。
@@ -142,7 +121,6 @@ first scheduling policy は single logical queue authority 前提の FIFO とす
 - scheduling の source-of-truth は service process が受け付けた request 順とする
 - request は accepted 後、ただちに 1 件の initial run へ具体化して queue へ入れてよい
 - queue claim 順は既存の execution queue policy に委ねてよい
-- preset request と manual request は source による優先度差を持たない
 - fairness、quota、parallel lane 分離、reservation は後続 plan へ送る
 
 current durable queue backend は lane ごとの分離列を持たず、

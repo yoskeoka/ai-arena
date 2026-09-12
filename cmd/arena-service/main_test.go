@@ -150,42 +150,6 @@ func TestRunResolvesRelativeOutputDirAgainstBaseDir(t *testing.T) {
 	}
 }
 
-func TestResolvingPresetCatalogResolvesRelativeOutputDirAgainstBaseDir(t *testing.T) {
-	baseDir := repoRoot(t)
-	presets, err := service.NewStaticPresetCatalog([]service.MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []service.SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-				{PlayerID: "p2", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: "arena-service-output",
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
-	}
-
-	submission, err := resolvingPresetCatalog{
-		baseDir: baseDir,
-		opaque:  false,
-		next:    presets,
-	}.Build(context.Background(), service.PresetMatchRequest{PresetID: "echo-reference"})
-	if err != nil {
-		t.Fatalf("Build() error = %v", err)
-	}
-
-	want := filepath.Join(baseDir, "arena-service-output")
-	if submission.OutputDir != want {
-		t.Fatalf("output_dir = %q, want %q", submission.OutputDir, want)
-	}
-}
-
 func TestResolveOutputDirKeepsOpaquePrefixForR2Lane(t *testing.T) {
 	submission := service.MatchSubmission{OutputDir: "arena-service-output"}
 	resolveOutputDir("/tmp/base", true, &submission)

@@ -21,7 +21,6 @@ import {
   jsonMatchRequestCreateRequestToTransportTransform,
   jsonMatchRequestListResponseToApplicationTransform,
   jsonMatchRequestToApplicationTransform,
-  jsonPresetMatchRequestToTransportTransform,
   jsonResultListItemToApplicationTransform,
   jsonRunListResponseToApplicationTransform,
   jsonSessionStatusResponseToApplicationTransform,
@@ -49,7 +48,6 @@ import type {
   MatchRequest,
   MatchRequestCreateRequest,
   MatchRequestListResponse,
-  PresetMatchRequest,
   ResultListItem,
   RunListResponse,
   SessionStatusResponse,
@@ -502,30 +500,6 @@ export async function getRanking(
     response.headers["content-type"]?.includes("application/json")
   ) {
     return jsonStoredRankingSnapshotToApplicationTransform(response.body)!;
-  }
-  throw createRestError(response);
-}
-export interface EnqueuePresetOptions extends OperationOptions {}
-export async function enqueuePreset(
-  client: OperatorClientContext,
-  body: PresetMatchRequest,
-  options?: EnqueuePresetOptions,
-): Promise<ResultListItem> {
-  const path = parse("/api/v1/preset-matches").expand({});
-  const httpRequestOptions = {
-    headers: {},
-    body: jsonPresetMatchRequestToTransportTransform(body),
-  };
-  const response = await client.pathUnchecked(path).post(httpRequestOptions);
-
-  if (typeof options?.operationOptions?.onResponse === "function") {
-    options?.operationOptions?.onResponse(response);
-  }
-  if (
-    +response.status === 200 &&
-    response.headers["content-type"]?.includes("application/json")
-  ) {
-    return jsonResultListItemToApplicationTransform(response.body)!;
   }
   throw createRestError(response);
 }

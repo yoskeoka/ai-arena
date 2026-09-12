@@ -11,7 +11,6 @@ production target は `Cloudflare R2` であり、
 make seaweed-up
 make seaweed-bootstrap
 make seaweed-down
-make verify-local-object-storage
 ```
 
 `make seaweed-bootstrap` は reset-first で次を行う。
@@ -50,7 +49,6 @@ make postgres-schema-apply
 make seaweed-bootstrap
 make render-build
 ARENA_SERVICE_POSTGRES_DSN=postgres://arena:arena@127.0.0.1:55432/arena_service?sslmode=disable \
-ARENA_SERVICE_PRESET_CONFIG=./config/platform-service/presets.remote-bootstrap.json \
 ARENA_SERVICE_ARTIFACT_BACKEND=r2 \
 ARENA_SERVICE_ARTIFACT_R2_BUCKET=ai-arena-local \
 ARENA_SERVICE_ARTIFACT_R2_S3_ENDPOINT=http://127.0.0.1:8333 \
@@ -60,22 +58,8 @@ PORT=10000 \
 make render-start
 ```
 
-この lane では `presets.remote-bootstrap.json` を canonical とし、
-`make render-build` が生成する prepared preset executable を使って remote bootstrap shape を再現する。
-`presets.example.json` は lightweight contributor example であり、この deploy-shaped lane の canonical config ではない。
-
-verification helper:
-
-```sh
-make verify-local-object-storage
-```
-
-この helper は少なくとも次を確認する。
-
-- preset queue request が受理される
-- completed detail が `s3://...` stable locator を返す
-- delegated download URL を取得できる
-- その URL から `result-summary.json` を取得できる
+general bundle regression は registered game と admitted bot を指定した match request を使い、
+completed detail の `s3://...` stable locator と delegated `result-summary.json` download を確認する。
 
 停止:
 

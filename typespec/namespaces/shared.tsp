@@ -250,13 +250,6 @@ model MatchRequest {
   lifecycle_state: LifecycleState;
 }
 
-model PresetMatchRequest {
-  preset_id: string;
-  run_id?: string;
-  match_id?: string;
-  output_dir?: string;
-}
-
 model RankingScope {
   game_id: string;
   game_version: string;

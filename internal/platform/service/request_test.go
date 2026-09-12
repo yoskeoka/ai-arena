@@ -256,6 +256,32 @@ func TestInMemoryMatchRequestStoreClonesParticipants(t *testing.T) {
 	}
 }
 
+func TestInMemoryMatchRequestStorePreservesHistoricalPresetSource(t *testing.T) {
+	store := NewInMemoryMatchRequestStore()
+	item := MatchRequest{
+		RequestID:          "historical-preset-request",
+		GameRegistrationID: "echo-count-v2",
+		Game:               contract.GameMetadata{GameID: "echo-count", GameVersion: "2.0.0", RulesetVersion: "phase2-simultaneous-2turn"},
+		Participants:       []MatchRequestParticipant{{PlayerID: "p1", AISubmissionID: "ai-1"}},
+		OutputDir:          "out",
+		Source:             RegistrationSource("preset"),
+		SourceID:           "retired-preset",
+		MatchID:            "match-1",
+		LatestRunID:        "run-1",
+		LifecycleState:     StateCompleted,
+	}
+	if err := store.Save(context.Background(), item); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	items, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(items) != 1 || items[0].Source != RegistrationSource("preset") || items[0].SourceID != "retired-preset" {
+		t.Fatalf("historical preset source = %+v", items)
+	}
+}
+
 type failingMatchRequestStore struct {
 	err error
 }

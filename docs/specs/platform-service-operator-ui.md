@@ -282,8 +282,8 @@ list/detail/ranking endpoint が expected JSON shape を返さない場合も、
 
 overview は active runs、completed runs、selected run summary/detail を read/follow-up surface として提供する。
 
-- overview は preset catalog、preset queue action、preset 固有の mutation state/error を表示してはならない
-- browser load または overview 上の既存 interaction は `/api/v1/preset-matches` を呼び出してはならない
+- overview は retired preset catalog、queue action、preset 固有の mutation state/error を表示してはならない
+- `POST /api/v1/preset-matches` は retired され、handler を持たず `404` を返す。browser load または overview 上の既存 interaction はこの path を呼び出してはならない
 - active/completed run list はそれぞれの polling cadence と panel-local error state を維持する
 - completed run を選択した場合は selected run detail を表示し、既存の run follow-up action は引き続き利用できる
 - completed runs がない場合は、selected run detail surface は empty state を表示してよい

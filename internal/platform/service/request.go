@@ -52,7 +52,7 @@ type MatchRequestStore interface {
 	List(context.Context) ([]MatchRequest, error)
 }
 
-// MatchRequestService validates general/preset match requests and schedules them into the queue.
+// MatchRequestService validates general match requests and schedules them into the queue.
 type MatchRequestService struct {
 	general        *GeneralSubmissionService
 	commands       *CommandService
@@ -188,43 +188,6 @@ func (s *MatchRequestService) Create(ctx context.Context, req MatchRequestCreate
 		Participants:       participants,
 		OutputDir:          submission.OutputDir,
 		Source:             SourceManual,
-		MatchID:            record.Submission.MatchID,
-		LatestRunID:        record.Submission.RunID,
-		OfficialRunID:      officialRunID(record),
-		LifecycleState:     record.State,
-	}
-	if err := s.store.Save(ctx, item); err != nil {
-		return MatchRequest{}, QueueRecord{}, s.rollbackQueuedSubmission(ctx, record, wrapConflict(err))
-	}
-	return item, record, nil
-}
-
-// CreatePreset materializes one preset into general identities, then schedules it like a general request.
-func (s *MatchRequestService) CreatePreset(ctx context.Context, presetID string, submission MatchSubmission) (MatchRequest, QueueRecord, error) {
-	game, items, err := s.general.MaterializePreset(ctx, presetID, submission)
-	if err != nil {
-		return MatchRequest{}, QueueRecord{}, err
-	}
-	participants := make([]MatchRequestParticipant, 0, len(submission.Players))
-	for index, player := range submission.Players {
-		participants = append(participants, MatchRequestParticipant{
-			PlayerID:       player.PlayerID,
-			AISubmissionID: items[index].AISubmissionID,
-		})
-	}
-
-	record, err := s.commands.Submit(ctx, submission)
-	if err != nil {
-		return MatchRequest{}, QueueRecord{}, err
-	}
-	item := MatchRequest{
-		RequestID:          "preset-" + presetID + "-" + record.Submission.RunID,
-		GameRegistrationID: game.RegistrationID,
-		Game:               game.Game,
-		Participants:       participants,
-		OutputDir:          submission.OutputDir,
-		Source:             SourcePreset,
-		SourceID:           presetID,
 		MatchID:            record.Submission.MatchID,
 		LatestRunID:        record.Submission.RunID,
 		OfficialRunID:      officialRunID(record),
