@@ -557,7 +557,7 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, workerID string, 
 	if err != nil {
 		return err
 	}
-	api, err := service.NewOperatorAPI(a.commands, a.queries, a.general, a.requests, nil, a.artifactAccess, a.auth, a.rankings)
+	api, err := service.NewOperatorAPI(a.commands, a.queries, a.general, a.requests, a.artifactAccess, a.auth, a.rankings)
 	if err != nil {
 		return err
 	}

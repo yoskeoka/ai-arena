@@ -86,7 +86,7 @@ func newFixtureBackend(listenAddr string) (*fixtureBackend, error) {
 	}
 
 	downloadURL := fmt.Sprintf("http://%s/fixture-artifacts/result-summary.json", listenAddr)
-	api, err := service.NewOperatorAPI(commands, queries, general, requests, nil, fixtureArtifactAccessIssuer{
+	api, err := service.NewOperatorAPI(commands, queries, general, requests, fixtureArtifactAccessIssuer{
 		downloadURL: downloadURL,
 	}, nil)
 	if err != nil {

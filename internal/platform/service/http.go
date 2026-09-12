@@ -145,7 +145,7 @@ func (a *OperatorAPI) WithArtifactAdmission(admission *ArtifactAdmissionService)
 }
 
 // NewOperatorAPI constructs the HTTP adapter for operator routes.
-func NewOperatorAPI(commands *CommandService, queries *QueryService, general *GeneralSubmissionService, requests *MatchRequestService, _ any, artifactAccess ArtifactAccessIssuer, auth *AuthService, rankings ...*RankingService) (*OperatorAPI, error) {
+func NewOperatorAPI(commands *CommandService, queries *QueryService, general *GeneralSubmissionService, requests *MatchRequestService, artifactAccess ArtifactAccessIssuer, auth *AuthService, rankings ...*RankingService) (*OperatorAPI, error) {
 	if commands == nil {
 		return nil, fmt.Errorf("service: command service is required")
 	}

@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
 )
 
@@ -131,152 +130,22 @@ func TestOperatorAPIAdmitsGameBundleWithCreatedResponse(t *testing.T) {
 	}
 }
 
-func TestOperatorAPIPresetLifecycle(t *testing.T) {
-	store := NewInMemoryQueueStore()
-	commands := newTestCommandServiceWithStore(t, store)
-	queries, err := NewQueryService(store)
+func TestOperatorAPIRetiresPresetMatches(t *testing.T) {
+	commands := newTestCommandService(t)
+	queue := NewInMemoryQueueStore()
+	queries, err := NewQueryService(queue)
 	if err != nil {
-		t.Fatalf("NewQueryService() error = %v", err)
+		t.Fatal(err)
 	}
 	general := newTestGeneralSubmissionService(t)
-	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-				{PlayerID: "p2", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: t.TempDir(),
-		},
-	})
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, queue), DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
+		t.Fatal(err)
 	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
-	if err != nil {
-		t.Fatalf("NewOperatorAPI() error = %v", err)
-	}
-	handler := api.Handler()
-
-	createReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/preset-matches", bytes.NewBufferString(`{"preset_id":"echo-reference"}`))
-	createReq.Header.Set("Content-Type", "application/json")
-	createResp := httptest.NewRecorder()
-	handler.ServeHTTP(createResp, createReq)
-	if createResp.Code == http.StatusNotFound {
-		return
-	}
-	if createResp.Code != http.StatusCreated {
-		t.Fatalf("POST /api/v1/preset-matches status = %d, body = %s", createResp.Code, createResp.Body.String())
-	}
-	var created ResultListItem
-	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
-		t.Fatalf("json.Unmarshal(created) error = %v", err)
-	}
-	if created.LifecycleState != StateQueued {
-		t.Fatalf("created.LifecycleState = %q, want %q", created.LifecycleState, StateQueued)
-	}
-
-	gameRegistrations, err := general.ListGames(context.Background())
-	if err != nil {
-		t.Fatalf("general.ListGames() error = %v", err)
-	}
-	if len(gameRegistrations) != 1 || gameRegistrations[0].RegistrationID != "echo-count-v2-phase2-simultaneous-2turn" {
-		t.Fatalf("game registrations = %+v, want materialized ruleset scope", gameRegistrations)
-	}
-	if gameRegistrations[0].Source != SourcePreset || gameRegistrations[0].SourceID != "echo-reference" {
-		t.Fatalf("game registration source = %+v, want preset echo-reference", gameRegistrations[0])
-	}
-	registeredAIs, err := general.ListAIs(context.Background())
-	if err != nil {
-		t.Fatalf("general.ListAIs() error = %v", err)
-	}
-	if len(registeredAIs) != 2 {
-		t.Fatalf("len(registeredAIs) = %d, want 2", len(registeredAIs))
-	}
-	if registeredAIs[0].Source != SourcePreset || registeredAIs[0].SourceID != "echo-reference" {
-		t.Fatalf("registered AI source = %+v, want preset echo-reference", registeredAIs[0])
-	}
-
-	activeResp := httptest.NewRecorder()
-	handler.ServeHTTP(activeResp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/matches/active", nil))
-	if activeResp.Code != http.StatusOK {
-		t.Fatalf("GET /api/v1/matches/active status = %d, body = %s", activeResp.Code, activeResp.Body.String())
-	}
-	var active struct {
-		Items []ResultListItem `json:"items"`
-	}
-	if err := json.Unmarshal(activeResp.Body.Bytes(), &active); err != nil {
-		t.Fatalf("json.Unmarshal(active) error = %v", err)
-	}
-	if len(active.Items) != 1 {
-		t.Fatalf("len(active.Items) = %d, want 1", len(active.Items))
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	loop, err := NewWorkerLoop(newTestWorker(t, store, 0), "worker-http", 5*time.Millisecond, nil)
-	if err != nil {
-		t.Fatalf("NewWorkerLoop() error = %v", err)
-	}
-	done := make(chan error, 1)
-	go func() {
-		done <- loop.Run(ctx)
-	}()
-
-	var completedItem ResultListItem
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		completedResp := httptest.NewRecorder()
-		handler.ServeHTTP(completedResp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/matches/completed", nil))
-		if completedResp.Code != http.StatusOK {
-			t.Fatalf("GET /api/v1/matches/completed status = %d, body = %s", completedResp.Code, completedResp.Body.String())
-		}
-		var completed struct {
-			Items []ResultListItem `json:"items"`
-		}
-		if err := json.Unmarshal(completedResp.Body.Bytes(), &completed); err != nil {
-			t.Fatalf("json.Unmarshal(completed) error = %v", err)
-		}
-		if len(completed.Items) == 1 {
-			completedItem = completed.Items[0]
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if completedItem.RunID == "" {
-		t.Fatal("completed match did not appear before timeout")
-	}
-	if completedItem.TerminalStatus == nil || *completedItem.TerminalStatus != contract.StatusCompleted {
-		t.Fatalf("completedItem.TerminalStatus = %v, want completed", completedItem.TerminalStatus)
-	}
-
-	detailResp := httptest.NewRecorder()
-	handler.ServeHTTP(detailResp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/runs/"+created.RunID, nil))
-	if detailResp.Code != http.StatusOK {
-		t.Fatalf("GET /api/v1/runs/{run_id} status = %d, body = %s", detailResp.Code, detailResp.Body.String())
-	}
-	var detail MatchDetailResponse
-	if err := json.Unmarshal(detailResp.Body.Bytes(), &detail); err != nil {
-		t.Fatalf("json.Unmarshal(detail) error = %v", err)
-	}
-	if detail.ResultSummary == nil {
-		t.Fatal("detail.ResultSummary = nil, want compact summary")
-	}
-	if len(detail.ArtifactAccess) == 0 {
-		t.Fatal("detail.ArtifactAccess = empty, want derived metadata")
-	}
-	if detail.ArtifactAccess["result-summary"].Status != "locator-only" {
-		t.Fatalf("result-summary access status = %q, want locator-only", detail.ArtifactAccess["result-summary"].Status)
-	}
-
-	cancel()
-	if err := <-done; err != nil {
-		t.Fatalf("WorkerLoop.Run() error = %v", err)
+	response := httptest.NewRecorder()
+	api.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/preset-matches", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("POST /api/v1/preset-matches status = %d, want %d", response.Code, http.StatusNotFound)
 	}
 }
 
@@ -289,23 +158,6 @@ func TestOperatorAPICreateSignupInvite(t *testing.T) {
 	}
 	general := newTestGeneralSubmissionService(t)
 	requests := newTestMatchRequestService(t, general, commands, queue)
-	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: t.TempDir(),
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
-	}
 	authStore := &memoryAuthStore{
 		identities: map[string]AuthPrincipal{
 			authIdentityKey(AuthIdentity{Provider: authProviderGitHub, Subject: "12345"}): {
@@ -323,7 +175,7 @@ func TestOperatorAPICreateSignupInvite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAuthService() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, general, requests, presets, DirectArtifactAccessIssuer{}, auth)
+	api, err := NewOperatorAPI(commands, queries, general, requests, DirectArtifactAccessIssuer{}, auth)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -391,44 +243,6 @@ func TestOperatorAPIBotRevisionUsesAuthenticatedOwner(t *testing.T) {
 	}
 }
 
-func TestOperatorAPIRejectsUnknownPreset(t *testing.T) {
-	commands := newTestCommandService(t)
-	queries, err := NewQueryService(NewInMemoryQueueStore())
-	if err != nil {
-		t.Fatalf("NewQueryService() error = %v", err)
-	}
-	general := newTestGeneralSubmissionService(t)
-	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: t.TempDir(),
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
-	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
-	if err != nil {
-		t.Fatalf("NewOperatorAPI() error = %v", err)
-	}
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/preset-matches", bytes.NewBufferString(`{"preset_id":"missing"}`))
-	req.Header.Set("Content-Type", "application/json")
-	resp := httptest.NewRecorder()
-	api.Handler().ServeHTTP(resp, req)
-	if resp.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, body = %s, want %d", resp.Code, resp.Body.String(), http.StatusNotFound)
-	}
-}
-
 func TestOperatorAPIAllowsConfiguredCORSOrigins(t *testing.T) {
 	commands := newTestCommandService(t)
 	queries, err := NewQueryService(NewInMemoryQueueStore())
@@ -436,24 +250,7 @@ func TestOperatorAPIAllowsConfiguredCORSOrigins(t *testing.T) {
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
 	general := newTestGeneralSubmissionService(t)
-	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: t.TempDir(),
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
-	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -629,24 +426,7 @@ func TestOperatorAPIDoesNotAllowUnknownCORSOrigin(t *testing.T) {
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
 	general := newTestGeneralSubmissionService(t)
-	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: t.TempDir(),
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
-	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -667,24 +447,7 @@ func TestOperatorAPIGeneralRegistrationRoutesRejectUnsupportedMethod(t *testing.
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
 	general := newTestGeneralSubmissionService(t)
-	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: t.TempDir(),
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
-	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -704,24 +467,7 @@ func TestOperatorAPIGeneralRegistrationRoutes(t *testing.T) {
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
 	general := newTestGeneralSubmissionService(t)
-	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: t.TempDir(),
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
-	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil)
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -776,24 +522,7 @@ func TestOperatorAPIMatchRequestRoutes(t *testing.T) {
 	}
 	general := newTestGeneralSubmissionService(t)
 	requests := newTestMatchRequestService(t, general, commands, store)
-	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: t.TempDir(),
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
-	}
-	api, err := NewOperatorAPI(commands, queries, general, requests, presets, DirectArtifactAccessIssuer{}, nil)
+	api, err := NewOperatorAPI(commands, queries, general, requests, DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
@@ -870,46 +599,18 @@ func TestOperatorAPIRunCancelRoute(t *testing.T) {
 	}
 	general := newTestGeneralSubmissionService(t)
 	requests := newTestMatchRequestService(t, general, commands, store)
-	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-				{PlayerID: "p2", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: t.TempDir(),
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
-	}
-	api, err := NewOperatorAPI(commands, queries, general, requests, presets, DirectArtifactAccessIssuer{}, nil)
+	api, err := NewOperatorAPI(commands, queries, general, requests, DirectArtifactAccessIssuer{}, nil)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
 	handler := api.Handler()
 
-	presetReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/preset-matches", bytes.NewBufferString(`{"preset_id":"echo-reference"}`))
-	presetReq.Header.Set("Content-Type", "application/json")
-	presetResp := httptest.NewRecorder()
-	handler.ServeHTTP(presetResp, presetReq)
-	if presetResp.Code == http.StatusNotFound {
-		return
-	}
-	if presetResp.Code != http.StatusCreated {
-		t.Fatalf("POST /api/v1/preset-matches status = %d, body = %s", presetResp.Code, presetResp.Body.String())
-	}
-	var created ResultListItem
-	if err := json.Unmarshal(presetResp.Body.Bytes(), &created); err != nil {
-		t.Fatalf("json.Unmarshal(created) error = %v", err)
+	created, err := commands.Submit(context.Background(), testSubmission("file://"+repoJoin(t, "testdata/ai/janken/janken-rock-ai")))
+	if err != nil {
+		t.Fatalf("Submit() error = %v", err)
 	}
 
-	cancelReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/runs/"+created.RunID+"/cancel", nil)
+	cancelReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/runs/"+created.Submission.RunID+"/cancel", nil)
 	cancelResp := httptest.NewRecorder()
 	handler.ServeHTTP(cancelResp, cancelReq)
 	if cancelResp.Code != http.StatusOK {
@@ -931,23 +632,6 @@ func TestOperatorAPIRankingReadRoute(t *testing.T) {
 		t.Fatalf("NewQueryService() error = %v", err)
 	}
 	general := newTestGeneralSubmissionService(t)
-	presets, err := NewStaticPresetCatalog([]MatchPresetDefinition{
-		{
-			PresetID: "echo-reference",
-			Game: contract.GameMetadata{
-				GameID:         "echo-count",
-				GameVersion:    "2.0.0",
-				RulesetVersion: "phase2-simultaneous-2turn",
-			},
-			Players: []SubmittedPlayer{
-				{PlayerID: "p1", ArtifactRef: repoJoin(t, "testdata/ai/echo/echo-ai-2turn")},
-			},
-			OutputDir: t.TempDir(),
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewStaticPresetCatalog() error = %v", err)
-	}
 	rankingStore, err := NewLocalRankingSnapshotStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewLocalRankingSnapshotStore() error = %v", err)
@@ -983,7 +667,7 @@ func TestOperatorAPIRankingReadRoute(t *testing.T) {
 	if _, err := rankingStore.Put(context.Background(), snapshot); err != nil {
 		t.Fatalf("rankingStore.Put() error = %v", err)
 	}
-	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), presets, DirectArtifactAccessIssuer{}, nil, rankings)
+	api, err := NewOperatorAPI(commands, queries, general, newTestMatchRequestService(t, general, commands, NewInMemoryQueueStore()), DirectArtifactAccessIssuer{}, nil, rankings)
 	if err != nil {
 		t.Fatalf("NewOperatorAPI() error = %v", err)
 	}
