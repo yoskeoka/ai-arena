@@ -1,5 +1,7 @@
 # phase8-public-state-and-reversi-visualizer-roadmap
 > **Execution**: Use `/execute-task` to implement this plan. After implementation is complete, use `/review-task` to prepare and create the PR.
+>
+> **Parent boundary**: Do not run `/execute-task` on this roadmap until it has been split into reviewed child plans. Execute each merged child plan instead.
 
 Addresses: N/A
 
@@ -36,28 +38,34 @@ state cadence、viewer UX、stream transport は child plan で具体化し、�
 
 ### A. Public exported-state contract と delivery
 
-- `(MODIFY) docs/specs/`: public spectator resource の discover / list / detail、terminal replay state、
+- `(MODIFY) docs/specs/`: public spectator resource の discover / list / detail、terminal public replay、
   in-progress latest state、terminal / unavailable / retention の observable behavior を定義する。private
   `record` / `snapshot` / `history` / stderr / bundle bytes を public path から除外する。
 - `(MODIFY) typespec/namespaces/public/api.tsp` と shared TypeSpec: public wire contract の唯一の field-level source を
   定義する。match identity、game metadata、monotonic public-state version / turn、lifecycle、opaque な game-specific
-  `public_state`、cache / retry hint を扱う。
-- `(MODIFY) internal/platform/service/*`: durable locator から exported state だけを読む public read adapter を追加する。
+  `public_state`、terminal replay format / version / payload、cache / retry hint を扱う。
+- `(MODIFY) game master output / artifact persistence contract`: game が public として生成した versioned replay payload を
+  private event log とは別 artifact として保存し、terminal public replay resource から読める stable locator を保持する。
+  platform が `record.json` / `history.json` を後から filter して public transcript を生成してはならない。payload は
+  game-specific かつ opaque とし、platform は共通 envelope、size/version、locator、retention だけを扱う。
+- `(MODIFY) internal/platform/service/*`: durable locator から latest exported state と terminal public replay だけを読む
+  public read adapter を追加する。
   公開対象の discoverability と anonymous access policy は child plan の review で確定し、operator authorization の
   緩和や signed operator artifact URL の再利用で代用しない。
 - 初回 delivery は snapshot polling を候補として、cadence、cache、stale response、terminal stop を契約化する。
   SSE / WebSocket、per-event feed、reconnect cursor は stable polling contract と load / latency requirement の確認後に
   別 child plan とする。
 - verification は filesystem / S3-compatible backend の双方で public/private boundary、in-progress version の単調性、
-  stale response、terminal / unavailable / retention を black-box test する。remote staging は provider deploy、exact
-  `/version`、`/healthz` readiness、public API response を別々の証跡として残す。
+  public replay の format/version/access/retention、stale response、terminal / unavailable を black-box test する。remote
+  staging は provider deploy、exact `/version`、`/healthz` readiness、public API response を別々の証跡として残す。
 
 ### B. Reversi artifact-first replay viewer
 
 - `(MODIFY) reversi-ai-arena/docs/specs/visualizer-architecture.md` と
-  `(MODIFY) reversi-ai-arena/docs/specs/artifact-kifu-export.md`: browser replay input を exported snapshot と lossless な
-  accepted-turn transcript から再構成する contract として固定する。`record` / `history` precedence、pass、malformed
-  input、failed / canceled terminal result を shared fixture で検証する。
+  `(MODIFY) reversi-ai-arena/docs/specs/artifact-kifu-export.md`: browser replay input を A の terminal public replay payload と
+  final exported snapshot から再構成する contract として固定する。Reversi の public replay format は lossless な
+  accepted placement / explicit pass の transcript を持ち、private `record` / `history` を viewer input にしない。
+  malformed input、failed / canceled terminal result を shared fixture で検証する。
 - `(NEW) reversi-ai-arena/visualizer/src/replay/*`: browser-side normalizer と immutable replay model を実装する。
   Rust filesystem helper の source copy は行わず、versioned neutral DTO、shared fixture、verified WASM bridge を比較して
   child plan で一つを選ぶ。private engine state と browser filesystem assumption を持ち込まない。
@@ -71,8 +79,8 @@ state cadence、viewer UX、stream transport は child plan で具体化し、�
 ### C. Public platform resource と Reversi viewer の接続
 
 - `(MODIFY) ai-arena public contract tests` と `(MODIFY) reversi-ai-arena visualizer adapter/tests`: B の local artifact
-  loader を A の public terminal resource へ接続し、同じ match の public metadata、final exported snapshot、turn / result が
-  shared fixture と一致することを示す。
+  loader を A の terminal public replay resource へ接続し、同じ match の public metadata、replay format / version / payload、
+  final exported snapshot、turn / result が shared fixture と一致することを示す。
 - in-progress polling は A の cadence / version semantics に従う。viewer は古い response を version で破棄し、terminal
   state 後に polling を止める。private artifact が欠けていても public contract だけで描画できることを検証する。
 - ai-arena と reversi-ai-arena の変更は別 PR とし、先に固定した versioned public fixture / wire contract を dependency
@@ -104,9 +112,9 @@ A public exported-state contract
 
 ## child plan ごとの受入条件
 
-- A: child plan で review した public access policy に従う client が、discoverable public match の exported state だけを
-  取得でき、private artifact、stderr、AI / game bundle、internal snapshot を取得できない。in-flight と terminal の
-  version / lifecycle / retention が TypeSpec と black-box test で一致する。
+- A: child plan で review した public access policy に従う client が、discoverable public match の latest exported state と
+  game-produced terminal public replay だけを取得でき、private artifact、stderr、AI / game bundle、internal snapshot を
+  取得できない。in-flight と terminal の version / lifecycle / retention が TypeSpec と black-box test で一致する。
 - B: runner-derived public fixture を browser で読み、開始から terminal まで合法な Reversi board progression と pass / score /
   winner を再生できる。private engine field なしで入力を再構成できる。
 - C: public platform resource を選ぶ viewer が final replay を再生し、running match では stale state を描画せず、terminal で
