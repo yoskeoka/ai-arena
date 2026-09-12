@@ -2,7 +2,6 @@ package service
 
 import (
 	"net/http"
-	"strings"
 )
 
 // PublicAPI exposes the versioned anonymous spectator HTTP family.
@@ -86,8 +85,4 @@ func writePublicNotFound(w http.ResponseWriter) {
 
 func writePublicUnavailable(w http.ResponseWriter) {
 	writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "public service unavailable"})
-}
-
-func cleanPublicMatchID(matchID string) string {
-	return strings.TrimSpace(matchID)
 }
