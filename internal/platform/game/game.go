@@ -59,6 +59,14 @@ type Placement = publicgm.Placement
 // MatchResult aliases the shared final match result.
 type MatchResult = publicgm.MatchResult
 
+// PublicReplay aliases the terminal public replay contract.
+type PublicReplay = publicgm.PublicReplay
+
+// PublicReplayProvider is optional until a game publishes a replay format.
+type PublicReplayProvider interface {
+	CurrentPublicReplay(context.Context) (PublicReplay, error)
+}
+
 // PlayerSnapshot aliases the shared internal player snapshot.
 type PlayerSnapshot = publicgm.PlayerSnapshot
 

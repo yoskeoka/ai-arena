@@ -96,12 +96,17 @@ type ExecutionResult struct {
 
 // TerminalArtifacts captures the minimum persisted output for one terminal match.
 type TerminalArtifacts struct {
-	MatchDir          string            `json:"match_dir"`
-	RecordPath        string            `json:"record_path"`
-	ResultSummaryPath string            `json:"result_summary_path"`
-	PlayerStderrPaths map[string]string `json:"player_stderr_paths,omitempty"`
-	MatchStatus       game.MatchStatus  `json:"match_status"`
-	Error             string            `json:"error,omitempty"`
+	MatchDir            string            `json:"match_dir"`
+	RecordPath          string            `json:"record_path"`
+	ResultSummaryPath   string            `json:"result_summary_path"`
+	PlayerStderrPaths   map[string]string `json:"player_stderr_paths,omitempty"`
+	MatchStatus         game.MatchStatus  `json:"match_status"`
+	Error               string            `json:"error,omitempty"`
+	PublicReplayPath    string            `json:"public_replay_path,omitempty"`
+	PublicReplayFormat  string            `json:"public_replay_format,omitempty"`
+	PublicReplayVersion string            `json:"public_replay_version,omitempty"`
+	PublicReplaySize    int64             `json:"public_replay_size,omitempty"`
+	PublicReplayDigest  string            `json:"public_replay_digest,omitempty"`
 }
 
 // QueueStore manages service-side queue state.

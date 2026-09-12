@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
-    "uri-template": "^2.0.0",
-    "@typespec/ts-http-runtime": "0.2.1"
+    "@typespec/ts-http-runtime": "0.2.1",
+    "uri-template": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "~18.19.75",
