@@ -13,6 +13,8 @@ Phase 8 を「公開してよい game state を platform から取得し、game 
 
 この親 plan の完了は Phase 8 の実装完了ではない。public contract、Reversi の artifact-first viewer、platform 接続、
 event stream の順序と依存を child plan に分け、各 child が独立した black-box contract と検証を持つ状態を完了境界とする。
+その分割は ai-arena の `0126`、reversi-ai-arena の `0001`、ai-arena の `0128`--`0129` で完了した。`0126` と `0001` は実装へ渡す詳細 plan、`0128` と `0129` は前者の実測と
+versioned contract を受けてから詳細化する intentional parent plan である。
 
 `N/A - detail required before execution`: 本文は cross-repository roadmap である。API field、公開対象の選択 policy、
 state cadence、viewer UX、stream transport は child plan で具体化し、人間の review を経てから実装する。
@@ -35,9 +37,21 @@ state cadence、viewer UX、stream transport は child plan で具体化し、�
   `reversi-ai-arena/docs/specs/artifact-kifu-export.md:20-80` に artifact-first replay と accepted turn / explicit pass の
   contract を持つが、`reversi-ai-arena/visualizer/src/main.ts:1-20` は scaffold に留まる。
 
-## 実行 child plan の構成
+## child plan の構成と実行状態
+
+| 区分 | child plan | 現在の粒度 | 実行条件 |
+| --- | --- | --- | --- |
+| A | `0126-phase8-public-state-and-reversi-visualizer.md` | 詳細な実装 plan | public visibility / access policy を plan review で選択後 |
+| B | `reversi-ai-arena/docs/exec-plan/todo/0001-phase8-public-state-and-reversi-visualizer-reversi-replay-viewer.md` | 詳細な実装 plan | browser replay boundary の選択を plan review で選択後。A の versioned fixture を入力にする |
+| C | `0128-phase8-public-state-and-reversi-visualizer-platform-connection.md` | intentional parent | A と B の実装・versioned contract・polling evidence が揃った後に詳細 plan を新規作成する |
+| D | `0129-phase8-public-state-and-reversi-visualizer-event-stream-evaluation.md` | intentional parent | C の polling load / latency / reconnect evidence を評価後に詳細 plan を新規作成する |
+
+以下は cross-repository dependency の roadmap summary である。各区分の implementation scope、spec-first change、
+verification はリンク先 child plan を正本とする。
 
 ### A. Public exported-state contract と delivery
+
+詳細 plan: `docs/exec-plan/todo/0126-phase8-public-state-and-reversi-visualizer.md`
 
 - `(MODIFY) docs/specs/`: public spectator resource の discover / list / detail、terminal public replay、
   in-progress latest state、terminal / unavailable / retention の observable behavior を定義する。private
@@ -62,6 +76,8 @@ state cadence、viewer UX、stream transport は child plan で具体化し、�
 
 ### B. Reversi artifact-first replay viewer
 
+詳細 plan: `reversi-ai-arena/docs/exec-plan/todo/0001-phase8-public-state-and-reversi-visualizer-reversi-replay-viewer.md`
+
 - `(MODIFY) reversi-ai-arena/docs/specs/visualizer-architecture.md` と
   `(MODIFY) reversi-ai-arena/docs/specs/artifact-kifu-export.md`: browser replay input を A の terminal public replay payload と
   final exported snapshot から再構成する contract として固定する。Reversi の public replay format は lossless な
@@ -79,6 +95,9 @@ state cadence、viewer UX、stream transport は child plan で具体化し、�
 
 ### C. Public platform resource と Reversi viewer の接続
 
+Intentional parent: `docs/exec-plan/todo/0128-phase8-public-state-and-reversi-visualizer-platform-connection.md`。
+ai-arena の `0126` と reversi-ai-arena の `0001` を完了するまで、この section を implementation plan として実行してはならない。
+
 - `(MODIFY) ai-arena public contract tests` と `(MODIFY) reversi-ai-arena visualizer adapter/tests`: B の local artifact
   loader を A の terminal public replay resource へ接続し、同じ match の public metadata、replay format / version / payload、
   final exported snapshot、turn / result が shared fixture と一致することを示す。
@@ -88,6 +107,9 @@ state cadence、viewer UX、stream transport は child plan で具体化し、�
   として明記する。片方の未 merge branch を暗黙に参照しない。
 
 ### D. Event stream の評価と追加
+
+Intentional parent: `docs/exec-plan/todo/0129-phase8-public-state-and-reversi-visualizer-event-stream-evaluation.md`。
+`0128` の polling evidence を得るまで、この section を implementation plan として実行してはならない。
 
 - snapshot polling の load / latency / reconnect evidence を取得し、event stream が必要な場合だけ transport、cursor、
   ordering、retention、terminal close、backpressure を child plan で定義する。
