@@ -28,7 +28,8 @@ state cadence、viewer UX、stream transport は child plan で具体化し、�
   `internal/platform/service/worker.go:83-115`、`internal/platform/service/replay_inputs.go:38-170` で成立している。
   これらは public delivery の入力基盤であって、既存 operator route を public にしてよい根拠ではない。
 - `record.json` / `history.json` は replay / audit の source of truth だが public artifact ではない。
-  `docs/specs/platform-common-contract.md:312-335` が定める exported snapshot だけを public state の起点にする。
+  `docs/specs/platform-common-contract.md:312-335` が定める exported snapshot を latest public state の起点とし、
+  terminal replay には game が別に生成する public replay payload を使う。
 - `typespec/namespaces/public/api.tsp:1-3` は予約 namespace のみであり、public spectator API は未実装である。
 - Reversi は `reversi-ai-arena/docs/specs/visualizer-architecture.md:5-32` と
   `reversi-ai-arena/docs/specs/artifact-kifu-export.md:20-80` に artifact-first replay と accepted turn / explicit pass の
