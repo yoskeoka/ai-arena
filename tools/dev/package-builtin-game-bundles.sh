@@ -25,7 +25,7 @@ pack_game() {
   "game_id": "$game_id",
   "game_version": "$version",
   "rulesets": [{"ruleset_version": "$ruleset", "player_count": 2, "max_active_bots_per_owner": $max_active_bots_per_owner}],
-  "runtime": {"kind": "wasm-wasi", "module": "module.wasm", "args": $args}
+  "runtime": {"kind": "wasm-wasi", "module": "module.wasm", "args": $args, "memory_limit_pages": 128}
 }
 EOF
   pack_zip "$bundle_dir" "$name"
