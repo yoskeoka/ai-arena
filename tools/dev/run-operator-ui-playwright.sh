@@ -84,13 +84,17 @@ if [ -n "$lane" ]; then
       ;;
     ci-file-backed)
       set_default OPERATOR_UI_TEST_SCENARIO ci
-      set_default OPERATOR_UI_BACKEND_MODE file-backed
+      set_default OPERATOR_UI_BACKEND_MODE auth-mock
+      set_default OPERATOR_UI_TEST_AUTH 1
+      set_default OPERATOR_UI_FRONTEND_HOST localhost
       set_default OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD 0
       set_default OPERATOR_UI_PLAYWRIGHT_REPORTER dot
       ;;
     ci-postgres)
       set_default OPERATOR_UI_TEST_SCENARIO ci
       set_default OPERATOR_UI_BACKEND_MODE postgres
+      set_default OPERATOR_UI_TEST_AUTH 1
+      set_default OPERATOR_UI_FRONTEND_HOST localhost
       set_default OPERATOR_UI_EXPECT_DELEGATED_DOWNLOAD 1
       set_default OPERATOR_UI_PLAYWRIGHT_REPORTER dot
       ;;

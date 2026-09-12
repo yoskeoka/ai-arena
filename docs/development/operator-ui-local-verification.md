@@ -2,7 +2,7 @@
 
 `operator-ui/` の local browser verification は、repo-owned な Playwright harness を canonical とする。
 目的は human manual check 依存を減らし、AI agent でも contributor でも同じ command で
-`active/completed visibility`、`completed detail`、`artifact access entry`、preset endpoint 非呼び出し
+`active/completed visibility`、`completed detail`、`artifact access entry`、preset endpoint 非呼び出し、WASI bundle admission
 の回帰を自己確認できるようにすることにある。
 
 local verification は 3 lane を既存の repo-owned `pnpm` command で扱う。
@@ -29,6 +29,7 @@ local verification は 3 lane を既存の repo-owned `pnpm` command で扱う�
 - active matches panel に queued submission が表示されること
 - completed matches panel と completed detail が visible であること
 - completed detail の `result_summary` と delegated artifact access entry が表示されること
+- filesystem または S3-compatible artifact backend で、echo-count と janken の generated `arena-bundle/v1` game / AI ZIP を upload し、activation、bot revision、manual request、worker completion、ranking まで到達すること
 
 この local verification が確認しないもの:
 

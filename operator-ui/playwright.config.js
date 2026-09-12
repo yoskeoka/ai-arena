@@ -15,6 +15,7 @@ const usesRemoteServers = testScenario === "remote";
 const authEnabled = process.env.OPERATOR_UI_TEST_AUTH === "1";
 const remoteBaseURL = process.env.OPERATOR_UI_BASE_URL;
 const captureArtifacts = process.env.OPERATOR_UI_CAPTURE_ARTIFACTS === "1";
+const bundleFixtureDir = process.env.OPERATOR_UI_BUNDLE_FIXTURE_DIR ?? "../.local/operator-ui-game-bundles";
 const reuseManagedServers = !process.env.CI && !authEnabled;
 
 if (usesRemoteServers && !remoteBaseURL) {
@@ -50,6 +51,7 @@ export default defineConfig({
           reuseExistingServer: usesManagedBackend ? reuseManagedServers : !process.env.CI,
           timeout: 120_000,
           url: `http://127.0.0.1:${backendPort}/healthz`,
+          env: usesManagedBackend ? { ...process.env, OPERATOR_UI_BUNDLE_FIXTURE_DIR: bundleFixtureDir } : process.env,
         },
         {
           command:

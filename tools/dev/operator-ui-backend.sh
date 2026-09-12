@@ -44,9 +44,15 @@ mkdir -p "$GOPATH" "$GOMODCACHE" "$GOCACHE"
 if [ -n "${OPERATOR_UI_TEST_SCENARIO:-}" ]; then
   game_bundle_dir="${OPERATOR_UI_GAME_BUNDLE_DIR:-$repo_root/.local/operator-ui-game-bundles}"
   "$repo_root/tools/dev/package-builtin-game-bundles.sh" "$game_bundle_dir"
-  export OPERATOR_UI_GAME_BUNDLE="${OPERATOR_UI_GAME_BUNDLE:-$game_bundle_dir/echo-count.arena-bundle.zip}"
-  export OPERATOR_UI_AI_BUNDLE="${OPERATOR_UI_AI_BUNDLE:-$game_bundle_dir/echo-ai.arena-bundle.zip}"
-  export OPERATOR_UI_AI_REVISION_BUNDLE="${OPERATOR_UI_AI_REVISION_BUNDLE:-$game_bundle_dir/echo-ai-revision.arena-bundle.zip}"
+  export OPERATOR_UI_BUNDLE_FIXTURE_DIR="${OPERATOR_UI_BUNDLE_FIXTURE_DIR:-$game_bundle_dir}"
+fi
+
+if [ "${OPERATOR_UI_TEST_AUTH:-0}" = "1" ]; then
+  export ARENA_GITHUB_OAUTH_CLIENT_ID="${ARENA_GITHUB_OAUTH_CLIENT_ID:-playwright-client-id}"
+  export ARENA_GITHUB_OAUTH_CLIENT_SECRET="${ARENA_GITHUB_OAUTH_CLIENT_SECRET:-playwright-client-secret}"
+  export ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL="${ARENA_AUTH_GITHUB_PROVIDER_OAUTH_BASE_URL:-http://127.0.0.1:${auth_mock_port}}"
+  export ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL="${ARENA_AUTH_GITHUB_PROVIDER_API_BASE_URL:-http://127.0.0.1:${auth_mock_port}}"
+  export ARENA_AUTH_ALLOWED_RETURN_ORIGINS="${ARENA_AUTH_ALLOWED_RETURN_ORIGINS:-http://${frontend_host}:${frontend_port},http://127.0.0.1:${frontend_port},http://localhost:${frontend_port},http://127.0.0.1:5173,http://localhost:5173}"
 fi
 
 echo "operator-ui backend mode: $mode"
