@@ -22,6 +22,7 @@ type Layout struct {
 	ExportedSnapshotPath string
 	HistoryPath          string
 	ResultSummaryPath    string
+	PublicReplayPath     string
 }
 
 // PathRefs stores match-dir-relative references used by result-summary.json.
@@ -58,6 +59,7 @@ func NewLayout(outputDir, matchID string) Layout {
 		ExportedSnapshotPath: filepath.Join(matchDir, "exported-snapshot.json"),
 		HistoryPath:          filepath.Join(matchDir, "history.json"),
 		ResultSummaryPath:    filepath.Join(matchDir, "result-summary.json"),
+		PublicReplayPath:     filepath.Join(matchDir, "public-replay.json"),
 	}
 }
 

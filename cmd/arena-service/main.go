@@ -216,6 +216,7 @@ type cliApp struct {
 	artifactAdmission *service.ArtifactAdmissionService
 	bundles           service.BundleStore
 	botOwnership      service.BotOwnershipStore
+	publicStates      service.PublicStateStore
 	registry          *registry.Registry
 	baseDir           string
 	timeout           time.Duration
@@ -305,6 +306,16 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	if err != nil {
 		return nil, err
 	}
+	publicStates := service.PublicStateStore(service.NewInMemoryPublicStateStore())
+	var closePublicStates func()
+	if strings.TrimSpace(postgresDSN) != "" {
+		postgresPublicStates, stateErr := service.NewPostgresPublicStateStore(context.Background(), postgresDSN)
+		if stateErr != nil {
+			return nil, stateErr
+		}
+		publicStates = postgresPublicStates
+		closePublicStates = postgresPublicStates.Close
+	}
 	artifactAdmission, err := service.NewArtifactAdmissionService(runtime.bundles, admissionRegistry)
 	if err != nil {
 		return nil, err
@@ -351,6 +362,9 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	closeAuth = false
 	previousClose := closeFn
 	closeFn = func() {
+		if closePublicStates != nil {
+			closePublicStates()
+		}
 		closeDescriptor = false
 		if descriptorStore != nil {
 			descriptorStore.Close()
@@ -372,6 +386,7 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		artifactAdmission: artifactAdmission,
 		bundles:           runtime.bundles,
 		botOwnership:      botOwnership,
+		publicStates:      publicStates,
 		registry:          admissionRegistry,
 		baseDir:           baseDir,
 		timeout:           matchTimeout,
@@ -518,6 +533,7 @@ func (a *cliApp) newWorker() (*service.Worker, error) {
 		return nil, err
 	}
 	invoker.WithBundleStore(a.bundles)
+	invoker.WithPublicStateStore(a.publicStates)
 	return service.NewWorker(a.queue, invoker, a.persister, a.rankings)
 }
 
@@ -565,9 +581,20 @@ func (a *cliApp) serve(ctx context.Context, listenAddr string, workerID string, 
 	api.WithArtifactAdmission(a.artifactAdmission)
 	api.WithBotOwnership(a.botOwnership)
 	api.WithWorkerReadiness(loop.Ready)
+	publicQueries, err := service.NewPublicQueryService(a.queue, a.publicStates, a.reader)
+	if err != nil {
+		return err
+	}
+	publicAPI, err := service.NewPublicAPI(publicQueries)
+	if err != nil {
+		return err
+	}
+	root := http.NewServeMux()
+	root.Handle("/api/v1-alpha/public/", publicAPI.Handler())
+	root.Handle("/", api.Handler())
 	server := &http.Server{
 		Addr:              listenAddr,
-		Handler:           api.Handler(),
+		Handler:           root,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

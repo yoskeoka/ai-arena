@@ -25,6 +25,12 @@ import type {
   MatchRequestParticipant,
   PathRefs,
   Placement,
+  PublicMatch,
+  PublicMatchDetail,
+  PublicMatchListResponse,
+  PublicReplayMetadata,
+  PublicReplayResponse,
+  PublicStateResponse,
   RankingEntry,
   RankingScope,
   RankingSnapshot,
@@ -1220,4 +1226,140 @@ export function decodeBase64(value: string): Uint8Array | undefined {
   }
 
   return _transformedArray as any;
+}export function jsonPublicMatchListResponseToTransportTransform(
+  input_?: PublicMatchListResponse | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    items: jsonArrayPublicMatchToTransportTransform(input_.items)
+  }!;
+}export function jsonPublicMatchListResponseToApplicationTransform(
+  input_?: any,
+): PublicMatchListResponse {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    items: jsonArrayPublicMatchToApplicationTransform(input_.items)
+  }!;
+}export function jsonArrayPublicMatchToTransportTransform(
+  items_?: Array<PublicMatch> | null,
+): any {
+  if(!items_) {
+    return items_ as any;
+  }
+  const _transformedArray = [];
+
+  for (const item of items_ ?? []) {
+    const transformedItem = jsonPublicMatchToTransportTransform(item as any);
+    _transformedArray.push(transformedItem);
+  }
+
+  return _transformedArray as any;
+}export function jsonArrayPublicMatchToApplicationTransform(
+  items_?: any,
+): Array<PublicMatch> {
+  if(!items_) {
+    return items_ as any;
+  }
+  const _transformedArray = [];
+
+  for (const item of items_ ?? []) {
+    const transformedItem = jsonPublicMatchToApplicationTransform(item as any);
+    _transformedArray.push(transformedItem);
+  }
+
+  return _transformedArray as any;
+}export function jsonPublicMatchToTransportTransform(
+  input_?: PublicMatch | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    match_id: input_.matchId,selected_run_id: input_.selectedRunId,game: jsonGameMetadataToTransportTransform(input_.game),lifecycle_state: input_.lifecycleState
+  }!;
+}export function jsonPublicMatchToApplicationTransform(
+  input_?: any,
+): PublicMatch {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    matchId: input_.match_id,selectedRunId: input_.selected_run_id,game: jsonGameMetadataToApplicationTransform(input_.game),lifecycleState: input_.lifecycle_state
+  }!;
+}export function jsonPublicMatchDetailToTransportTransform(
+  input_?: PublicMatchDetail | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    replay: jsonPublicReplayMetadataToTransportTransform(input_.replay),match_id: input_.matchId,selected_run_id: input_.selectedRunId,game: jsonGameMetadataToTransportTransform(input_.game),lifecycle_state: input_.lifecycleState
+  }!;
+}export function jsonPublicMatchDetailToApplicationTransform(
+  input_?: any,
+): PublicMatchDetail {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    replay: jsonPublicReplayMetadataToApplicationTransform(input_.replay),matchId: input_.match_id,selectedRunId: input_.selected_run_id,game: jsonGameMetadataToApplicationTransform(input_.game),lifecycleState: input_.lifecycle_state
+  }!;
+}export function jsonPublicReplayMetadataToTransportTransform(
+  input_?: PublicReplayMetadata | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    availability: input_.availability,format: input_.format,version: input_.version,size_bytes: input_.sizeBytes,digest: input_.digest
+  }!;
+}export function jsonPublicReplayMetadataToApplicationTransform(
+  input_?: any,
+): PublicReplayMetadata {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    availability: input_.availability,format: input_.format,version: input_.version,sizeBytes: input_.size_bytes,digest: input_.digest
+  }!;
+}export function jsonPublicStateResponseToTransportTransform(
+  input_?: PublicStateResponse | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    availability: input_.availability,state_version: input_.stateVersion,turn: input_.turn,public_state: input_.publicState,retry_after_ms: input_.retryAfterMs,match_id: input_.matchId,selected_run_id: input_.selectedRunId,game: jsonGameMetadataToTransportTransform(input_.game),lifecycle_state: input_.lifecycleState
+  }!;
+}export function jsonPublicStateResponseToApplicationTransform(
+  input_?: any,
+): PublicStateResponse {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    availability: input_.availability,stateVersion: input_.state_version,turn: input_.turn,publicState: input_.public_state,retryAfterMs: input_.retry_after_ms,matchId: input_.match_id,selectedRunId: input_.selected_run_id,game: jsonGameMetadataToApplicationTransform(input_.game),lifecycleState: input_.lifecycle_state
+  }!;
+}export function jsonPublicReplayResponseToTransportTransform(
+  input_?: PublicReplayResponse | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    availability: input_.availability,format: input_.format,version: input_.version,payload: input_.payload
+  }!;
+}export function jsonPublicReplayResponseToApplicationTransform(
+  input_?: any,
+): PublicReplayResponse {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    availability: input_.availability,format: input_.format,version: input_.version,payload: input_.payload
+  }!;
 }
