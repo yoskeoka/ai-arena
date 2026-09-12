@@ -44,7 +44,7 @@ func TestPublicAPIStateIsAnonymousVersionedAndExportedOnly(t *testing.T) {
 	}
 
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/v1-alpha/public/matches/match-1/state", nil)
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1-alpha/public/matches/match-1/state", nil)
 	request.Header.Set("Origin", "https://viewer.example")
 	api.Handler().ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
@@ -83,12 +83,12 @@ func TestPublicAPIRejectsNonGETAndDoesNotExposeQueuedMatch(t *testing.T) {
 	}
 
 	post := httptest.NewRecorder()
-	api.Handler().ServeHTTP(post, httptest.NewRequest(http.MethodPost, "/api/v1-alpha/public/matches", nil))
+	api.Handler().ServeHTTP(post, httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1-alpha/public/matches", nil))
 	if post.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("POST status = %d", post.Code)
 	}
 	notFound := httptest.NewRecorder()
-	api.Handler().ServeHTTP(notFound, httptest.NewRequest(http.MethodGet, "/api/v1-alpha/public/matches/match-queued", nil))
+	api.Handler().ServeHTTP(notFound, httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1-alpha/public/matches/match-queued", nil))
 	if notFound.Code != http.StatusNotFound {
 		t.Fatalf("queued status = %d", notFound.Code)
 	}
