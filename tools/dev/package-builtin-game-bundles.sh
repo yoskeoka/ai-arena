@@ -55,7 +55,7 @@ pack_zip() {
   (cd "$bundle_dir" && zip -q -X "$output_dir/$name.arena-bundle.zip" manifest.json module.wasm)
 }
 
-pack_game "echo-count" "./cmd/echo-count-gamemaster" "echo-count" "2.0.0" "phase2-simultaneous-3turn" "2" '["--game-version", "2.0.0", "--ruleset", "phase2-simultaneous-3turn"]'
+pack_game "echo-count" "./cmd/echo-count-gamemaster" "echo-count" "2.0.0" "phase2-simultaneous-3turn" "2" '["module.wasm", "--game-version", "2.0.0", "--ruleset", "phase2-simultaneous-3turn"]'
 pack_game "janken" "./cmd/janken-gamemaster" "janken" "2.1.0" "regular" "2" '[]'
 
 pack_ai "echo-ai-alpha" "./testdata/ai/echo/echo-ai" "echo-ai-alpha" "echo-count" "2.0.0"
