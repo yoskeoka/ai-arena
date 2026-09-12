@@ -468,7 +468,7 @@ ownership timeout は queue safety failure として扱い、lease expiry によ
 を確認対象とするが、production release workflow による external readiness verification と automatic
 rollback は `0117-online-release-production-readiness-rollback` の責務である。
 
-`online-release-staging-verify` は deploy 済みの operator flow を diagnostic preset で確認する自動 lane
+`online-release-staging-verify` は deploy 済みの operator flow を registered scope と admitted bot で確認する自動 lane
 であり、特定ゲームの公開 release asset を download、upload、register する release gate ではない。
 Reversi game の登録可否は、人間が local または staging 環境で必要な bundle を選んで確認する運用上の
 受け入れ項目として扱う。
@@ -712,7 +712,7 @@ provider dashboard、secret manager、または Access issuance flow にだけ�
 1. staging backend health を確認する
    - `curl -i https://ai-arena-staging-p4ml.onrender.com/healthz`
 2. remote operator flow が CORS / 5xx で崩れていないかを確認する
-   - `curl -i -X OPTIONS https://ai-arena-staging-p4ml.onrender.com/api/v1/preset-matches -H 'Origin: https://staging.ai-arena.pages.dev' -H 'Access-Control-Request-Method: POST'`
+   - `curl -i -X OPTIONS https://ai-arena-staging-p4ml.onrender.com/api/v1/match-requests -H 'Origin: https://staging.ai-arena.pages.dev' -H 'Access-Control-Request-Method: POST'`
 3. Render deploy log で relation not found や startup exit を確認する
 4. Neon staging DB に direct/admin DSN で接続し、対象 table が存在するか確認する
    - `psql "$NEON_STAGING_MIGRATION_DSN" -c '\dt service_queue_records'`

@@ -2,7 +2,7 @@
 
 `operator-ui/` の local browser verification は、repo-owned な Playwright harness を canonical とする。
 目的は human manual check 依存を減らし、AI agent でも contributor でも同じ command で
-`active/completed visibility`、`completed detail`、`artifact access entry`、preset endpoint 非呼び出し、WASI bundle admission
+`active/completed visibility`、`completed detail`、`artifact access entry`、retired endpoint 非呼び出し、WASI bundle admission
 の回帰を自己確認できるようにすることにある。
 
 local verification は 3 lane を既存の repo-owned `pnpm` command で扱う。
@@ -24,8 +24,8 @@ local verification は 3 lane を既存の repo-owned `pnpm` command で扱う�
 - backend の `/healthz` 応答。HTTP status は `200` で、fixture は `api=OK` / `worker=OK` を返す
 - real service lane では worker ownership と initial recovery 前の `worker=NOT_READY` が liveness を壊さず、
   readiness 完了後に `worker=OK` になること
-- overview が preset catalog / queue action を表示しないこと
-- overview の load と既存 run observation が `/api/v1/preset-matches` を呼ばないこと
+- overview が retired queue action を表示しないこと
+- overview の load と既存 run observation が retired endpoint を呼ばないこと
 - active matches panel に queued submission が表示されること
 - completed matches panel と completed detail が visible であること
 - completed detail の `result_summary` と delegated artifact access entry が表示されること
