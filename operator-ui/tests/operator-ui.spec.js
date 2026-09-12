@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 
 test("operator route alias serves the same operator surface", async ({ page }) => {
+  const presetRequests = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/v1/preset-matches") {
+      presetRequests.push(request);
+    }
+  });
+
   await page.goto("/operator");
 
   await expect(page.getByRole("heading", { name: "AI Arena Operator Console" })).toBeVisible();
@@ -10,10 +17,12 @@ test("operator route alias serves the same operator surface", async ({ page }) =
   await expect(page.getByTestId("operator-nav-submissions")).toBeVisible();
   await expect(page.getByTestId("operator-nav-requests")).toBeVisible();
   await expect(page.getByTestId("operator-nav-rankings")).toBeVisible();
-  await expect(page.getByTestId("operator-panel-preset-queue")).toBeVisible();
   await expect(page.getByTestId("operator-panel-active-matches")).toBeVisible();
   await expect(page.getByTestId("operator-panel-completed-matches")).toBeVisible();
   await expect(page.getByTestId("operator-panel-completed-detail")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Preset Queue", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Echo Reference", { exact: true })).toHaveCount(0);
+  expect(presetRequests).toHaveLength(0);
 
   await page.getByTestId("operator-nav-invites").click();
   await expect(page.getByTestId("operator-form-invites")).toBeVisible();
@@ -26,15 +35,21 @@ test("operator route alias serves the same operator surface", async ({ page }) =
   await expect(page.getByRole("button", { name: "Create AI submission" })).toHaveCount(0);
 });
 
-test("local operator UI browser lane covers queue, active, completed detail, and artifact access", async ({ page, request }) => {
+test("local operator UI browser lane covers active, completed detail, artifact access, and no preset request", async ({ page, request }) => {
   const health = await request.get("http://127.0.0.1:10000/healthz");
   expect(health.status()).toBe(200);
   expect(await health.json()).toEqual({ api: "OK", worker: "OK" });
 
+  const presetRequests = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/v1/preset-matches") {
+      presetRequests.push(request);
+    }
+  });
+
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "AI Arena Operator Console" })).toBeVisible();
-  await expect(page.getByTestId("operator-panel-preset-queue")).toBeVisible();
   await expect(page.getByTestId("operator-panel-active-matches")).toBeVisible();
   await expect(page.getByTestId("operator-panel-completed-matches")).toBeVisible();
   await expect(page.getByTestId("operator-panel-completed-detail")).toBeVisible();
@@ -42,6 +57,7 @@ test("local operator UI browser lane covers queue, active, completed detail, and
   const activePanel = page.getByTestId("operator-panel-active-matches");
   const completedPanel = page.getByTestId("operator-panel-completed-matches");
   const completedRow = completedPanel.getByTestId("match-row-run-completed-local");
+  expect(presetRequests).toHaveLength(0);
 
   await expect(activePanel.getByTestId("match-row-run-active-queued")).toBeVisible();
   await expect(completedRow).toBeVisible();
@@ -59,13 +75,6 @@ test("local operator UI browser lane covers queue, active, completed detail, and
     "href",
     "http://127.0.0.1:10000/fixture-artifacts/result-summary.json",
   );
-
-  const initialActiveRows = await activePanel.locator('[data-testid^="match-row-"]').count();
-  await page.getByTestId("preset-queue-action-echo-reference").click();
-
-  await expect
-    .poll(async () => activePanel.locator('[data-testid^="match-row-"]').count())
-    .toBeGreaterThan(initialActiveRows);
 
   await page.goto("/operator/runs/run-completed-local");
   const runDetail = page.getByTestId("match-detail-run-completed-local");

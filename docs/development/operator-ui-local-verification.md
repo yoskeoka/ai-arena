@@ -2,7 +2,7 @@
 
 `operator-ui/` の local browser verification は、repo-owned な Playwright harness を canonical とする。
 目的は human manual check 依存を減らし、AI agent でも contributor でも同じ command で
-`preset queue`、`active/completed visibility`、`completed detail`、`artifact access entry`
+`active/completed visibility`、`completed detail`、`artifact access entry`、preset endpoint 非呼び出し
 の回帰を自己確認できるようにすることにある。
 
 local verification は 3 lane を既存の repo-owned `pnpm` command で扱う。
@@ -11,7 +11,7 @@ local verification は 3 lane を既存の repo-owned `pnpm` command で扱う�
   `0068` の軽量 lane。fixture backend を起動し、最小回帰を素早く確認する
 - real local inspection/capture lane:
   `0070` の実運用寄り lane。actual `arena-service` と actual `operator-ui` を起動し、
-  preset queue から completed detail までを確認し、review artifact を保存する
+  active/completed run と completed detail までを確認し、review artifact を保存する
 - auth-enabled GitHub regression lane:
   repo-owned provider test double つき auth-enabled backend を起動し、
   `/login -> provider form -> callback -> session cookie -> /operator -> logout`
@@ -24,7 +24,8 @@ local verification は 3 lane を既存の repo-owned `pnpm` command で扱う�
 - backend の `/healthz` 応答。HTTP status は `200` で、fixture は `api=OK` / `worker=OK` を返す
 - real service lane では worker ownership と initial recovery 前の `worker=NOT_READY` が liveness を壊さず、
   readiness 完了後に `worker=OK` になること
-- preset queue panel が visible で、1 action で enqueue できること
+- overview が preset catalog / queue action を表示しないこと
+- overview の load と既存 run observation が `/api/v1/preset-matches` を呼ばないこと
 - active matches panel に queued submission が表示されること
 - completed matches panel と completed detail が visible であること
 - completed detail の `result_summary` と delegated artifact access entry が表示されること
@@ -159,11 +160,9 @@ CI と同じ 5432 port の外部 Postgres を使いたい場合は、
 browser automation は role / visible text を第一選択とする。
 ただし次の `data-testid` は stable contract として利用してよい。
 
-- `operator-panel-preset-queue`
 - `operator-panel-active-matches`
 - `operator-panel-completed-matches`
 - `operator-panel-completed-detail`
-- `preset-queue-action-<preset-id>`
 - `match-row-<run-id>`
 - `match-detail-<run-id>`
 - `artifact-entry-<artifact-kind>`

@@ -13,8 +13,7 @@ export function OperatorHeader({ baseUrl, onBaseUrlChange, providerLogin, onLogo
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-teal">Phase 6 Operator Surface</p>
           <h1 className="text-3xl font-semibold tracking-tight">AI Arena Minimal Operator UI</h1>
           <p className="max-w-3xl text-sm text-black/70">
-            Active and completed match polling, preset queue actions, and delegated artifact access for the first
-            online confirmation lane.
+            Active and completed match polling and delegated artifact access for the first online confirmation lane.
           </p>
         </div>
         <div className="flex min-w-80 flex-col gap-3 text-sm">

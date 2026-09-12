@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { MatchDetailResponse, OperatorApiClient } from "../../lib/operatorApiClient";
 import { CompletedDetailPanel } from "./CompletedDetailPanel";
-import { EnqueueState, isAbortError, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
+import { ActionState, isAbortError, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
 
 type RunDetailPageProps = {
   baseUrl: string;
@@ -14,7 +14,7 @@ export function RunDetailPage({ baseUrl, runId }: RunDetailPageProps) {
   const [detail, setDetail] = useState<MatchDetailResponse>();
   const [detailState, setDetailState] = useState<LoadState>("loading");
   const [detailError, setDetailError] = useState<string>();
-  const [actionState, setActionState] = useState<EnqueueState>("idle");
+  const [actionState, setActionState] = useState<ActionState>("idle");
   const [actionError, setActionError] = useState<string>();
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -99,7 +99,7 @@ function RunActionButtons({
   onAction,
 }: {
   detail: MatchDetailResponse;
-  actionState: EnqueueState;
+  actionState: ActionState;
   onAction: (action: "cancel" | "retry" | "rerun" | "promote") => void;
 }) {
   const actions: Array<{ kind: "cancel" | "retry" | "rerun" | "promote"; label: string }> = [];

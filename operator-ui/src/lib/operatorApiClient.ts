@@ -16,7 +16,6 @@ import {
   jsonMatchRequestCreateRequestToTransportTransform,
   jsonMatchRequestListResponseToApplicationTransform,
   jsonMatchRequestToApplicationTransform,
-  jsonPresetMatchRequestToTransportTransform,
   jsonResultListItemToApplicationTransform,
   jsonRunListResponseToApplicationTransform,
   jsonSessionStatusResponseToApplicationTransform,
@@ -38,7 +37,6 @@ import type {
   MatchRequest,
   MatchRequestCreateRequest,
   MatchRequestParticipant,
-  PresetMatchRequest,
   RankingScope,
   ResultListItem,
   SessionStatusResponse,
@@ -247,17 +245,6 @@ export class OperatorApiClient {
     });
     const response = await this.get(`/api/v1/rankings?${params.toString()}`, signal);
     return jsonStoredRankingSnapshotToApplicationTransform(response.body)!;
-  }
-
-  async enqueuePreset(presetId: string, signal?: AbortSignal): Promise<ResultListItem> {
-    const body: PresetMatchRequest = { presetId };
-    const response = await this.post(
-      "/api/v1/preset-matches",
-      jsonPresetMatchRequestToTransportTransform(body),
-      [201],
-      signal,
-    );
-    return jsonResultListItemToApplicationTransform(response.body)!;
   }
 
   async cancelRun(runId: string, signal?: AbortSignal): Promise<ResultListItem> {

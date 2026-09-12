@@ -1,5 +1,5 @@
 export type LoadState = "idle" | "loading" | "ready" | "error";
-export type EnqueueState = "idle" | "submitting" | "success" | "error";
+export type ActionState = "idle" | "submitting" | "success" | "error";
 
 export function defaultBaseUrl() {
   const envValue = import.meta.env.VITE_OPERATOR_API_BASE_URL;
