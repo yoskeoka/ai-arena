@@ -1,6 +1,8 @@
 module github.com/yoskeoka/ai-arena
 
-go 1.26
+go 1.27
+
+toolchain go1.27.1
 
 tool (
 	github.com/mgechev/revive
