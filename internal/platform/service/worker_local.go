@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/yoskeoka/ai-arena/artifactbundle"
 	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
@@ -118,6 +119,16 @@ func (i *LocalRunnerInvoker) loadPlayersAndSessions(ctx context.Context, submiss
 	sessions := make(map[string]match.PlayerSession, len(submission.Players))
 	for _, submitted := range submission.Players {
 		if submitted.ArtifactID != "" && i.bundles != nil {
+			bundleBytes, err := i.bundles.Read(ctx, submitted.ArtifactID)
+			if err != nil {
+				closeSessions(sessions)
+				return nil, nil, fmt.Errorf("service: %s bundle read failed: %w", submitted.PlayerID, err)
+			}
+			bundle, err := artifactbundle.Read(bundleBytes)
+			if err != nil {
+				closeSessions(sessions)
+				return nil, nil, fmt.Errorf("service: %s bundle invalid: %w", submitted.PlayerID, err)
+			}
 			dir, err := os.MkdirTemp("", "ai-arena-ai-")
 			if err != nil {
 				closeSessions(sessions)
@@ -129,7 +140,14 @@ func (i *LocalRunnerInvoker) loadPlayersAndSessions(ctx context.Context, submiss
 				closeSessions(sessions)
 				return nil, nil, fmt.Errorf("service: %s bundle materialize failed: %w", submitted.PlayerID, err)
 			}
-			cfg := runtime.Config{Kind: runtime.KindWASMWASI, ModulePath: module, Dir: dir, StderrLimitBytes: i.stderrLimitBytes}
+			cfg := runtime.Config{
+				Kind:             runtime.KindWASMWASI,
+				ModulePath:       module,
+				Dir:              dir,
+				Args:             append([]string(nil), bundle.Manifest.Runtime.Args...),
+				MemoryLimitPages: bundle.Manifest.Runtime.MemoryLimitPages,
+				StderrLimitBytes: i.stderrLimitBytes,
+			}
 			adapter, err := runtime.Start(ctx, cfg)
 			if err != nil {
 				_ = os.RemoveAll(dir)

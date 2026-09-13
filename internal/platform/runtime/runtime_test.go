@@ -187,6 +187,29 @@ func TestStartWASMWASIReturnsMalformedOutput(t *testing.T) {
 	}
 }
 
+func TestStartWASMWASIReturnsDiagnosticForPreResponseExit(t *testing.T) {
+	modulePath := buildWASMTestBot(t)
+
+	adapter, err := Start(context.Background(), Config{
+		Kind:       KindWASMWASI,
+		ModulePath: modulePath,
+		Env:        []string{"BOT_MODE=exit-clean"},
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = adapter.Close(closeCtx)
+	}()
+
+	msg := <-adapter.Incoming()
+	if msg.RuntimeError != "module exited before response (exit code 0)" {
+		t.Fatalf("runtime diagnostic = %q", msg.RuntimeError)
+	}
+}
+
 func TestEffectiveWASMMemoryLimitPagesDefaultsWhenUnset(t *testing.T) {
 	if got := effectiveWASMMemoryLimitPages(Config{}); got != DefaultWASMMemoryLimitPages {
 		t.Fatalf("effectiveWASMMemoryLimitPages() = %d, want %d", got, DefaultWASMMemoryLimitPages)

@@ -10,6 +10,6 @@
     "kind": "wasm-wasi",
     "module": "./janken-go-wasm-ai.wasm",
     "args": ["./janken-go-wasm-ai.wasm"],
-    "memory_limit_pages": 64
+    "memory_limit_pages": 1024
   }
 }

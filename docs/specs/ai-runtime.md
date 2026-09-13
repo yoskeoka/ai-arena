@@ -112,6 +112,17 @@ online service の admission validation が local artifact locator を受ける�
 - runtime kind が subprocess でも WASM でも `stderr` は debug / audit 用の自由ログとして扱う
 - transport 継続不能は runtime kind を問わず `runtime-stopped` として監査する
 
+WASI module が response を返す前に instantiate failure または exit を起こした場合、platform は
+`runtime-stopped` として扱い、captured stderr と正規化した exit cause を run / worker の failure
+evidence として残す。exit code 0 であっても response 前の exit は
+`module exited before response (exit code 0)` のように診断可能な原因を持たなければならず、channel
+close だけで原因を失ってはならない。
+
+stdout から完全な response を decode 済みなら、その後の clean exit は response delivery を上書き
+してはならない。response 後の abnormal exit も既に返した response を failure に置換しないが、
+正規化した exit cause は structured audit event に残す。既存の `runtime_exited` event payload は
+replay 互換のため変更せず、exit cause / stderr diagnostic は別 event として append する。
+
 ## Sandbox と Host Capability
 
 deny-by-default を基本方針とする。

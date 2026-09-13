@@ -51,6 +51,7 @@ type Result struct {
 	FailureReason          contract.FailureReason
 	Payload                json.RawMessage
 	IgnoredLateResponseIDs []string
+	RuntimeError           string
 }
 
 // Session manages one player's request/response lifecycle over a Transport.
@@ -129,6 +130,9 @@ func (s *Session) call(ctx context.Context, req Request) Result {
 		case incoming, ok := <-s.transport.Incoming():
 			if !ok {
 				return Result{Status: StatusNoAction, FailureReason: ReasonRuntimeStop}
+			}
+			if incoming.RuntimeError != "" {
+				return Result{Status: StatusNoAction, FailureReason: ReasonRuntimeStop, RuntimeError: incoming.RuntimeError}
 			}
 			if incoming.Err != nil {
 				if s.onMalformed != nil {
