@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -72,12 +74,25 @@ func (p *S3TerminalPersister) Persist(ctx context.Context, submission MatchSubmi
 		playerStderrPaths[player.PlayerID] = locator
 	}
 
-	return TerminalArtifacts{
+	terminal := TerminalArtifacts{
 		MatchDir:          p.store.ObjectLocator(matchKeyPrefix),
 		RecordPath:        recordPath,
 		ResultSummaryPath: resultSummaryPath,
 		PlayerStderrPaths: playerStderrPaths,
-	}, nil
+	}
+	if replay := result.Record.PublicReplay; replay != nil && len(replay.Payload) <= maxPublicReplayBytes {
+		locator, putErr := p.store.PutBytes(ctx, path.Join(matchKeyPrefix, "public-replay.json"), replay.Payload, "application/json")
+		if putErr != nil {
+			return TerminalArtifacts{}, putErr
+		}
+		digest := sha256.Sum256(replay.Payload)
+		terminal.PublicReplayPath = locator
+		terminal.PublicReplayFormat = replay.Format
+		terminal.PublicReplayVersion = replay.Version
+		terminal.PublicReplaySize = int64(len(replay.Payload))
+		terminal.PublicReplayDigest = hex.EncodeToString(digest[:])
+	}
+	return terminal, nil
 }
 
 func (p *S3TerminalPersister) putJSON(ctx context.Context, key string, value any) (string, error) {

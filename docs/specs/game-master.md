@@ -230,6 +230,14 @@ terminal / score update -> visible-state refresh の順を deterministic に適�
 - 現時点の match result を返す
 - `NextDecisionStep = null` 後は最終結果と一致しなければならない
 
+### `CurrentPublicReplay`
+
+- terminal の completed match でのみ、game が生成した public replay を返してよい optional API とする
+- payload は JSON の opaque bytes、`format`、`version` を持つ。platform は payload を private record / history から
+  生成、filter、再構成してはならない
+- 未対応、非 terminal、または public replay がない game master は unavailable を返してよい。platform はそれを
+  `replay_unavailable` として公開し、private failure detail を返してはならない
+
 ### `Shutdown`
 
 - game master の後始末を行う
@@ -281,6 +289,7 @@ local subprocess adapter では以下の method 名を使う。これは transpo
 - `current_snapshot`
 - `current_exported_snapshot`
 - `current_result`
+- `current_public_replay`（optional）
 - `shutdown`
 
 これらの request / response payload は上記論理 API と 1 対 1 に対応する。
@@ -292,5 +301,6 @@ payload DTO と NDJSON framing helper の正本は `github.com/yoskeoka/ai-arena
 - `InitializeMatch` で player 初期状態を返せる
 - `NextDecisionStep` と `ApplyDecisionResults` で match loop を進められる
 - `CurrentSnapshot` / `CurrentExportedSnapshot` / `CurrentResult` が常に取得できる
+- public replay を提供する game では、completed terminal state で `CurrentPublicReplay` の format/version/JSON payload を返せる
 - `Shutdown` が呼ばれても異常終了しない
 - local subprocess でも in-process でも、同じ game 固有 spec に従う

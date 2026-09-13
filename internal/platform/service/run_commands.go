@@ -70,33 +70,9 @@ func (s *RunCommandService) Rerun(ctx context.Context, runID string) (QueueRecor
 
 // Promote marks one completed run as the official run for its logical match.
 func (s *RunCommandService) Promote(ctx context.Context, runID string) (QueueRecord, error) {
-	target, err := s.queue.Get(ctx, strings.TrimSpace(runID))
+	target, err := s.queue.Promote(ctx, strings.TrimSpace(runID))
 	if err != nil {
 		return QueueRecord{}, err
-	}
-	if target.State != StateCompleted {
-		return QueueRecord{}, fmt.Errorf("%w: service: only completed runs can be promoted", ErrConflict)
-	}
-
-	records, err := s.queue.List(ctx)
-	if err != nil {
-		return QueueRecord{}, err
-	}
-	for _, record := range records {
-		if record.Submission.MatchID != target.Submission.MatchID {
-			continue
-		}
-		next := cloneQueueRecord(record)
-		next.Submission.Official = record.Submission.RunID == target.Submission.RunID
-		if next.Submission.Official == record.Submission.Official {
-			continue
-		}
-		if err := s.queue.Update(ctx, next); err != nil {
-			return QueueRecord{}, err
-		}
-		if next.Submission.RunID == target.Submission.RunID {
-			target = next
-		}
 	}
 
 	if s.rankings != nil {

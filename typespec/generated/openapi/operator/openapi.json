@@ -6,6 +6,105 @@
   },
   "tags": [],
   "paths": {
+    "/api/v1-alpha/public/matches": {
+      "get": {
+        "operationId": "Public_listMatches",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Public.PublicMatchListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1-alpha/public/matches/{match_id}": {
+      "get": {
+        "operationId": "Public_getMatch",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Public.PublicMatchDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1-alpha/public/matches/{match_id}/replay": {
+      "get": {
+        "operationId": "Public_getReplay",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Public.PublicReplayResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1-alpha/public/matches/{match_id}/state": {
+      "get": {
+        "operationId": "Public_getLatestState",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Public.PublicStateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai-bundles": {
       "post": {
         "operationId": "Operator_uploadAIBundle",
@@ -655,6 +754,127 @@
   },
   "components": {
     "schemas": {
+      "Public.PublicMatch": {
+        "type": "object",
+        "required": ["match_id", "selected_run_id", "game", "lifecycle_state"],
+        "properties": {
+          "match_id": {
+            "type": "string"
+          },
+          "selected_run_id": {
+            "type": "string"
+          },
+          "game": {
+            "$ref": "#/components/schemas/Shared.GameMetadata"
+          },
+          "lifecycle_state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "leased",
+              "running",
+              "persisting",
+              "completed",
+              "failed",
+              "canceled"
+            ]
+          }
+        }
+      },
+      "Public.PublicMatchDetail": {
+        "type": "object",
+        "required": ["replay"],
+        "properties": {
+          "replay": {
+            "$ref": "#/components/schemas/Public.PublicReplayMetadata"
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Public.PublicMatch"
+          }
+        ]
+      },
+      "Public.PublicMatchListResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Public.PublicMatch"
+            }
+          }
+        }
+      },
+      "Public.PublicReplayMetadata": {
+        "type": "object",
+        "required": ["availability"],
+        "properties": {
+          "availability": {
+            "type": "string",
+            "enum": ["available", "replay_unavailable"]
+          },
+          "format": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "digest": {
+            "type": "string"
+          }
+        }
+      },
+      "Public.PublicReplayResponse": {
+        "type": "object",
+        "required": ["availability"],
+        "properties": {
+          "availability": {
+            "type": "string",
+            "enum": ["available", "replay_unavailable"]
+          },
+          "format": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "payload": {}
+        }
+      },
+      "Public.PublicStateResponse": {
+        "type": "object",
+        "required": ["availability", "retry_after_ms"],
+        "properties": {
+          "availability": {
+            "type": "string",
+            "enum": ["available", "state_unavailable"]
+          },
+          "state_version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "public_state": {},
+          "retry_after_ms": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Public.PublicMatch"
+          }
+        ]
+      },
       "Shared.AIBot": {
         "type": "object",
         "required": ["bot_id", "scope_id", "bot_name", "lifecycle_state"],
