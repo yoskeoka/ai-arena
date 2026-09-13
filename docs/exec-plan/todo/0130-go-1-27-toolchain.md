@@ -13,7 +13,8 @@ module の言語バージョン下限と、main module を操作するときに�
 完了時には `go.mod` が `go 1.27` と `toolchain go1.27.1` を宣言し、開発用 quality-gate
 契約がその役割（前者は最低言語/実行要件、後者は推奨する exact toolchain）を明記する。
 file-backed、Postgres、lint、Go-WASM、Rust-WASM の既存検証が選択された toolchain で成功し、
-module graph に意図しない差分を残さないことまでを本計画の範囲とする。
+module graph に意図しない差分を残さず、その実施結果から将来の Go version upgrade 用 skill を
+作成することまでを本計画の範囲とする。
 
 次は範囲外とする。
 
@@ -21,6 +22,8 @@ module graph に意図しない差分を残さないことまでを本計画の�
 - Go tool・通常依存の version 更新（`go get` / `tidy` が必要最小限に生む module metadata 以外）
 - cache key 形式、GitHub Actions action revision、CI job topology、Render build image の変更
 - Go 1.27.x の後続 patch への追随
+- 実施前に Go version upgrade skill の詳細手順・文面を設計すること。skill は実装で得た
+  確定済みの手順と検証結果から組み立てる
 
 ## 背景と既存根拠
 
@@ -69,6 +72,10 @@ build contract 変更である。`docs/specs/` に CI mechanics を追加しな�
 - `(MODIFY, only if Go tooling changes it) go.sum`:
   Go 1.27.1 で module tidy / verification が正当な checksum 差分を生成した場合だけ、その
   最小差分を含める。差分が不要なら変更しない。
+- `(NEW) .claude/skills/go-version-upgrade/SKILL.md`:
+  実施済みの Go version/toolchain upgrade を再利用可能にする repo-local skill を追加する。
+  内容は事前に固定せず、directive 更新、module metadata の精査、toolchain selection、quality
+  gates、CI evidence について実装で確認できた手順と境界だけを記録する。
 - `(NO CHANGE, verify) .github/workflows/go-ci.yml:31-123`,
   `.github/workflows/wasm-verification.yml:34-80`,
   `.github/workflows/operator-ui-browser.yml:50-218`:
@@ -98,7 +105,12 @@ build contract 変更である。`docs/specs/` に CI mechanics を追加しな�
    file-backed test、Postgres test、lint、Go-WASM、Rust-WASM とし、失敗時は Go 1.27 由来の
    compile/test/tool incompatibility を最小の scope で直す。既存 Go tool pin の更新が必要なら、
    その互換性修正だけを同じ PR に含め、理由と version を開発 contract に追記する。
-7. GitHub Actions では既存の `go-version-file: go.mod` lanes を変更せず、PR の `go-ci`、
+7. 上記の実装と local verification が確定した後に `.claude/skills/go-version-upgrade/SKILL.md`
+   を作成する。skill の詳細内容はこの時点で初めて、実際に成功した command、必要だった
+   prerequisite、許容される module metadata 差分、local/CI の検証証跡から構成する。計画段階の
+   仮説を手順として書かず、今回の upgrade 以外の依存更新・CI topology 変更を skill の標準手順
+   に含めない。
+8. GitHub Actions では既存の `go-version-file: go.mod` lanes を変更せず、PR の `go-ci`、
    `wasm-verification`、`operator-ui-browser` の最新 head 実行が Go 1.27.1 で開始し成功することを
    job log で確認する。setup-go が 1.27.1 を準備しない、または Go command が別 version を選ぶ
    なら、version source を増やさず `go.mod` directive と action の version-file 解釈に限定して
@@ -112,7 +124,8 @@ build contract 変更である。`docs/specs/` に CI mechanics を追加しな�
 | 2 | `go` / `toolchain` directives と module metadata 更新 | 1 | 不可 |
 | 3 | selected toolchain と module diff の検査 | 2 | 不可 |
 | 4 | local quality gates | 3 | `make test`、`make lint`、WASM lanes は cache/DB 資源を分離できる場合のみ並行可 |
-| 5 | PR CI と latest-head follow-up | 4、PR 作成 | CI jobs は並行、follow-up は順次 |
+| 5 | 実施結果から Go version upgrade skill を作成 | 4 | 不可 |
+| 6 | PR CI と latest-head follow-up | 5、PR 作成 | CI jobs は並行、follow-up は順次 |
 
 ## 検証
 
@@ -125,6 +138,8 @@ build contract 変更である。`docs/specs/` に CI mechanics を追加しな�
   directive/checksum 差分以外を示さないことを確認する。
 - `make test`、`make test-postgres`、`make lint`、`make test-wasm-go`、`make test-wasm-rust`
   を実行する。Postgres lane は既存の repository 手順で DSN と service を用意して実行する。
+- `.claude/skills/go-version-upgrade/SKILL.md` が追加され、今回の成功した upgrade の実施内容と
+  evidence を再利用できる一方、未実施の手順を事実として扱わないことをレビューで確認する。
 - PR では `go-ci`、`wasm-verification`、`operator-ui-browser` の current head を確認し、各
   setup-go step と Go command が manifest 由来の 1.27.1 を使っていること、および required
   checks が成功していることを確認する。
