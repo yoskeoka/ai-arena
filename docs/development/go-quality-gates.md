@@ -2,6 +2,13 @@
 
 `ai-arena` の Go module は、ローカル開発と CI のどちらでも同じ quality-gate targets を入口として検証する。
 
+## Go Toolchain Contract
+
+- `go.mod` の `go` directive は module の最低 Go version と package の言語 version を `1.27` に固定する
+- `go.mod` の `toolchain` directive は、local と CI が main module を操作するときの preferred named toolchain として `go1.27.1` を記録する。これは exact な実行 version を強制せず、default toolchain がより新しい場合は downgrade しない
+- `GOTOOLCHAIN` によって toolchain switching を禁じる環境では、実行者が少なくとも `go1.27.1` を事前に提供しなければならない
+- GitHub Actions と local は別個の Go version literal を持たず、既存の `go-version-file: go.mod` と Go command の toolchain selection を通じて、この manifest を唯一の version source とする
+
 ## Command Surface
 
 - `make test`
