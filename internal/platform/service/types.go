@@ -116,6 +116,7 @@ type QueueStore interface {
 	Heartbeat(context.Context, string, string) error
 	RecoverExpired(context.Context, time.Time) (int, error)
 	Update(context.Context, QueueRecord) error
+	Promote(context.Context, string) (QueueRecord, error)
 	CancelQueued(context.Context, string) (QueueRecord, error)
 	Get(context.Context, string) (QueueRecord, error)
 	List(context.Context) ([]QueueRecord, error)

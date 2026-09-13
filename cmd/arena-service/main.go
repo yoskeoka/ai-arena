@@ -308,6 +308,12 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	}
 	publicStates := service.PublicStateStore(service.NewInMemoryPublicStateStore())
 	var closePublicStates func()
+	closePublicStatesOnFailure := false
+	defer func() {
+		if closePublicStatesOnFailure && closePublicStates != nil {
+			closePublicStates()
+		}
+	}()
 	if strings.TrimSpace(postgresDSN) != "" {
 		postgresPublicStates, stateErr := service.NewPostgresPublicStateStore(context.Background(), postgresDSN)
 		if stateErr != nil {
@@ -315,6 +321,7 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 		}
 		publicStates = postgresPublicStates
 		closePublicStates = postgresPublicStates.Close
+		closePublicStatesOnFailure = true
 	}
 	artifactAdmission, err := service.NewArtifactAdmissionService(runtime.bundles, admissionRegistry)
 	if err != nil {
@@ -360,6 +367,7 @@ func newCLIApp(baseDir string, matchTimeout time.Duration, postgresDSN string, a
 	}
 	closeQueue = false
 	closeAuth = false
+	closePublicStatesOnFailure = false
 	previousClose := closeFn
 	closeFn = func() {
 		if closePublicStates != nil {

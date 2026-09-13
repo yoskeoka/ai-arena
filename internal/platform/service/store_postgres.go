@@ -268,6 +268,33 @@ func (s *PostgresQueueStore) Update(ctx context.Context, next QueueRecord) error
 	return nil
 }
 
+// Promote atomically selects one completed run as the official run for its match.
+func (s *PostgresQueueStore) Promote(ctx context.Context, runID string) (QueueRecord, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return QueueRecord{}, fmt.Errorf("service: begin promote tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	target, err := s.loadRecordTx(ctx, tx, runID, true)
+	if err != nil {
+		return QueueRecord{}, err
+	}
+	if target.State != StateCompleted {
+		return QueueRecord{}, fmt.Errorf("%w: service: only completed runs can be promoted", ErrConflict)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE service_queue_records SET official = submission_id = $1, updated_at = NOW() WHERE match_id = $2`, target.Submission.RunID, target.Submission.MatchID); err != nil {
+		return QueueRecord{}, fmt.Errorf("service: promote official run: %w", err)
+	}
+	target, err = s.loadRecordTx(ctx, tx, runID, false)
+	if err != nil {
+		return QueueRecord{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return QueueRecord{}, fmt.Errorf("service: commit promote tx: %w", err)
+	}
+	return target, nil
+}
+
 // CancelQueued moves one queued record into canceled.
 func (s *PostgresQueueStore) CancelQueued(ctx context.Context, runID string) (QueueRecord, error) {
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})

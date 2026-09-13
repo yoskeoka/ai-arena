@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
@@ -76,6 +78,8 @@ type PublicStatePublisher struct {
 	run   string
 }
 
+const publicStatePublishTimeout = time.Second
+
 // NewPublicStatePublisher constructs a publisher bound to one logical run.
 func NewPublicStatePublisher(store PublicStateStore, matchID, runID string) *PublicStatePublisher {
 	return &PublicStatePublisher{store: store, match: matchID, run: runID}
@@ -86,7 +90,9 @@ func (p *PublicStatePublisher) OnExportedSnapshot(snapshot game.ExportedSnapshot
 	if p == nil || p.store == nil {
 		return
 	}
-	_, _ = p.store.Publish(context.Background(), p.match, p.run, snapshot)
+	ctx, cancel := context.WithTimeout(context.Background(), publicStatePublishTimeout)
+	defer cancel()
+	_, _ = p.store.Publish(ctx, p.match, p.run, snapshot)
 }
 
 // OnEvent intentionally ignores private runner events.
@@ -171,7 +177,7 @@ func (s *PublicQueryService) Get(ctx context.Context, matchID string) (PublicMat
 	if err != nil || !ok {
 		return PublicMatchDetail{}, ok, err
 	}
-	return PublicMatchDetail{PublicMatch: publicMatchFromRecord(record), Replay: replayMetadata(record)}, true, nil
+	return PublicMatchDetail{PublicMatch: publicMatchFromRecord(record), Replay: s.replayMetadata(ctx, record)}, true, nil
 }
 
 // State returns the latest published exported state or a documented unavailable response.
@@ -186,6 +192,9 @@ func (s *PublicQueryService) State(ctx context.Context, matchID string) (PublicS
 		return PublicStateResponse{}, false, err
 	}
 	if !found {
+		if isPublicTerminal(record.State) {
+			response.RetryAfterMS = 0
+		}
 		return response, true, nil
 	}
 	response.Availability = "available"
@@ -204,13 +213,13 @@ func (s *PublicQueryService) Replay(ctx context.Context, matchID string) (Public
 	if err != nil || !ok {
 		return PublicReplayResponse{}, ok, err
 	}
-	metadata := replayMetadata(record)
+	metadata := s.replayMetadata(ctx, record)
 	response := PublicReplayResponse{Availability: metadata.Availability, Format: metadata.Format, Version: metadata.Version}
 	if metadata.Availability != "available" || record.Terminal == nil {
 		return response, true, nil
 	}
-	body, err := s.reader.Read(ctx, record.Terminal.PublicReplayPath)
-	if err != nil || len(body) > maxPublicReplayBytes || !json.Valid(body) {
+	body, err := s.reader.ReadBounded(ctx, record.Terminal.PublicReplayPath, maxPublicReplayBytes)
+	if err != nil || int64(len(body)) != record.Terminal.PublicReplaySize || replayDigest(body) != record.Terminal.PublicReplayDigest || !json.Valid(body) {
 		return PublicReplayResponse{Availability: "replay_unavailable"}, true, nil
 	}
 	response.Payload = append(json.RawMessage(nil), body...)
@@ -266,8 +275,25 @@ func publicMatchFromRecord(record QueueRecord) PublicMatch {
 }
 
 func replayMetadata(record QueueRecord) PublicReplayMetadata {
-	if record.State != StateCompleted || record.Terminal == nil || record.Terminal.PublicReplayPath == "" || record.Terminal.PublicReplayFormat == "" || record.Terminal.PublicReplayVersion == "" || record.Terminal.PublicReplaySize > maxPublicReplayBytes {
+	if record.State != StateCompleted || record.Terminal == nil || record.Terminal.PublicReplayPath == "" || record.Terminal.PublicReplayFormat == "" || record.Terminal.PublicReplayVersion == "" || record.Terminal.PublicReplaySize < 0 || record.Terminal.PublicReplaySize > maxPublicReplayBytes || record.Terminal.PublicReplayDigest == "" {
 		return PublicReplayMetadata{Availability: "replay_unavailable"}
 	}
 	return PublicReplayMetadata{Availability: "available", Format: record.Terminal.PublicReplayFormat, Version: record.Terminal.PublicReplayVersion, SizeBytes: record.Terminal.PublicReplaySize, Digest: record.Terminal.PublicReplayDigest}
+}
+
+func (s *PublicQueryService) replayMetadata(ctx context.Context, record QueueRecord) PublicReplayMetadata {
+	metadata := replayMetadata(record)
+	if metadata.Availability != "available" || record.Terminal == nil {
+		return metadata
+	}
+	body, err := s.reader.ReadBounded(ctx, record.Terminal.PublicReplayPath, maxPublicReplayBytes)
+	if err != nil || int64(len(body)) != record.Terminal.PublicReplaySize || replayDigest(body) != record.Terminal.PublicReplayDigest || !json.Valid(body) {
+		return PublicReplayMetadata{Availability: "replay_unavailable"}
+	}
+	return metadata
+}
+
+func replayDigest(body []byte) string {
+	digest := sha256.Sum256(body)
+	return fmt.Sprintf("%x", digest)
 }

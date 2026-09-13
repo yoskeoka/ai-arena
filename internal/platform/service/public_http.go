@@ -42,7 +42,11 @@ func (a *PublicAPI) handleList(w http.ResponseWriter, r *http.Request) {
 
 func (a *PublicAPI) handleGet(w http.ResponseWriter, r *http.Request) {
 	detail, found, err := a.queries.Get(r.Context(), r.PathValue("match_id"))
-	if err != nil || !found {
+	if err != nil {
+		writePublicUnavailable(w)
+		return
+	}
+	if !found {
 		writePublicNotFound(w)
 		return
 	}
@@ -51,7 +55,11 @@ func (a *PublicAPI) handleGet(w http.ResponseWriter, r *http.Request) {
 
 func (a *PublicAPI) handleState(w http.ResponseWriter, r *http.Request) {
 	response, found, err := a.queries.State(r.Context(), r.PathValue("match_id"))
-	if err != nil || !found {
+	if err != nil {
+		writePublicUnavailable(w)
+		return
+	}
+	if !found {
 		writePublicNotFound(w)
 		return
 	}
@@ -60,7 +68,11 @@ func (a *PublicAPI) handleState(w http.ResponseWriter, r *http.Request) {
 
 func (a *PublicAPI) handleReplay(w http.ResponseWriter, r *http.Request) {
 	response, found, err := a.queries.Replay(r.Context(), r.PathValue("match_id"))
-	if err != nil || !found {
+	if err != nil {
+		writePublicUnavailable(w)
+		return
+	}
+	if !found {
 		writePublicNotFound(w)
 		return
 	}

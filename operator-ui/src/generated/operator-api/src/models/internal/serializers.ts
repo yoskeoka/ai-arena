@@ -47,6 +47,19 @@ import type {
   VersionResponse,
 } from "../models.js";
 
+function int64Deserializer(value?: number | string | bigint | null): bigint | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return typeof value === "bigint" ? value : BigInt(value);
+}
+function int64Serializer(value?: bigint | null): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return Number(value);
+}
+
 export function decodeBase64(value: string): Uint8Array | undefined {
   if(!value) {
     return value as any;
@@ -1315,7 +1328,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    availability: input_.availability,format: input_.format,version: input_.version,size_bytes: input_.sizeBytes,digest: input_.digest
+    availability: input_.availability,format: input_.format,version: input_.version,size_bytes: int64Serializer(input_.sizeBytes),digest: input_.digest
   }!;
 }export function jsonPublicReplayMetadataToApplicationTransform(
   input_?: any,
@@ -1324,7 +1337,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    availability: input_.availability,format: input_.format,version: input_.version,sizeBytes: input_.size_bytes,digest: input_.digest
+    availability: input_.availability,format: input_.format,version: input_.version,sizeBytes: int64Deserializer(input_.size_bytes),digest: input_.digest
   }!;
 }export function jsonPublicStateResponseToTransportTransform(
   input_?: PublicStateResponse | null,
@@ -1333,7 +1346,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    availability: input_.availability,state_version: input_.stateVersion,turn: input_.turn,public_state: input_.publicState,retry_after_ms: input_.retryAfterMs,match_id: input_.matchId,selected_run_id: input_.selectedRunId,game: jsonGameMetadataToTransportTransform(input_.game),lifecycle_state: input_.lifecycleState
+    availability: input_.availability,state_version: int64Serializer(input_.stateVersion),turn: input_.turn,public_state: input_.publicState,retry_after_ms: input_.retryAfterMs,match_id: input_.matchId,selected_run_id: input_.selectedRunId,game: jsonGameMetadataToTransportTransform(input_.game),lifecycle_state: input_.lifecycleState
   }!;
 }export function jsonPublicStateResponseToApplicationTransform(
   input_?: any,
@@ -1342,7 +1355,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    availability: input_.availability,stateVersion: input_.state_version,turn: input_.turn,publicState: input_.public_state,retryAfterMs: input_.retry_after_ms,matchId: input_.match_id,selectedRunId: input_.selected_run_id,game: jsonGameMetadataToApplicationTransform(input_.game),lifecycleState: input_.lifecycle_state
+    availability: input_.availability,stateVersion: int64Deserializer(input_.state_version),turn: input_.turn,publicState: input_.public_state,retryAfterMs: input_.retry_after_ms,matchId: input_.match_id,selectedRunId: input_.selected_run_id,game: jsonGameMetadataToApplicationTransform(input_.game),lifecycleState: input_.lifecycle_state
   }!;
 }export function jsonPublicReplayResponseToTransportTransform(
   input_?: PublicReplayResponse | null,

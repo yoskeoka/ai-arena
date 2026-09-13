@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"mime"
 	"net/url"
 	"os"
@@ -91,6 +90,11 @@ func (s *S3ArtifactStore) ObjectLocator(key string) string {
 
 // ReadLocator loads one object referenced by an s3:// locator.
 func (s *S3ArtifactStore) ReadLocator(ctx context.Context, locator string) ([]byte, error) {
+	return s.ReadLocatorBounded(ctx, locator, 0)
+}
+
+// ReadLocatorBounded loads an object without materializing more than limit bytes.
+func (s *S3ArtifactStore) ReadLocatorBounded(ctx context.Context, locator string, limit int64) ([]byte, error) {
 	bucket, key, err := parseS3Locator(locator)
 	if err != nil {
 		return nil, err
@@ -110,7 +114,10 @@ func (s *S3ArtifactStore) ReadLocator(ctx context.Context, locator string) ([]by
 		return nil, fmt.Errorf("service: get artifact object %s: %w", locator, err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
+	if limit > 0 && resp.ContentLength != nil && *resp.ContentLength > limit {
+		return nil, fmt.Errorf("service: artifact object %s exceeds %d bytes", locator, limit)
+	}
+	data, err := readBounded(resp.Body, limit)
 	if err != nil {
 		return nil, fmt.Errorf("service: read artifact object %s: %w", locator, err)
 	}

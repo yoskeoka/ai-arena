@@ -126,6 +126,27 @@ func (s *InMemoryQueueStore) Update(_ context.Context, next QueueRecord) error {
 	return nil
 }
 
+// Promote atomically selects one completed run as the official run for its match.
+func (s *InMemoryQueueStore) Promote(_ context.Context, runID string) (QueueRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	target, ok := s.records[runID]
+	if !ok {
+		return QueueRecord{}, ErrQueueRecordNotFound
+	}
+	if target.State != StateCompleted {
+		return QueueRecord{}, fmt.Errorf("%w: service: only completed runs can be promoted", ErrConflict)
+	}
+	for id, record := range s.records {
+		if record.Submission.MatchID != target.Submission.MatchID {
+			continue
+		}
+		record.Submission.Official = id == runID
+		s.records[id] = record
+	}
+	return cloneQueueRecord(s.records[runID]), nil
+}
+
 // CancelQueued moves one queued record into canceled.
 func (s *InMemoryQueueStore) CancelQueued(_ context.Context, runID string) (QueueRecord, error) {
 	s.mu.Lock()
