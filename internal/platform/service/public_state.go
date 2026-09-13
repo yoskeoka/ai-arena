@@ -218,7 +218,7 @@ func (s *PublicQueryService) Replay(ctx context.Context, matchID string) (Public
 	if metadata.Availability != "available" || record.Terminal == nil {
 		return response, true, nil
 	}
-	body, err := s.reader.ReadBounded(ctx, record.Terminal.PublicReplayPath, maxPublicReplayBytes)
+	body, err := s.reader.ReadBoundedUnder(ctx, record.Terminal.PublicReplayPath, record.Submission.OutputDir, maxPublicReplayBytes)
 	if err != nil || int64(len(body)) != record.Terminal.PublicReplaySize || replayDigest(body) != record.Terminal.PublicReplayDigest || !json.Valid(body) {
 		return PublicReplayResponse{Availability: "replay_unavailable"}, true, nil
 	}
@@ -286,7 +286,7 @@ func (s *PublicQueryService) replayMetadata(ctx context.Context, record QueueRec
 	if metadata.Availability != "available" || record.Terminal == nil {
 		return metadata
 	}
-	body, err := s.reader.ReadBounded(ctx, record.Terminal.PublicReplayPath, maxPublicReplayBytes)
+	body, err := s.reader.ReadBoundedUnder(ctx, record.Terminal.PublicReplayPath, record.Submission.OutputDir, maxPublicReplayBytes)
 	if err != nil || int64(len(body)) != record.Terminal.PublicReplaySize || replayDigest(body) != record.Terminal.PublicReplayDigest || !json.Valid(body) {
 		return PublicReplayMetadata{Availability: "replay_unavailable"}
 	}

@@ -16,6 +16,7 @@ import (
 type ArtifactReader interface {
 	Read(context.Context, string) ([]byte, error)
 	ReadBounded(context.Context, string, int64) ([]byte, error)
+	ReadBoundedUnder(context.Context, string, string, int64) ([]byte, error)
 }
 
 // DefaultArtifactReader reads local files, http(s) URLs, and optional S3 locators.
@@ -100,8 +101,49 @@ func (r *DefaultArtifactReader) ReadBounded(ctx context.Context, locator string,
 	}
 }
 
+// ReadBoundedUnder reads a local artifact only when its resolved path stays under root.
+// Non-local locators use their provider-specific isolation instead.
+func (r *DefaultArtifactReader) ReadBoundedUnder(ctx context.Context, locator, root string, limit int64) ([]byte, error) {
+	locator = strings.TrimSpace(locator)
+	if isLocalPath(locator) {
+		data, err := readFileBoundedUnder(root, localPath(locator), limit)
+		if err != nil {
+			return nil, fmt.Errorf("service: read local artifact %s: %w", locator, err)
+		}
+		return data, nil
+	}
+	return r.ReadBounded(ctx, locator, limit)
+}
+
 func readFileBounded(path string, limit int64) ([]byte, error) {
+	// #nosec G304 -- non-public callers read the persisted terminal artifact locator; public replay reads use readFileBoundedUnder.
 	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return readBounded(file, limit)
+}
+
+func readFileBoundedUnder(root, path string, limit int64) ([]byte, error) {
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, fmt.Errorf("resolve artifact root: %w", err)
+	}
+	resolvedPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve artifact path: %w", err)
+	}
+	rel, err := filepath.Rel(resolvedRoot, resolvedPath)
+	if err != nil {
+		return nil, fmt.Errorf("relativize artifact path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return nil, fmt.Errorf("artifact path is outside the persisted output directory")
+	}
+
+	// #nosec G304 -- resolvedPath is canonicalized and verified under the persisted server-owned output directory above.
+	file, err := os.Open(resolvedPath)
 	if err != nil {
 		return nil, err
 	}
