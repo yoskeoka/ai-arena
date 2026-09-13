@@ -362,3 +362,42 @@ export interface ArtifactAccessMetadata {
 export interface RunListResponse {
   items: Array<ResultListItem>;
 }
+export interface PublicMatchListResponse {
+  items: Array<PublicMatch>;
+}
+export interface PublicMatch {
+  matchId: string;
+  selectedRunId: string;
+  game: GameMetadata;
+  lifecycleState:
+    | "queued"
+    | "leased"
+    | "running"
+    | "persisting"
+    | "completed"
+    | "failed"
+    | "canceled";
+}
+export interface PublicMatchDetail extends PublicMatch {
+  replay: PublicReplayMetadata;
+}
+export interface PublicReplayMetadata {
+  availability: "available" | "replay_unavailable";
+  format?: string;
+  version?: string;
+  sizeBytes?: bigint;
+  digest?: string;
+}
+export interface PublicStateResponse extends PublicMatch {
+  availability: "available" | "state_unavailable";
+  stateVersion?: bigint;
+  turn?: number;
+  publicState?: unknown;
+  retryAfterMs: number;
+}
+export interface PublicReplayResponse {
+  availability: "available" | "replay_unavailable";
+  format?: string;
+  version?: string;
+  payload?: unknown;
+}

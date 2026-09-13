@@ -39,6 +39,12 @@ type Session interface {
 	Shutdown(context.Context) error
 }
 
+// PublicReplaySession is the optional terminal replay extension. Keeping it
+// separate preserves compatibility for games that have not published a format.
+type PublicReplaySession interface {
+	CurrentPublicReplay(context.Context) (game.PublicReplay, error)
+}
+
 // WASIConfig configures an artifact-materialized WASI game master.
 type WASIConfig struct {
 	Context          context.Context
@@ -129,6 +135,15 @@ func (s *inProcessSession) CurrentExportedSnapshot(context.Context) (game.Export
 
 func (s *inProcessSession) CurrentResult(context.Context) (game.MatchResult, error) {
 	return s.master.Result(), nil
+}
+
+// CurrentPublicReplay obtains a game-produced payload when the game supports it.
+func (s *inProcessSession) CurrentPublicReplay(ctx context.Context) (game.PublicReplay, error) {
+	provider, ok := s.master.(game.PublicReplayProvider)
+	if !ok {
+		return game.PublicReplay{}, fmt.Errorf("game master public replay is unavailable")
+	}
+	return provider.CurrentPublicReplay(ctx)
 }
 
 func (s *inProcessSession) Shutdown(context.Context) error {
@@ -263,6 +278,18 @@ func (s *localSubprocessSession) CurrentResult(ctx context.Context) (game.MatchR
 		return game.MatchResult{}, fmt.Errorf("game master current_result: %w", err)
 	}
 	return result, nil
+}
+
+// CurrentPublicReplay requests the terminal replay without interpreting it.
+func (s *localSubprocessSession) CurrentPublicReplay(ctx context.Context) (game.PublicReplay, error) {
+	if _, err := s.InitializeMatch(ctx); err != nil {
+		return game.PublicReplay{}, err
+	}
+	var replay game.PublicReplay
+	if err := s.call(ctx, sidecar.MethodCurrentPublicReplay, nil, &replay); err != nil {
+		return game.PublicReplay{}, fmt.Errorf("game master current_public_replay: %w", err)
+	}
+	return replay, nil
 }
 
 func (s *localSubprocessSession) Shutdown(ctx context.Context) error {

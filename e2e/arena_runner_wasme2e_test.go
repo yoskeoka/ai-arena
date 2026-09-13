@@ -26,7 +26,7 @@ func TestArenaRunnerJankenGoWASMMixedRuntimePath(t *testing.T) {
 	)
 
 	if result.Record.Status != contract.StatusCompleted {
-		t.Fatalf("status = %q, want completed", result.Record.Status)
+		t.Fatalf("status = %q, want completed; events=%+v snapshot=%+v players=%+v", result.Record.Status, result.Record.EventLog, result.Record.Snapshot, result.Record.Players)
 	}
 	if result.Record.Result.Placements[0].PlayerID != "p1" {
 		t.Fatalf("winner = %q, want p1", result.Record.Result.Placements[0].PlayerID)

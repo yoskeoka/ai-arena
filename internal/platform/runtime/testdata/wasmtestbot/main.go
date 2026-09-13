@@ -20,6 +20,8 @@ func main() {
 		runExitAfterInit()
 	case "session-bot":
 		runSessionBot()
+	case "exit-clean":
+		return
 	default:
 		fmt.Fprintln(os.Stderr, "unknown BOT_MODE")
 		os.Exit(2)

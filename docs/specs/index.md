@@ -28,6 +28,16 @@ operator-facing HTTP contract は TypeSpec を正本とする。
   - `typespec/generated/openapi/operator/openapi.json`
   - `operator-ui/src/generated/operator-api/`
 
+public spectator HTTP contract も同じ TypeSpec project を正本とする。公開 family は
+`/api/v1-alpha/public/` に固定する。alpha contract は安定版ではなく、breaking
+change を行う場合にも path と TypeSpec を同時に更新する。stable version を導入する
+ときは独立した versioned route family を追加する。
+
+- public route definitions
+  - `typespec/namespaces/public/api.tsp`
+- emitted artifacts
+  - `typespec/generated/openapi/operator/openapi.json`（`/api/v1-alpha/public/` paths）
+
 関連する behavioral companion:
 
 - `docs/specs/platform-artifact-bundle.md`
@@ -36,6 +46,7 @@ operator-facing HTTP contract は TypeSpec を正本とする。
 - `docs/specs/platform-service-general-submission.md`
 - `docs/specs/platform-service-match-request-scheduling.md`
 - `docs/specs/platform-service-read-model.md`
+- `docs/specs/platform-public-spectator.md`
 
 ## AI Runtime / Game Master JSON-RPC
 

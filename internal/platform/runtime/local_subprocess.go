@@ -63,7 +63,7 @@ func startLocalSubprocess(ctx context.Context, cfg Config) (*localSubprocessAdap
 	}()
 
 	stdoutDone := make(chan struct{})
-	go readStdout(stdout, adapter.incoming, stdoutDone)
+	go readStdout(stdout, adapter.incoming, stdoutDone, nil)
 	go func() {
 		<-stdoutDone
 		adapter.waitForExit()

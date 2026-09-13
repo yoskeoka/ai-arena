@@ -36,8 +36,9 @@ type Config struct {
 
 // Message carries one decoded runtime response or decode error.
 type Message struct {
-	Response *protocol.Response
-	Err      error
+	Response     *protocol.Response
+	Err          error
+	RuntimeError string
 }
 
 // StderrSnapshot captures the buffered stderr state for a runtime.

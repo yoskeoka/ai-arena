@@ -37,6 +37,7 @@ type Record struct {
 	EventLog         []Event               `json:"event_log"`
 	Snapshot         game.Snapshot         `json:"snapshot"`
 	ExportedSnapshot game.ExportedSnapshot `json:"exported_snapshot"`
+	PublicReplay     *game.PublicReplay    `json:"public_replay,omitempty"`
 }
 
 // Event is one structured entry in a match event log.
@@ -52,6 +53,11 @@ type Event struct {
 type Observer interface {
 	OnEvent(Event)
 	OnRecordBuilt(Record)
+}
+
+// ExportedSnapshotObserver receives safe-to-publish snapshots during a run.
+type ExportedSnapshotObserver interface {
+	OnExportedSnapshot(game.ExportedSnapshot)
 }
 
 // RunnerOption mutates runner configuration during construction.
@@ -74,6 +80,7 @@ type Runner struct {
 	finalResult   game.MatchResult
 	finalSnapshot game.Snapshot
 	finalExported game.ExportedSnapshot
+	publicReplay  *game.PublicReplay
 }
 
 const (
@@ -216,6 +223,7 @@ func (r *Runner) initializeSessions(ctx context.Context, meta catalog.GameMetada
 			return ctxErr
 		}
 		if result.FailureReason == session.ReasonRuntimeStop {
+			r.appendRuntimeDiagnostic(0, player.PlayerID, result)
 			r.appendRuntimeExited(0, player.PlayerID, map[string]any{"stage": "init"})
 		}
 		if result.Status != session.StatusAccepted {
@@ -223,6 +231,7 @@ func (r *Runner) initializeSessions(ctx context.Context, meta catalog.GameMetada
 			return fmt.Errorf("init failed for %s: %s", player.PlayerID, result.FailureReason)
 		}
 	}
+	r.publishExportedSnapshot(ctx)
 
 	return nil
 }
@@ -252,6 +261,7 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 			if err := r.master.ApplyDecisionResults(ctx, *step, outcomes); err != nil {
 				return err
 			}
+			r.publishExportedSnapshot(ctx)
 		case game.Sequential:
 			if len(step.Requests) != 1 {
 				return fmt.Errorf("sequential step must contain exactly one request, got %d", len(step.Requests))
@@ -270,6 +280,7 @@ func (r *Runner) runDecisionLoop(ctx context.Context) error {
 			if err := r.master.ApplyDecisionResults(ctx, *step, []game.ActionStatus{actionStatus}); err != nil {
 				return err
 			}
+			r.publishExportedSnapshot(ctx)
 		default:
 			return fmt.Errorf("unsupported decision mode %q", step.Mode)
 		}
@@ -329,6 +340,7 @@ func (r *Runner) shutdownSessions(ctx context.Context) {
 				},
 			})
 			if result.FailureReason == session.ReasonRuntimeStop {
+				r.appendRuntimeDiagnostic(0, playerID, result)
 				r.appendRuntimeExited(0, playerID, map[string]any{"stage": "game_over"})
 			}
 			if result.Status != session.StatusAccepted {
@@ -409,6 +421,7 @@ func (r *Runner) buildRecord(meta catalog.GameMetadata) Record {
 		EventLog:         append([]Event(nil), r.events...),
 		Snapshot:         snapshot,
 		ExportedSnapshot: exported,
+		PublicReplay:     r.publicReplay,
 	}
 }
 
@@ -502,6 +515,7 @@ func (r *Runner) recordTurn(turn int, exec turnExecution) game.ActionStatus {
 	case session.ReasonTimeout:
 		r.appendEvent("turn_timeout", turn, exec.request.PlayerID, exec.actionStatus)
 	case session.ReasonRuntimeStop:
+		r.appendRuntimeDiagnostic(turn, exec.request.PlayerID, exec.result)
 		r.appendRuntimeExited(turn, exec.request.PlayerID, exec.actionStatus)
 	default:
 		r.appendEvent("protocol_error", turn, exec.request.PlayerID, exec.actionStatus)
@@ -511,6 +525,18 @@ func (r *Runner) recordTurn(turn int, exec turnExecution) game.ActionStatus {
 
 func (r *Runner) appendRuntimeExited(turn int, playerID string, payload any) {
 	r.appendEvent("runtime_exited", turn, playerID, payload)
+}
+
+func (r *Runner) appendRuntimeDiagnostic(turn int, playerID string, result session.Result) {
+	if result.RuntimeError == "" {
+		return
+	}
+	stderr := r.sessions[playerID].StderrSnapshot()
+	r.appendEvent("runtime_diagnostic", turn, playerID, map[string]any{
+		"exit_cause": result.RuntimeError,
+		"stderr":     stderr.Output,
+		"truncated":  stderr.Truncated,
+	})
 }
 
 func (r *Runner) visibleStateForPlayer(playerID string) json.RawMessage {
@@ -536,7 +562,26 @@ func (r *Runner) captureFinalState(ctx context.Context) error {
 	r.finalSnapshot = snapshot
 	r.finalExported = exported
 	r.finalResult = result
+	if r.status == game.StatusCompleted {
+		if provider, ok := r.master.(gamemaster.PublicReplaySession); ok {
+			replay, replayErr := provider.CurrentPublicReplay(ctx)
+			if replayErr == nil && replay.Format != "" && replay.Version != "" && len(replay.Payload) > 0 {
+				r.publicReplay = &replay
+			}
+		}
+	}
 	return nil
+}
+
+func (r *Runner) publishExportedSnapshot(ctx context.Context) {
+	observer, ok := r.observer.(ExportedSnapshotObserver)
+	if !ok {
+		return
+	}
+	exported, err := r.master.CurrentExportedSnapshot(ctx)
+	if err == nil {
+		observer.OnExportedSnapshot(exported)
+	}
 }
 
 func (r *Runner) appendEvent(kind string, turn int, playerID string, payload any) {

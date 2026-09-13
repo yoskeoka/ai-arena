@@ -88,6 +88,14 @@ type GameRelease struct {
 	CreatedAt         pgtype.Timestamptz
 }
 
+type PublicMatchState struct {
+	MatchID              string
+	RunID                string
+	Version              int64
+	ExportedSnapshotJson []byte
+	UpdatedAt            pgtype.Timestamptz
+}
+
 type ServiceQueueRecord struct {
 	SubmissionID    string
 	QueueOrder      int64

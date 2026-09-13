@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/yoskeoka/ai-arena/artifactbundle"
 	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
@@ -18,6 +21,8 @@ import (
 
 const defaultWorkerStderrLimitBytes = 4096
 
+const maxPublicReplayBytes = 1 << 20
+
 // LocalRunnerInvoker resolves local artifact refs and executes one runner invocation in-process.
 type LocalRunnerInvoker struct {
 	baseDir          string
@@ -25,11 +30,18 @@ type LocalRunnerInvoker struct {
 	stderrLimitBytes int
 	matchTimeout     time.Duration
 	bundles          BundleStore
+	publicStates     PublicStateStore
 }
 
 // WithBundleStore enables digest-only WASI player materialization.
 func (i *LocalRunnerInvoker) WithBundleStore(bundles BundleStore) *LocalRunnerInvoker {
 	i.bundles = bundles
+	return i
+}
+
+// WithPublicStateStore publishes exported snapshots while a run is in flight.
+func (i *LocalRunnerInvoker) WithPublicStateStore(states PublicStateStore) *LocalRunnerInvoker {
+	i.publicStates = states
 	return i
 }
 
@@ -86,7 +98,11 @@ func (i *LocalRunnerInvoker) Run(ctx context.Context, req ExecutionRequest) (Exe
 		return ExecutionResult{}, err
 	}
 
-	record, runErr := match.NewRunner(submission.MatchID, players, master, sessions).Run(runCtx)
+	options := []match.RunnerOption{}
+	if i.publicStates != nil {
+		options = append(options, match.WithObserver(NewPublicStatePublisher(i.publicStates, submission.MatchID, submission.RunID)))
+	}
+	record, runErr := match.NewRunnerWithOptions(submission.MatchID, players, master, sessions, options...).Run(runCtx)
 	return ExecutionResult{
 		Record:       record,
 		PlayerStderr: snapshotPlayerStderr(sessions),
@@ -103,6 +119,16 @@ func (i *LocalRunnerInvoker) loadPlayersAndSessions(ctx context.Context, submiss
 	sessions := make(map[string]match.PlayerSession, len(submission.Players))
 	for _, submitted := range submission.Players {
 		if submitted.ArtifactID != "" && i.bundles != nil {
+			bundleBytes, err := i.bundles.Read(ctx, submitted.ArtifactID)
+			if err != nil {
+				closeSessions(sessions)
+				return nil, nil, fmt.Errorf("service: %s bundle read failed: %w", submitted.PlayerID, err)
+			}
+			bundle, err := artifactbundle.Read(bundleBytes)
+			if err != nil {
+				closeSessions(sessions)
+				return nil, nil, fmt.Errorf("service: %s bundle invalid: %w", submitted.PlayerID, err)
+			}
 			dir, err := os.MkdirTemp("", "ai-arena-ai-")
 			if err != nil {
 				closeSessions(sessions)
@@ -114,7 +140,14 @@ func (i *LocalRunnerInvoker) loadPlayersAndSessions(ctx context.Context, submiss
 				closeSessions(sessions)
 				return nil, nil, fmt.Errorf("service: %s bundle materialize failed: %w", submitted.PlayerID, err)
 			}
-			cfg := runtime.Config{Kind: runtime.KindWASMWASI, ModulePath: module, Dir: dir, StderrLimitBytes: i.stderrLimitBytes}
+			cfg := runtime.Config{
+				Kind:             runtime.KindWASMWASI,
+				ModulePath:       module,
+				Dir:              dir,
+				Args:             append([]string(nil), bundle.Manifest.Runtime.Args...),
+				MemoryLimitPages: bundle.Manifest.Runtime.MemoryLimitPages,
+				StderrLimitBytes: i.stderrLimitBytes,
+			}
 			adapter, err := runtime.Start(ctx, cfg)
 			if err != nil {
 				_ = os.RemoveAll(dir)
@@ -192,12 +225,32 @@ func (LocalTerminalPersister) Persist(_ context.Context, submission MatchSubmiss
 		playerStderrPaths[player.PlayerID] = path
 	}
 
-	return TerminalArtifacts{
+	terminal := TerminalArtifacts{
 		MatchDir:          layout.MatchDir,
 		RecordPath:        layout.RecordPath,
 		ResultSummaryPath: layout.ResultSummaryPath,
 		PlayerStderrPaths: playerStderrPaths,
-	}, nil
+	}
+	if replay := result.Record.PublicReplay; replay != nil && len(replay.Payload) <= maxPublicReplayBytes {
+		file, err := artifacts.CreateFileOutput(layout.PublicReplayPath)
+		if err != nil {
+			return TerminalArtifacts{}, err
+		}
+		if _, err := file.Write(replay.Payload); err != nil {
+			_ = file.Close()
+			return TerminalArtifacts{}, fmt.Errorf("write public replay artifact: %w", err)
+		}
+		if err := file.Close(); err != nil {
+			return TerminalArtifacts{}, fmt.Errorf("close public replay artifact: %w", err)
+		}
+		digest := sha256.Sum256(replay.Payload)
+		terminal.PublicReplayPath = layout.PublicReplayPath
+		terminal.PublicReplayFormat = replay.Format
+		terminal.PublicReplayVersion = replay.Version
+		terminal.PublicReplaySize = int64(len(replay.Payload))
+		terminal.PublicReplayDigest = hex.EncodeToString(digest[:])
+	}
+	return terminal, nil
 }
 
 func writePlayerStderr(path, stderr string) error {

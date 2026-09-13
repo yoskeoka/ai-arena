@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tetratelabs/wazero"
@@ -28,6 +29,7 @@ type wasmWASIAdapter struct {
 	closeRuntime     func()
 	mu               sync.Mutex
 	shutdownExpected bool
+	decodedResponse  atomic.Bool
 }
 
 func startWASMWASI(parent context.Context, cfg Config) (*wasmWASIAdapter, error) {
@@ -90,13 +92,21 @@ func startWASMWASI(parent context.Context, cfg Config) (*wasmWASIAdapter, error)
 	}
 
 	stdoutDone := make(chan struct{})
-	go readStdout(stdoutReader, adapter.incoming, stdoutDone)
+	go readStdout(stdoutReader, adapter.incoming, stdoutDone, &adapter.decodedResponse)
 	go func() {
 		_, err := rt.InstantiateModule(ctx, compiled, moduleCfg)
 		_ = stdoutWriter.Close()
 		_ = stdinReader.Close()
 		<-stdoutDone
-		adapter.done <- adapter.normalizeExit(err)
+		exitErr := adapter.normalizeExit(err)
+		if exitErr != nil || !adapter.decodedResponse.Load() {
+			cause := "module exited before response (exit code 0)"
+			if exitErr != nil {
+				cause = exitErr.Error()
+			}
+			adapter.incoming <- Message{RuntimeError: cause}
+		}
+		adapter.done <- exitErr
 		close(adapter.done)
 		close(adapter.incoming)
 		adapter.closeRuntime()
@@ -201,7 +211,7 @@ func resolvePath(dir, path string) string {
 	return filepath.Join(dir, path)
 }
 
-func readStdout(stdout io.Reader, incoming chan Message, done chan<- struct{}) {
+func readStdout(stdout io.Reader, incoming chan Message, done chan<- struct{}, decodedResponse *atomic.Bool) {
 	defer close(done)
 
 	dec := protocol.NewDecoder(stdout)
@@ -215,6 +225,9 @@ func readStdout(stdout io.Reader, incoming chan Message, done chan<- struct{}) {
 			return
 		}
 		respCopy := resp
+		if decodedResponse != nil {
+			decodedResponse.Store(true)
+		}
 		select {
 		case incoming <- Message{Response: &respCopy}:
 		default:

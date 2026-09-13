@@ -86,6 +86,15 @@ checked-in generated code は comment policy の対象外としてよい。
 
 これらの tool version は module 側で明示的に pin し、CI とローカルで同じ version を使う。
 
+## Go Version Upgrade Preflight
+
+- `go` / `toolchain` directive を更新する前に、target compiler を `GOTOOLCHAIN=go<target>` で明示して
+  Go-WASM、Rust-WASM、lint を含む全 quality gate を実行する
+- target Go version を解析できない staticcheck は aggregate lint の成功として扱わない。upstream の signed
+  stable release を pin して再実行し、master、pseudo-version、pre-release、lint bypass は使わない
+- target compiler が生成する WASI module は、admitted manifest の `memory_limit_pages` 内で実行できることを
+  filesystem と S3-compatible artifact store の双方で確認する
+
 ## Cache Contract
 
 - `Makefile` は local default として `/tmp/ai-arena-go-quality-gates` を cache root に使ってよい

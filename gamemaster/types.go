@@ -23,6 +23,8 @@ const (
 	MethodCurrentExportedSnapshot = "current_exported_snapshot"
 	// MethodCurrentResult requests the current match result.
 	MethodCurrentResult = "current_result"
+	// MethodCurrentPublicReplay requests the terminal game-produced public replay.
+	MethodCurrentPublicReplay = "current_public_replay"
 	// MethodShutdown asks the game master to shut down cleanly.
 	MethodShutdown = "shutdown"
 )
@@ -189,6 +191,14 @@ type Placement struct {
 // MatchResult is the persisted placement summary for a match.
 type MatchResult struct {
 	Placements []Placement `json:"placements"`
+}
+
+// PublicReplay is a game-produced terminal payload safe for anonymous readers.
+// The platform stores it opaquely and never derives it from private artifacts.
+type PublicReplay struct {
+	Format  string          `json:"format"`
+	Version string          `json:"version"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 // PlayerSnapshot stores the player-scoped portion of a match snapshot.
