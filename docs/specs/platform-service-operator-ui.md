@@ -101,7 +101,7 @@ minimal operator UI は nav 上で少なくとも次の page/surface を持つ�
 - requests page:
   accepted match request list と create form
 - rankings page:
-  selected scope の durable ranking snapshot read
+  selected scope の durable ranking snapshot read と、同じ scope に属する completed official logical match の operator-only history。history は match ID、official run ID、lifecycle、および既存 run detail への navigation を表示する。ranking aggregate の値や per-bot の last run から match を推測してはならず、認証済み completed-match read model を source とする
 - run detail page:
   compact summary、submitted players、replay input locator group、
   artifact access、queued cancel / retry / rerun / promote action。compact summary 内の metadata は、
@@ -124,7 +124,7 @@ browser verification は、少なくとも次の acceptance surface を route �
   1 件作成または revision し、bot list へ反映できる
 - requests page で manual match request を 1 件以上作成し、accepted request と latest run を表示できる
 - run detail page で selected run の `result_summary` と artifact access entry を表示できる
-- rankings page で completed official run の scope を選び、snapshot entry を表示できる
+- rankings page で completed official run の scope を選び、snapshot entry と、その scope の completed official logical match の match ID / official run ID / run detail navigation を表示できる。completed request が Requests page から消えた後もこの history から run detail を開ける
 
 auth-enabled GitHub regression lane では、上記 operator surface に到達する前段として次も acceptance surface に含めなければならない。
 
@@ -296,6 +296,6 @@ games page、submissions page、requests page は、operator-facing write route 
 - games page は file selection -> bundle admission -> manifest-derived review and ruleset selection -> activation
   の順に進む。game ID、game version、artifact digest、registration ID の manual field は新規 flow に提供してはならない
 - requests page の item は `latest_run_id` を run detail deep-link として表示してよい
-- rankings page は completed official run の scope または operator-selected scope から `GET /api/v1/rankings` を呼び、stored snapshot を read-only 表示してよい
+- rankings page は completed official run の scope または operator-selected scope から `GET /api/v1/rankings` を呼び、stored snapshot を read-only 表示してよい。加えて、既に読み込んだ authenticated completed-match records を `completed` かつ `official` と selected scope で絞り込み、stable な logical-match history として表示しなければならない。この history の loading/error/empty state は ranking snapshot panel の state を変更してはならない
 
 run detail page は follow-up action を visibility とともに提供してよい。

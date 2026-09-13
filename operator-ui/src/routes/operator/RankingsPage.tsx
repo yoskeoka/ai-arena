@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { OperatorApiClient, RankingScope, ResultListItem, StoredRankingSnapshot } from "../../lib/operatorApiClient";
 import { Panel } from "../../shared/ui/Panel";
 import { hintFor, LoadState, messageOf, normalizeBaseUrl } from "./operatorPageSupport";
+import { hrefForRunDetail } from "./operatorRoutes";
 
 type RankingsPageProps = {
   baseUrl: string;
@@ -61,7 +62,9 @@ export function RankingsPage({ baseUrl }: RankingsPageProps) {
     }
   };
 
-  const quickScopes = dedupeScopes(completedItems.filter((item) => item.lifecycleState === "completed" && item.official));
+  const completedOfficialItems = completedItems.filter(isCompletedOfficial);
+  const quickScopes = dedupeScopes(completedOfficialItems);
+  const scopedCompletedItems = completedOfficialItems.filter((item) => scopeMatches(item, scope));
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -121,6 +124,34 @@ export function RankingsPage({ baseUrl }: RankingsPageProps) {
             </div>
           </div>
         ) : null}
+
+        <div className="mt-6 border-t border-black/10 pt-5" data-testid="ranking-completed-match-history">
+          <p className="text-sm font-medium text-black/70">Completed official matches</p>
+          <p className="mt-1 text-xs text-black/60">Historical matches for the selected ranking scope.</p>
+          {scopeListState === "ready" && scopedCompletedItems.length === 0 ? (
+            <p className="mt-3 text-sm text-black/60">No completed official matches for this scope yet.</p>
+          ) : null}
+          {scopedCompletedItems.length ? (
+            <div className="mt-3 space-y-3">
+              {scopedCompletedItems.map((item) => (
+                <article
+                  key={`${item.matchId}-${item.runId}`}
+                  className="rounded-2xl border border-black/10 bg-white p-3 text-sm"
+                  data-testid={`ranking-completed-match-${encodeURIComponent(item.matchId)}`}
+                >
+                  <p className="font-semibold">match: {item.matchId}</p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-black/60">
+                    <span>official run: {item.runId}</span>
+                    <span>{item.lifecycleState}</span>
+                  </div>
+                  <a className="mt-3 inline-block text-sm font-semibold text-teal no-underline hover:text-ink" href={hrefForRunDetail(item.runId)}>
+                    Open official run detail
+                  </a>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </Panel>
 
       <Panel
@@ -196,6 +227,14 @@ function dedupeScopes(items: ResultListItem[]) {
 
 function scopeKey(scope: RankingScope) {
   return `${scope.gameId}-${scope.gameVersion}-${scope.rulesetVersion}`.replace(/[^a-zA-Z0-9_-]+/g, "_");
+}
+
+function isCompletedOfficial(item: ResultListItem) {
+  return item.lifecycleState === "completed" && item.official;
+}
+
+function scopeMatches(item: ResultListItem, scope: RankingScope) {
+  return item.gameId === scope.gameId && item.gameVersion === scope.gameVersion && item.rulesetVersion === scope.rulesetVersion;
 }
 
 function TextField({
