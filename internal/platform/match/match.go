@@ -223,6 +223,7 @@ func (r *Runner) initializeSessions(ctx context.Context, meta catalog.GameMetada
 			return ctxErr
 		}
 		if result.FailureReason == session.ReasonRuntimeStop {
+			r.appendRuntimeDiagnostic(0, player.PlayerID, result)
 			r.appendRuntimeExited(0, player.PlayerID, map[string]any{"stage": "init"})
 		}
 		if result.Status != session.StatusAccepted {
@@ -339,6 +340,7 @@ func (r *Runner) shutdownSessions(ctx context.Context) {
 				},
 			})
 			if result.FailureReason == session.ReasonRuntimeStop {
+				r.appendRuntimeDiagnostic(0, playerID, result)
 				r.appendRuntimeExited(0, playerID, map[string]any{"stage": "game_over"})
 			}
 			if result.Status != session.StatusAccepted {
@@ -513,6 +515,7 @@ func (r *Runner) recordTurn(turn int, exec turnExecution) game.ActionStatus {
 	case session.ReasonTimeout:
 		r.appendEvent("turn_timeout", turn, exec.request.PlayerID, exec.actionStatus)
 	case session.ReasonRuntimeStop:
+		r.appendRuntimeDiagnostic(turn, exec.request.PlayerID, exec.result)
 		r.appendRuntimeExited(turn, exec.request.PlayerID, exec.actionStatus)
 	default:
 		r.appendEvent("protocol_error", turn, exec.request.PlayerID, exec.actionStatus)
@@ -522,6 +525,18 @@ func (r *Runner) recordTurn(turn int, exec turnExecution) game.ActionStatus {
 
 func (r *Runner) appendRuntimeExited(turn int, playerID string, payload any) {
 	r.appendEvent("runtime_exited", turn, playerID, payload)
+}
+
+func (r *Runner) appendRuntimeDiagnostic(turn int, playerID string, result session.Result) {
+	if result.RuntimeError == "" {
+		return
+	}
+	stderr := r.sessions[playerID].StderrSnapshot()
+	r.appendEvent("runtime_diagnostic", turn, playerID, map[string]any{
+		"exit_cause": result.RuntimeError,
+		"stderr":     stderr.Output,
+		"truncated":  stderr.Truncated,
+	})
 }
 
 func (r *Runner) visibleStateForPlayer(playerID string) json.RawMessage {
