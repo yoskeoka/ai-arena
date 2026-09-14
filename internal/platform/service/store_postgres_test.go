@@ -74,6 +74,21 @@ func TestPostgresQueueStoreSharesQueueAcrossInstances(t *testing.T) {
 	if loaded.State != StateCompleted {
 		t.Fatalf("loaded.State = %q, want %q", loaded.State, StateCompleted)
 	}
+	if loaded.CompletedAt == nil {
+		t.Fatal("loaded.CompletedAt = nil, want database completion timestamp")
+	}
+	completedAt := *loaded.CompletedAt
+	loaded.Submission.Official = true
+	if err := store3.Update(ctx, loaded); err != nil {
+		t.Fatalf("Update(completed idempotent) error = %v", err)
+	}
+	loadedAgain, err := store3.Get(ctx, submission1.RunID)
+	if err != nil {
+		t.Fatalf("Get(completed) error = %v", err)
+	}
+	if loadedAgain.CompletedAt == nil || !loadedAgain.CompletedAt.Equal(completedAt) {
+		t.Fatalf("CompletedAt = %v, want immutable %v", loadedAgain.CompletedAt, completedAt)
+	}
 	if got := loaded.Submission.Players[0]; got.BotID != "bot-pg-1" || got.AISubmissionID != "revision-pg-1" || got.ArtifactID != "digest-pg-1" {
 		t.Fatalf("loaded pinned provenance = %+v", got)
 	}
@@ -89,6 +104,9 @@ func TestPostgresQueueStoreSharesQueueAcrossInstances(t *testing.T) {
 	}
 	if next.Submission.RunID != submission2.RunID {
 		t.Fatalf("Claim(second) run_id = %q, want %q", next.Submission.RunID, submission2.RunID)
+	}
+	if next.CompletedAt != nil {
+		t.Fatalf("queued legacy CompletedAt = %v, want nil", next.CompletedAt)
 	}
 }
 

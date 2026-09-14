@@ -1,4 +1,4 @@
-h1:DFGJ6H1+QCLpaEb2weC4dy8TnIegBszOHYe7hqBlF2k=
+h1:5av47+yNF6WLh8VGTuPtSAj+Ibgx2e3/2P+h+RXoowU=
 20260529000000_create_service_queue_records.sql h1:gpeGQif6IbMjl9PeKZZ1eKQmFbGOmycjdl9TI+CM8rM=
 20260614000000_add_run_metadata_to_service_queue_records.sql h1:xE3feF8C5TbP6gwScTGNsjwt3ichweeIqJHMZHprthM=
 20260617000000_create_auth_tables.sql h1:/ML6IJIo6RU+PJNOx2X1Gu+H7GxcJBYR9kWV5CpMICM=
@@ -6,4 +6,4 @@ h1:DFGJ6H1+QCLpaEb2weC4dy8TnIegBszOHYe7hqBlF2k=
 20260905153241_queue_lease_recovery.sql h1:SKTd+A789lX1E6eEIPaP5/VhJDhhkdKlBczUJIuGFfg=
 20260911000000_persist_game_descriptor_runtime.sql h1:9i0in8a73MQ4KDVRGgnDDQ4Zjp0ZZvjjb5gkPpFeamY=
 20260912223059_public_match_states.sql h1:P74wa2y3na0EITEqVzAyJ0H4VEkmYKadDQtElhrNV+E=
-20260914201134_add-queue-record-completed-at.sql h1:QWR/bhnhjpvKRGV9m4cssNotQq0RJx7A5Dez99L1RlQ=
+20260914201134_add-queue-record-completed-at.sql h1:OOfkLAJVuy9QDMmh5nxYm+fzmSEYukpmLmNLBSXlHFs=
