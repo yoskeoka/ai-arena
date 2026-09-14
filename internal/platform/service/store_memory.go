@@ -122,6 +122,15 @@ func (s *InMemoryQueueStore) Update(_ context.Context, next QueueRecord) error {
 	if err := ValidateTransition(current.State, next.State); err != nil {
 		return err
 	}
+	if current.CompletedAt != nil {
+		completedAt := *current.CompletedAt
+		next.CompletedAt = &completedAt
+	} else if next.State == StateCompleted {
+		completedAt := time.Now().UTC()
+		next.CompletedAt = &completedAt
+	} else {
+		next.CompletedAt = nil
+	}
 	s.records[next.Submission.RunID] = cloneQueueRecord(next)
 	return nil
 }
@@ -211,6 +220,10 @@ func (s *InMemoryQueueStore) removeFromOrder(submissionID string) {
 
 func cloneQueueRecord(record QueueRecord) QueueRecord {
 	record.Submission = cloneMatchSubmission(record.Submission)
+	if record.CompletedAt != nil {
+		completedAt := *record.CompletedAt
+		record.CompletedAt = &completedAt
+	}
 	if record.Lease != nil {
 		lease := *record.Lease
 		record.Lease = &lease

@@ -33,6 +33,16 @@ queued と leased match は discoverable ではない。running、persisting、t
 detail は観測可能であってはならない。terminal lifecycle の state response は state が unavailable でも polling stop
 を示す `retry_after_ms = 0` を返す。
 
+各 public match projection は、selected run が admission 時に固定した participant provenance を返す。participant は
+submitted player order のまま `player_id`、display name、immutable AI submission/revision identity だけを含む。platform は
+game 固有の player role や color を追加せず、consumer は配列順と game ruleset を使って解釈する。新規 admission は bot と
+raw AI submission のどちらの経路でもこの provenance を固定する。歴史的 record に完全な provenance がない場合、platform は
+現在の operator registry や private artifact から補完せず participant metadata を省略する。
+
+selected run が terminal artifact の durable persistence に成功して `completed` になったとき、projection は immutable な
+completion timestamp を返す。heartbeat、promotion、ranking などの更新時刻をその代わりに使ってはならない。未完了、persistence
+前に failed になった run、および completion timestamp を持たない historical record はこの timestamp を省略する。
+
 ## state と replay の境界
 
 latest-state resource は atomically published された exported snapshot だけから構成する。state publication は

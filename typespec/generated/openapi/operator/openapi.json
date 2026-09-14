@@ -778,6 +778,16 @@
               "failed",
               "canceled"
             ]
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Public.PublicParticipant"
+            }
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -804,6 +814,21 @@
             "items": {
               "$ref": "#/components/schemas/Public.PublicMatch"
             }
+          }
+        }
+      },
+      "Public.PublicParticipant": {
+        "type": "object",
+        "required": ["player_id", "display_name", "ai_submission_id"],
+        "properties": {
+          "player_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "ai_submission_id": {
+            "type": "string"
           }
         }
       },

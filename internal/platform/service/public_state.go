@@ -107,6 +107,15 @@ type PublicMatch struct {
 	SelectedRunID  string                `json:"selected_run_id"`
 	Game           contract.GameMetadata `json:"game"`
 	LifecycleState LifecycleState        `json:"lifecycle_state"`
+	Participants   []PublicParticipant   `json:"participants,omitempty"`
+	CompletedAt    *time.Time            `json:"completed_at,omitempty"`
+}
+
+// PublicParticipant is immutable admission provenance safe for anonymous viewers.
+type PublicParticipant struct {
+	PlayerID       string `json:"player_id"`
+	DisplayName    string `json:"display_name"`
+	AISubmissionID string `json:"ai_submission_id"`
 }
 
 // PublicReplayMetadata is safe terminal metadata for an opaque public replay.
@@ -271,7 +280,22 @@ func isPublicTerminal(state LifecycleState) bool {
 }
 
 func publicMatchFromRecord(record QueueRecord) PublicMatch {
-	return PublicMatch{MatchID: record.Submission.MatchID, SelectedRunID: record.Submission.RunID, Game: record.Submission.Game, LifecycleState: record.State}
+	match := PublicMatch{MatchID: record.Submission.MatchID, SelectedRunID: record.Submission.RunID, Game: record.Submission.Game, LifecycleState: record.State}
+	if record.State == StateCompleted && record.CompletedAt != nil {
+		completedAt := *record.CompletedAt
+		match.CompletedAt = &completedAt
+	}
+	participants := make([]PublicParticipant, 0, len(record.Submission.Players))
+	for _, player := range record.Submission.Players {
+		if player.PlayerID == "" || player.BotName == "" || player.AISubmissionID == "" {
+			return match
+		}
+		participants = append(participants, PublicParticipant{PlayerID: player.PlayerID, DisplayName: player.BotName, AISubmissionID: player.AISubmissionID})
+	}
+	if len(participants) > 0 {
+		match.Participants = participants
+	}
+	return match
 }
 
 func replayMetadata(record QueueRecord) PublicReplayMetadata {
