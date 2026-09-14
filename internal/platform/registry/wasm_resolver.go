@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
@@ -65,13 +66,28 @@ func (r *WASIResolver) Resolve(_ context.Context, record DescriptorRecord) (Game
 
 type cleanupSession struct {
 	gamemaster.Session
-	cleanup func()
+	cleanup     func()
+	cleanupOnce sync.Once
 }
 
 func (s *cleanupSession) Shutdown(ctx context.Context) error {
 	err := s.Session.Shutdown(ctx)
-	s.cleanup()
+	s.cleanupOnce.Do(func() {
+		if s.cleanup != nil {
+			s.cleanup()
+		}
+	})
 	return err
+}
+
+// CurrentPublicReplay forwards the optional game-generated replay capability
+// without interpreting its opaque payload.
+func (s *cleanupSession) CurrentPublicReplay(ctx context.Context) (game.PublicReplay, error) {
+	provider, ok := s.Session.(gamemaster.PublicReplaySession)
+	if !ok {
+		return game.PublicReplay{}, fmt.Errorf("game master public replay is unavailable")
+	}
+	return provider.CurrentPublicReplay(ctx)
 }
 
 // NewWASIOverlay preserves built-in descriptors as a fallback while adding a
