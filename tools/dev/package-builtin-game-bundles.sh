@@ -43,7 +43,7 @@ pack_ai() {
   "ai_id": "$ai_id",
   "game_id": "$game_id",
   "game_version": "$game_version",
-  "runtime": {"kind": "wasm-wasi", "module": "module.wasm"}
+  "runtime": {"kind": "wasm-wasi", "module": "module.wasm", "memory_limit_pages": 1024}
 }
 EOF
   pack_zip "$bundle_dir" "$name"
