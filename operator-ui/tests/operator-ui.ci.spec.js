@@ -335,6 +335,11 @@ async function runBundleAdmissionFlow(page, api, family) {
   await page.getByTestId("operator-nav-requests").click();
   await expect(page.getByTestId(`request-row-${createdRequest.request_id}`)).toHaveCount(0);
 
+  await waitForRecord(api, async () => {
+    const items = await listItems(api, `${backendBaseURL}/api/v1/matches/completed`);
+    return items.find((item) => item.match_id === createdRequest.match_id && item.run_id === rerunRun.run_id && item.official) ?? null;
+  }, "promoted run in completed match history");
+
   await page.getByTestId("operator-nav-rankings").click();
   await page.getByLabel("Game ID").fill(family.gameID);
   await page.getByLabel("Game Version").fill(family.gameVersion);
