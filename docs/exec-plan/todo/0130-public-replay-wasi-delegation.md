@@ -42,8 +42,8 @@ wire response と unavailable semantics は変わらないため TypeSpec は変
 - `(MODIFY) internal/platform/registry/wasm_resolver.go`: shutdown 時 cleanup の挙動を変えず、
   materialize 済み game-master session の optional public-replay capability を cleanup session が
   保持・forward するようにする。
-- `(MODIFY) internal/platform/registry/registry_test.go`: terminal replay を提供する admitted WASI
-  descriptor/session を用いた focused regression を追加する。返却された session が capability を公開し、
+- `(NEW) internal/platform/registry/wasm_resolver_test.go`: `cleanupSession` を terminal replay を
+  提供する fake session で直接包む focused regression を追加する。wrapper が capability を公開し、
   replay result を forward すること、および shutdown 時 cleanup を継続することを確認する。
 
 ## 実施手順
@@ -53,9 +53,12 @@ wire response と unavailable semantics は変わらないため TypeSpec は変
 2. wrapped session が対応するとき、WASI cleanup wrapper が `CurrentPublicReplay` を forward するように
    拡張する。non-provider に対して replay data を生成せず、既存の optional-capability absence/error
    behavior を返す。
-3. admitted WASI descriptor を resolve する registry-level regression test を追加し、返却 session が
-   optional replay provider を保持し、format、version、payload を変更せず forward することを確認する。
-   wrapper が shutdown 時に materialized directory を削除することも確認する。
+3. `cleanupSession` を terminal replay provider である fake session と cleanup callback で直接構成する
+   registry-level regression test を追加する。wrapper が optional replay provider を保持し、format、version、
+   payload を変更せず forward すること、および shutdown が callback を一度だけ実行することを確認する。
+   `WASIResolver.Resolve` は concrete WASI runtime を直接起動し、checked-in game-master WASI fixture を持たないため、
+   本修正の capability forwarding はこの wrapper seam で決定的に検証する。既存 resolver の materialization と
+   cleanup 挙動は変更しない。
 4. focused Go test と適用される repository quality gate を実行する。deploy 後に staging で新しい
    Reversi `v1.1.0` match を submit・完了させ、anonymous detail、state、replay endpoint が available
    で相互に整合することを確認する。修正前 match は受入根拠に使わない。
