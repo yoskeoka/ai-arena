@@ -197,9 +197,23 @@ test("service-backed operator UI browser lane covers registration, request execu
     await expect(page.getByTestId("signup-invite-url")).toHaveAttribute("href", /\/login\?invite_token=/);
   }
 
+  const completedMatches = [];
   for (const family of bundleFamilies) {
-    await runBundleAdmissionFlow(page, api, family);
+    completedMatches.push(await runBundleAdmissionFlow(page, api, family));
   }
+
+  const [firstCompletedMatch, secondCompletedMatch] = completedMatches;
+  await expect(page.getByTestId(`ranking-completed-match-${encodeURIComponent(secondCompletedMatch.matchID)}`)).toBeVisible();
+  await expect(page.getByTestId(`ranking-completed-match-${encodeURIComponent(firstCompletedMatch.matchID)}`)).toHaveCount(0);
+  await page
+    .getByTestId(`ranking-completed-match-${encodeURIComponent(secondCompletedMatch.matchID)}`)
+    .getByRole("link", { name: "Open official run detail" })
+    .click();
+  await expect(page).toHaveURL(`/operator/runs/${encodeURIComponent(secondCompletedMatch.runID)}`);
+  const completedRunDetail = page.getByTestId(`match-detail-${secondCompletedMatch.runID}`);
+  await expect(completedRunDetail).toBeVisible();
+  await expect(completedRunDetail.getByRole("heading", { name: secondCompletedMatch.matchID, exact: true })).toBeVisible();
+  await expect(completedRunDetail.getByText(secondCompletedMatch.runID, { exact: true })).toBeVisible();
 
   if (captureArtifacts) {
     await page.screenshot({
@@ -317,6 +331,25 @@ async function runBundleAdmissionFlow(page, api, family) {
   for (const bot of activeBots) {
     await expect(page.getByTestId(`ranking-entry-${encodeURIComponent(bot.bot_id)}`)).toBeVisible();
   }
+
+  await page.getByTestId("operator-nav-requests").click();
+  await expect(page.getByTestId(`request-row-${createdRequest.request_id}`)).toHaveCount(0);
+
+  await page.getByTestId("operator-nav-rankings").click();
+  await page.getByLabel("Game ID").fill(family.gameID);
+  await page.getByLabel("Game Version").fill(family.gameVersion);
+  await page.getByLabel("Ruleset Version").fill(family.rulesetVersion);
+  await page.getByRole("button", { name: "Load ranking snapshot" }).click();
+  await expect(page.getByTestId(`ranking-completed-match-${encodeURIComponent(createdRequest.match_id)}`)).toBeVisible();
+  const completedMatch = page.getByTestId(`ranking-completed-match-${encodeURIComponent(createdRequest.match_id)}`);
+  await expect(completedMatch).toContainText(`match: ${createdRequest.match_id}`);
+  await expect(completedMatch).toContainText(`official run: ${rerunRun.run_id}`);
+  await expect(completedMatch.getByRole("link", { name: "Open official run detail" })).toHaveAttribute(
+    "href",
+    `/operator/runs/${encodeURIComponent(rerunRun.run_id)}`,
+  );
+
+  return { matchID: createdRequest.match_id, runID: rerunRun.run_id };
 }
 
 async function waitForRequest(api, registrationID) {
