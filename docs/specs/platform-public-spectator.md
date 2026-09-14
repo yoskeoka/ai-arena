@@ -43,3 +43,8 @@ terminal replay bytes は game が生成した versioned public replay artifact 
 metadata を保持してよいが、private artifact を decode、filter、redirect、re-envelope して public replay を導出しては
 ならない。read は 1 MiB の上限を超えて materialize してはならず、payload の size と digest を advertised metadata と
 照合する。1 MiB 超、欠落、retention、integrity failure、unsupported artifact は同じ unavailable result にする。
+
+admitted WASI game master が valid な terminal public replay を提供するとき、platform は runtime の lifecycle と
+resource cleanup をまたいでその replay capability を保持し、既存の replay artifact と metadata の永続化・公開へ渡す。
+この保持は game-owned で opaque な payload を変更せず、replay を提供しない game と artifact の integrity または
+retention failure は従来どおり unavailable とする。
