@@ -68,6 +68,7 @@ export function RankingsPage({ baseUrl }: RankingsPageProps) {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    await loadCompleted();
     await loadSnapshot(scope);
   };
 
