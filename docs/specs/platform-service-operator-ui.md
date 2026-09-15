@@ -56,6 +56,20 @@ first landing の operator UI は `Cloudflare Pages` から配信する static a
 - current `/` entry は `/operator` alias または redirect として扱ってよい
 - browser-specific concern である base URL normalize、credentialed fetch policy、GitHub login URL assembly、HTTP error message normalization は thin local adapter に閉じ込めてよい
 
+### Generated client delivery gate
+
+operator UI が消費する generated client は、TypeSpec source と committed generated artifact を一組の
+delivery input として扱う。HTTP wire contract の field-level source of truth は引き続き TypeSpec であり、
+この gate は API の observable behavior を変更しない。
+
+- TypeSpec source または generated client/runtime dependency の変更は、TypeSpec source からの clean な再生成で
+  committed artifact に tracked / untracked の drift がないことを確認しなければならない
+- generated client と operator UI は strict TypeScript compile を通らなければならない。unused local を含む
+  compiler failure を TypeScript 設定の緩和で回避してはならない
+- staging release は、上記の regeneration / drift / strict compile gate が対象 SHA で成功した後だけ deploy してよい。
+  push と manual dispatch は同じ変更入力の prerequisite を使い、target SHA の変更範囲を安全に取得できない
+  manual dispatch は deploy を許可してはならない
+
 Phase 7 の operator route family は少なくとも次を持たなければならない。
 
 - `/operator`
