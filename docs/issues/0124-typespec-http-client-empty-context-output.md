@@ -23,6 +23,15 @@ emitter の peer dependency は compiler/http/rest と上記 line に整合し�
 `pnpm --dir typespec run build` の後も `AiArenaClient.#context` と `SharedClient.#context` が再出力され、
 `pnpm --dir operator-ui run build` は各 field の `TS6133` で失敗した。
 
+## Upstream 関連
+
+- [microsoft/typespec#8479](https://github.com/microsoft/typespec/issues/8479) は empty client/options の
+  generation を扱う open issue であり、empty client の出力方針という根本領域が関連する。
+- 同 issue は `emitter:client:csharp` の issue で、JavaScript emitter が unused context を出力して
+  `TS6133` になる本件を直接は扱わない。2026-09-16 に title/body で
+  `http-client-js unused context`、`TS6133`、`unused private context`、`client context` を検索したが、
+  同一の公開 issue は確認できなかった。
+
 ## 次の判断
 
 upstream emitter が empty client を strict compile 可能に出力する version、または TypeSpec source で

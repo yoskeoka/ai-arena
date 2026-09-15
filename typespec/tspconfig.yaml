@@ -7,6 +7,9 @@ options:
     file-type: json
     output-file: openapi.json
   "@typespec/http-client-js":
+    # Related upstream issue: https://github.com/microsoft/typespec/issues/8479
+    # It covers empty-client generation generally; the JS TS6133 context output
+    # remains unreported upstream as of 2026-09-16.
     # Keep the emitted client strict-TypeScript-safe. The current latest emitter
     # still emits unused contexts for empty clients; validate a candidate upgrade
     # by compiling the generated operator UI before replacing the temporary fix.
