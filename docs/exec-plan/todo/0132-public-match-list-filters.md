@@ -5,7 +5,7 @@
 
 匿名 public spectator の `GET /api/v1-alpha/public/matches` を、全 discoverable match の暗黙順・無制限配列ではなく、game scope を server 側で絞り込んだ安定したページとして取得できるようにする。Reversi visualizer は `game_id=reversi` と `game_version_major=1` を固定し、必要な ruleset だけを選べる契約入力にする。
 
-query はすべて任意とし、`page` は 1 始まり・既定 `1`、`limit` は既定 `20` かつ `1..100`、`sort=completed_at`、`sort_order=asc|desc` とする。`sort` の既定は `completed_at`、`sort_order` の既定は `desc` とする。filter は `game_id` 完全一致、`game_version_major` の semantic-version major 一致、`ruleset_version` 完全一致とする。`completed_at` を持たない discoverable record は completed record の後ろに置き、同じ値は `match_id` で一意に tie-break する。ページ応答には、要求に反映された `page`、`limit`、filter 後件数 `total`、`items` を返す。
+query はすべて任意とし、`page` は 1 始まり・既定 `1`、`limit` は既定 `20` かつ `1..100`、`sort=completed_at`、`sort_order=asc|desc` とする。`sort` の既定は `completed_at`、`sort_order` の既定は `desc` とする。filter は `game_id` 完全一致、`game_version_major` の semantic-version major 一致、`ruleset_version` 完全一致とする。`completed_at` を持たない discoverable record は completed record の後ろに置き、同じ値は `match_id` で一意に tie-break する。ページ応答は top-level object の sibling key として、要求に反映された `page`、`limit`、filter 後かつ page 切り出し前件数 `total`、`items` を返す。例えば `{"page":1,"limit":20,"total":53,"items":[...]}` とする。
 
 無効な整数、範囲外の page/limit、未対応の sort/order、major が正の整数でない query は HTTP 400 にする。既存の selector / anonymous / public-only 境界、selected-run の規則、detail/state/replay resource の key は変更しない。AI Arena の staging が、現行 visualizer が必要とする `completed_at`、participant provenance、利用可能な Reversi replay を返す新しい service SHA で稼働していることを実データで確認して完了とする。
 
