@@ -12,7 +12,7 @@
 
 - generated client と operator UI が strict TypeScript build を通る。
 - TypeSpec source からの再生成後に committed artifact の drift がない。
-- `typespec/**` または generated client/runtime dependency の変更は、staging release 前に専用 CI gate を通過しなければならない。
+- `typespec/**` または generated client/runtime dependency の変更は、push と manual dispatch のいずれの staging release 前にも専用 CI gate を通過しなければならない。
 - 更新済み skill は実測した package compatibility、生成物差分の確認、ローカル/CI verification、失敗時の切り分けを含む。
 - 最新 SHA の staging release が target version と worker readiness を確認して成功する。
 
@@ -29,7 +29,7 @@ Addresses: https://github.com/yoskeoka/ai-arena/actions/runs/35011122951 （stag
 - `operator-ui/tsconfig.app.json:14-16` は `noUnusedLocals` を有効にしている。run `35011122951` の `Build operator UI` は generated `AiArenaClient.#context` と `SharedClient.#context` を未使用として `TS6133` で失敗した。
 - `operator-ui/src/generated/operator-api/src/aiArenaClient.ts:92-102,243-248` は operation を持たない client に context を保存しており、現在の failure を再現する出力である。`5b9a6bb` で一度生成物だけを直したが、`ff85f5e` の再生成で戻った。
 - `.github/workflows/operator-ui-browser.yml:3-27` と `.github/workflows/online-release-staging.yml:57-84` は `typespec/**` を required browser/typecheck input として扱わない。このため TypeSpec-only change が release 前の browser lane を起動せず、staging build で初めて検出された。
-- `.github/workflows/online-release-staging.yml:197-209` は該当する required workflow の成功後にのみ deploy を許可する。新しい gate はこの判断に参加させる。
+- `.github/workflows/online-release-staging.yml:114-123` の manual dispatch は resolved target SHA を即時 deploy 許可しており、現状では required workflow を検証しない。`.github/workflows/online-release-staging.yml:197-209` の push 側と同じ prerequisite 判断へ統合する必要がある。
 
 ## 仕様・運用契約
 
@@ -41,7 +41,7 @@ Addresses: https://github.com/yoskeoka/ai-arena/actions/runs/35011122951 （stag
 - `(MODIFY) typespec/package.json`, `typespec/pnpm-lock.yaml`, `typespec/pnpm-workspace.yaml` — TypeSpec compiler/libraries/JS emitter を互換な組で更新し、lock と minimum-release exception を同期する。
 - `(MODIFY) operator-ui/package.json`, `operator-ui/pnpm-lock.yaml` — emitter が要求する generated runtime dependency を root UI consumer と lock に同期する。
 - `(MODIFY) operator-ui/src/generated/operator-api/**`, `typespec/generated/openapi/operator/openapi.json` — 更新済み emitter による再生成結果だけを commit する。恒久的な手編集を残さない。
-- `(NEW) tools/dev/verify-typespec-generated-client.sh` — clean checkout で TypeSpec install/compile、generated-artifact drift check、operator UI install/strict build を順に実行する失敗終了の単一入口を置く。
+- `(NEW) tools/dev/verify-typespec-generated-client.sh` — clean checkout で frozen TypeSpec install/compile、tracked/untracked の generated-artifact drift check、operator UI frozen install/strict build を順に実行する失敗終了の単一入口を置く。
 - `(MODIFY) Makefile` — 上記 script を呼ぶローカル/CI 共通 target を追加する。
 - `(NEW) .github/workflows/typespec-client.yml` — TypeSpec、generated client、runtime dependency、verification script/workflow の変更で共通 target を実行する軽量 CI gate を追加する。
 - `(MODIFY) .github/workflows/online-release-staging.yml` — 同じ入力群で `typespec-client` workflow を release prerequisite に加える。既存の Go/browser prerequisite と deploy/version/readiness contract は変更しない。
@@ -61,9 +61,9 @@ Addresses: https://github.com/yoskeoka/ai-arena/actions/runs/35011122951 （stag
    - public/operator の exported client method、wire path、model serialization が意図せず変わらないことを、generated diff と既存 operator UI imports (`operator-ui/src/lib/operatorApiClient.ts`) から確認する。互換性を満たす update が得られない場合は、暫定 correction だけを release fix として分離し、取得した versions/peer dependencies/minimal reproduction を plan-linked local issue に残して upgrade を推測で完了させない。
 
 3. **再発を CI gate にする**
-   - verification script/Make target を、TypeSpec compile → generated output の `git diff --exit-code` → operator UI frozen install → `pnpm run build` の順に固定する。
+   - verification script/Make target を、TypeSpec frozen install → TypeSpec compile → generated output の tracked diff と untracked file 検査 → operator UI frozen install → `pnpm run build` の順に固定する。artifact directory 内の `git diff --exit-code` だけでなく、同 directory に untracked file がないことも失敗条件にする。
    - dedicated workflow の path filter と staging release gate の input pattern を一致させる。少なくとも `typespec/**`、generated client、operator UI の runtime package/lock、verification script、workflow 自体を対象にする。
-   - `typespec-client` の failure は staging deploy の前に prepare job を失敗させる。browser E2E をこの軽量 compile/drift gate の代替にせず、既存 browser lanes は維持する。
+   - `typespec-client` の failure は staging deploy の前に prepare job を失敗させる。manual dispatch でも resolved target SHA の parent diff から同じ required-workflow set を導出し、diff を安全に取得できない場合は gate を迂回して deploy しない。browser E2E をこの軽量 compile/drift gate の代替にせず、既存 browser lanes は維持する。
 
 4. **成功した upgrade 知識を skill にする**
    - skill は Step 2-3 の成功後に作成する。未検証の version や一般論は書かず、実際に採用した package set、peer dependency の確認方法、lock update、generator output の確認点、共通 verification command、CI/release gate、失敗時の分岐だけを記録する。
@@ -86,8 +86,8 @@ Addresses: https://github.com/yoskeoka/ai-arena/actions/runs/35011122951 （stag
 
 - current-pin temporary correction: `pnpm --dir operator-ui install --frozen-lockfile && pnpm --dir operator-ui run build`
 - updated compatibility set: `pnpm --dir typespec install`, `pnpm --dir typespec run build`, generated artifact diff review, `pnpm --dir operator-ui install --frozen-lockfile`, `pnpm --dir operator-ui run build`
-- generated drift: clean generated artifacts に対して共通 verification target を実行し、`typespec/generated/openapi/operator/` と `operator-ui/src/generated/operator-api/` に差分がないことを確認する。
-- CI contract: TypeSpec-only change と generated-client/runtime-only change の双方で `typespec-client` が起動すること、staging prepare が同 workflow の failure を deploy 前に拒否することを workflow test/fixture で確認する。
+- generated drift: clean checkout で共通 verification target を実行し、TypeSpec frozen install が lock どおりに完了すること、`typespec/generated/openapi/operator/` と `operator-ui/src/generated/operator-api/` に tracked diff と untracked file のいずれもないことを確認する。
+- CI contract: TypeSpec-only change と generated-client/runtime-only change の双方で `typespec-client` が起動すること、push と manual dispatch の staging prepare が同 workflow の failure を deploy 前に拒否することを workflow test/fixture で確認する。manual dispatch は resolved target SHA の parent diff を使用し、diff 取得不能時に deploy を許可しないことも確認する。
 - regression: generated `AiArenaClient` と `SharedClient` の unused context による `TS6133` が起きないことを strict build で確認し、`operator-ui/src/lib/operatorApiClient.ts` の imports/typecheck を保つ。
 - release acceptance: latest merged SHA の `online-release-staging` で DB migration、operator UI build、Pages deploy、Render trigger、exact `/version`、ready `/healthz` がすべて success であることを GitHub Actions logs から確認する。
 - quality/PR: applicable workflow lint、skill/document lint、dedicated CI、existing required checks、`review-task` の latest-head follow-up を完了する。
