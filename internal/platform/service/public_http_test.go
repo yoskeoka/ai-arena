@@ -98,6 +98,125 @@ func TestPublicAPIStateIsAnonymousVersionedAndExportedOnly(t *testing.T) {
 	}
 }
 
+func TestPublicAPISelectedRunPreservesParticipantSequenceAcrossViews(t *testing.T) {
+	ctx := context.Background()
+	queue := NewInMemoryQueueStore()
+	states := NewInMemoryPublicStateStore()
+	first := publicTestSubmission("run-first", "match-participants")
+	first.Players = []SubmittedPlayer{
+		{PlayerID: "player-second", BotID: "private-bot-second", BotName: "Second submitted", AISubmissionID: "revision-second", ArtifactRef: "private-artifact-second"},
+		{PlayerID: "player-first", BotID: "private-bot-first", BotName: "First submitted", AISubmissionID: "revision-first", ArtifactRef: "private-artifact-first"},
+	}
+	second := publicTestSubmission("run-promoted", "match-participants")
+	second.Players = []SubmittedPlayer{
+		{PlayerID: "player-new-first", BotID: "private-bot-new-first", BotName: "New first submitted", AISubmissionID: "revision-new-first", ArtifactRef: "private-artifact-new-first"},
+		{PlayerID: "player-new-second", BotID: "private-bot-new-second", BotName: "New second submitted", AISubmissionID: "revision-new-second", ArtifactRef: "private-artifact-new-second"},
+	}
+	completePublicTestRecord(t, ctx, queue, first)
+	completePublicTestRecord(t, ctx, queue, second)
+	if _, err := queue.Promote(ctx, first.RunID); err != nil {
+		t.Fatalf("Promote(first) error = %v", err)
+	}
+	if _, err := states.Publish(ctx, first.MatchID, first.RunID, game.ExportedSnapshot{Turn: 4, PublicState: []byte(`{"board":["first-run"]}`)}); err != nil {
+		t.Fatalf("Publish(first) error = %v", err)
+	}
+	queries, err := NewPublicQueryService(queue, states, NewDefaultArtifactReader(nil))
+	if err != nil {
+		t.Fatalf("NewPublicQueryService() error = %v", err)
+	}
+	api, err := NewPublicAPI(queries)
+	if err != nil {
+		t.Fatalf("NewPublicAPI() error = %v", err)
+	}
+
+	assertSelectedPublicRun(t, ctx, api, "run-first", first.Players)
+	if _, err := queue.Promote(ctx, second.RunID); err != nil {
+		t.Fatalf("Promote(second) error = %v", err)
+	}
+	if _, err := states.Publish(ctx, second.MatchID, second.RunID, game.ExportedSnapshot{Turn: 5, PublicState: []byte(`{"board":["promoted-run"]}`)}); err != nil {
+		t.Fatalf("Publish(second) error = %v", err)
+	}
+	assertSelectedPublicRun(t, ctx, api, "run-promoted", second.Players)
+}
+
+func completePublicTestRecord(t *testing.T, ctx context.Context, queue *InMemoryQueueStore, submission MatchSubmission) {
+	t.Helper()
+	record, err := queue.Enqueue(ctx, submission)
+	if err != nil {
+		t.Fatalf("Enqueue(%q) error = %v", submission.RunID, err)
+	}
+	for _, state := range []LifecycleState{StateLeased, StateRunning, StatePersisting, StateCompleted} {
+		record.State = state
+		if err := queue.Update(ctx, record); err != nil {
+			t.Fatalf("Update(%q, %s) error = %v", submission.RunID, state, err)
+		}
+	}
+}
+
+func assertSelectedPublicRun(t *testing.T, ctx context.Context, api *PublicAPI, wantRunID string, wantPlayers []SubmittedPlayer) {
+	t.Helper()
+	paths := []string{
+		"/api/v1-alpha/public/matches",
+		"/api/v1-alpha/public/matches/match-participants",
+		"/api/v1-alpha/public/matches/match-participants/state",
+	}
+	var wantCompletedAt string
+	for _, path := range paths {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+		request.Header.Set("Origin", "https://viewer.example")
+		api.Handler().ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, body = %s", path, response.Code, response.Body.String())
+		}
+		if got := response.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+			t.Fatalf("GET %s Access-Control-Allow-Origin = %q", path, got)
+		}
+		body := response.Body.String()
+		for _, forbidden := range []string{"bot_id", "artifact_ref", "artifact_id", "output_dir", "record_path", "credential"} {
+			if strings.Contains(body, forbidden) {
+				t.Fatalf("GET %s leaked %q: %s", path, forbidden, body)
+			}
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("GET %s decode error = %v", path, err)
+		}
+		if path == "/api/v1-alpha/public/matches" {
+			items, ok := payload["items"].([]any)
+			if !ok || len(items) != 1 {
+				t.Fatalf("GET %s items = %#v", path, payload["items"])
+			}
+			payload, ok = items[0].(map[string]any)
+			if !ok {
+				t.Fatalf("GET %s item = %#v", path, items[0])
+			}
+		}
+		if got := payload["selected_run_id"]; got != wantRunID {
+			t.Fatalf("GET %s selected_run_id = %v, want %q", path, got, wantRunID)
+		}
+		completedAt, ok := payload["completed_at"].(string)
+		if !ok || completedAt == "" {
+			t.Fatalf("GET %s completed_at = %#v", path, payload["completed_at"])
+		}
+		if wantCompletedAt == "" {
+			wantCompletedAt = completedAt
+		} else if completedAt != wantCompletedAt {
+			t.Fatalf("GET %s completed_at = %q, want immutable %q", path, completedAt, wantCompletedAt)
+		}
+		participants, ok := payload["participants"].([]any)
+		if !ok || len(participants) != len(wantPlayers) {
+			t.Fatalf("GET %s participants = %#v", path, payload["participants"])
+		}
+		for i, want := range wantPlayers {
+			participant, ok := participants[i].(map[string]any)
+			if !ok || participant["player_id"] != want.PlayerID || participant["display_name"] != want.BotName || participant["ai_submission_id"] != want.AISubmissionID {
+				t.Fatalf("GET %s participant[%d] = %#v, want %#v", path, i, participants[i], want)
+			}
+		}
+	}
+}
+
 func TestPublicAPIRejectsNonGETAndDoesNotExposeQueuedMatch(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

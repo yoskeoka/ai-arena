@@ -34,10 +34,13 @@ detail は観測可能であってはならない。terminal lifecycle の state
 を示す `retry_after_ms = 0` を返す。
 
 各 public match projection は、selected run が admission 時に固定した participant provenance を返す。participant は
-submitted player order のまま `player_id`、display name、immutable AI submission/revision identity だけを含む。platform は
-game 固有の player role や color を追加せず、consumer は配列順と game ruleset を使って解釈する。新規 admission は bot と
-raw AI submission のどちらの経路でもこの provenance を固定する。歴史的 record に完全な provenance がない場合、platform は
-現在の operator registry や private artifact から補完せず participant metadata を省略する。
+match request の submitted player order と個数を変えず、`player_id`、display name、immutable AI submission/revision
+identity だけを含む。同じ selected run では、この sequence と terminal completion timestamp を list、detail、state
+の各 resource から不変に観測できる。promotion は selected run 自体を切り替えるため、新たに選ばれた run の sequence と
+completion timestamp を返してよい。platform は game 固有の player role、color、人数、または配列順の意味を追加・検証せず、
+consumer は配列順と game ruleset を使って解釈する。新規 admission は bot と raw AI submission のどちらの経路でも
+この provenance を固定する。歴史的 record に完全な provenance がない場合、platform は現在の operator registry や private
+artifact から補完せず participant metadata を省略する。
 
 selected run が terminal artifact の durable persistence に成功して `completed` になったとき、projection は immutable な
 completion timestamp を返す。heartbeat、promotion、ranking などの更新時刻をその代わりに使ってはならない。未完了、persistence
