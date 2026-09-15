@@ -46,6 +46,22 @@ selected run が terminal artifact の durable persistence に成功して `comp
 completion timestamp を返す。heartbeat、promotion、ranking などの更新時刻をその代わりに使ってはならない。未完了、persistence
 前に failed になった run、および completion timestamp を持たない historical record はこの timestamp を省略する。
 
+## match list
+
+`GET /api/v1-alpha/public/matches` は discoverable logical match の selected run だけを返す。query はすべて任意で、
+`game_id` は完全一致、`game_version_major` は game semantic version の major の一致、`ruleset_version` は完全一致で
+絞り込む。`page` は 1 始まりで既定 `1`、`limit` は既定 `20` かつ `1..100`、`sort` は `completed_at` だけを受け付け既定も
+`completed_at`、`sort_order` は `asc` または `desc` で既定は `desc` とする。未知の query、無効な整数、範囲外の page / limit、
+正でない major、未対応の sort / sort order は HTTP 400 とする。
+
+completed timestamp を持つ record は timestamp 順に並び、timestamp を持たない record は sort order にかかわらず最後に
+置く。同じ timestamp の record と timestamp を持たない record は、sort order にかかわらず `match_id` の昇順で並ぶ。応答は
+`items` に加え、filter 後かつ page 前の `total`、要求へ反映した `page` と `limit`、`ceil(total / limit)` の `total_pages`
+を含む `pagination` を返す。`total = 0` の `total_pages` は `0` とする。
+
+`available_ruleset_versions` は `game_id` と `game_version_major` filter に合う discoverable selected run から、ruleset filter
+と page を適用する前に導出する。値は重複なしの昇順とし、ruleset filter の結果が空でも scope に存在する値を保持する。
+
 ## state と replay の境界
 
 latest-state resource は atomically published された exported snapshot だけから構成する。state publication は

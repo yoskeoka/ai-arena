@@ -30,8 +30,20 @@ model PublicMatch {
 }
 
 model PublicMatchListResponse {
+  pagination: PublicMatchPagination;
+  available_ruleset_versions: string[];
   items: PublicMatch[];
 }
+
+model PublicMatchPagination {
+  page: int32;
+  limit: int32;
+  total: int32;
+  total_pages: int32;
+}
+
+alias PublicMatchSort = "completed_at";
+alias PublicMatchSortOrder = "asc" | "desc";
 
 model PublicReplayMetadata {
   availability: PublicReplayAvailability;
@@ -62,7 +74,15 @@ model PublicReplayResponse {
 
 @route("/api/v1-alpha/public/matches")
 @get
-op listMatches(): PublicMatchListResponse;
+op listMatches(
+  @query game_id?: string,
+  @query @minValue(1) game_version_major?: int32,
+  @query ruleset_version?: string,
+  @query @minValue(1) page?: int32,
+  @query @minValue(1) @maxValue(100) limit?: int32,
+  @query sort?: PublicMatchSort,
+  @query sort_order?: PublicMatchSortOrder,
+): PublicMatchListResponse;
 
 @route("/api/v1-alpha/public/matches/{match_id}")
 @get
