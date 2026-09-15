@@ -11,10 +11,10 @@ Addresses: https://github.com/yoskeoka/ai-arena/issues/365
 
 ## 現状と根拠
 
-- `typespec/namespaces/public/api.tsp:13-25` は public match の任意 `participants` 配列を `player_id`、`display_name`、`ai_submission_id` として定義している。
+- `typespec/namespaces/public/api.tsp:13-27` は public match の任意 `participants` 配列を `player_id`、`display_name`、`ai_submission_id` として定義している。
 - `docs/specs/platform-public-spectator.md:34-39` は admission 時の participant provenance を submitted player order のまま返し、consumer が game ruleset と配列順を解釈すると定めている。
 - `internal/platform/service/request.go:244-280` は request participant の順序で immutable submitted player を作り、`internal/platform/service/public_state.go:283-301` は同順序で public projection を作る。
-- `internal/platform/service/worker_local.go:112-140` は submitted player order で game master へ player を渡す。Reversi provider の `games/reversi/src/gamemaster.rs:389-402` は先頭 player から Black の決定を要求する。
+- `internal/platform/service/worker_local.go:112-140` は submitted player order で game master へ player を渡す。`yoskeoka/reversi-ai-arena` の main（PR #47 作成時点）の `games/reversi/src/gamemaster.rs:389-402` は先頭 player から Black の決定を要求する。
 - `internal/platform/service/public_http_test.go:18-49` は projection の順序を unit test するが、standard Reversi の list/detail/state public HTTP response を Black/White semantics として結合検証していない。
 
 ## Change map
@@ -26,17 +26,16 @@ Addresses: https://github.com/yoskeoka/ai-arena/issues/365
 
 ## Black-box specification changes
 
-1. A completed public match whose game metadata identifies standard Reversi exposes exactly two complete participant provenance entries when the selected run has complete provenance. Entry 0 is the Black bot and entry 1 is the White bot. Each keeps its public `display_name` and immutable `ai_submission_id`; the browser retains the full values for requests and displays only its own safe presentation form.
-2. The same selected-run participant order and immutable terminal `completed_at` are observable from list, detail, and state responses. Promotion or later mutable metadata updates do not change the selected response's pinned participant identities or completion time.
-3. The endpoint remains credential-free and GET-only. It never exposes role-inference inputs or private provenance such as bot IDs, artifact references, locators, credentials, records, snapshots, histories, or run selection controls.
+1. `game_id = "reversi"`、major version 1、`ruleset_version = "standard"` の completed selected run は、Reversi provider が two-player admission を完了し provenance が完全な場合に限り、ちょうど二つの participant entry を返す。entry 0 は Black、entry 1 は White であり、各 entry は public `display_name` と immutable `ai_submission_id` を保持する。
+2. 同じ selected run の participant order と terminal `completed_at` は list、detail、state で不変に観測できる。promotion は selected run 自体を切り替え、新しく選ばれた run の identity と completion time を返してよい。
+3. endpoint は credential-free、GET-only のままとする。公開の participant order 以外の private/internal role-inference input、bot ID、artifact reference、locator、credential、record、snapshot、history、run selection control は出さない。
 
 ## Work
 
-1. Add a concise Reversi-specific clause to the public spectator specification. Keep the generic array contract authoritative for other games and state that the clause applies only to completed standard Reversi two-player matches.
-2. Add matching TypeSpec documentation without renaming or reshaping `PublicParticipant`. Regenerate the checked-in API artifacts if the TypeSpec build changes them.
-3. Extend the public HTTP test setup with distinct first/second submitted Reversi players and a completed selected run. Exercise list, detail, and state through the anonymous route rather than only calling the projection helper.
-4. Assert positional Black/White semantics, `display_name`, `ai_submission_id`, immutable `completed_at`, selected-run consistency, CORS, and the absence of private fields in every response. Keep malformed or historical incomplete provenance behavior unchanged.
-5. Run the scoped Go tests, TypeSpec generation/checks, and applicable repository quality gates. Delete this completed plan only from its later execution branch after evidence is captured and its implementation PR is prepared.
+1. public spectator specification と TypeSpec に Reversi 固有の位置的意味を追記する。他 game の generic array contract と既存 `PublicParticipant` の wire field は変更しない。
+2. distinct first/second Reversi player を持つ completed selected run で anonymous list/detail/state を検証する。exactly-two precondition を満たさない Reversi record はこの保証の対象外であることも negative test で示す。
+3. Black/White order、`display_name`、`ai_submission_id`、immutable `completed_at`、promotion による selected-run switch、CORS、private field 非露出を検証する。
+4. scoped Go test、TypeSpec generation/check、repository quality gate を実行する。完了した plan は後続の execution branch で PR 準備後に削除する。
 
 ## Dependencies and parallelism
 
