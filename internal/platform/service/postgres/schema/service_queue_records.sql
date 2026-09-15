@@ -16,6 +16,7 @@ CREATE TABLE service_queue_records (
     lease_deadline TIMESTAMPTZ,
     last_heartbeat_at TIMESTAMPTZ,
     terminal_json JSONB,
+    completed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

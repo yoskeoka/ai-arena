@@ -270,9 +270,11 @@ func (s *MatchRequestService) resolveParticipants(ctx context.Context, gameRegis
 			return nil, fmt.Errorf("%w: service: ai submission %q does not belong to game registration %q", ErrBadRequest, aiSubmissionID, gameRegistrationID)
 		}
 		players = append(players, SubmittedPlayer{
-			PlayerID:    playerID,
-			ArtifactRef: ai.ArtifactRef,
-			ArtifactID:  ai.ArtifactID,
+			PlayerID:       playerID,
+			BotName:        ai.DisplayName,
+			AISubmissionID: ai.AISubmissionID,
+			ArtifactRef:    ai.ArtifactRef,
+			ArtifactID:     ai.ArtifactID,
 		})
 	}
 	return players, nil

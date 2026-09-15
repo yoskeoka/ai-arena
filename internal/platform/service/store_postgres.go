@@ -169,6 +169,7 @@ func (s *PostgresQueueStore) Claim(ctx context.Context, workerID string) (QueueR
 		row.LeaseDeadline,
 		row.LastHeartbeatAt,
 		row.TerminalJson,
+		row.CompletedAt,
 	)
 	if err != nil {
 		return QueueRecord{}, err
@@ -361,6 +362,7 @@ func (s *PostgresQueueStore) List(ctx context.Context) ([]QueueRecord, error) {
 			row.LeaseDeadline,
 			row.LastHeartbeatAt,
 			row.TerminalJson,
+			row.CompletedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -405,6 +407,7 @@ func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, tx pgx.Tx, runID 
 				row.LeaseDeadline,
 				row.LastHeartbeatAt,
 				row.TerminalJson,
+				row.CompletedAt,
 			)
 		}
 	} else {
@@ -429,6 +432,7 @@ func (s *PostgresQueueStore) loadRecordTx(ctx context.Context, tx pgx.Tx, runID 
 				row.LeaseDeadline,
 				row.LastHeartbeatAt,
 				row.TerminalJson,
+				row.CompletedAt,
 			)
 		}
 	}
@@ -458,6 +462,7 @@ func queueRecordFromFields(
 	leaseDeadline pgtype.Timestamptz,
 	lastHeartbeatAt pgtype.Timestamptz,
 	terminalJSON []byte,
+	completedAt pgtype.Timestamptz,
 ) (QueueRecord, error) {
 	var players []SubmittedPlayer
 	if err := json.Unmarshal(playersJSON, &players); err != nil {
@@ -492,6 +497,10 @@ func queueRecordFromFields(
 			return QueueRecord{}, fmt.Errorf("service: decode terminal artifacts: %w", err)
 		}
 		record.Terminal = &terminal
+	}
+	if completedAt.Valid {
+		value := completedAt.Time.UTC()
+		record.CompletedAt = &value
 	}
 
 	return cloneQueueRecord(record), nil

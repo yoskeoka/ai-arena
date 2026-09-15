@@ -377,7 +377,18 @@ export interface PublicMatch {
     | "completed"
     | "failed"
     | "canceled";
+  participants?: Array<PublicParticipant>;
+  completedAt?: Date;
 }
+export interface PublicParticipant {
+  playerId: string;
+  displayName: string;
+  aiSubmissionId: string;
+}
+/**
+ * An instant in coordinated universal time (UTC)"
+ */
+export type UtcDateTime = Date;
 export interface PublicMatchDetail extends PublicMatch {
   replay: PublicReplayMetadata;
 }

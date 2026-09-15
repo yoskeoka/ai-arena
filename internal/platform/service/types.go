@@ -70,10 +70,11 @@ const (
 
 // QueueRecord is the persisted service-side lifecycle state for one submission.
 type QueueRecord struct {
-	Submission MatchSubmission    `json:"submission"`
-	State      LifecycleState     `json:"state"`
-	Lease      *WorkerLease       `json:"lease,omitempty"`
-	Terminal   *TerminalArtifacts `json:"terminal,omitempty"`
+	Submission  MatchSubmission    `json:"submission"`
+	State       LifecycleState     `json:"state"`
+	CompletedAt *time.Time         `json:"completed_at,omitempty"`
+	Lease       *WorkerLease       `json:"lease,omitempty"`
+	Terminal    *TerminalArtifacts `json:"terminal,omitempty"`
 }
 
 // WorkerLease records which worker currently owns a queued submission.

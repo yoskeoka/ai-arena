@@ -61,7 +61,8 @@ RETURNING
     records.worker_id,
     records.lease_deadline,
     records.last_heartbeat_at,
-    records.terminal_json;
+    records.terminal_json,
+    records.completed_at;
 
 -- name: UpdateQueueRecord :exec
 UPDATE service_queue_records
@@ -81,6 +82,10 @@ SET
     lease_deadline = @lease_deadline,
     last_heartbeat_at = @last_heartbeat_at,
     terminal_json = @terminal_json,
+    completed_at = CASE
+        WHEN @state = 'completed' AND completed_at IS NULL THEN NOW()
+        ELSE completed_at
+    END,
     updated_at = NOW()
 WHERE submission_id = @submission_id;
 
@@ -107,6 +112,7 @@ SELECT
     lease_deadline,
     last_heartbeat_at,
     terminal_json
+    ,completed_at
 FROM service_queue_records
 WHERE submission_id = @submission_id;
 
@@ -128,6 +134,7 @@ SELECT
     lease_deadline,
     last_heartbeat_at,
     terminal_json
+    ,completed_at
 FROM service_queue_records
 WHERE submission_id = @submission_id
 FOR UPDATE;
@@ -150,6 +157,7 @@ SELECT
     lease_deadline,
     last_heartbeat_at,
     terminal_json
+    ,completed_at
 FROM service_queue_records
 ORDER BY queue_order;
 

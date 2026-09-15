@@ -100,6 +100,33 @@ func TestInMemoryQueueStoreReportsMissingRecord(t *testing.T) {
 	}
 }
 
+func TestInMemoryQueueStorePinsCompletionTimeOnce(t *testing.T) {
+	store := NewInMemoryQueueStore()
+	ctx := context.Background()
+	record, err := store.Enqueue(ctx, testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai")))
+	if err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+	for _, state := range []LifecycleState{StateLeased, StateRunning, StatePersisting, StateCompleted} {
+		record.State = state
+		if err := store.Update(ctx, record); err != nil {
+			t.Fatalf("Update(%s) error = %v", state, err)
+		}
+	}
+	completed, err := store.Get(ctx, record.Submission.RunID)
+	if err != nil || completed.CompletedAt == nil {
+		t.Fatalf("completed record = %#v, err = %v", completed, err)
+	}
+	first := *completed.CompletedAt
+	if err := store.Update(ctx, completed); err != nil {
+		t.Fatalf("Update(completed idempotent) error = %v", err)
+	}
+	again, err := store.Get(ctx, record.Submission.RunID)
+	if err != nil || again.CompletedAt == nil || !again.CompletedAt.Equal(first) {
+		t.Fatalf("immutable completion = %#v, err = %v", again.CompletedAt, err)
+	}
+}
+
 func TestInMemoryQueueStoreCopiesSubmissionPlayers(t *testing.T) {
 	store := NewInMemoryQueueStore()
 	submission := testSubmission(repoJoin(t, "testdata/ai/janken/janken-rock-ai"))

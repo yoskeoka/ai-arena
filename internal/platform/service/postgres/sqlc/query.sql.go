@@ -60,7 +60,8 @@ RETURNING
     records.worker_id,
     records.lease_deadline,
     records.last_heartbeat_at,
-    records.terminal_json
+    records.terminal_json,
+    records.completed_at
 `
 
 type ClaimNextQueueRecordParams struct {
@@ -88,6 +89,7 @@ type ClaimNextQueueRecordRow struct {
 	LeaseDeadline   pgtype.Timestamptz
 	LastHeartbeatAt pgtype.Timestamptz
 	TerminalJson    []byte
+	CompletedAt     pgtype.Timestamptz
 }
 
 func (q *Queries) ClaimNextQueueRecord(ctx context.Context, arg ClaimNextQueueRecordParams) (ClaimNextQueueRecordRow, error) {
@@ -116,6 +118,7 @@ func (q *Queries) ClaimNextQueueRecord(ctx context.Context, arg ClaimNextQueueRe
 		&i.LeaseDeadline,
 		&i.LastHeartbeatAt,
 		&i.TerminalJson,
+		&i.CompletedAt,
 	)
 	return i, err
 }
@@ -202,6 +205,7 @@ SELECT
     lease_deadline,
     last_heartbeat_at,
     terminal_json
+    ,completed_at
 FROM service_queue_records
 WHERE submission_id = $1
 `
@@ -223,6 +227,7 @@ type GetQueueRecordRow struct {
 	LeaseDeadline   pgtype.Timestamptz
 	LastHeartbeatAt pgtype.Timestamptz
 	TerminalJson    []byte
+	CompletedAt     pgtype.Timestamptz
 }
 
 func (q *Queries) GetQueueRecord(ctx context.Context, submissionID string) (GetQueueRecordRow, error) {
@@ -245,6 +250,7 @@ func (q *Queries) GetQueueRecord(ctx context.Context, submissionID string) (GetQ
 		&i.LeaseDeadline,
 		&i.LastHeartbeatAt,
 		&i.TerminalJson,
+		&i.CompletedAt,
 	)
 	return i, err
 }
@@ -267,6 +273,7 @@ SELECT
     lease_deadline,
     last_heartbeat_at,
     terminal_json
+    ,completed_at
 FROM service_queue_records
 WHERE submission_id = $1
 FOR UPDATE
@@ -289,6 +296,7 @@ type GetQueueRecordForUpdateRow struct {
 	LeaseDeadline   pgtype.Timestamptz
 	LastHeartbeatAt pgtype.Timestamptz
 	TerminalJson    []byte
+	CompletedAt     pgtype.Timestamptz
 }
 
 func (q *Queries) GetQueueRecordForUpdate(ctx context.Context, submissionID string) (GetQueueRecordForUpdateRow, error) {
@@ -311,6 +319,7 @@ func (q *Queries) GetQueueRecordForUpdate(ctx context.Context, submissionID stri
 		&i.LeaseDeadline,
 		&i.LastHeartbeatAt,
 		&i.TerminalJson,
+		&i.CompletedAt,
 	)
 	return i, err
 }
@@ -402,6 +411,7 @@ SELECT
     lease_deadline,
     last_heartbeat_at,
     terminal_json
+    ,completed_at
 FROM service_queue_records
 ORDER BY queue_order
 `
@@ -423,6 +433,7 @@ type ListQueueRecordsRow struct {
 	LeaseDeadline   pgtype.Timestamptz
 	LastHeartbeatAt pgtype.Timestamptz
 	TerminalJson    []byte
+	CompletedAt     pgtype.Timestamptz
 }
 
 func (q *Queries) ListQueueRecords(ctx context.Context) ([]ListQueueRecordsRow, error) {
@@ -451,6 +462,7 @@ func (q *Queries) ListQueueRecords(ctx context.Context) ([]ListQueueRecordsRow, 
 			&i.LeaseDeadline,
 			&i.LastHeartbeatAt,
 			&i.TerminalJson,
+			&i.CompletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -535,6 +547,10 @@ SET
     lease_deadline = $13,
     last_heartbeat_at = $14,
     terminal_json = $15,
+    completed_at = CASE
+        WHEN $11 = 'completed' AND completed_at IS NULL THEN NOW()
+        ELSE completed_at
+    END,
     updated_at = NOW()
 WHERE submission_id = $16
 `

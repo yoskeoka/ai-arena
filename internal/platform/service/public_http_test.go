@@ -2,16 +2,48 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 )
+
+func TestPublicMatchUsesPinnedParticipantOrderAndCompletionTime(t *testing.T) {
+	t.Parallel()
+	completedAt := time.Date(2026, time.September, 15, 1, 2, 3, 0, time.UTC)
+	record := QueueRecord{Submission: MatchSubmission{MatchID: "match-1", RunID: "run-1", Players: []SubmittedPlayer{
+		{PlayerID: "player-z", BotName: "second admitted", AISubmissionID: "revision-2"},
+		{PlayerID: "player-a", BotName: "first admitted", AISubmissionID: "revision-1"},
+	}}, State: StateCompleted, CompletedAt: &completedAt}
+	match := publicMatchFromRecord(record)
+	if match.CompletedAt == nil || !match.CompletedAt.Equal(completedAt) {
+		t.Fatalf("CompletedAt = %v, want %v", match.CompletedAt, completedAt)
+	}
+	if len(match.Participants) != 2 || match.Participants[0].PlayerID != "player-z" || match.Participants[1].PlayerID != "player-a" {
+		t.Fatalf("Participants = %#v, want submitted order", match.Participants)
+	}
+	body, err := json.Marshal(match)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	for _, forbidden := range []string{"bot_id", "artifact_ref", "artifact_id", "output_dir"} {
+		if strings.Contains(string(body), forbidden) {
+			t.Fatalf("public payload leaked %q: %s", forbidden, body)
+		}
+	}
+
+	record.Submission.Players[1].BotName = ""
+	if got := publicMatchFromRecord(record).Participants; got != nil {
+		t.Fatalf("Participants = %#v, want omitted incomplete legacy provenance", got)
+	}
+}
 
 func TestPublicAPIStateIsAnonymousVersionedAndExportedOnly(t *testing.T) {
 	t.Parallel()

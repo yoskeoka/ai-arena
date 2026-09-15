@@ -114,6 +114,7 @@ type ServiceQueueRecord struct {
 	LeaseDeadline   pgtype.Timestamptz
 	LastHeartbeatAt pgtype.Timestamptz
 	TerminalJson    []byte
+	CompletedAt     pgtype.Timestamptz
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 }

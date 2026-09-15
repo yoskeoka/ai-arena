@@ -12,11 +12,19 @@ namespace AiArena.Public;
 alias PublicStateAvailability = "available" | "state_unavailable";
 alias PublicReplayAvailability = "available" | "replay_unavailable";
 
+model PublicParticipant {
+  player_id: string;
+  display_name: string;
+  ai_submission_id: string;
+}
+
 model PublicMatch {
   match_id: string;
   selected_run_id: string;
   game: GameMetadata;
   lifecycle_state: LifecycleState;
+  participants?: PublicParticipant[];
+  completed_at?: utcDateTime;
 }
 
 model PublicMatchListResponse {
