@@ -1,7 +1,9 @@
 package service
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 )
 
 // PublicAPI exposes the versioned anonymous spectator HTTP family.
@@ -32,12 +34,71 @@ func (a *PublicAPI) Handler() http.Handler {
 }
 
 func (a *PublicAPI) handleList(w http.ResponseWriter, r *http.Request) {
-	items, err := a.queries.List(r.Context())
+	options, err := decodePublicMatchListOptions(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid public match list query"})
+		return
+	}
+	response, err := a.queries.List(r.Context(), options)
 	if err != nil {
 		writePublicUnavailable(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, response)
+}
+
+func decodePublicMatchListOptions(r *http.Request) (PublicMatchListOptions, error) {
+	options := defaultPublicMatchListOptions()
+	values := r.URL.Query()
+	for key, value := range values {
+		if len(value) != 1 {
+			return PublicMatchListOptions{}, fmt.Errorf("query %q must occur once", key)
+		}
+		switch key {
+		case "game_id":
+			options.GameID = value[0]
+		case "ruleset_version":
+			options.RulesetVersion = value[0]
+		case "game_version_major":
+			major, err := parsePositivePublicQueryInt(value[0])
+			if err != nil {
+				return PublicMatchListOptions{}, err
+			}
+			options.GameVersionMajor = major
+		case "page":
+			page, err := parsePositivePublicQueryInt(value[0])
+			if err != nil {
+				return PublicMatchListOptions{}, err
+			}
+			options.Page = page
+		case "limit":
+			limit, err := parsePositivePublicQueryInt(value[0])
+			if err != nil || limit > 100 {
+				return PublicMatchListOptions{}, fmt.Errorf("limit must be 1..100")
+			}
+			options.Limit = limit
+		case "sort":
+			if value[0] != "completed_at" {
+				return PublicMatchListOptions{}, fmt.Errorf("unsupported sort")
+			}
+		case "sort_order":
+			if value[0] != "asc" && value[0] != "desc" {
+				return PublicMatchListOptions{}, fmt.Errorf("unsupported sort order")
+			}
+			options.SortOrder = value[0]
+		default:
+			return PublicMatchListOptions{}, fmt.Errorf("unsupported query %q", key)
+		}
+	}
+	return options, nil
+}
+
+func parsePositivePublicQueryInt(raw string) (int, error) {
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 {
+		return 0, fmt.Errorf("must be a positive integer")
+	}
+	return value, nil
 }
 
 func (a *PublicAPI) handleGet(w http.ResponseWriter, r *http.Request) {

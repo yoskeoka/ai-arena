@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +44,105 @@ func TestPublicMatchUsesPinnedParticipantOrderAndCompletionTime(t *testing.T) {
 	if got := publicMatchFromRecord(record).Participants; got != nil {
 		t.Fatalf("Participants = %#v, want omitted incomplete legacy provenance", got)
 	}
+}
+
+func TestPublicMatchListFiltersSortsAndPaginatesStably(t *testing.T) {
+	t.Parallel()
+	completedEarly := time.Date(2026, time.September, 14, 1, 0, 0, 0, time.UTC)
+	completedLate := time.Date(2026, time.September, 15, 1, 0, 0, 0, time.UTC)
+	queue := &publicListQueueStore{records: []QueueRecord{
+		publicListRecord("match-z", "reversi", "1.1.0", "standard", &completedLate),
+		publicListRecord("match-a", "reversi", "1.2.0", "xot", &completedLate),
+		publicListRecord("match-b", "reversi", "1.0.0", "standard", &completedEarly),
+		publicListRecord("match-null", "reversi", "1.0.0", "standard", nil),
+		publicListRecord("match-other-major", "reversi", "2.0.0", "standard", &completedLate),
+		publicListRecord("match-other-game", "janken", "1.0.0", "classic", &completedLate),
+	}}
+	queries, err := NewPublicQueryService(queue, NewInMemoryPublicStateStore(), NewDefaultArtifactReader(nil))
+	if err != nil {
+		t.Fatalf("NewPublicQueryService() error = %v", err)
+	}
+
+	page, err := queries.List(context.Background(), PublicMatchListOptions{GameID: "reversi", GameVersionMajor: 1, Page: 1, Limit: 2, SortOrder: "desc"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if got, want := page.Pagination, (PublicMatchPagination{Page: 1, Limit: 2, Total: 4, TotalPages: 2}); got != want {
+		t.Fatalf("Pagination = %#v, want %#v", got, want)
+	}
+	if got, want := page.AvailableRulesetVersions, []string{"standard", "xot"}; !slices.Equal(got, want) {
+		t.Fatalf("AvailableRulesetVersions = %#v, want %#v", got, want)
+	}
+	if got, want := publicMatchIDs(page.Items), []string{"match-a", "match-z"}; !slices.Equal(got, want) {
+		t.Fatalf("page 1 IDs = %#v, want %#v", got, want)
+	}
+
+	page, err = queries.List(context.Background(), PublicMatchListOptions{GameID: "reversi", GameVersionMajor: 1, RulesetVersion: "standard", Page: 1, Limit: 20, SortOrder: "asc"})
+	if err != nil {
+		t.Fatalf("List(filtered) error = %v", err)
+	}
+	if got, want := publicMatchIDs(page.Items), []string{"match-b", "match-z", "match-null"}; !slices.Equal(got, want) {
+		t.Fatalf("filtered IDs = %#v, want %#v", got, want)
+	}
+	if got, want := page.AvailableRulesetVersions, []string{"standard", "xot"}; !slices.Equal(got, want) {
+		t.Fatalf("ruleset metadata = %#v, want scope-wide %#v", got, want)
+	}
+}
+
+func TestPublicAPIListRejectsInvalidQueryAndPreservesDefaults(t *testing.T) {
+	t.Parallel()
+	queue := &publicListQueueStore{records: []QueueRecord{publicListRecord("match-1", "reversi", "1.0.0", "standard", nil)}}
+	queries, err := NewPublicQueryService(queue, NewInMemoryPublicStateStore(), NewDefaultArtifactReader(nil))
+	if err != nil {
+		t.Fatalf("NewPublicQueryService() error = %v", err)
+	}
+	api, err := NewPublicAPI(queries)
+	if err != nil {
+		t.Fatalf("NewPublicAPI() error = %v", err)
+	}
+	for _, query := range []string{"?page=0", "?limit=101", "?game_version_major=zero", "?sort=match_id", "?sort_order=sideways", "?unknown=value", "?page=1&page=2"} {
+		response := httptest.NewRecorder()
+		api.Handler().ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1-alpha/public/matches"+query, nil))
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("GET %s status = %d, want %d", query, response.Code, http.StatusBadRequest)
+		}
+	}
+	response := httptest.NewRecorder()
+	api.Handler().ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1-alpha/public/matches", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("default list status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var body PublicMatchList
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got, want := body.Pagination, (PublicMatchPagination{Page: 1, Limit: 20, Total: 1, TotalPages: 1}); got != want {
+		t.Fatalf("defaults pagination = %#v, want %#v", got, want)
+	}
+	if got := response.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Fatalf("Access-Control-Allow-Origin = %q", got)
+	}
+}
+
+type publicListQueueStore struct {
+	*InMemoryQueueStore
+	records []QueueRecord
+}
+
+func (s *publicListQueueStore) List(context.Context) ([]QueueRecord, error) {
+	return append([]QueueRecord(nil), s.records...), nil
+}
+
+func publicListRecord(matchID, gameID, gameVersion, rulesetVersion string, completedAt *time.Time) QueueRecord {
+	return QueueRecord{Submission: MatchSubmission{MatchID: matchID, RunID: "run-" + matchID, Game: contract.GameMetadata{GameID: gameID, GameVersion: gameVersion, RulesetVersion: rulesetVersion}}, State: StateCompleted, CompletedAt: completedAt}
+}
+
+func publicMatchIDs(items []PublicMatch) []string {
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.MatchID)
+	}
+	return ids
 }
 
 func TestPublicAPIStateIsAnonymousVersionedAndExportedOnly(t *testing.T) {

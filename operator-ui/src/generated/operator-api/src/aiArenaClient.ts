@@ -1,4 +1,8 @@
-import { type AiArenaClientOptions } from "./api/aiArenaClientContext.js";
+import {
+  type AiArenaClientContext,
+  type AiArenaClientOptions,
+  createAiArenaClientContext,
+} from "./api/aiArenaClientContext.js";
 import {
   createOperatorClientContext,
   type OperatorClientContext,
@@ -71,7 +75,11 @@ import {
   listMatches,
   type ListMatchesOptions,
 } from "./api/publicClient/publicClientOperations.js";
-import { type SharedClientOptions } from "./api/sharedClient/sharedClientContext.js";
+import {
+  createSharedClientContext,
+  type SharedClientContext,
+  type SharedClientOptions,
+} from "./api/sharedClient/sharedClientContext.js";
 import type {
   AiSubmissionRequest,
   BotRevisionRequest,
@@ -82,10 +90,12 @@ import type {
 } from "./models/models.js";
 
 export class AiArenaClient {
+  #context: AiArenaClientContext
   sharedClient: SharedClient;
   operatorClient: OperatorClient;
   publicClient: PublicClient
   constructor(endpoint: string, options?: AiArenaClientOptions) {
+    this.#context = createAiArenaClientContext(endpoint, options);
     this.sharedClient = new SharedClient(endpoint, options);;this
       .operatorClient = new OperatorClient(endpoint, options);;this
       .publicClient = new PublicClient(endpoint, options);
@@ -231,6 +241,9 @@ export class OperatorClient {
   }
 }
 export class SharedClient {
-  constructor(_endpoint: string, _options?: SharedClientOptions) {
+  #context: SharedClientContext
+  constructor(endpoint: string, options?: SharedClientOptions) {
+    this.#context = createSharedClientContext(endpoint, options);
+
   }
 }
