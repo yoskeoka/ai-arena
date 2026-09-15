@@ -100,7 +100,7 @@ func TestPublicAPIListRejectsInvalidQueryAndPreservesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPublicAPI() error = %v", err)
 	}
-	for _, query := range []string{"?page=0", "?limit=101", "?game_version_major=zero", "?sort=match_id", "?sort_order=sideways", "?unknown=value", "?page=1&page=2"} {
+	for _, query := range []string{"?page=0", "?limit=101", "?game_version_major=zero", "?game_version_major=2147483648", "?sort=match_id", "?sort_order=sideways", "?unknown=value", "?page=1&page=2"} {
 		response := httptest.NewRecorder()
 		api.Handler().ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1-alpha/public/matches"+query, nil))
 		if response.Code != http.StatusBadRequest {

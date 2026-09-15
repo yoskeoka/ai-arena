@@ -94,11 +94,11 @@ func decodePublicMatchListOptions(r *http.Request) (PublicMatchListOptions, erro
 }
 
 func parsePositivePublicQueryInt(raw string) (int, error) {
-	value, err := strconv.Atoi(raw)
+	value, err := strconv.ParseInt(raw, 10, 32)
 	if err != nil || value < 1 {
 		return 0, fmt.Errorf("must be a positive integer")
 	}
-	return value, nil
+	return int(value), nil
 }
 
 func (a *PublicAPI) handleGet(w http.ResponseWriter, r *http.Request) {

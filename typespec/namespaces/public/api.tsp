@@ -76,7 +76,7 @@ model PublicReplayResponse {
 @get
 op listMatches(
   @query game_id?: string,
-  @query game_version_major?: int32,
+  @query @minValue(1) game_version_major?: int32,
   @query ruleset_version?: string,
   @query @minValue(1) page?: int32,
   @query @minValue(1) @maxValue(100) limit?: int32,
