@@ -7,5 +7,10 @@ options:
     file-type: json
     output-file: openapi.json
   "@typespec/http-client-js":
+    # JS emitter bug: https://github.com/microsoft/typespec/issues/11978
+    # Related empty-client design issue (C#): https://github.com/microsoft/typespec/issues/8479
+    # Keep the emitted client strict-TypeScript-safe. The current latest emitter
+    # still emits unused contexts for empty clients; validate a candidate upgrade
+    # by compiling the generated operator UI before replacing the temporary fix.
     emitter-output-dir: "{project-root}/../operator-ui/src/generated/operator-api"
     package-name: "@yoskeoka/ai-arena-operator-api"
