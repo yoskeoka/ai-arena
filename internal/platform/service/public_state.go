@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
+	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
@@ -111,6 +113,36 @@ type PublicMatch struct {
 	CompletedAt    *time.Time            `json:"completed_at,omitempty"`
 }
 
+const (
+	defaultPublicMatchListPage  = 1
+	defaultPublicMatchListLimit = 20
+)
+
+// PublicMatchListOptions constrains the anonymous match list to one game scope and page.
+type PublicMatchListOptions struct {
+	GameID           string
+	GameVersionMajor int
+	RulesetVersion   string
+	Page             int
+	Limit            int
+	SortOrder        string
+}
+
+// PublicMatchPagination describes the selected page after list filters are applied.
+type PublicMatchPagination struct {
+	Page       int `json:"page"`
+	Limit      int `json:"limit"`
+	Total      int `json:"total"`
+	TotalPages int `json:"total_pages"`
+}
+
+// PublicMatchList is the anonymous list response including scope metadata.
+type PublicMatchList struct {
+	Pagination               PublicMatchPagination `json:"pagination"`
+	AvailableRulesetVersions []string              `json:"available_ruleset_versions"`
+	Items                    []PublicMatch         `json:"items"`
+}
+
 // PublicParticipant is immutable admission provenance safe for anonymous viewers.
 type PublicParticipant struct {
 	PlayerID       string `json:"player_id"`
@@ -166,18 +198,97 @@ func NewPublicQueryService(queue QueueStore, states PublicStateStore, reader Art
 	return &PublicQueryService{queue: queue, states: states, reader: reader}, nil
 }
 
-// List returns one discoverable selected run per logical match.
-func (s *PublicQueryService) List(ctx context.Context) ([]PublicMatch, error) {
+// List returns one filtered, stable page of discoverable selected runs.
+func (s *PublicQueryService) List(ctx context.Context, options PublicMatchListOptions) (PublicMatchList, error) {
 	records, err := s.queue.List(ctx)
 	if err != nil {
-		return nil, err
+		return PublicMatchList{}, err
 	}
 	selected := selectedPublicRecords(records)
-	items := make([]PublicMatch, 0, len(selected))
+	availableRulesets := availablePublicRulesetVersions(selected, options)
+	filtered := make([]QueueRecord, 0, len(selected))
 	for _, record := range selected {
-		items = append(items, publicMatchFromRecord(record))
+		if matchesPublicMatchListFilters(record, options) {
+			filtered = append(filtered, record)
+		}
 	}
-	return items, nil
+	sortPublicMatchRecords(filtered, options.SortOrder)
+	total := len(filtered)
+	totalPages := (total + options.Limit - 1) / options.Limit
+	items := make([]PublicMatch, 0, min(options.Limit, total))
+	if options.Page <= totalPages {
+		start := (options.Page - 1) * options.Limit
+		end := min(start+options.Limit, total)
+		for _, record := range filtered[start:end] {
+			items = append(items, publicMatchFromRecord(record))
+		}
+	}
+	return PublicMatchList{
+		Pagination:               PublicMatchPagination{Page: options.Page, Limit: options.Limit, Total: total, TotalPages: totalPages},
+		AvailableRulesetVersions: availableRulesets,
+		Items:                    items,
+	}, nil
+}
+
+func availablePublicRulesetVersions(records []QueueRecord, options PublicMatchListOptions) []string {
+	versions := make(map[string]struct{})
+	for _, record := range records {
+		if matchesPublicGameScope(record, options) {
+			versions[record.Submission.Game.RulesetVersion] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(versions))
+	for version := range versions {
+		result = append(result, version)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func matchesPublicMatchListFilters(record QueueRecord, options PublicMatchListOptions) bool {
+	return matchesPublicGameScope(record, options) &&
+		(options.RulesetVersion == "" || record.Submission.Game.RulesetVersion == options.RulesetVersion)
+}
+
+func matchesPublicGameScope(record QueueRecord, options PublicMatchListOptions) bool {
+	if options.GameID != "" && record.Submission.Game.GameID != options.GameID {
+		return false
+	}
+	if options.GameVersionMajor == 0 {
+		return true
+	}
+	major, err := catalog.MajorVersion(record.Submission.Game.GameVersion)
+	return err == nil && major == options.GameVersionMajor
+}
+
+func sortPublicMatchRecords(records []QueueRecord, order string) {
+	sort.Slice(records, func(i, j int) bool {
+		left, right := records[i], records[j]
+		if left.CompletedAt == nil || right.CompletedAt == nil {
+			if left.CompletedAt == nil && right.CompletedAt == nil {
+				return left.Submission.MatchID < right.Submission.MatchID
+			}
+			return right.CompletedAt == nil
+		}
+		if left.CompletedAt.Equal(*right.CompletedAt) {
+			return left.Submission.MatchID < right.Submission.MatchID
+		}
+		if order == "asc" {
+			return left.CompletedAt.Before(*right.CompletedAt)
+		}
+		return left.CompletedAt.After(*right.CompletedAt)
+	})
+}
+
+func defaultPublicMatchListOptions() PublicMatchListOptions {
+	return PublicMatchListOptions{Page: defaultPublicMatchListPage, Limit: defaultPublicMatchListLimit, SortOrder: "desc"}
+}
+
+func min(left, right int) int {
+	if left < right {
+		return left
+	}
+	return right
 }
 
 // Get returns the selected public run and replay availability for a match.

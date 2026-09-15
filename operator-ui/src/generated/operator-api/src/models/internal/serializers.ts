@@ -28,6 +28,7 @@ import type {
   PublicMatch,
   PublicMatchDetail,
   PublicMatchListResponse,
+  PublicMatchPagination,
   PublicParticipant,
   PublicReplayMetadata,
   PublicReplayResponse,
@@ -1234,7 +1235,7 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    items: jsonArrayPublicMatchToTransportTransform(input_.items)
+    pagination: jsonPublicMatchPaginationToTransportTransform(input_.pagination),available_ruleset_versions: jsonArrayStringToTransportTransform(input_.availableRulesetVersions),items: jsonArrayPublicMatchToTransportTransform(input_.items)
   }!;
 }export function jsonPublicMatchListResponseToApplicationTransform(
   input_?: any,
@@ -1243,7 +1244,25 @@ export function decodeBase64(value: string): Uint8Array | undefined {
     return input_ as any;
   }
     return {
-    items: jsonArrayPublicMatchToApplicationTransform(input_.items)
+    pagination: jsonPublicMatchPaginationToApplicationTransform(input_.pagination),availableRulesetVersions: jsonArrayStringToApplicationTransform(input_.available_ruleset_versions),items: jsonArrayPublicMatchToApplicationTransform(input_.items)
+  }!;
+}export function jsonPublicMatchPaginationToTransportTransform(
+  input_?: PublicMatchPagination | null,
+): any {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    page: input_.page,limit: input_.limit,total: input_.total,total_pages: input_.totalPages
+  }!;
+}export function jsonPublicMatchPaginationToApplicationTransform(
+  input_?: any,
+): PublicMatchPagination {
+  if(!input_) {
+    return input_ as any;
+  }
+    return {
+    page: input_.page,limit: input_.limit,total: input_.total,totalPages: input_.total_pages
   }!;
 }export function jsonArrayPublicMatchToTransportTransform(
   items_?: Array<PublicMatch> | null,

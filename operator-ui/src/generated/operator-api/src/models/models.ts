@@ -363,7 +363,15 @@ export interface RunListResponse {
   items: Array<ResultListItem>;
 }
 export interface PublicMatchListResponse {
+  pagination: PublicMatchPagination;
+  availableRulesetVersions: Array<string>;
   items: Array<PublicMatch>;
+}
+export interface PublicMatchPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 export interface PublicMatch {
   matchId: string;
