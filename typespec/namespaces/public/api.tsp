@@ -13,6 +13,7 @@ alias PublicStateAvailability = "available" | "state_unavailable";
 alias PublicReplayAvailability = "available" | "replay_unavailable";
 
 model PublicParticipant {
+  // Entries retain the submitted player sequence; positional meaning belongs to the game.
   player_id: string;
   display_name: string;
   ai_submission_id: string;
@@ -23,6 +24,7 @@ model PublicMatch {
   selected_run_id: string;
   game: GameMetadata;
   lifecycle_state: LifecycleState;
+  // The selected run's participant sequence is identical in list, detail, and state views.
   participants?: PublicParticipant[];
   completed_at?: utcDateTime;
 }
