@@ -81,6 +81,19 @@ jobs:
                   "tools/dev/**",
                 ],
               },
+              {
+                name: "typespec-generated-client",
+                patterns: [
+                  "typespec/**",
+                  "operator-ui/src/generated/operator-api/**",
+                  "operator-ui/package.json",
+                  "operator-ui/pnpm-lock.yaml",
+                  "tools/dev/verify-typespec-generated-client.sh",
+                  "Makefile",
+                  ".github/workflows/typespec-generated-client.yml",
+                  ".github/workflows/online-release-staging.yml",
+                ],
+              },
             ];
             const globToRegExp = (pattern) => {
               let source = "^";
@@ -111,58 +124,64 @@ jobs:
             };
             const matchesAny = (patterns, value) => patterns.some((pattern) => globToRegExp(pattern).test(value));
 
-            if (context.eventName === "workflow_dispatch") {
-              const inputs = context.payload.inputs ?? {};
-              const targetSha = await resolveDispatchedSha(inputs.commit_sha ?? "");
-              if (!targetSha) {
-                return;
-              }
-              core.setOutput("should_deploy", "true");
-              core.setOutput("target_sha", targetSha);
-              core.info(`resolved workflow_dispatch commit_sha to ${targetSha}`);
-              return;
-            }
-
-            const targetSha = context.sha;
             const maxAttempts = 40;
             const pollIntervalMs = 15000;
-
-            core.setOutput("target_sha", targetSha);
-
             const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
             let expectedWorkflowNames = [];
+            let targetSha = context.sha;
+            let baseSha = context.payload.before;
 
             try {
-              const beforeSha = context.payload.before;
-              const isInitialPush = !beforeSha || /^0+$/.test(beforeSha);
-              if (isInitialPush) {
-                core.info(`initial push detected for ${targetSha}; defaulting to deploy`);
-              } else {
-                const comparison = await github.rest.repos.compareCommitsWithBasehead({
+              if (context.eventName === "workflow_dispatch") {
+                const inputs = context.payload.inputs ?? {};
+                targetSha = await resolveDispatchedSha(inputs.commit_sha ?? "");
+                if (!targetSha) {
+                  return;
+                }
+                const { data: commit } = await github.rest.repos.getCommit({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  basehead: `${beforeSha}...${targetSha}`,
+                  ref: targetSha,
                 });
-                const changedFiles = (comparison.data.files || []).map((file) => file.filename);
-                core.info(`changed files for ${targetSha}: ${changedFiles.join(",") || "none"}`);
-
-                if (changedFiles.length === 0) {
-                  core.info(`no changed files reported for ${targetSha}; defaulting to deploy`);
-                } else {
-                  const deployRelevantFiles = changedFiles.filter((file) => !matchesAny(nonReleasePatterns, file));
-                  if (deployRelevantFiles.length === 0) {
-                    core.info(`skip: only non-release files changed for ${targetSha}`);
-                    core.setOutput("should_deploy", "false");
-                    return;
-                  }
-
-                  expectedWorkflowNames = requiredWorkflows
-                    .filter((workflow) => changedFiles.some((file) => matchesAny(workflow.patterns, file)))
-                    .map((workflow) => workflow.name);
+                baseSha = commit.parents?.[0]?.sha;
+                if (!baseSha) {
+                  core.setFailed(`cannot compare workflow_dispatch target ${targetSha}: its first parent is unavailable`);
+                  return;
                 }
               }
+
+              if (!baseSha || /^0+$/.test(baseSha)) {
+                core.setFailed(`cannot compare changed files for ${targetSha}: a nonzero base SHA is required`);
+                return;
+              }
+
+              core.setOutput("target_sha", targetSha);
+              const comparison = await github.rest.repos.compareCommitsWithBasehead({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                basehead: `${baseSha}...${targetSha}`,
+              });
+              const changedFiles = (comparison.data.files || []).map((file) => file.filename);
+              core.info(`changed files for ${targetSha}: ${changedFiles.join(",") || "none"}`);
+
+              if (changedFiles.length === 0) {
+                core.setOutput("should_deploy", "true");
+                return;
+              }
+
+              const deployRelevantFiles = changedFiles.filter((file) => !matchesAny(nonReleasePatterns, file));
+              if (deployRelevantFiles.length === 0) {
+                core.info(`skip: only non-release files changed for ${targetSha}`);
+                core.setOutput("should_deploy", "false");
+                return;
+              }
+
+              expectedWorkflowNames = requiredWorkflows
+                .filter((workflow) => changedFiles.some((file) => matchesAny(workflow.patterns, file)))
+                .map((workflow) => workflow.name);
             } catch (error) {
-              core.warning(`failed to evaluate changed files for ${targetSha}; defaulting to deploy: ${error.message}`);
+              core.setFailed(`failed to evaluate changed files for ${targetSha}: ${error.message}`);
+              return;
             }
 
             if (expectedWorkflowNames.length === 0) {

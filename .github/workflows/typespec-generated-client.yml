@@ -1,0 +1,46 @@
+name: typespec-generated-client
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "typespec/**"
+      - "operator-ui/src/generated/operator-api/**"
+      - "operator-ui/package.json"
+      - "operator-ui/pnpm-lock.yaml"
+      - "tools/dev/verify-typespec-generated-client.sh"
+      - "Makefile"
+      - ".github/workflows/typespec-generated-client.yml"
+      - ".github/workflows/online-release-staging.yml"
+  push:
+    branches: [main]
+    paths:
+      - "typespec/**"
+      - "operator-ui/src/generated/operator-api/**"
+      - "operator-ui/package.json"
+      - "operator-ui/pnpm-lock.yaml"
+      - "tools/dev/verify-typespec-generated-client.sh"
+      - "Makefile"
+      - ".github/workflows/typespec-generated-client.yml"
+      - ".github/workflows/online-release-staging.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            typespec/pnpm-lock.yaml
+            operator-ui/pnpm-lock.yaml
+
+      - name: Verify generated TypeSpec client
+        run: make verify-typespec-generated-client

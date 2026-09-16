@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsp compile main.tsp && prettier --write generated/openapi/operator/openapi.json ../operator-ui/src/generated/operator-api/src/**/*.ts ../operator-ui/src/generated/operator-api/package.json ../operator-ui/src/generated/operator-api/tsconfig.json"
+    "build": "tsp compile main.tsp && node tools/normalize-empty-client-context.mjs ../operator-ui/src/generated/operator-api/src/aiArenaClient.ts && prettier --write generated/openapi/operator/openapi.json ../operator-ui/src/generated/operator-api/src/aiArenaClient.ts ../operator-ui/src/generated/operator-api/src/**/*.ts ../operator-ui/src/generated/operator-api/package.json ../operator-ui/src/generated/operator-api/tsconfig.json",
+    "test:normalize-empty-client-context": "node --test tools/normalize-empty-client-context.test.mjs"
   },
   "devDependencies": {
     "@typespec/compiler": "1.13.0",
