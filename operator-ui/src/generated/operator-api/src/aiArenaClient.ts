@@ -71,6 +71,7 @@ import {
   listMatches,
   type ListMatchesOptions,
 } from "./api/publicClient/publicClientOperations.js";
+import type { SharedClientOptions } from "./api/sharedClient/sharedClientContext.js";
 import type {
   AiSubmissionRequest,
   BotRevisionRequest,
@@ -228,5 +229,5 @@ export class OperatorClient {
   }
 }
 export class SharedClient {
-  constructor(_endpoint: string, _options?: AiArenaClientOptions) {}
+  constructor(_endpoint: string, _options?: SharedClientOptions) {}
 }

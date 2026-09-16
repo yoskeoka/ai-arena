@@ -15,6 +15,8 @@ const sharedContextImport = `import {
   type SharedClientOptions,
 } from "./api/sharedClient/sharedClientContext.js";
 `;
+const sharedOptionsImport = `import type { SharedClientOptions } from "./api/sharedClient/sharedClientContext.js";
+`;
 
 function fail(message) {
   throw new Error(`normalize-empty-client-context: ${message}`);
@@ -38,11 +40,32 @@ function assertOnce(source, target, description) {
   }
 }
 
+function classBody(source, className) {
+  const start = `export class ${className} {`;
+  const startIndex = source.indexOf(start);
+  if (startIndex === -1 || source.indexOf(start, startIndex + start.length) !== -1) {
+    fail(`expected one ${className} class`);
+  }
+  let depth = 0;
+  for (let index = startIndex + start.length - 1; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") depth -= 1;
+    if (depth === 0) return source.slice(startIndex, index + 1);
+  }
+  fail(`expected ${className} class to close`);
+}
+
 export function normalizeEmptyClientContexts(source) {
   assertOnce(source, "export class AiArenaClient {", "AiArenaClient class");
   assertOnce(source, "export class SharedClient {", "SharedClient class");
   assertOnce(source, "export class OperatorClient {", "OperatorClient class");
   assertOnce(source, "export class PublicClient {", "PublicClient class");
+
+  const aiArenaClientBody = classBody(source, "AiArenaClient");
+  const aiArenaContextUses = aiArenaClientBody.match(/this\.\#context/g) ?? [];
+  if (aiArenaContextUses.length !== 1 || !aiArenaClientBody.includes("this.#context = createAiArenaClientContext(endpoint, options);")) {
+    fail("AiArenaClient must have exactly the known empty-client context initializer");
+  }
 
   let normalized = replaceOnce(
     source,
@@ -62,7 +85,7 @@ export function normalizeEmptyClientContexts(source) {
     "",
     "AiArenaClient context initializer",
   );
-  normalized = replaceOnce(normalized, sharedContextImport, "", "SharedClient context import");
+  normalized = replaceOnce(normalized, sharedContextImport, sharedOptionsImport, "SharedClient context import");
   normalized = replaceOnce(
     normalized,
     `export class SharedClient {
@@ -74,7 +97,7 @@ export function normalizeEmptyClientContexts(source) {
 }
 `,
     `export class SharedClient {
-  constructor(_endpoint: string, _options?: AiArenaClientOptions) {}
+  constructor(_endpoint: string, _options?: SharedClientOptions) {}
 }
 `,
     "empty SharedClient class body",
@@ -84,7 +107,6 @@ export function normalizeEmptyClientContexts(source) {
     "AiArenaClientContext",
     "createAiArenaClientContext",
     "SharedClientContext",
-    "SharedClientOptions",
     "createSharedClientContext",
     "this.#context = createAiArenaClientContext",
     "this.#context = createSharedClientContext",

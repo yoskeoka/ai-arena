@@ -46,13 +46,15 @@ test("normalizes only the known empty client contexts", () => {
   const normalized = normalizeEmptyClientContexts(fixture);
   assert.doesNotMatch(normalized, /AiArenaClientContext|SharedClientContext|createAiArenaClientContext/);
   assert.match(normalized, /AiArenaClientOptions/);
+  assert.match(normalized, /SharedClientOptions/);
   assert.match(normalized, /createOperatorClientContext/);
-  assert.match(normalized, /constructor\(_endpoint: string, _options\?: AiArenaClientOptions\) \{\}/);
+  assert.match(normalized, /constructor\(_endpoint: string, _options\?: SharedClientOptions\) \{\}/);
 });
 
 for (const [name, invalid] of [
   ["missing initializer", fixture.replace("    this.#context = createSharedClientContext(endpoint, options);\n", "")],
   ["duplicate initializer", fixture.replace("    this.#context = createSharedClientContext(endpoint, options);", "    this.#context = createSharedClientContext(endpoint, options);\n    this.#context = createSharedClientContext(endpoint, options);")],
+  ["AiArenaClient operation context use", fixture.replace("    this.sharedClient = new SharedClient(endpoint, options);", "    this.sharedClient = new SharedClient(endpoint, options);\n    return this.#context;")],
   ["already-fixed output", normalizeEmptyClientContexts(fixture)],
 ]) {
   test(`fails closed for ${name}`, () => {
