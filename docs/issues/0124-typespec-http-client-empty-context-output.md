@@ -34,12 +34,14 @@ emitter の peer dependency は compiler/http/rest と上記 line に整合し�
   `http-client-js unused context`、`TS6133`、`unused private context`、`client context` を検索したが、
   同一の公開 issue は確認できなかったため #11978 を起票した。
 
-## 次の判断
+## 採用判断
 
-upstream emitter が empty client を strict compile 可能に出力する version、または TypeSpec source で
-generated client を空にしない contract-level の設定が確認できるまで、emitter/runtime upgrade、generated
-drift gate、staging prerequisite の導入は行わない。generated file への恒久手編集、emitter 単独更新、
-TypeScript strictness の緩和は採らない。
+generated file への恒久手編集、emitter 単独更新、TypeScript strictness の緩和は採らない。一方で、0136 は
+TypeSpec build に所有された決定的 postprocess を導入する。これは `AiArenaClient` と `SharedClient` の既知の
+empty-client context/import/initializer にだけ限定し、shape の変化・不足・重複・既修正 output は fail-closed
+にする。従って contributor、CI、staging release は手作業ではなく同じ regeneration output を検証する。
 
-採用候補が得られたら、clean install → TypeSpec compile → generated tracked/untracked drift check → operator UI
-strict build の順で再評価し、成功時に専用 CI / staging release gate を別の実行 plan で導入する。
+#11978 は upstream blocker として継続監視する。upstream emitter が strict-compile-safe な output を提供した
+時点で、clean install → TypeSpec build → generated tracked/untracked drift check → operator UI strict build を
+行い、postprocess を撤去するかは別 execution plan で判断する。この postprocess は upstream fix を代替または
+偽装するものではない。

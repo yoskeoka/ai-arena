@@ -17,6 +17,7 @@
 - `docs/development/operator-ui-local-verification.md`: operator UI local browser verification の canonical Playwright lane
 - `docs/development/platform-service-postgres.md`: durable queue backend 用 Postgres の schema/apply/query-generation workflow と local / CI harness
 - `docs/development/platform-service-online-deploy.md`: provider inventory、staging / production release flow、internal surface protection、developer access inventory
+- `docs/development/typespec-generated-client.md`: TypeSpec generated client の ownership、決定的 postprocess、verification gate 運用
 - `docs/development/workflow-linter.md`: local workflow linter の maintenance 契約
 
 online release workflow の dispatch / verification / rollback runbook も

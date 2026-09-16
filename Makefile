@@ -39,7 +39,7 @@ REVIVE_TESTDATA_DIRS = $(shell git ls-files -- testdata internal/platform/runtim
 REVIVE_SOURCE_PATTERNS = $(shell for dir in cmd games internal e2e; do if [ -d "$$dir" ]; then printf './%s/... ' "$$dir"; fi; done)
 REVIVE_PACKAGE_DIRS = $(shell mkdir -p "$(GOPATH)" "$(GOCACHE)" "$(GOMODCACHE)" >/dev/null 2>&1; env GOPATH="$(GOPATH)" GOMODCACHE="$(GOMODCACHE)" GOCACHE="$(GOCACHE)" $(GO) list -f '{{.Dir}}' $(REVIVE_SOURCE_PATTERNS) | grep -v '/internal/platform/service/postgres/sqlc$$' | tr '\n' ' ')
 
-.PHONY: up down migrate local-dummy-fixture local-invite-url invite-remote start-backend-local start-frontend-local test test-postgres test-remote-version-helper test-remote-health-helper test-release-commit-sha-helper postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-reversi-release-artifacts test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
+.PHONY: up down migrate local-dummy-fixture local-invite-url invite-remote start-backend-local start-frontend-local test test-postgres test-remote-version-helper test-remote-health-helper test-release-commit-sha-helper postgres-up postgres-down postgres-schema-apply postgres-migrate-diff postgres-migrate-hash postgres-migrate-baseline postgres-migrate-apply postgres-sqlc-generate seaweed-up seaweed-down seaweed-bootstrap verify-reversi-release-artifacts verify-typespec-generated-client test-wasm-go test-wasm-rust fmt lint lint-goimports lint-vet lint-noctx lint-staticcheck lint-gosec lint-revive render-build render-start build-janken-go-wasm run-janken-go-wasm build-janken-rust-wasm run-janken-rust-wasm-eval run-echo-simultaneous run-echo-sequential
 
 export COMPOSE_BAKE = false
 
@@ -100,6 +100,9 @@ seaweed-bootstrap:
 verify-reversi-release-artifacts:
 	mkdir -p "$(GOCACHE)" "$(GOMODCACHE)"
 	$(GO_ENV) ./tools/dev/verify-reversi-release-artifacts.sh
+
+verify-typespec-generated-client:
+	./tools/dev/verify-typespec-generated-client.sh
 
 # Use this for quick local compose DB setup when you want the current schema without creating revision history.
 postgres-schema-apply:
