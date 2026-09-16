@@ -11,7 +11,7 @@ TypeSpec の HTTP client emitter が operation を持たない client に出力�
 - `pnpm --dir typespec run build` を clean checkout で実行しても、`AiArenaClient` と `SharedClient` の unused private context による `TS6133` を再導入しない。
 - 後処理は既知の empty-client 出力だけに限定し、対象 shape が変わった場合や対象外の generated code を変更しようとした場合は成功を装わず failure になる。
 - TypeSpec source から再生成した committed OpenAPI/client artifact に drift がなく、operator UI の strict build が通る。
-- TypeSpec/generated-client に関わる変更は staging deploy の前に上記再生成・drift・strict build を検証し、最新 merged SHA の staging release が Pages build と既存の version/worker-readiness 確認まで成功する。
+- TypeSpec/generated-client に関わる変更は push と `workflow_dispatch` の別を問わず staging deploy の前に上記再生成・drift・strict build を検証し、最新 merged SHA の staging release が Pages build と既存の version/worker-readiness 確認まで成功する。
 
 対象外:
 
@@ -42,11 +42,12 @@ HTTP field inventory と browser product behavior は変更しないため、`do
 ## 変更マップ
 
 - `(NEW) docs/development/typespec-generated-client.md` — generated client の ownership、決定的 postprocess、upstream-removal 条件、local/CI verification の運用契約を記録する。
+- `(MODIFY) docs/development/README.md` — 新しい generated-client 運用文書を development docs の索引に追加する。
 - `(MODIFY) docs/issues/0124-typespec-http-client-empty-context-output.md` — direct hand edit を置き換える採用判断、postprocess の限定性、#11978 を monitor して撤去を別判断する条件に更新する。
 - `(NEW) typespec/tools/normalize-empty-client-context.mjs` — emitted `aiArenaClient.ts` を構造的に検査し、空 `AiArenaClient` / `SharedClient` のみから unused context と専用 import を除去する fail-closed postprocessor を置く。
 - `(MODIFY) typespec/package.json` — `build` を compile → normalize → format に固定し、後処理を contributor と CI の共通 entrypoint にする。
 - `(MODIFY) operator-ui/src/generated/operator-api/src/aiArenaClient.ts` — 上記 entrypoint の出力だけを commit し、unused field/import/initializer を残さない。
-- `(NEW) tools/dev/verify-typespec-generated-client.sh` — TypeSpec build、generated artifact drift check、frozen operator UI install、strict build を順に実行する fail-fast verifier を置く。
+- `(NEW) tools/dev/verify-typespec-generated-client.sh` — frozen TypeSpec install、TypeSpec build、generated artifact drift check、frozen operator UI install、strict build を順に実行する fail-fast verifier を置く。
 - `(MODIFY) Makefile` — verifier の repo-local target を追加して local/CI entrypoint を共有する。
 - `(NEW) .github/workflows/typespec-generated-client.yml` — TypeSpec、postprocessor、generated client、TypeSpec/runtime lock、verifier、workflow の変更で verifier を実行する dedicated CI gate を置く。
 - `(MODIFY) .github/workflows/online-release-staging.yml` — 上記と同じ path set では `typespec-generated-client` の latest successful push run を deploy prerequisite に加え、failure 時は Pages build より前に release を停止する。
@@ -64,14 +65,14 @@ HTTP field inventory と browser product behavior は変更しないため、`do
    - package script を `tsp compile`、normalizer、Prettier の順にして、直接の `tsp compile` だけを日常の regenerated artifact source と見なさない。再生成 artifact を更新し、手修正 diff を残さない。
 
 3. **reproduction と drift を共通 verifier にする**
-   - verifier は TypeSpec build を実行後、`typespec/generated/openapi/operator/` と `operator-ui/src/generated/operator-api/` の tracked/untracked drift を検査し、その後 operator UI の frozen install と `pnpm run build` を行う。
+   - verifier はまず `pnpm --dir typespec install --frozen-lockfile` で独立した TypeSpec workspace を clean checkout に materialize してから TypeSpec build を実行する。続いて `typespec/generated/openapi/operator/` と `operator-ui/src/generated/operator-api/` の tracked/untracked drift を検査し、operator UI の frozen install と `pnpm run build` を行う。
    - normalizer の current-shape fixture/shell test を追加し、expected output は正規化し、unexpected or already-fixed emitter output は明確に failure となることを確認する。postprocessor が黙って広い出力を壊せないことを regression で固定する。
    - Make target は verifier を呼ぶだけにし、developer と CI の command sequence を分岐させない。
 
 4. **CI と staging release gate を同期する**
    - dedicated workflow の path filter と staging `requiredWorkflows` の pattern を同一の変更集合にする。少なくとも `typespec/**`、generated client、operator UI package/lock の generated runtime、verifier/Make target、workflow file を含める。
-   - staging prepare は relevant change に対する `typespec-generated-client` の failure、missing、pending を deploy 前に拒否する。既存 Go/browser prerequisite と deploy/version/health contract は維持する。
-   - workflow lint の test seam がある場合は、TypeSpec-only change で gate が選ばれること、failure が staging deploy job を作らないことを追加して確認する。
+   - staging prepare は push と `workflow_dispatch` の両方で target SHA の relevant change を判定し、該当時の `typespec-generated-client` failure、missing、pending を deploy 前に拒否する。手動dispatch は prerequisite の bypass ではない。changed-file comparison または required-workflow lookup を検証できない場合も default deploy へ fall back せず、fail-closed で停止する。既存 Go/browser prerequisite と deploy/version/health contract は維持する。
+   - workflow lint の test seam がある場合は、TypeSpec-only change と manual dispatch target の双方で gate が選ばれること、workflow lookup failure と gate failure のどちらも staging deploy job を作らないことを追加して確認する。
 
 5. **verification、PR、staging acceptance を閉じる**
    - local verifier と normalizer regression、applicable workflow lint を通し、generated diff が normalizer の出力だけであることを review する。
@@ -89,8 +90,8 @@ HTTP field inventory と browser product behavior は変更しないため、`do
 
 - normalizer unit/fixture regression: current empty-client fixture が expected artifact になり、missing/duplicate/unexpected/already-fixed shape が nonzero exit になること。
 - generation: `pnpm --dir typespec run build` の直後に `operator-ui/src/generated/operator-api/src/aiArenaClient.ts` に unused `#context`、関連する unused context imports、or their initializers が残らないこと。
-- strict consumer: `pnpm --dir operator-ui install --frozen-lockfile` と `pnpm --dir operator-ui run build` が `TS6133` なしで通ること。
+- strict consumer: `pnpm --dir typespec install --frozen-lockfile`、`pnpm --dir operator-ui install --frozen-lockfile`、`pnpm --dir operator-ui run build` が `TS6133` なしで通ること。
 - drift: common Make/verifier target が clean checkout で TypeSpec/OpenAPI/generated-client drift なしを確認し、意図的な artifact mutation を failure にすること。
-- workflow selection: TypeSpec-only、normalizer-only、generated-client-only、operator runtime dependency-only の各 diff で dedicated workflow が起動し、staging prepare が同 workflow の completed success を要求すること。
+- workflow selection: TypeSpec-only、normalizer-only、generated-client-only、operator runtime dependency-only の各 diff と、それらを target にした manual dispatch で dedicated workflow が起動し、staging prepare が同 workflow の completed success を要求すること。changed-file comparison または workflow lookup を検証できない場合は deploy を開始しないこと。
 - release: latest merged SHA の `online-release-staging` が DB migration、operator UI build、Pages deploy、Render trigger、target full SHA の `/version`、API/worker `OK` の `/healthz` まで success であること。
 - quality/PR: applicable document/workflow lint、required CI、`review-task` の latest-head follow-up を完了すること。
