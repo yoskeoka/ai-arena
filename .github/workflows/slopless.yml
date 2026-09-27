@@ -81,6 +81,9 @@ jobs:
               [ -n "$path" ] || continue
               [ -f "$path" ] || continue
               case "$path" in
+                docs/exec-plan/*)
+                  continue
+                  ;;
                 docs/specs/*.md|docs/design-decisions/*.md|docs/development/*.md|docs/references/*.md)
                   contains_japanese_text "$path" && continue
                   printf '%s\n' "$path"
