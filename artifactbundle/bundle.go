@@ -164,10 +164,15 @@ func validateManifest(m Manifest, raw []byte) error {
 	if (numeric.Runtime.MemoryLimitPages != nil && *numeric.Runtime.MemoryLimitPages == 0) || (numeric.Runtime.TimeoutMS != nil && *numeric.Runtime.TimeoutMS == 0) {
 		return fmt.Errorf("artifactbundle: runtime budget must be positive when specified")
 	}
+	seenRulesets := make(map[string]struct{}, len(m.Rulesets))
 	for _, ruleset := range m.Rulesets {
 		if ruleset.RulesetVersion == "" || ruleset.PlayerCount < 0 || ruleset.MaxActiveBotsPerOwner < 0 {
 			return fmt.Errorf("artifactbundle: invalid ruleset")
 		}
+		if _, exists := seenRulesets[ruleset.RulesetVersion]; exists {
+			return fmt.Errorf("artifactbundle: duplicate ruleset %q", ruleset.RulesetVersion)
+		}
+		seenRulesets[ruleset.RulesetVersion] = struct{}{}
 	}
 	for _, ruleset := range numeric.Rulesets {
 		if (ruleset.PlayerCount != nil && *ruleset.PlayerCount == 0) || (ruleset.MaxActiveBotsPerOwner != nil && *ruleset.MaxActiveBotsPerOwner == 0) {

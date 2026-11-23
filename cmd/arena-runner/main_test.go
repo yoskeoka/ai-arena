@@ -12,8 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yoskeoka/ai-arena/artifactbundle"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
+	"github.com/yoskeoka/ai-arena/internal/platform/replay"
 	platformruntime "github.com/yoskeoka/ai-arena/internal/platform/runtime"
 )
 
@@ -291,7 +293,7 @@ func TestRunSupportsManifestGameWithMixedAIInputs(t *testing.T) {
 func TestRunSupportsGameMasterBundleRecordResume(t *testing.T) {
 	chdirRepoRoot(t)
 
-	gameBundle := buildTestBundle(t, "./cmd/echo-count-gamemaster", `{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"echo-count","game_version":"2.0.0","rulesets":[{"ruleset_version":"phase2-simultaneous-3turn","player_count":2}],"runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024,"args":["module.wasm","--game-id","echo-count","--game-version","2.0.0","--ruleset","phase2-simultaneous-3turn"]}}`)
+	gameBundle := buildTestBundle(t, "./cmd/echo-count-gamemaster", `{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"echo-count","game_version":"2.0.0","rulesets":[{"ruleset_version":"phase2-simultaneous-3turn","player_count":2},{"ruleset_version":"phase2-simultaneous-2turn","player_count":2}],"runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024,"args":["module.wasm","--game-id","echo-count","--game-version","2.0.0","--ruleset","phase2-simultaneous-3turn"]}}`)
 	aiBundle := buildTestBundle(t, "./testdata/ai/echo/echo-ai", `{"schema_version":"arena-bundle/v1","artifact_kind":"ai","ai_id":"echo-ai","game_id":"echo-count","game_version":"2.0.0","runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024}}`)
 	outputDir := t.TempDir()
 	initialMatchID := "bundle-game-record-source"
@@ -299,6 +301,7 @@ func TestRunSupportsGameMasterBundleRecordResume(t *testing.T) {
 		"--game-master-bundle", gameBundle,
 		"--output-dir", outputDir,
 		"--match-id", initialMatchID,
+		"--ruleset", "phase2-simultaneous-2turn",
 		"--log-output", "none",
 		"--player-bundle", "p1=" + aiBundle,
 		"--player-bundle", "p2=" + aiBundle,
@@ -319,10 +322,85 @@ func TestRunSupportsGameMasterBundleRecordResume(t *testing.T) {
 		t.Fatalf("resume run: %v", err)
 	}
 	assertCompletedBundleRun(t, outputDir, resumeMatchID, "echo-count")
+	bundle, err := readArtifactBundle(gameBundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := replay.LoadRecord(filepath.Join(outputDir, initialMatchID, "record.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source.GameArtifactID != bundle.Digest || source.Game.RulesetVersion != "phase2-simultaneous-2turn" || source.Snapshot.Turn != 2 {
+		t.Fatalf("record identity or turns = %s, %+v, %d", source.GameArtifactID, source.Game, source.Snapshot.Turn)
+	}
+
+	common := []string{"--game-master-bundle", gameBundle, "--output-dir", outputDir, "--log-output", "none",
+		"--player-bundle", "p1=" + aiBundle, "--player-bundle", "p2=" + aiBundle}
+	snapshotPath := filepath.Join(outputDir, initialMatchID, "snapshot.json")
+	if err := run(append(append([]string{}, common...), "--match-id", "snapshot-resume", "--snapshot-input", snapshotPath)); err != nil {
+		t.Fatalf("snapshot resume: %v", err)
+	}
+	assertCompletedBundleRun(t, outputDir, "snapshot-resume", "echo-count")
+
+	snapshot, err := replay.LoadSnapshotArtifact(snapshotPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.GameArtifactID != bundle.Digest {
+		t.Fatalf("snapshot digest = %q, want %q", snapshot.GameArtifactID, bundle.Digest)
+	}
+	legacyRecordPath := filepath.Join(t.TempDir(), "record.json")
+	source.GameArtifactID = ""
+	legacyRecord, err := json.Marshal(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyRecordPath, legacyRecord, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(append(append([]string{}, common...), "--match-id", "legacy-resume", "--record-input", legacyRecordPath)); err != nil {
+		t.Fatalf("legacy record resume: %v", err)
+	}
+	assertCompletedBundleRun(t, outputDir, "legacy-resume", "echo-count")
+
+	snapshot.GameArtifactID = "different-digest"
+	wrongDigestPath := filepath.Join(t.TempDir(), "snapshot.json")
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(wrongDigestPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"missing-ruleset", nil, "--ruleset is required"},
+		{"unknown-ruleset", []string{"--ruleset", "unknown"}, "is not declared"},
+		{"different-ruleset", []string{"--ruleset", "phase2-simultaneous-3turn", "--snapshot-input", snapshotPath}, "resume snapshot game identity"},
+		{"different-digest", []string{"--snapshot-input", wrongDigestPath}, "requires the same --game-master-bundle"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := append(append([]string{}, common...), "--match-id", tc.name)
+			if err := run(append(args, tc.args...)); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+	mismatchManifest := bundle.Manifest
+	mismatchManifest.GameVersion = "2.0.1"
+	mismatchBundle := writeTestBundle(t, artifactbundle.ModuleBytes(bundle.Bytes, bundle.Manifest.Runtime.Module), string(artifactbundle.ManifestJSON(mismatchManifest)))
+	if err := run(append(append([]string{}, common...), "--game-master-bundle", mismatchBundle, "--match-id", "wrong-metadata", "--ruleset", "phase2-simultaneous-2turn")); err == nil || !strings.Contains(err.Error(), "game_version mismatch") {
+		t.Fatalf("metadata mismatch error = %v", err)
+	}
+
 	if err := run([]string{
 		"--game-master-bundle", gameBundle,
 		"--history-input", filepath.Join(outputDir, initialMatchID, "history.json"),
 		"--target-turn", "1",
+		"--ruleset", "phase2-simultaneous-2turn",
 		"--output-dir", outputDir,
 		"--match-id", "bundle-game-history-unsupported",
 		"--log-output", "none",
@@ -402,7 +480,16 @@ func buildTestBundle(t *testing.T, packagePath, manifest string) string {
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build WASI bundle module %s: %v\n%s", packagePath, err, output)
 	}
-	bundlePath := filepath.Join(tmpDir, "bundle.zip")
+	moduleBytes, err := os.ReadFile(modulePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return writeTestBundle(t, moduleBytes, manifest)
+}
+
+func writeTestBundle(t *testing.T, moduleBytes []byte, manifest string) string {
+	t.Helper()
+	bundlePath := filepath.Join(t.TempDir(), "bundle.zip")
 	file, err := os.Create(bundlePath)
 	if err != nil {
 		t.Fatal(err)
@@ -413,10 +500,6 @@ func buildTestBundle(t *testing.T, packagePath, manifest string) string {
 		t.Fatal(err)
 	}
 	if _, err := manifestEntry.Write([]byte(manifest)); err != nil {
-		t.Fatal(err)
-	}
-	moduleBytes, err := os.ReadFile(modulePath)
-	if err != nil {
 		t.Fatal(err)
 	}
 	moduleEntry, err := writer.CreateHeader(&zip.FileHeader{Name: "module.wasm", Method: zip.Store})

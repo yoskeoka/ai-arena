@@ -7,6 +7,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
+
+	sidecar "github.com/yoskeoka/ai-arena/gamemaster"
 
 	"github.com/yoskeoka/ai-arena/internal/games/echo"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
@@ -33,6 +36,11 @@ func run() error {
 	fs.StringVar(&ruleset, "ruleset", "", "ruleset")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return err
+	}
+	if runtime.GOOS == "wasip1" {
+		if selected, ok := os.LookupEnv(sidecar.WASIRulesetVersionEnv); ok {
+			ruleset = selected
+		}
 	}
 	selectedMeta, _, _, _, err := echo.MetadataForSelectionWithGameID(gameID, gameVersion, ruleset)
 	if err != nil {

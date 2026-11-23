@@ -29,6 +29,7 @@ type PlayerSession interface {
 
 // Record is the persisted final match artifact.
 type Record struct {
+	GameArtifactID   string                `json:"game_artifact_id,omitempty"`
 	MatchID          string                `json:"match_id"`
 	Game             catalog.GameMetadata  `json:"game"`
 	Players          []game.Player         `json:"players"`

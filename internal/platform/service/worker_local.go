@@ -103,6 +103,7 @@ func (i *LocalRunnerInvoker) Run(ctx context.Context, req ExecutionRequest) (Exe
 		options = append(options, match.WithObserver(NewPublicStatePublisher(i.publicStates, submission.MatchID, submission.RunID)))
 	}
 	record, runErr := match.NewRunnerWithOptions(submission.MatchID, players, master, sessions, options...).Run(runCtx)
+	record.GameArtifactID = descriptor.ArtifactID
 	return ExecutionResult{
 		Record:       record,
 		PlayerStderr: snapshotPlayerStderr(sessions),

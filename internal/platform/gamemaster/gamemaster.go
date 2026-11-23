@@ -65,11 +65,27 @@ func StartWASMWASI(cfg WASIConfig) (Session, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	adapter, err := runtime.Start(ctx, runtime.Config{Kind: runtime.KindWASMWASI, ModulePath: cfg.ModulePath, Dir: cfg.Dir, Args: append([]string(nil), cfg.Args...), MemoryLimitPages: cfg.MemoryLimitPages, StderrLimitBytes: cfg.StderrLimitBytes})
+	if err := catalog.ValidateMetadata(cfg.ExpectedMetadata); err != nil {
+		return nil, err
+	}
+	if snapshot := cfg.ResumeSnapshot; snapshot != nil {
+		if snapshot.GameID != cfg.ExpectedMetadata.GameID || snapshot.GameVersion != cfg.ExpectedMetadata.GameVersion || snapshot.RulesetVersion != cfg.ExpectedMetadata.RulesetVersion {
+			return nil, fmt.Errorf("game master: resume snapshot game identity does not match the selected bundle and ruleset")
+		}
+	}
+	adapter, err := runtime.Start(ctx, runtime.Config{
+		Kind:             runtime.KindWASMWASI,
+		ModulePath:       cfg.ModulePath,
+		Dir:              cfg.Dir,
+		Args:             append([]string(nil), cfg.Args...),
+		Env:              []string{sidecar.WASIRulesetVersionEnv + "=" + cfg.ExpectedMetadata.RulesetVersion},
+		MemoryLimitPages: cfg.MemoryLimitPages,
+		StderrLimitBytes: cfg.StderrLimitBytes,
+	})
 	if err != nil {
 		return nil, err
 	}
-	return &localSubprocessSession{meta: cfg.ExpectedMetadata, players: append([]game.Player(nil), cfg.Players...), rngSeed: cfg.RNGSeed, resumeSnapshot: cloneSnapshotPtr(cfg.ResumeSnapshot), adapter: adapter}, nil
+	return &localSubprocessSession{meta: cfg.ExpectedMetadata, players: append([]game.Player(nil), cfg.Players...), rngSeed: cfg.RNGSeed, resumeSnapshot: cloneSnapshotPtr(cfg.ResumeSnapshot), adapter: adapter, requireExactVersion: true}, nil
 }
 
 // InitializeMatchParams contains the inputs for starting or resuming a match.
@@ -162,14 +178,15 @@ type LocalSubprocessConfig struct {
 }
 
 type localSubprocessSession struct {
-	meta           catalog.GameMetadata
-	players        []game.Player
-	rngSeed        string
-	resumeSnapshot *game.Snapshot
-	adapter        *runtime.Adapter
-	nextID         int
-	initialized    bool
-	initState      game.InitState
+	meta                catalog.GameMetadata
+	players             []game.Player
+	rngSeed             string
+	resumeSnapshot      *game.Snapshot
+	requireExactVersion bool
+	adapter             *runtime.Adapter
+	nextID              int
+	initialized         bool
+	initState           game.InitState
 }
 
 // StartLocalSubprocess starts a subprocess-backed game-master session.
@@ -205,6 +222,9 @@ func (s *localSubprocessSession) InitializeMatch(ctx context.Context) (game.Init
 	}
 	if err := catalog.Compatible(s.meta, actual); err != nil {
 		return game.InitState{}, fmt.Errorf("game master metadata incompatible: %w", err)
+	}
+	if s.requireExactVersion && s.meta.GameVersion != actual.GameVersion {
+		return game.InitState{}, fmt.Errorf("game master metadata incompatible: game_version mismatch: expected %q, got %q", s.meta.GameVersion, actual.GameVersion)
 	}
 	s.meta = actual
 

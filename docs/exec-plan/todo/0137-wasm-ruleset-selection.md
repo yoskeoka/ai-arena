@@ -25,9 +25,9 @@ WASI の history 再構成は既存の適用範囲のままとする。
 ## 変更対象と契約
 
 - (MODIFY) `docs/specs/game-master.md`、`docs/specs/platform-game-registry.md`、`docs/specs/platform-artifact-bundle.md`: 上記起動契約、選択元、未対応・不一致、過去の run と互換性を先に明記する。field の正本が必要な場合は `gamemaster/types.go` 等の typed contract を更新し、Markdown に重複させない。
-- (MODIFY) `internal/platform/registry/wasm_resolver.go` の `BuildSession` / `BuildSessionFromSnapshot`、`internal/platform/gamemaster/gamemaster.go` の `WASIConfig` / `StartWASMWASI`、`internal/platform/runtime/wasm_wasi.go`: 検証された build input を起動時環境へ伝える。空・未対応 ruleset は起動前に拒否し、bundle の固定 args と sandbox 制約を保つ。
-- (MODIFY) `internal/platform/service/general.go`、`internal/platform/service/worker_local.go`、queue / retry 経路、および `cmd/arena-runner` の bundle 実行経路: 大会登録から実行、resume、retry まで選択と artifact digest が固定されることを確認し、必要箇所を修正する。複数 ruleset bundle の直接 runner 実行では明示選択でき、単一 ruleset の既存呼び出しは従来どおり動くようにする。未知・曖昧な選択は失敗させる。
-- (MODIFY/NEW) 上記の registry、runtime、service、runner のテストと WASI fixture: １つの bundle が２ ruleset で異なる metadata / observable behavior を返す fixture を用いる。固定 args の既存 fixture も維持する。
+- (MODIFY) `internal/platform/registry/wasm_resolver.go` の `BuildSession` / `BuildSessionFromSnapshot`、`internal/platform/gamemaster/gamemaster.go` の `StartWASMWASI`: 検証された build input を既存の runtime 設定を通じて起動時環境へ伝える。空・未対応 ruleset は起動前に拒否し、bundle の固定 args と sandbox 制約を保つ。
+- (MODIFY) `cmd/arena-runner` の bundle 実行経路と worker の成果物出力: 実行に用いた artifact digest を再開用成果物へ保存し、resume 時に照合する。大会登録、queue、retry / rerun の既存経路は、選択と digest の維持を確認する。複数 ruleset bundle の直接 runner 実行では明示選択でき、単一 ruleset の既存呼び出しは従来どおり動くようにする。未知・曖昧な選択は失敗させる。
+- (MODIFY/NEW) 上記の registry、runtime、service、runner のテストと WASI fixture: echo-count を WASI の検証用 game として利用し、同じ bundle で２手と３手の ruleset を確認する。固定 args の既存 fixture も維持する。
 
 ## 検証と依存
 

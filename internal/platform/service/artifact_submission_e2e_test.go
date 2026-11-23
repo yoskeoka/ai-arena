@@ -5,15 +5,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/yoskeoka/ai-arena/artifactbundle"
+	"github.com/yoskeoka/ai-arena/gamemaster"
 	"github.com/yoskeoka/ai-arena/internal/platform/contract"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
+	"github.com/yoskeoka/ai-arena/internal/platform/replay"
 )
 
 func TestArtifactSubmissionUploadToWASIStartAcrossBundleStores(t *testing.T) {
@@ -264,4 +268,158 @@ func samePaths(left, right map[string]struct{}) bool {
 		}
 	}
 	return true
+}
+
+func TestArtifactBundleRulesetSelection(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv(gamemaster.WASIRulesetVersionEnv, "host-only")
+	gameBytes := buildWASIBundle(t, "./cmd/echo-count-gamemaster", `{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"echo-count","game_version":"2.0.0","rulesets":[{"ruleset_version":"phase2-simultaneous-3turn","player_count":2,"max_active_bots_per_owner":2},{"ruleset_version":"phase2-simultaneous-2turn","player_count":2,"max_active_bots_per_owner":2}],"runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024,"args":["module.wasm","--game-id","echo-count","--game-version","2.0.0"]}}`)
+	aiBytes := buildWASIBundle(t, "./testdata/ai/echo/echo-ai", `{"schema_version":"arena-bundle/v1","artifact_kind":"ai","ai_id":"echo-ai","game_id":"echo-count","game_version":"2.0.0","runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024}}`)
+	bundles := newFilesystemTestBundleStore(t)
+	reg, err := registry.NewWASIOverlay(bundles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admission, err := NewArtifactAdmissionService(bundles, reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := admission.RegisterGameBundle(ctx, gameBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := repoRoot(t)
+	general, err := NewGeneralSubmissionService(root, reg, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	general.WithBundleStore(bundles)
+	queue := NewInMemoryQueueStore()
+	dryRun, err := NewLocalDryRunChecker(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validator, err := NewDefaultAdmissionValidator(reg, dryRun.WithBundleStore(bundles))
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands, err := NewCommandService(queue, validator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests, err := NewMatchRequestService(general, commands, queue, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	followups, err := NewRunCommandService(commands, queue, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var queued []QueueRecord
+	for _, turns := range []int{2, 3} {
+		ruleset := fmt.Sprintf("phase2-simultaneous-%dturn", turns)
+		registration, err := general.RegisterGame(ctx, GameRegistrationRequest{ArtifactID: release.ArtifactID, RulesetVersion: ruleset})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var participants []MatchRequestParticipant
+		for _, player := range []string{"p1", "p2"} {
+			ai, err := general.RegisterAIBundle(ctx, AISubmissionRequest{GameRegistrationID: registration.RegistrationID}, aiBytes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			participants = append(participants, MatchRequestParticipant{PlayerID: player, AISubmissionID: ai.AISubmissionID})
+		}
+		_, run, err := requests.Create(ctx, MatchRequestCreateRequest{
+			RequestID: ruleset, GameRegistrationID: registration.RegistrationID, MatchID: ruleset,
+			OutputDir: t.TempDir(), Participants: participants,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if run.Submission.Game.RulesetVersion != ruleset || run.Submission.GameArtifactID != release.ArtifactID {
+			t.Fatalf("queued run identity = %+v", run.Submission)
+		}
+		queued = append(queued, run)
+	}
+
+	invoker, err := NewLocalRunnerInvoker(root, reg, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker, err := NewWorker(queue, invoker.WithBundleStore(bundles), LocalTerminalPersister{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workers sync.WaitGroup
+	for i := range queued {
+		workers.Go(func() {
+			if _, err := worker.ProcessNext(ctx, fmt.Sprintf("worker-%d", i)); err != nil {
+				t.Errorf("ProcessNext: %v", err)
+			}
+		})
+	}
+	workers.Wait()
+
+	for i, original := range queued {
+		completed, err := queue.Get(ctx, original.Submission.RunID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertRulesetBundleResult(t, completed, release.ArtifactID, i+2)
+
+		rerun, err := followups.Rerun(ctx, original.Submission.RunID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rerun.Submission.Game != original.Submission.Game || rerun.Submission.GameArtifactID != release.ArtifactID {
+			t.Fatalf("rerun identity = %+v", rerun.Submission)
+		}
+		repeated, err := worker.ProcessNext(ctx, "rerun-worker")
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertRulesetBundleResult(t, repeated, release.ArtifactID, i+2)
+	}
+
+	original := queued[0]
+	if _, err := followups.Rerun(ctx, original.Submission.RunID); err != nil {
+		t.Fatal(err)
+	}
+	startFailure := fmt.Errorf("simulated worker failure before game start")
+	failingWorker, err := NewWorker(queue, stubRunnerInvoker{err: startFailure}, LocalTerminalPersister{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed, err := failingWorker.ProcessNext(ctx, "failing-worker")
+	if err != startFailure || failed.State != StateFailed {
+		t.Fatalf("failed run state = %q, error = %v", failed.State, err)
+	}
+	retry, err := followups.Retry(ctx, failed.Submission.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retry.Submission.Game != original.Submission.Game || retry.Submission.GameArtifactID != release.ArtifactID {
+		t.Fatalf("retry identity = %+v", retry.Submission)
+	}
+	retried, err := worker.ProcessNext(ctx, "retry-worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRulesetBundleResult(t, retried, release.ArtifactID, 2)
+}
+
+func assertRulesetBundleResult(t *testing.T, run QueueRecord, digest string, turns int) {
+	t.Helper()
+	if run.State != StateCompleted || run.Terminal == nil {
+		t.Fatalf("run did not complete: %+v", run)
+	}
+	record, err := replay.LoadRecord(run.Terminal.RecordPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.GameArtifactID != digest || record.Game.RulesetVersion != run.Submission.Game.RulesetVersion ||
+		record.Snapshot.RulesetVersion != record.Game.RulesetVersion || record.Snapshot.Turn != turns {
+		t.Fatalf("record digest, ruleset, or turn count = %q, %q, %q, %d", record.GameArtifactID, record.Game.RulesetVersion, record.Snapshot.RulesetVersion, record.Snapshot.Turn)
+	}
 }

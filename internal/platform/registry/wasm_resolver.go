@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
@@ -37,6 +38,12 @@ func (r *WASIResolver) Resolve(_ context.Context, record DescriptorRecord) (Game
 		return GameDescriptor{}, fmt.Errorf("registry: descriptor is not an admitted WASI artifact release")
 	}
 	build := func(spec BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
+		if spec.GameVersion != record.GameVersion {
+			return nil, fmt.Errorf("registry: game version %q does not match artifact version %q", spec.GameVersion, record.GameVersion)
+		}
+		if spec.Ruleset == "" || !slices.Contains(record.BuildConstraints.SupportedRulesets, spec.Ruleset) {
+			return nil, fmt.Errorf("registry: ruleset %q is not supported by artifact %q", spec.Ruleset, record.ArtifactID)
+		}
 		dir, err := os.MkdirTemp("", "ai-arena-game-")
 		if err != nil {
 			return nil, err
