@@ -85,7 +85,7 @@ func run(args []string) error {
 	fs.SetOutput(os.Stderr)
 	fs.StringVar(&gameName, "game", "", "game id")
 	fs.StringVar(&gameVersion, "game-version", "", "game version")
-	fs.StringVar(&ruleset, "ruleset", "", "game ruleset")
+	fs.StringVar(&ruleset, "ruleset", "", "game ruleset, including selection from a game master bundle")
 	fs.StringVar(&gameMasterManifest, "game-master-manifest", "", "game master manifest path for a dev-only local-subprocess overlay")
 	fs.StringVar(&gameMasterBundle, "game-master-bundle", "", "game master arena-bundle/v1 ZIP path for a local WASI overlay")
 	fs.StringVar(&rngSeed, "rng-seed", "", "deterministic seed for seed-aware games")
@@ -153,16 +153,18 @@ func run(args []string) error {
 	if gameMasterManifest != "" && gameMasterBundle != "" {
 		return fmt.Errorf("--game-master-manifest and --game-master-bundle cannot be combined")
 	}
-	if gameMasterManifest != "" || gameMasterBundle != "" {
-		if gameName != "" || gameVersion != "" || ruleset != "" {
-			return fmt.Errorf("game master overlay cannot be combined with --game, --game-version, or --ruleset")
-		}
+	if gameMasterManifest != "" && (gameName != "" || gameVersion != "" || ruleset != "") {
+		return fmt.Errorf("game master manifest cannot be combined with --game, --game-version, or --ruleset")
+	}
+	if gameMasterBundle != "" && (gameName != "" || gameVersion != "") {
+		return fmt.Errorf("game master bundle cannot be combined with --game or --game-version")
 	}
 
 	var (
-		recordSource   *match.Record
-		resumeSnapshot *game.Snapshot
-		metaOverride   *catalog.GameMetadata
+		recordSource     *match.Record
+		resumeSnapshot   *game.Snapshot
+		metaOverride     *catalog.GameMetadata
+		resumeArtifactID string
 	)
 	if recordInput != "" {
 		record, err := replay.LoadRecord(recordInput)
@@ -170,6 +172,7 @@ func run(args []string) error {
 			return err
 		}
 		recordSource = &record
+		resumeArtifactID = record.GameArtifactID
 		if gameName == "" {
 			gameName = record.Game.GameID
 		}
@@ -191,10 +194,12 @@ func run(args []string) error {
 		}
 	}
 	if snapshotInput != "" {
-		snapshot, err := replay.LoadSnapshot(snapshotInput)
+		artifact, err := replay.LoadSnapshotArtifact(snapshotInput)
 		if err != nil {
 			return err
 		}
+		resumeArtifactID = artifact.GameArtifactID
+		snapshot := artifact.Snapshot
 		resumeSnapshot = &snapshot
 		metaOverride = ptr(catalog.GameMetadata{
 			GameID:         snapshot.GameID,
@@ -229,9 +234,13 @@ func run(args []string) error {
 		ruleset = manifestMeta.RulesetVersion
 	} else if gameMasterBundle != "" {
 		var bundleMeta catalog.GameMetadata
-		descriptor, bundleMeta, err = loadGameMasterBundleDescriptor(gameMasterBundle, defaultStderrLimitBytes)
+		descriptor, bundleMeta, err = loadGameMasterBundleDescriptor(gameMasterBundle, ruleset, defaultStderrLimitBytes)
 		if err != nil {
 			return err
+		}
+		if (gameName != "" && gameName != bundleMeta.GameID) || (gameVersion != "" && gameVersion != bundleMeta.GameVersion) ||
+			(recordSource != nil && recordSource.Game.RulesetVersion != bundleMeta.RulesetVersion) {
+			return fmt.Errorf("resume game identity does not match the selected bundle")
 		}
 		gameName = bundleMeta.GameID
 		gameVersion = bundleMeta.GameVersion
@@ -250,6 +259,10 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	if resumeArtifactID != "" && (gameMasterBundle == "" || resumeArtifactID != descriptor.ArtifactID) {
+		return fmt.Errorf("resume game artifact digest %q requires the same --game-master-bundle", resumeArtifactID)
 	}
 
 	if historyInput != "" {
@@ -364,6 +377,7 @@ func run(args []string) error {
 		sessions,
 		opts...,
 	).Run(ctx)
+	record.GameArtifactID = descriptor.ArtifactID
 	if observer.err != nil {
 		return fmt.Errorf("stream log: %w", observer.err)
 	}
@@ -379,6 +393,9 @@ func run(args []string) error {
 		return err
 	}
 	if runErr != nil {
+		if gameMasterBundle != "" {
+			return runErr
+		}
 		fmt.Fprintln(os.Stderr, runErr)
 	}
 	return nil

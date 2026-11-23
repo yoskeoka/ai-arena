@@ -71,12 +71,18 @@ func EnsureLayout(layout Layout) error {
 	return nil
 }
 
+// SnapshotArtifact stores resume provenance alongside the game-owned snapshot.
+type SnapshotArtifact struct {
+	game.Snapshot
+	GameArtifactID string `json:"game_artifact_id,omitempty"`
+}
+
 // WriteStandardArtifacts persists the standard runner artifact set except stderr logs.
 func WriteStandardArtifacts(layout Layout, record match.Record) error {
 	if err := writeJSONFile(layout.RecordPath, record, "record"); err != nil {
 		return err
 	}
-	if err := writeJSONFile(layout.SnapshotPath, record.Snapshot, "snapshot"); err != nil {
+	if err := writeJSONFile(layout.SnapshotPath, SnapshotArtifact{Snapshot: record.Snapshot, GameArtifactID: record.GameArtifactID}, "snapshot"); err != nil {
 		return err
 	}
 	if err := writeJSONFile(layout.ExportedSnapshotPath, record.ExportedSnapshot, "exported snapshot"); err != nil {

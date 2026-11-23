@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/yoskeoka/ai-arena/internal/platform/artifacts"
 	"github.com/yoskeoka/ai-arena/internal/platform/catalog"
 	"github.com/yoskeoka/ai-arena/internal/platform/game"
 	"github.com/yoskeoka/ai-arena/internal/platform/match"
@@ -28,14 +29,20 @@ func LoadRecord(path string) (match.Record, error) {
 
 // LoadSnapshot loads a persisted snapshot from disk.
 func LoadSnapshot(path string) (game.Snapshot, error) {
+	artifact, err := LoadSnapshotArtifact(path)
+	return artifact.Snapshot, err
+}
+
+// LoadSnapshotArtifact loads a resume snapshot and its optional bundle provenance.
+func LoadSnapshotArtifact(path string) (artifacts.SnapshotArtifact, error) {
 	// #nosec G304 -- the caller explicitly selects the local debug snapshot input path.
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return game.Snapshot{}, fmt.Errorf("read snapshot input %s: %w", path, err)
+		return artifacts.SnapshotArtifact{}, fmt.Errorf("read snapshot input %s: %w", path, err)
 	}
-	var snapshot game.Snapshot
+	var snapshot artifacts.SnapshotArtifact
 	if err := json.Unmarshal(data, &snapshot); err != nil {
-		return game.Snapshot{}, fmt.Errorf("decode snapshot input %s: %w", path, err)
+		return artifacts.SnapshotArtifact{}, fmt.Errorf("decode snapshot input %s: %w", path, err)
 	}
 	return snapshot, nil
 }

@@ -47,7 +47,7 @@ func (p *S3TerminalPersister) Persist(ctx context.Context, submission MatchSubmi
 	if err != nil {
 		return TerminalArtifacts{}, err
 	}
-	if _, err := p.putJSON(ctx, path.Join(matchKeyPrefix, "snapshot.json"), result.Record.Snapshot); err != nil {
+	if _, err := p.putJSON(ctx, path.Join(matchKeyPrefix, "snapshot.json"), artifacts.SnapshotArtifact{Snapshot: result.Record.Snapshot, GameArtifactID: result.Record.GameArtifactID}); err != nil {
 		return TerminalArtifacts{}, err
 	}
 	if _, err := p.putJSON(ctx, path.Join(matchKeyPrefix, "exported-snapshot.json"), result.Record.ExportedSnapshot); err != nil {

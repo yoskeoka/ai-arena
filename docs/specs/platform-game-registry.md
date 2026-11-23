@@ -257,6 +257,12 @@ session build は、fresh run ではこの build input を受け取り、
 snapshot resume ではこれに加えて snapshot を受け取る。history replay build は event 列と
 target turn を受け取る。
 
+WASI の build 入口は未指定または release が宣言していない ruleset を
+materialization 前に拒否する。snapshot resume では snapshot の game ID、
+exact version、ruleset が選択と一致することも起動前に確認する。
+運営登録から作成した run は登録で選択した ruleset と artifact digest を保持し、
+retry / rerun も元の run と同じ組み合わせを使う。
+
 ## build と compatibility の責務分離
 
 1. runner / replay-debug entrypoint は `game_id + game_version major` を指定して registry lookup を要求する

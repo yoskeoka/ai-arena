@@ -13,7 +13,7 @@ import (
 	"github.com/yoskeoka/ai-arena/internal/platform/registry"
 )
 
-func loadGameMasterBundleDescriptor(path string, stderrLimitBytes int) (registry.GameDescriptor, catalog.GameMetadata, error) {
+func loadGameMasterBundleDescriptor(path, selectedRuleset string, stderrLimitBytes int) (registry.GameDescriptor, catalog.GameMetadata, error) {
 	bundle, err := readArtifactBundle(path)
 	if err != nil {
 		return registry.GameDescriptor{}, catalog.GameMetadata{}, err
@@ -21,10 +21,20 @@ func loadGameMasterBundleDescriptor(path string, stderrLimitBytes int) (registry
 	if bundle.Manifest.ArtifactKind != "game" {
 		return registry.GameDescriptor{}, catalog.GameMetadata{}, fmt.Errorf("game master bundle: artifact kind %q is not game", bundle.Manifest.ArtifactKind)
 	}
-	if len(bundle.Manifest.Rulesets) != 1 {
-		return registry.GameDescriptor{}, catalog.GameMetadata{}, fmt.Errorf("game master bundle: exactly one ruleset is required for runner selection")
+	if selectedRuleset == "" {
+		if len(bundle.Manifest.Rulesets) != 1 {
+			return registry.GameDescriptor{}, catalog.GameMetadata{}, fmt.Errorf("game master bundle: --ruleset is required when the bundle does not declare exactly one ruleset")
+		}
+		selectedRuleset = bundle.Manifest.Rulesets[0].RulesetVersion
 	}
-	ruleset := bundle.Manifest.Rulesets[0]
+	rulesetIndex := 0
+	for rulesetIndex < len(bundle.Manifest.Rulesets) && bundle.Manifest.Rulesets[rulesetIndex].RulesetVersion != selectedRuleset {
+		rulesetIndex++
+	}
+	if rulesetIndex == len(bundle.Manifest.Rulesets) {
+		return registry.GameDescriptor{}, catalog.GameMetadata{}, fmt.Errorf("game master bundle: ruleset %q is not declared", selectedRuleset)
+	}
+	ruleset := bundle.Manifest.Rulesets[rulesetIndex]
 	meta := catalog.GameMetadata{
 		GameID:         bundle.Manifest.GameID,
 		GameVersion:    bundle.Manifest.GameVersion,
@@ -38,12 +48,8 @@ func loadGameMasterBundleDescriptor(path string, stderrLimitBytes int) (registry
 		return registry.GameDescriptor{}, catalog.GameMetadata{}, err
 	}
 	build := func(spec registry.BuildSpec, snapshot *game.Snapshot) (gamemaster.Session, error) {
-		if err := catalog.Compatible(meta, catalog.GameMetadata{
-			GameID:         meta.GameID,
-			GameVersion:    spec.GameVersion,
-			RulesetVersion: spec.Ruleset,
-		}); err != nil {
-			return nil, fmt.Errorf("game master bundle metadata incompatible: %w", err)
+		if spec.GameVersion != meta.GameVersion || spec.Ruleset != meta.RulesetVersion {
+			return nil, fmt.Errorf("game master bundle: build game version and ruleset must match the selected bundle")
 		}
 		if ruleset.PlayerCount > 0 && ruleset.PlayerCount != len(spec.Players) {
 			return nil, fmt.Errorf("game master bundle: ruleset %q requires %d players, got %d", ruleset.RulesetVersion, ruleset.PlayerCount, len(spec.Players))

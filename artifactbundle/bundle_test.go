@@ -70,6 +70,13 @@ func TestReadRejectsExplicitZeroResourceLimits(t *testing.T) {
 	}
 }
 
+func TestReadRejectsDuplicateRulesetVersions(t *testing.T) {
+	data := testZIP(t, `{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"test","game_version":"2.0.0","rulesets":[{"ruleset_version":"same","player_count":2},{"ruleset_version":"same","player_count":3}],"runtime":{"kind":"wasm-wasi","module":"module.wasm"}}`)
+	if _, err := Read(data); err == nil {
+		t.Fatal("Read accepted an ambiguous ruleset version")
+	}
+}
+
 func TestReadRejectsAIWithoutAIID(t *testing.T) {
 	data := testZIP(t, `{"schema_version":"arena-bundle/v1","artifact_kind":"ai","game_id":"test","game_version":"2.0.0","runtime":{"kind":"wasm-wasi","module":"module.wasm"}}`)
 	if _, err := Read(data); err == nil {
