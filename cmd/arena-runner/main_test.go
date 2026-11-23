@@ -233,6 +233,7 @@ func TestRunSupportsGameMasterBundleWithTwoAIBundles(t *testing.T) {
 
 func TestRunSupportsGameMasterBundleWithLegacyAI(t *testing.T) {
 	chdirRepoRoot(t)
+	t.Setenv("AI_ARENA_INIT_ACK_TIMEOUT", "30s")
 
 	gameBundle := buildTestBundle(t, "./cmd/echo-count-gamemaster", `{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"echo-count","game_version":"2.0.0","rulesets":[{"ruleset_version":"phase2-simultaneous-3turn","player_count":2}],"runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024,"args":["module.wasm","--game-id","echo-count","--game-version","2.0.0","--ruleset","phase2-simultaneous-3turn"]}}`)
 	outputDir := t.TempDir()
@@ -292,9 +293,10 @@ func TestRunSupportsManifestGameWithMixedAIInputs(t *testing.T) {
 
 func TestRunSupportsGameMasterBundleRecordResume(t *testing.T) {
 	chdirRepoRoot(t)
+	t.Setenv("AI_ARENA_INIT_ACK_TIMEOUT", "30s")
 
 	gameBundle := buildTestBundle(t, "./cmd/echo-count-gamemaster", `{"schema_version":"arena-bundle/v1","artifact_kind":"game","game_id":"echo-count","game_version":"2.0.0","rulesets":[{"ruleset_version":"phase2-simultaneous-3turn","player_count":2},{"ruleset_version":"phase2-simultaneous-2turn","player_count":2}],"runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024,"args":["module.wasm","--game-id","echo-count","--game-version","2.0.0","--ruleset","phase2-simultaneous-3turn"]}}`)
-	aiBundle := buildTestBundle(t, "./testdata/ai/echo/echo-ai", `{"schema_version":"arena-bundle/v1","artifact_kind":"ai","ai_id":"echo-ai","game_id":"echo-count","game_version":"2.0.0","runtime":{"kind":"wasm-wasi","module":"module.wasm","memory_limit_pages":1024}}`)
+	const player = "./testdata/ai/echo/echo-ai-2turn"
 	outputDir := t.TempDir()
 	initialMatchID := "bundle-game-record-source"
 	args := []string{
@@ -303,8 +305,8 @@ func TestRunSupportsGameMasterBundleRecordResume(t *testing.T) {
 		"--match-id", initialMatchID,
 		"--ruleset", "phase2-simultaneous-2turn",
 		"--log-output", "none",
-		"--player-bundle", "p1=" + aiBundle,
-		"--player-bundle", "p2=" + aiBundle,
+		"--player", "p1=" + player,
+		"--player", "p2=" + player,
 	}
 	if err := run(args); err != nil {
 		t.Fatalf("initial run: %v", err)
@@ -316,8 +318,8 @@ func TestRunSupportsGameMasterBundleRecordResume(t *testing.T) {
 		"--output-dir", outputDir,
 		"--match-id", resumeMatchID,
 		"--log-output", "none",
-		"--player-bundle", "p1=" + aiBundle,
-		"--player-bundle", "p2=" + aiBundle,
+		"--player", "p1=" + player,
+		"--player", "p2=" + player,
 	}); err != nil {
 		t.Fatalf("resume run: %v", err)
 	}
@@ -335,7 +337,7 @@ func TestRunSupportsGameMasterBundleRecordResume(t *testing.T) {
 	}
 
 	common := []string{"--game-master-bundle", gameBundle, "--output-dir", outputDir, "--log-output", "none",
-		"--player-bundle", "p1=" + aiBundle, "--player-bundle", "p2=" + aiBundle}
+		"--player", "p1=" + player, "--player", "p2=" + player}
 	snapshotPath := filepath.Join(outputDir, initialMatchID, "snapshot.json")
 	if err := run(append(append([]string{}, common...), "--match-id", "snapshot-resume", "--snapshot-input", snapshotPath)); err != nil {
 		t.Fatalf("snapshot resume: %v", err)
@@ -404,8 +406,8 @@ func TestRunSupportsGameMasterBundleRecordResume(t *testing.T) {
 		"--output-dir", outputDir,
 		"--match-id", "bundle-game-history-unsupported",
 		"--log-output", "none",
-		"--player-bundle", "p1=" + aiBundle,
-		"--player-bundle", "p2=" + aiBundle,
+		"--player", "p1=" + player,
+		"--player", "p2=" + player,
 	}); err == nil || !strings.Contains(err.Error(), "history replay reconstruction is not supported") {
 		t.Fatalf("history replay error = %v, want explicit unsupported error", err)
 	}

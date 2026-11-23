@@ -192,7 +192,7 @@ func buildWASIBundle(t *testing.T, packagePath, manifest string) []byte {
 	modulePath := filepath.Join(t.TempDir(), "module.wasm")
 	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", modulePath, packagePath)
 	cmd.Dir = repoRoot(t)
-	cmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm", "GOCACHE="+filepath.Join(t.TempDir(), "go-build"))
+	cmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build WASI module %s: %v\n%s", packagePath, err, output)
 	}
@@ -368,21 +368,22 @@ func TestArtifactBundleRulesetSelection(t *testing.T) {
 		}
 		assertRulesetBundleResult(t, completed, release.ArtifactID, i+2)
 
-		rerun, err := followups.Rerun(ctx, original.Submission.RunID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if rerun.Submission.Game != original.Submission.Game || rerun.Submission.GameArtifactID != release.ArtifactID {
-			t.Fatalf("rerun identity = %+v", rerun.Submission)
-		}
-		repeated, err := worker.ProcessNext(ctx, "rerun-worker")
-		if err != nil {
-			t.Fatal(err)
-		}
-		assertRulesetBundleResult(t, repeated, release.ArtifactID, i+2)
 	}
 
 	original := queued[0]
+	rerun, err := followups.Rerun(ctx, original.Submission.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rerun.Submission.Game != original.Submission.Game || rerun.Submission.GameArtifactID != release.ArtifactID {
+		t.Fatalf("rerun identity = %+v", rerun.Submission)
+	}
+	repeated, err := worker.ProcessNext(ctx, "rerun-worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRulesetBundleResult(t, repeated, release.ArtifactID, 2)
+
 	if _, err := followups.Rerun(ctx, original.Submission.RunID); err != nil {
 		t.Fatal(err)
 	}
