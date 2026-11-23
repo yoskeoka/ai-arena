@@ -12,6 +12,16 @@
 
 WASI game master に platform が予約する環境変数 `AI_ARENA_RULESET_VERSION` を起動時に渡す。値は検証済みの大会 / run の ruleset をそのまま用い、metadata 問い合わせ前に利用可能とする。未対応の既存 game は無視でき、既存 runtime args の解釈は変えない。環境変数は game master 専用で、player AI や host 環境を継承しない。対応 game は未知の値を拒否し、選択した ruleset を metadata に返す。platform は従来どおり不一致を拒否する。初期化時のみの伝達や全 bundle に新しい必須引数を追加する方法は、metadata の順序または既存 bundle 互換を満たさない。
 
+## 実装前レビュー
+
+登録、queue、retry / rerun は既に選択済み metadata と digest を保持するため、
+既存経路を試験で確認する。共通 WASI runtime は明示された環境変数を
+既に渡せるため、game master の起動入口だけで予約変数を設定する。
+runner は既存の `--ruleset` を bundle 選択にも使う。resume では入力の
+ruleset と一致させ、新規の record / snapshot に記録した digest を照合する。
+digest を持たない過去の成果物は game ID、exact version、ruleset を照合する。
+WASI の history 再構成は既存の適用範囲のままとする。
+
 ## 変更対象と契約
 
 - (MODIFY) `docs/specs/game-master.md`、`docs/specs/platform-game-registry.md`、`docs/specs/platform-artifact-bundle.md`: 上記起動契約、選択元、未対応・不一致、過去の run と互換性を先に明記する。field の正本が必要な場合は `gamemaster/types.go` 等の typed contract を更新し、Markdown に重複させない。

@@ -121,6 +121,16 @@ resume / replay support は、同じ metadata と `runtime.command` を使って
 metadata source of truth は manifest のままとする。`record` / `snapshot` が持つ metadata は
 manifest と compatibility check を通過しなければならず、CLI metadata flag へは戻さない。
 
+### WASI game bundle
+
+platform は選択済みの ruleset を予約環境変数 `AI_ARENA_RULESET_VERSION` に設定し、
+起動時から game master が参照できるようにする。bundle の固定引数はそのまま渡す。
+この値は起動する game master ごとに設定し、player AI と host 環境には伝播しない。
+対応する game master は、値が指定された場合にその ruleset を選び、未知の値を拒否する。
+metadata 問い合わせには選択した ruleset を返し、初期化、再開、試合結果にも同じ規則を適用する。
+従来の固定 ruleset の game master も、返す metadata が選択と一致すれば利用できる。
+platform は ruleset、game ID、exact game version の不一致を初期化前に拒否する。
+
 ### future external adapter
 
 - 将来の trusted external game backend でも、platform から見える論理 API は同一とする

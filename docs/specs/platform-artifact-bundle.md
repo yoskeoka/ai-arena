@@ -19,3 +19,7 @@ manifest の正本は `schemas/arena-bundle-v1.schema.json` と typed Go model �
 - game bundle は ruleset と player-count / game-defined bot limit を宣言し、AI bundle は `ai_id` と対象 game/ruleset を宣言する。AI admission は selected game registration と game id、semver major、ruleset が互換であることを同期的に確認する。
 - game release は `game_id + major` で lookup し、admitted release の semver 最大を選ぶ。request acceptance 時には、その時点で選択された game digest と各 AI digest を run に snapshot する。retry / rerun は snapshot を再解決せず、同じ digest を引き継ぐ。
 - worker は game / AI の各 digest を private directory へ materialize して同じ match runtime を起動する。AI の試合記録上の identity は seat の `player_id` ではなく、admitted immutable artifact digest とする。materialization directory は player session の終了後に削除する。queue と worker は caller 提供の host path / URL を artifact identity として受け取らない。match の deadline/cancellation は registry lookup、session construction、WASI process lifetime に一貫して適用され、短命な resolver lookup context に session lifetime は束縛されない。host filesystem と network capability は付与しない。
+
+- 同じ game bundle の各 ruleset を別々の大会に登録できる。game bundle の ruleset 識別子は bundle 内で一意とする。
+- runner の `--game-master-bundle` では `--ruleset` で宣言済みの ruleset を選ぶ。fresh run で省略できるのは単一 ruleset bundle の場合に限る。record / snapshot から再開するときは入力の ruleset を使い、明示選択した場合は入力と一致させる。
+- bundle run が保存する record と再開用 snapshot は game artifact digest を保持する。再開時に digest が記録されていれば、同じ bundle を指定する。過去の digest を持たない成果物は game ID、exact version、ruleset が一致する bundle で再開できる。
